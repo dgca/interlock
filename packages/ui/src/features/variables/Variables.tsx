@@ -39,12 +39,7 @@ import {
   type VariableBinding,
 } from '@interlock/core';
 import { api, errorMessage } from '../../lib/api';
-import {
-  trpc,
-  useQuery,
-  useQueryClient,
-  useRefreshOnTick,
-} from '../../lib/query';
+import { trpc, useQuery, useQueryClient } from '../../lib/query';
 import { useDraftDismissal } from '../../lib/useDraftDismissal';
 import { useEditorDraft } from '../../lib/useEditorDraft';
 
@@ -63,7 +58,19 @@ import { VariablePicker } from './VariablePicker';
 
 type Read = Awaited<ReturnType<typeof api.variables.read.query>>;
 type Inspection = Extract<Read, { dependencies: unknown }>;
-type ConfigValue = { id: string; value: string };
+type VariableReceipt = Extract<
+  Awaited<ReturnType<typeof api.variables.manage.mutate>>,
+  { name: string }
+>;
+type ConfigValue = Extract<Read, { value: string }>;
+class ConfigValueChangedError extends Error {
+  constructor() {
+    super(
+      'The Config value changed while loading. Retry to load its current revision.',
+    );
+  }
+}
+
 // The value revision belongs to cache identity, not the server input. Secret
 // values never use this read path or enter the query cache.
 function configReadOptions(id: string, revision: number) {
@@ -77,18 +84,26 @@ function configReadOptions(id: string, revision: number) {
   ];
   return {
     queryKey,
-    queryFn: async (): Promise<ConfigValue> => {
-      const result = await api.variables.read.query({
-        action: 'config_value',
-        id,
-      });
+    staleTime: Infinity,
+    meta: { engineRefresh: false },
+    queryFn: async ({
+      signal,
+    }: {
+      signal: AbortSignal;
+    }): Promise<ConfigValue> => {
+      const result = await api.variables.read.query(
+        { action: 'config_value', id },
+        { signal },
+      );
       if (
         !('value' in result) ||
-        typeof result.id !== 'string' ||
+        result.id !== id ||
         typeof result.value !== 'string'
       )
         throw new Error('Could not read the config value.');
-      return { id: result.id, value: result.value };
+      if (result.valueRevision !== revision)
+        throw new ConfigValueChangedError();
+      return result;
     },
   };
 }
@@ -101,7 +116,6 @@ const statusName = {
 } as const;
 
 export function VariableLibrary() {
-  const { tick } = useOutletContext<AppContext>();
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [offset, setOffset] = useState(0);
@@ -114,12 +128,6 @@ export function VariableLibrary() {
       return page;
     },
   });
-  useRefreshOnTick(
-    tick,
-    result.refetch,
-    search === debouncedSearch,
-    result.isFetching,
-  );
   const data = result.data;
   const read = workspaceRead('variables', result, searchInput);
   const loading = !read.ready && !read.error;
@@ -266,7 +274,7 @@ export function VariableRoute() {
 function VariableEditor({ id }: { id: string }) {
   const creating = id === 'new';
   const formId = useId();
-  const { act, tick } = useOutletContext<AppContext>();
+  const { act } = useOutletContext<AppContext>();
   const navigate = useNavigate();
   const location = useLocation();
   const acknowledged = location.state?.savedVariable;
@@ -301,21 +309,19 @@ function VariableEditor({ id }: { id: string }) {
       return undefined;
     if (initial.valueRevision === null) return { revision: null, value: '' };
     const cachedValue = queryClient.getQueryData<ConfigValue>(
-      configReadOptions(id, initial.valueRevision).queryKey,
+      configReadOptions(initial.id, initial.valueRevision).queryKey,
     );
     return cachedValue && 'value' in cachedValue
       ? { revision: initial.valueRevision, value: cachedValue.value }
       : undefined;
   });
   const [configDraft, setConfigDraft] = useState<string>();
-  const [configError, setConfigError] = useState('');
   const [valueRequired, setValueRequired] = useState(false);
   const [error, setError] = useState('');
-  const [readError, setReadError] = useState('');
+  const [recoveryError, setRecoveryError] = useState('');
   const [loadingLatest, setLoadingLatest] = useState(false);
   const [unconfirmedWrite, setUnconfirmedWrite] = useState(false);
   const latestRequest = useRef<AbortController>(null);
-  const [refresh, setRefresh] = useState(0);
   const [offset, setOffset] = useState(0);
   const [deleting, setDeleting] = useState(false);
   const [rebind, setRebind] = useState<{
@@ -352,10 +358,14 @@ function VariableEditor({ id }: { id: string }) {
   const readConfig = async (inspection: Inspection) => {
     if (inspection.kind !== 'config' || inspection.availability === 'locked')
       return undefined;
-    if (config?.revision === inspection.valueRevision) return config;
+    if (
+      saved?.id === inspection.id &&
+      config?.revision === inspection.valueRevision
+    )
+      return config;
     if (inspection.valueRevision === null) return { revision: null, value: '' };
     const result = await queryClient.fetchQuery(
-      configReadOptions(id, inspection.valueRevision),
+      configReadOptions(inspection.id, inspection.valueRevision),
     );
     return { revision: inspection.valueRevision, value: result.value };
   };
@@ -370,35 +380,66 @@ function VariableEditor({ id }: { id: string }) {
     setDescription(inspection.description);
     setKind(inspection.kind);
   };
+  const readEnabled = !creating && !dirty && !busy && !needsReload;
+  const inspection = useQuery({
+    ...trpc.variables.read.queryOptions({ action: 'inspect', id, offset }),
+    enabled: readEnabled,
+    select: (data) => {
+      if (!('dependencies' in data) || (data.referenceId ?? data.id) !== id)
+        throw new Error('Could not read variable details.');
+      return data;
+    },
+  });
+  const observed = inspection.data;
+  const configRevision =
+    observed?.kind === 'config' && observed.availability !== 'locked'
+      ? observed.valueRevision
+      : undefined;
+  const configRead = useQuery({
+    ...configReadOptions(observed?.id ?? id, configRevision ?? 0),
+    enabled: readEnabled && typeof configRevision === 'number',
+  });
+  const readError =
+    recoveryError || (inspection.error ? errorMessage(inspection.error) : '');
+  const configError = configRead.error ? errorMessage(configRead.error) : '';
+  const retryDetails = () => void inspection.refetch({ cancelRefetch: false });
+  const retryConfig = () => {
+    if (configRead.error instanceof ConfigValueChangedError) retryDetails();
+    else void configRead.refetch({ cancelRefetch: false });
+  };
   useEffect(() => () => latestRequest.current?.abort(), []);
   useEffect(() => {
-    if (creating || dirty || busy || needsReload) return;
-    let active = true;
-    void queryClient
-      .fetchQuery(
-        trpc.variables.read.queryOptions({ action: 'inspect', id, offset }),
-      )
-      .then(async (r) => {
-        if (!active || !('dependencies' in r)) return;
-        let nextConfig: typeof config = undefined;
-        let configFailure = '';
-        try {
-          nextConfig = await readConfig(r);
-        } catch (e) {
-          configFailure = errorMessage(e);
-        }
-        if (!active) return;
-        applyInspection(r, nextConfig);
-        setConfigError(configFailure);
-        setReadError('');
-      })
-      .catch((e) => {
-        if (active) setReadError(errorMessage(e));
-      });
-    return () => {
-      active = false;
-    };
-  }, [id, creating, dirty, busy, needsReload, tick, refresh, offset, config]);
+    if (
+      !readEnabled ||
+      !observed ||
+      (saved?.id === observed.id && observed.revision < saved.revision)
+    )
+      return;
+    const currentConfig = saved?.id === observed.id ? config : undefined;
+    let nextConfig: typeof config;
+    if (configRevision === null) {
+      nextConfig =
+        currentConfig?.revision === null
+          ? currentConfig
+          : { revision: null, value: '' };
+    } else if (configRevision !== undefined) {
+      if (currentConfig?.revision === configRevision)
+        nextConfig = currentConfig;
+      else if (configRead.data)
+        nextConfig = { revision: configRevision, value: configRead.data.value };
+      else if (configRead.error) nextConfig = currentConfig;
+      else if (!saved || saved.id === observed.id) return;
+    }
+    applyInspection(observed, nextConfig);
+  }, [
+    readEnabled,
+    observed,
+    configRevision,
+    configRead.data,
+    configRead.error,
+    config,
+    saved,
+  ]);
   useEffect(() => {
     if (replacingSecret) valueInput.current?.focus();
     else if (!busy && returnToValue.current) {
@@ -417,14 +458,42 @@ function VariableEditor({ id }: { id: string }) {
     }
     setError('');
   };
+  const acknowledgeMetadata = (
+    inspectionId: string,
+    receipt: VariableReceipt,
+  ) => {
+    const matchesSaved = (current: Read | undefined): current is Inspection =>
+      Boolean(
+        current &&
+        'dependencies' in current &&
+        current.id === receipt.id &&
+        current.revision <= receipt.revision,
+      );
+    const filter = trpc.variables.read.queryFilter({
+      action: 'inspect',
+      id: inspectionId,
+    });
+    // A portable reference can change targets while the write is pending.
+    void queryClient.cancelQueries({
+      ...filter,
+      predicate: ({ queryKey }) =>
+        inspectionId === receipt.id ||
+        matchesSaved(queryClient.getQueryData(queryKey)),
+    });
+    queryClient.setQueriesData<Read>(filter, (current) =>
+      matchesSaved(current)
+        ? { ...current, ...receipt, referenceId: current.referenceId }
+        : undefined,
+    );
+  };
   const loadLatest = async () => {
     if (!saved || latestRequest.current) return;
     const request = new AbortController();
     latestRequest.current = request;
     setLoadingLatest(true);
-    setReadError('');
+    setRecoveryError('');
     try {
-      const input = { action: 'inspect' as const, id, offset };
+      const input = { action: 'inspect' as const, id: saved.id, offset };
       const latest = await api.variables.read.query(input, {
         signal: request.signal,
       });
@@ -455,11 +524,15 @@ function VariableEditor({ id }: { id: string }) {
         );
         return;
       }
+      if (id !== latest.id) {
+        const { referenceId, dependencies, bindings, storage, ...metadata } =
+          latest;
+        acknowledgeMetadata(id, metadata);
+      }
       clear();
-      setConfigError('');
       applyInspection(latest, nextConfig);
     } catch (error) {
-      if (!request.signal.aborted) setReadError(errorMessage(error));
+      if (!request.signal.aborted) setRecoveryError(errorMessage(error));
     } finally {
       if (!request.signal.aborted) {
         latestRequest.current = null;
@@ -478,10 +551,7 @@ function VariableEditor({ id }: { id: string }) {
     }
     if (!beginSave()) return;
     setError('');
-    let result: Extract<
-      Awaited<ReturnType<typeof api.variables.manage.mutate>>,
-      { name: string }
-    >;
+    let result: VariableReceipt;
     try {
       const receipt = await api.variables.manage.mutate(
         creating
@@ -494,7 +564,7 @@ function VariableEditor({ id }: { id: string }) {
             }
           : {
               action: 'update',
-              id,
+              id: saved!.id,
               expectedRevision: saved!.revision,
               name,
               description,
@@ -546,18 +616,8 @@ function VariableEditor({ id }: { id: string }) {
             });
         }
       }
-      const filter = trpc.variables.read.queryFilter({
-        action: 'inspect',
-        id: result.id,
-      });
-      void queryClient.cancelQueries(filter);
-      queryClient.setQueriesData<Read>(filter, (current) =>
-        current &&
-        'dependencies' in current &&
-        current.revision <= result.revision
-          ? { ...current, ...result }
-          : current,
-      );
+      acknowledgeMetadata(result.id, result);
+      if (!creating && id !== result.id) acknowledgeMetadata(id, result);
       if (result.kind === 'config' && result.valueRevision !== null) {
         const savedValue = creating
           ? value
@@ -567,7 +627,11 @@ function VariableEditor({ id }: { id: string }) {
         if (savedValue !== undefined)
           queryClient.setQueryData<ConfigValue>(
             configReadOptions(result.id, result.valueRevision).queryKey,
-            { id: result.id, value: savedValue },
+            {
+              id: result.id,
+              valueRevision: result.valueRevision,
+              value: savedValue,
+            },
           );
       }
       if (active && creating)
@@ -593,12 +657,21 @@ function VariableEditor({ id }: { id: string }) {
         } else {
           await api.variables.manage.mutate({
             action: 'delete',
-            id,
+            id: saved.id,
             expectedRevision: saved.revision,
           });
           for (const filter of [
-            trpc.variables.read.queryFilter({ action: 'inspect', id }),
-            trpc.variables.read.queryFilter({ action: 'config_value', id }),
+            trpc.variables.read.queryFilter({
+              action: 'inspect',
+              id: saved.id,
+            }),
+            trpc.variables.read.queryFilter({
+              action: 'config_value',
+              id: saved.id,
+            }),
+            ...(id === saved.id
+              ? []
+              : [trpc.variables.read.queryFilter({ action: 'inspect', id })]),
           ]) {
             void queryClient.cancelQueries(filter);
             queryClient.removeQueries(filter);
@@ -699,10 +772,7 @@ function VariableEditor({ id }: { id: string }) {
                 }
               >
                 {readError}
-                <Button
-                  variant="ghost"
-                  onClick={() => setRefresh((n) => n + 1)}
-                >
+                <Button variant="ghost" onClick={retryDetails}>
                   Retry loading
                 </Button>
               </Alert>
@@ -838,7 +908,7 @@ function VariableEditor({ id }: { id: string }) {
                 <Button
                   variant="ghost"
                   disabled={dirty || busy}
-                  onClick={() => setRefresh((n) => n + 1)}
+                  onClick={retryDetails}
                 >
                   Retry variable details
                 </Button>
@@ -907,7 +977,9 @@ function VariableEditor({ id }: { id: string }) {
                           autoComplete="off"
                           spellCheck={false}
                           rows={3}
-                          disabled={!config}
+                          disabled={
+                            !config || config.revision !== saved.valueRevision
+                          }
                           value={configDraft ?? config?.value ?? ''}
                           error={configError || undefined}
                           description={
@@ -917,7 +989,17 @@ function VariableEditor({ id }: { id: string }) {
                           }
                           onChange={(e) => setConfigDraft(e.target.value)}
                         />
-                        {config?.revision === null &&
+                        {configError && (
+                          <Button
+                            variant="ghost"
+                            disabled={dirty || busy}
+                            onClick={retryConfig}
+                          >
+                            Retry Config value
+                          </Button>
+                        )}
+                        {saved.valueRevision === null &&
+                          config?.revision === null &&
                           configDraft === undefined && (
                             <Button
                               className={styles.valueAction}

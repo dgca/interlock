@@ -4,7 +4,6 @@ import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useRef,
   useState,
   type ReactNode,
@@ -12,93 +11,78 @@ import {
 
 import { Pause, Play, RefreshCw } from 'lucide-react';
 import { api, errorMessage } from '../../lib/api';
+import {
+  refreshQueries,
+  trpc,
+  useQuery,
+  useQueryClient,
+} from '../../lib/query';
 import styles from './PauseControls.module.css';
 
 type Holds = Awaited<ReturnType<typeof api.pauses.list.query>>;
-type PauseStatus = {
-  data?: Holds;
-  busy?: boolean;
-  error?: string;
-  actionError?: string;
-};
+type PauseAction = { busy?: boolean; actionError?: string };
 const Context = createContext<{
-  tick: number;
-  statuses: Record<string, PauseStatus>;
-  refresh: (workflowId: string) => void;
+  actions: ReadonlyMap<string, PauseAction>;
   setPaused: (workflowId: string, paused: boolean) => Promise<void>;
 } | null>(null);
 
-export function PauseProvider({
-  children,
-  tick = 0,
-}: {
-  children: ReactNode;
-  tick?: number;
-}) {
-  const [statuses, setStatuses] = useState<Record<string, PauseStatus>>({});
-  const requests = useRef(new Map<string, Promise<Holds>>());
+function holdOptions(workflowId: string) {
+  // The editor needs every applicable hold, including legacy instances
+  // with multiple pages. Keep the aggregate separate from a single API page.
+  const page = trpc.pauses.list.queryKey({ workflowId, offset: 0, limit: 100 });
+  return {
+    queryKey: [...page, 'all'] as const,
+    queryFn: async ({ signal }: { signal: AbortSignal }): Promise<Holds> => {
+      const items: Holds['items'] = [];
+      let offset: number | null = 0;
+      do {
+        const next = await api.pauses.list.query(
+          { workflowId, offset, limit: 100 },
+          { signal },
+        );
+        items.push(...next.items);
+        offset = next.nextOffset ?? null;
+      } while (offset !== null);
+      return { items, total: items.length, nextOffset: null };
+    },
+  };
+}
+
+export function PauseProvider({ children }: { children: ReactNode }) {
+  const client = useQueryClient();
+  const [actions, setActions] = useState<ReadonlyMap<string, PauseAction>>(
+    () => new Map(),
+  );
   const pending = useRef(new Set<string>());
   const update = useCallback(
-    (workflowId: string, patch: Partial<PauseStatus>) => {
-      setStatuses((old) => ({
-        ...old,
-        [workflowId]: { ...old[workflowId], ...patch },
-      }));
+    (workflowId: string, patch: Partial<PauseAction>) => {
+      setActions((old) => {
+        const next = new Map(old);
+        const action = { ...old.get(workflowId), ...patch };
+        if (action.busy || action.actionError) next.set(workflowId, action);
+        else next.delete(workflowId);
+        return next;
+      });
     },
     [],
-  );
-  const load = useCallback(
-    (workflowId: string): Promise<Holds> => {
-      const existing = requests.current.get(workflowId);
-      if (existing) return existing;
-      const request = (async () => {
-        const items: Holds['items'] = [];
-        let offset: number | null = 0;
-        do {
-          const page = await api.pauses.list.query({
-            workflowId,
-            offset,
-            limit: 100,
-          });
-          items.push(...page.items);
-          offset = page.nextOffset ?? null;
-        } while (offset !== null);
-        return { items, total: items.length, nextOffset: null };
-      })()
-        .then(
-          (data) => {
-            update(workflowId, { data, error: '' });
-            return data;
-          },
-          (error) => {
-            update(workflowId, { error: errorMessage(error) });
-            throw error;
-          },
-        )
-        .finally(() => requests.current.delete(workflowId));
-      requests.current.set(workflowId, request);
-      return request;
-    },
-    [update],
-  );
-  const refresh = useCallback(
-    (workflowId: string) => {
-      if (!pending.current.has(workflowId))
-        void load(workflowId).catch(() => {});
-    },
-    [load],
   );
   const setPaused = useCallback(
     async (workflowId: string, paused: boolean) => {
       if (pending.current.has(workflowId)) return;
       pending.current.add(workflowId);
       update(workflowId, { busy: true, actionError: '' });
+      const options = holdOptions(workflowId);
+      const filter = { queryKey: options.queryKey, exact: true };
+      const acknowledge = (data: Holds) => {
+        void client.cancelQueries(filter);
+        client.setQueryData(options.queryKey, data);
+      };
       try {
-        // Finish older reads, then inspect current holds before changing them.
-        await requests.current.get(workflowId)?.catch(() => {});
         let current: Holds;
         try {
-          current = await load(workflowId);
+          // Start a fresh status read before deciding whether to write.
+          await client.cancelQueries(filter);
+          current = await client.fetchQuery(options);
         } catch {
           return;
         }
@@ -112,7 +96,7 @@ export function PauseProvider({
                 total: current.total - 1,
                 nextOffset: null,
               };
-              update(workflowId, { data: current });
+              acknowledge(current);
             }
           } else if (paused && !current.total) {
             const hold = await api.pauses.pause.mutate({
@@ -120,24 +104,22 @@ export function PauseProvider({
               actor: 'Interlock UI',
               reason: 'Paused from the workflow editor',
             });
-            update(workflowId, {
-              data: { items: [hold], total: 1, nextOffset: null },
-            });
+            acknowledge({ items: [hold], total: 1, nextOffset: null });
           }
         } catch (error) {
           update(workflowId, { actionError: errorMessage(error) });
         }
         // Keep acknowledged writes when this read fails; retry only the read.
-        await load(workflowId).catch(() => {});
+        await refreshQueries(client, filter);
       } finally {
         pending.current.delete(workflowId);
         update(workflowId, { busy: false });
       }
     },
-    [load, update],
+    [client, update],
   );
   return (
-    <Context.Provider value={{ tick, statuses, refresh, setPaused }}>
+    <Context.Provider value={{ actions, setPaused }}>
       {children}
     </Context.Provider>
   );
@@ -145,12 +127,19 @@ export function PauseProvider({
 
 function useHolds(workflowId: string) {
   const context = useContext(Context);
-  const refresh = context?.refresh;
-  const tick = context?.tick;
-  useEffect(() => {
-    refresh?.(workflowId);
-  }, [workflowId, tick, refresh]);
-  return { context, status: context?.statuses[workflowId] };
+  const result = useQuery({
+    ...holdOptions(workflowId),
+    enabled: Boolean(context),
+  });
+  return {
+    context,
+    status: {
+      ...context?.actions.get(workflowId),
+      data: result.data,
+      error: result.error ? errorMessage(result.error) : '',
+    },
+    retry: () => void result.refetch({ cancelRefetch: false }),
+  };
 }
 
 export function WorkflowPauseButton({
@@ -160,7 +149,7 @@ export function WorkflowPauseButton({
   workflowId: string;
   compact?: boolean;
 }) {
-  const { context, status } = useHolds(workflowId);
+  const { context, status, retry } = useHolds(workflowId);
   const local = status?.data?.items.some((hold) => hold.scope === 'workflow');
   const libraryOnly = !!status?.data?.total && !local;
   const label = status?.error
@@ -182,7 +171,7 @@ export function WorkflowPauseButton({
       : undefined,
     loading: status?.busy,
     onClick: () => {
-      if (status?.error) context?.refresh(workflowId);
+      if (status.error) retry();
       else void context?.setPaused(workflowId, !local);
     },
   };
@@ -209,7 +198,7 @@ export function PauseBanner({
   workflowId: string;
   run?: boolean;
 }) {
-  const { context, status } = useHolds(workflowId);
+  const { status, retry } = useHolds(workflowId);
   if (!status?.data?.total && !status?.error && !status?.actionError)
     return null;
   const library = status.data?.items.some((hold) => hold.scope === 'library');
@@ -242,11 +231,7 @@ export function PauseBanner({
         )}
       </Stack>
       {status.error ? (
-        <Button
-          variant="ghost"
-          disabled={status.busy}
-          onClick={() => context?.refresh(workflowId)}
-        >
+        <Button variant="ghost" disabled={status.busy} onClick={retry}>
           Retry pause status
         </Button>
       ) : run ? (

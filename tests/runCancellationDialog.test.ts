@@ -33,7 +33,6 @@ let root: Root,
   runId: string,
   childId: string;
 const closed = vi.fn(),
-  changed = vi.fn(),
   opened = vi.fn();
 
 beforeEach(() => {
@@ -57,7 +56,7 @@ beforeEach(() => {
       disconnect() {}
     },
   );
-  for (const fn of [calls.preview, calls.cancel, closed, changed, opened])
+  for (const fn of [calls.preview, calls.cancel, closed, opened])
     fn.mockReset();
   engine = new Engine(new Store(':memory:'), process.cwd());
   const child = engine.create('Independent task', '', blankDefinition());
@@ -107,7 +106,6 @@ async function render() {
           h(RunCancellationDialog, {
             runId,
             onClose: closed,
-            onCancelled: changed,
             onOpen: opened,
           }),
         ),
@@ -171,7 +169,6 @@ it('previews a terminal parent, explicitly selects detached work, and requires a
     status: 'cancelled',
     cancellationReason: 'Stop runaway batch',
   });
-  expect(changed).toHaveBeenCalledTimes(1);
   expect(closed).toHaveBeenCalledTimes(1);
 });
 
@@ -225,7 +222,6 @@ it('retains the reason after failure, reloads the preview, and prevents duplicat
       .disabled,
   ).toBe(true);
   await act(async () => resolveCancel());
-  expect(changed).toHaveBeenCalledTimes(1);
   expect(closed).toHaveBeenCalledTimes(1);
 });
 
@@ -296,10 +292,6 @@ it('invalidates inactive run lists, attention, child details and work immediatel
     client.setQueryData<unknown>(key, 'before cancellation');
   const unrelated = trpc.executors.profiles.queryKey();
   client.setQueryData<unknown>(unrelated, []);
-  changed.mockImplementation(() => {
-    for (const key of keys)
-      expect(client.getQueryState(key)?.isInvalidated).toBe(true);
-  });
   await render();
   await toggleDetached();
   await reason('Stop tree');
@@ -309,7 +301,8 @@ it('invalidates inactive run lists, attention, child details and work immediatel
     expect(client.getQueryState(key)?.isInvalidated).toBe(false);
   await click('Reload affected runs');
   await click('Cancel run tree');
-  expect(changed).toHaveBeenCalledOnce();
+  for (const key of keys)
+    expect(client.getQueryState(key)?.isInvalidated).toBe(true);
   expect(client.getQueryState(unrelated)?.isInvalidated).toBe(false);
 });
 

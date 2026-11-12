@@ -4,23 +4,20 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 
 import { errorMessage } from '../../lib/api';
-import { trpc, useQuery, useRefreshOnTick } from '../../lib/query';
+import { trpc, useQuery } from '../../lib/query';
 import { paths } from '../../routes/paths';
 
 export function AutomationAlerts({
   workflowId,
-  tick,
   onCount,
 }: {
   workflowId?: string;
-  tick: number;
   onCount?: (count: number) => void;
 }) {
   const [offset, setOffset] = useState(0);
   const result = useQuery(
     trpc.triggers.attention.queryOptions({ workflowId, offset }),
   );
-  useRefreshOnTick(tick, result.refetch, true, result.isFetching);
   const page = result.data;
   const error = result.error ? errorMessage(result.error) : '';
   useEffect(() => {

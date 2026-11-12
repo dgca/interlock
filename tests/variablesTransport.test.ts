@@ -51,6 +51,9 @@ it.each(['http', 'stdio'])(
         ['read_variables', 'manage_variables'].includes(t.name),
       );
       expect(schemas).toHaveLength(2);
+      expect(
+        schemas.find((tool) => tool.name === 'read_variables')?.description,
+      ).toContain('valueRevision');
       if (discovery) expect(schemas).toEqual(discovery);
       else discovery = schemas;
       const definition = JSON.stringify(
@@ -100,7 +103,30 @@ it.each(['http', 'stdio'])(
         await call('read_variables', {
           request: { action: 'config_value', id: config.id },
         }),
-      ).toEqual({ id: config.id, value: 'non-secret-config' });
+      ).toEqual({
+        id: config.id,
+        value: 'non-secret-config',
+        valueRevision: 1,
+      });
+      await call('manage_variables', {
+        request: {
+          action: 'update',
+          id: config.id,
+          expectedRevision: 1,
+          value: 'rotated-config',
+        },
+      });
+      const shared = createClient(url);
+      const readConfig = { action: 'config_value' as const, id: config.id };
+      const rotated = {
+        id: config.id,
+        value: 'rotated-config',
+        valueRevision: 2,
+      };
+      expect(await call('read_variables', { request: readConfig })).toEqual(
+        rotated,
+      );
+      expect(await shared.variables.read.query(readConfig)).toEqual(rotated);
       const d = blankDefinition();
       d.nodes[1] = nodeSchema.parse({
         id: 'agent',
@@ -164,7 +190,6 @@ it.each(['http', 'stdio'])(
         { request: { action: 'delete', id: variable.id, expectedRevision: 2 } },
         true,
       );
-      const shared = createClient(url);
       if (mode === 'http') {
         const rejections = [
           {

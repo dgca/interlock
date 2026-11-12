@@ -156,6 +156,7 @@ export class Variables {
         );
       return {
         id: variable.id,
+        valueRevision: variable.valueRevision,
         value: this.store.protectedValues.read(
           variable.id,
           variable.kind,

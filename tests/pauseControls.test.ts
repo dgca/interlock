@@ -1,8 +1,12 @@
 // @vitest-environment jsdom
 import { act, createElement as h } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import {
+  createQueryClient,
+  refreshQueries,
+} from '../packages/ui/src/lib/query';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { DesignSystemProvider } from '../packages/ui/src/design-system';
+import { UiTestProvider as DesignSystemProvider } from './uiTestProvider';
 import { Engine } from '@interlock/runtime';
 import { Store } from '@interlock/storage';
 import { blankDefinition } from '@interlock/core';
@@ -37,14 +41,13 @@ async function click(name: string) {
   expect(button(name), name).toBeDefined();
   await act(async () => button(name).click());
 }
-async function render(tick = 0) {
+async function render() {
   await act(async () =>
     root.render(
       h(
         DesignSystemProvider,
-        { env: 'test' },
+        { env: 'test', client },
         h(PauseProvider, {
-          tick,
           children: [
             h(WorkflowPauseButton, { key: 'button', workflowId }),
             h(PauseBanner, { key: 'banner', workflowId }),
@@ -61,7 +64,9 @@ function hold(scope: 'workflow' | 'library' = 'workflow') {
     reason: scope === 'workflow' ? 'Workflow maintenance' : 'Deployment',
   });
 }
+let client: ReturnType<typeof createQueryClient>;
 beforeEach(() => {
+  client = createQueryClient();
   (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
   window.matchMedia = vi.fn().mockReturnValue({
     matches: false,
@@ -213,6 +218,7 @@ it('resumes legacy workflow holds across all pages while preserving library hold
   await render();
   expect(rpc.list).toHaveBeenCalledWith(
     expect.objectContaining({ offset: 100 }),
+    expect.objectContaining({ signal: expect.any(AbortSignal) }),
   );
   await click('Resume workflow');
   expect(rpc.resume).toHaveBeenCalledTimes(101);
@@ -238,14 +244,14 @@ it('retains paused status after a partial resume fails and retries only remainin
   expect(engine.pauses.list({ workflowId }).total).toBe(0);
   expect(rpc.resume).toHaveBeenCalledTimes(3);
 });
-it('does not poll inactive pauses and refreshes from the shared workspace tick', async () => {
+it('does not poll inactive pauses and refreshes from the shared query cache', async () => {
   await render();
   rpc.list.mockClear();
   vi.useFakeTimers();
   await act(async () => vi.advanceTimersByTimeAsync(20_000));
   expect(rpc.list).not.toHaveBeenCalled();
   hold();
-  await render(1);
+  await act(async () => refreshQueries(client));
   expect(rpc.list).toHaveBeenCalledOnce();
   expect(button('Resume workflow')).toBeDefined();
 });

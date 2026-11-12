@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { TRPCClientError } from '@interlock/client';
 import { transferableAbortController } from 'node:util';
 import { act, createElement as h, useEffect } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -990,7 +991,7 @@ it('retries a failed refresh promptly even while the event stream is healthy', a
   await advance(100);
   queries.workflows.mockClear();
   queries.workflows.mockRejectedValueOnce(
-    new Error('Temporary request failure'),
+    new TRPCClientError('Temporary request failure'),
   );
   await act(async () => streamListeners.get('change')!());
   await advance(100);
@@ -999,6 +1000,43 @@ it('retries a failed refresh promptly even while the event stream is healthy', a
   expect(queries.workflows).toHaveBeenCalledTimes(2);
   await advance(5_000);
   expect(queries.workflows).toHaveBeenCalledTimes(2);
+});
+
+it('keeps healthy stream polling when an active read is permanently rejected', async () => {
+  vi.useFakeTimers();
+  const message = 'The saved prompt no longer exists.';
+  queries.prompt.mockRejectedValue(
+    new TRPCClientError(message, {
+      result: {
+        error: {
+          code: -32603,
+          message,
+          data: {
+            code: 'INTERNAL_SERVER_ERROR',
+            httpStatus: 500,
+            domainRejection: true,
+          },
+        },
+      },
+    }),
+  );
+  await mount('/prompts/test-prompt');
+  await act(async () => streamListeners.get('connect')!());
+  await act(async () => vi.advanceTimersByTimeAsync(100));
+  queries.workflows.mockClear();
+  queries.connection.mockClear();
+  await act(async () => {
+    streamListeners.get('change')!();
+    await vi.advanceTimersByTimeAsync(100);
+  });
+  expect(container.textContent).toContain(message);
+  const reads = queries.prompt.mock.calls.length;
+  await click('Retry');
+  expect(queries.prompt).toHaveBeenCalledTimes(reads + 1);
+  expect(queries.workflows).toHaveBeenCalledTimes(1);
+  await act(async () => vi.advanceTimersByTimeAsync(5_000));
+  expect(queries.workflows).toHaveBeenCalledTimes(1);
+  expect(queries.connection).not.toHaveBeenCalled();
 });
 
 it('renders a slow summary and coalesces live updates into one follow-up request', async () => {

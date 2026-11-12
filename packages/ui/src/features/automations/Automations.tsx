@@ -16,7 +16,7 @@ import {
 } from '../../components/WorkspaceReads';
 import { ListTable, ListTableRow } from '../../components/ListTable/ListTable';
 import { useEffect, useRef } from 'react';
-import { trpc, useQuery, useRefreshOnTick } from '../../lib/query';
+import { trpc, useQuery } from '../../lib/query';
 import {
   Link,
   useLocation,
@@ -151,14 +151,13 @@ function AutomationType() {
 }
 
 function AutomationList() {
-  const { workflows, tick } = useOutletContext<AppContext>();
+  const { workflows } = useOutletContext<AppContext>();
   const [search, setSearch] = useSearchParams();
   const query = listQuery(search);
   const searchInput = useRef<HTMLInputElement>(null);
   const result = useQuery(
     trpc.triggers.list.queryOptions({ ...query, limit: 20 }),
   );
-  useRefreshOnTick(tick, result.refetch, true, result.isFetching);
   const page = result.data;
   const read = workspaceRead('automations', result, searchInput);
   const filtered = Boolean(

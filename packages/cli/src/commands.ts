@@ -628,7 +628,7 @@ export async function runCommand(argv: string[]) {
           'report [--workflow <id>] [--since <ISO datetime>] [--until <ISO datetime>] [--limit <n>] [--tag KEY=VALUE ...] [--json] (workflow performance and cost report over time window)',
           'doctor [--live] [--json] (read-only system health and readiness check; returns non-zero on failure)',
           'triggers <read|manage> <json|@file> (schedule/event configuration; paged search/status filters and scoped counts; mutations use expectedRevision; create defaults disabled, enabled:true opts in; imports disabled; schedules alias retained)',
-          'variables <read|manage> <json|@file> [--value-stdin] (metadata list/inspect, explicit config_value; write-only Secret creation/replacement through stdin)',
+          'variables <read|manage> <json|@file> [--value-stdin] (metadata list/inspect, explicit config_value with valueRevision, write-only Secret creation/replacement through stdin)',
           'stalls [json|@file] (settings by default; configure with expectedRevision/policy, inspect with runId/offset/limit)',
           'executors [json|@file] (list by default; settings/save_settings, save profiles, models, inspect work, transcript by executionId with before/after paging, message with executionId/requestId/message, receipt with executionId/requestId, respond, retry_model, stop, reconcile)',
           'workflows [scope-json: {"ownerWorkflowId":null|"parent-id"}]',

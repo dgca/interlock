@@ -2,6 +2,10 @@
 import { act, createElement as h } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { UiTestProvider as DesignSystemProvider } from './uiTestProvider';
+import {
+  createQueryClient,
+  refreshQueries,
+} from '../packages/ui/src/lib/query';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { blankDefinition } from '@interlock/core';
 import { Engine } from '@interlock/runtime';
@@ -24,7 +28,9 @@ let root: Root,
   store: Store,
   engine: Engine,
   id: string;
+let client: ReturnType<typeof createQueryClient>;
 beforeEach(() => {
+  client = createQueryClient();
   (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
   window.matchMedia = vi.fn().mockReturnValue({
     matches: false,
@@ -49,9 +55,9 @@ afterEach(async () => {
   engine.stop();
   store.close();
 });
-async function render(tick = 0) {
+async function render() {
   await act(async () =>
-    root.render(h(DesignSystemProvider, {}, h(RunUsage, { id, tick }))),
+    root.render(h(DesignSystemProvider, { client }, h(RunUsage, { id }))),
   );
 }
 it('shows unknown usage and makes descendant inclusion an explicit choice', async () => {
@@ -158,7 +164,7 @@ it('separates requested tiers, declared selections and usage-reported models', a
       models: [{ provider: 'used-provider', model: 'used-model' }],
     },
   });
-  await render(1);
+  await act(async () => refreshQueries(client));
   expect(cells()).toContain('used-provider / used-model');
   expect(cells()).toContain(
     'Tier: fast; provider: declared-provider; model: declared-model',
