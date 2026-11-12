@@ -31,8 +31,7 @@ export class WorkHolds {
         : undefined);
     const end = endAt ? Date.parse(endAt) : Date.now();
     const intervals = this.store
-      .list<WorkHoldInterval>(collection)
-      .filter((h) => h.workId === workId)
+      .forWork<WorkHoldInterval>(collection, workId)
       .sort((a, b) => b.revision - a.revision);
     const wallMs = Math.max(0, end - Date.parse(work.createdAt));
     const declaredHeldMs = intervals.reduce(

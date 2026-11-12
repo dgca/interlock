@@ -332,8 +332,8 @@ export class ExecutorManager {
       occupied.set(job.work.id, job.record.profile.id);
     for (const [id, profile] of this.pendingLaunches) occupied.set(id, profile);
     for (const [id, session] of this.launchedWork) {
-      const work = this.engine.store.get<WorkRequest>('work', id);
-      if (work && ['available', 'claimed'].includes(work.status))
+      const status = this.engine.store.workStatus(id);
+      if (status === 'available' || status === 'claimed')
         occupied.set(id, session.profile.id);
     }
     return [...occupied.values()].filter((id) => !profileId || id === profileId)
