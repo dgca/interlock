@@ -1,16 +1,8 @@
-import {
-  Button,
-  Group,
-  Notification,
-  Text,
-  Modal,
-  ModalBody,
-  ModalFooter,
-} from './design-system';
+import { Button, Group, Notification, Text } from './design-system';
 
 import { PauseProvider } from './features/pauses/PauseControls';
 import { useUiFeatures } from './lib/uiFeatures';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Check, AlertCircle } from 'lucide-react';
 
 import { Outlet, useBlocker, useMatch, useNavigate } from 'react-router';
@@ -25,7 +17,10 @@ import { trpc, useQuery, useQueryClient, refreshQueries } from './lib/query';
 import { subscribeToEngineEvents } from './lib/engineEvents';
 import type { Action } from './lib/useActionFeedback';
 import { aiSettingsTab } from './features/executors/aiSettingsNavigation';
+import { DiscardChangesDialog } from './components/DiscardChangesDialog';
 import { WorkflowLayoutNotice } from './features/workflows/WorkflowLayoutNotice';
+
+type EditorGuard = 'dirty' | 'saving' | undefined;
 
 export type AppContext = {
   workflows: Workflow[];
@@ -36,6 +31,8 @@ export type AppContext = {
   tick: number;
   act: Action;
   onDirty: (dirty: boolean) => void;
+  onEditorGuard: (guard: EditorGuard) => void;
+  editorNavigationBlocked: boolean;
   onScheduleDirty: (dirty: boolean) => void;
   onSchedulePending: (pending: boolean) => void;
   onSaved: (workflow: Workflow) => void;
@@ -107,22 +104,39 @@ export function App() {
     ? new URL(connectionQuery.data.engineUrl).host
     : undefined;
   const [editorDirty, setEditorDirty] = useState(false);
+  const editorGuard = useRef<EditorGuard>(undefined);
+  const onEditorGuard = useCallback((guard: EditorGuard) => {
+    editorGuard.current = guard;
+  }, []);
+  const blockedWhileSaving = useRef(false);
   const [scheduleDirty, setScheduleDirty] = useState(false);
   const [schedulePending, setSchedulePending] = useState(false);
   const [connectDialog, setConnectDialog] = useState(false);
   const [loadError, setLoadError] = useState('');
   const effectiveLoadError =
     loadError || (readError ? errorMessage(readError) : '');
-  const blocker = useBlocker(
-    ({ currentLocation, nextLocation }) =>
-      (editorDirty &&
-        (currentLocation.pathname !== nextLocation.pathname ||
-          (currentLocation.pathname === paths.harnesses &&
-            aiSettingsTab(currentLocation) !== aiSettingsTab(nextLocation)))) ||
+  const blocker = useBlocker(({ currentLocation, nextLocation }) => {
+    const leavingEditor =
+      currentLocation.pathname !== nextLocation.pathname ||
+      (currentLocation.pathname === paths.harnesses &&
+        aiSettingsTab(currentLocation) !== aiSettingsTab(nextLocation));
+    const blocked =
+      (leavingEditor && (editorDirty || editorGuard.current !== undefined)) ||
       ((scheduleDirty || schedulePending) &&
         (currentLocation.pathname !== nextLocation.pathname ||
-          currentLocation.search !== nextLocation.search)),
-  );
+          currentLocation.search !== nextLocation.search));
+    if (blocked)
+      blockedWhileSaving.current =
+        leavingEditor && editorGuard.current === 'saving';
+    return blocked;
+  });
+  const editorNavigationBlocked =
+    blocker.state === 'blocked' && !blockedWhileSaving.current;
+  useEffect(() => {
+    // A navigation attempted during a save must never proceed after it settles.
+    if (blocker.state === 'blocked' && blockedWhileSaving.current)
+      blocker.reset();
+  }, [blocker]);
   const [connected, setConnected] = useState(false),
     [tick, setTick] = useState(0),
     [runDialog, setRunDialog] = useState<Workflow>();
@@ -241,6 +255,8 @@ export function App() {
     tick,
     act,
     onDirty: setEditorDirty,
+    onEditorGuard,
+    editorNavigationBlocked,
     onScheduleDirty: setScheduleDirty,
     onSchedulePending: setSchedulePending,
     onSaved: (w) => {
@@ -310,36 +326,16 @@ export function App() {
           />
           <Outlet context={context} />
         </main>
-        {blocker.state === 'blocked' && (
-          <Modal
-            onClose={() => blocker.state === 'blocked' && blocker.reset()}
-            title="Discard unsaved changes?"
-          >
-            <ModalBody>
-              <Text>You have changes that have not been saved.</Text>
-            </ModalBody>
-            <ModalFooter>
-              <Button
-                variant="secondary"
-                onClick={() => blocker.state === 'blocked' && blocker.reset()}
-              >
-                Keep editing
-              </Button>
-              <Button
-                variant="danger"
-                disabled={schedulePending}
-                onClick={() => {
-                  if (blocker.state === 'blocked') {
-                    setEditorDirty(false);
-                    setScheduleDirty(false);
-                    blocker.proceed();
-                  }
-                }}
-              >
-                Discard changes
-              </Button>
-            </ModalFooter>
-          </Modal>
+        {blocker.state === 'blocked' && editorNavigationBlocked && (
+          <DiscardChangesDialog
+            onKeepEditing={blocker.reset}
+            discardDisabled={schedulePending}
+            onDiscard={() => {
+              setEditorDirty(false);
+              setScheduleDirty(false);
+              blocker.proceed();
+            }}
+          />
         )}
         {features.connectAgent && connectDialog && (
           <ConnectDialog onClose={() => setConnectDialog(false)} />

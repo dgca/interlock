@@ -20,6 +20,8 @@ import { ArrowRight, Plus, Save, Search, Trash2 } from 'lucide-react';
 import type { PromptContent, SavedPrompt } from '@interlock/core';
 
 import type { Action } from '../../lib/useActionFeedback';
+import { useDraftDismissal } from '../../lib/useDraftDismissal';
+import { useEditorDraft } from '../../lib/useEditorDraft';
 import { useBeforeUnloadWarning } from '../../lib/useBeforeUnloadWarning';
 import { api, errorMessage } from '../../lib/api';
 import {
@@ -94,17 +96,10 @@ export function PromptLibrary({
   prompts: SavedPrompt[];
   act: Action;
 }) {
-  const navigate = useNavigate();
-  const createFormId = useId();
   const [query, setQuery] = useState('');
-  const [draft, setDraft] = useState<PromptContent>();
-  const [busy, setBusy] = useState(false);
+  const [creating, setCreating] = useState(false);
   const searchInput = useRef<HTMLInputElement>(null);
-  const [error, setError] = useState('');
-  const openCreate = () => {
-    setError('');
-    setDraft({ name: '', description: '', content: '' });
-  };
+  const openCreate = () => setCreating(true);
   const visible = prompts
     .filter((p) =>
       `${p.name} ${p.description}`.toLowerCase().includes(query.toLowerCase()),
@@ -176,59 +171,98 @@ export function PromptLibrary({
           </EmptyState>
         )}
       </div>
-      {draft && (
-        <Modal
-          onClose={() => !busy && setDraft(undefined)}
-          title="New prompt"
-          size={650}
-          busy={busy}
-        >
-          <ModalBody>
-            <form
-              id={createFormId}
-              onSubmit={(e) => {
-                e.preventDefault();
-                void (async () => {
-                  setBusy(true);
-                  setError('');
-                  let id: string | undefined;
-                  await act(
-                    async () => {
-                      id = (await api.prompts.create.mutate(draft)).id;
-                    },
-                    'Prompt created.',
-                    setError,
-                  );
-                  setBusy(false);
-                  if (id) {
-                    setDraft(undefined);
-                    void navigate(paths.prompt(id));
-                  }
-                })();
-              }}
-            >
-              <fieldset disabled={busy} className={styles.fields}>
-                <PromptFields value={draft} onChange={setDraft} />
-              </fieldset>
-              <ActionError message={error} />
-            </form>
-          </ModalBody>
-          <ModalFooter>
-            <Button disabled={busy} onClick={() => setDraft(undefined)}>
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              form={createFormId}
-              variant="primary"
-              disabled={busy || !draft.name.trim() || !draft.content.trim()}
-            >
-              {busy ? 'Creating…' : 'Create prompt'}
-            </Button>
-          </ModalFooter>
-        </Modal>
+      {creating && (
+        <NewPromptDialog act={act} onClose={() => setCreating(false)} />
       )}
     </section>
+  );
+}
+
+const blankPrompt: PromptContent = { name: '', description: '', content: '' };
+
+function NewPromptDialog({
+  act,
+  onClose,
+}: {
+  act: Action;
+  onClose: () => void;
+}) {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const formId = useId();
+  const [draft, setDraft] = useState(blankPrompt);
+  const [error, setError] = useState('');
+  const dirty = !same(draft, blankPrompt);
+  const { busy, beginSave, finishSave } = useEditorDraft(dirty);
+  const { dismiss, covered, confirmation } = useDraftDismissal(
+    dirty,
+    busy,
+    onClose,
+  );
+
+  return (
+    <>
+      <Modal
+        onClose={dismiss}
+        title="New prompt"
+        size={650}
+        busy={busy}
+        covered={covered}
+      >
+        <ModalBody>
+          <form
+            id={formId}
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!beginSave()) return;
+              setError('');
+              void act(
+                async () => {
+                  const created = await api.prompts.create.mutate(draft);
+                  void queryClient.cancelQueries(
+                    trpc.prompts.list.queryFilter(),
+                  );
+                  queryClient.setQueryData(
+                    trpc.prompts.list.queryKey(),
+                    (prompts = []) =>
+                      prompts.some((prompt) => prompt.id === created.id)
+                        ? prompts
+                        : [...prompts, created],
+                  );
+                  if (finishSave(true)) {
+                    onClose();
+                    void navigate(paths.prompt(created.id));
+                  }
+                },
+                'Prompt created.',
+                (message) => {
+                  if (finishSave(false)) setError(message);
+                },
+              );
+            }}
+          >
+            <fieldset disabled={busy} className={styles.fields}>
+              <PromptFields value={draft} onChange={setDraft} />
+            </fieldset>
+            <ActionError message={error} />
+          </form>
+        </ModalBody>
+        <ModalFooter>
+          <Button disabled={busy} onClick={dismiss}>
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            form={formId}
+            variant="primary"
+            disabled={busy || !draft.name.trim() || !draft.content.trim()}
+          >
+            {busy ? 'Creating…' : 'Create prompt'}
+          </Button>
+        </ModalFooter>
+      </Modal>
+      {confirmation}
+    </>
   );
 }
 

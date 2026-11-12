@@ -17,6 +17,7 @@ export function Modal({
   height,
   backLabel,
   busy = false,
+  covered = false,
   size = 550,
   returnFocusTo,
 }: {
@@ -26,10 +27,27 @@ export function Modal({
   height?: number;
   backLabel?: string;
   busy?: boolean;
+  covered?: boolean;
   size?: ComponentProps<typeof MantineModal>['size'];
   returnFocusTo?: () => HTMLElement | null;
 }) {
   const dismissButton = useRef<HTMLButtonElement>(null);
+  const lastFocused = useRef<HTMLElement | null>(null);
+  const focusBeforeCover = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (covered) {
+      focusBeforeCover.current = lastFocused.current;
+      return;
+    }
+    const target = focusBeforeCover.current;
+    if (!target) return;
+    // Restore after Mantine reactivates its focus trap and runs initial focus.
+    const timer = window.setTimeout(() => {
+      focusBeforeCover.current = null;
+      if (target.isConnected) target.focus({ preventScroll: true });
+    });
+    return () => window.clearTimeout(timer);
+  }, [covered]);
   useEffect(() => {
     if (backLabel) dismissButton.current?.focus();
   }, [backLabel]);
@@ -75,12 +93,18 @@ export function Modal({
         ref: dismissButton,
         'aria-label': backLabel ?? 'Close dialog',
         title: backLabel,
-        disabled: busy,
+        disabled: busy || covered,
         icon: backLabel ? (
           <ArrowLeft size={18} aria-hidden="true" />
         ) : undefined,
       }}
-      closeOnEscape={!busy}
+      onFocusCapture={(event) => {
+        if (event.target instanceof HTMLElement)
+          lastFocused.current = event.target;
+      }}
+      inert={covered}
+      trapFocus={!covered}
+      closeOnEscape={!busy && !covered}
       closeOnClickOutside={false}
     >
       {children}

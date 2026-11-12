@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate, useOutletContext, useParams } from 'react-router';
+import { useNavigate, useOutletContext, useParams } from 'react-router';
 import { ArrowDown, ArrowUp, Plus, X } from 'lucide-react';
 import {
   ActionError,
@@ -22,6 +22,7 @@ import {
   useQuery,
   useQueryClient,
 } from '../../lib/query';
+import { useEditorDraft } from '../../lib/useEditorDraft';
 import { paths } from '../../routes/paths';
 import classes from './Boards.module.css';
 
@@ -53,15 +54,27 @@ export function BoardSettingsRoute() {
 }
 
 function BoardSettings({ initial }: { initial?: Settings }) {
-  const [name, setName] = useState(initial?.name ?? '');
+  const [baseline] = useState(initial);
+  const [name, setName] = useState(baseline?.name ?? '');
   const [columns, setColumns] = useState<Column[]>(
     () =>
-      initial?.columns.map((column) => ({ ...column, key: column.id })) ?? [],
+      baseline?.columns.map((column) => ({ ...column, key: column.id })) ?? [],
   );
-  const [selected, setSelected] = useState(initial?.workflowIds ?? []);
+  const [selected, setSelected] = useState(baseline?.workflowIds ?? []);
   const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [revision] = useState(initial?.revision);
+  const originalColumns = baseline?.columns ?? [];
+  const originalWorkflows = baseline?.workflowIds ?? [];
+  const dirty =
+    name !== (baseline?.name ?? '') ||
+    columns.length !== originalColumns.length ||
+    columns.some(
+      (column, index) =>
+        column.id !== originalColumns[index].id ||
+        column.name !== originalColumns[index].name,
+    ) ||
+    selected.length !== originalWorkflows.length ||
+    selected.some((id) => !originalWorkflows.includes(id));
+  const { busy, beginSave, finishSave } = useEditorDraft(dirty);
   const { workflows } = useOutletContext<AppContext>();
   const boards = useQuery(trpc.boards.list.queryOptions());
   const client = useQueryClient();
@@ -90,13 +103,12 @@ function BoardSettings({ initial }: { initial?: Settings }) {
           className={classes.form}
           onSubmit={async (event) => {
             event.preventDefault();
-            if (busy) return;
-            setBusy(true);
+            if (!beginSave()) return;
             setError('');
             try {
               const board = await api.boards.save.mutate({
                 id: initial?.id,
-                expectedRevision: revision,
+                expectedRevision: baseline?.revision,
                 name,
                 columns: columns.map(({ id, name }) => ({ id, name })),
                 workflowIds: selected,
@@ -106,12 +118,15 @@ function BoardSettings({ initial }: { initial?: Settings }) {
                     .map((workflow) => [workflow.id, workflow.boardId ?? null]),
                 ),
               });
-              await refreshQueries(client);
-              void navigate(paths.board(board.id));
+              // The write omits protected columns. Reopen from a fresh settings read.
+              client.removeQueries({
+                ...trpc.boards.settings.queryFilter({ id: board.id }),
+                exact: true,
+              });
+              void refreshQueries(client);
+              if (finishSave(true)) void navigate(paths.board(board.id));
             } catch (error) {
-              setError(errorMessage(error));
-            } finally {
-              setBusy(false);
+              if (finishSave(false)) setError(errorMessage(error));
             }
           }}
         >
@@ -231,15 +246,14 @@ function BoardSettings({ initial }: { initial?: Settings }) {
             </Stack>
             <ActionError message={error} />
             <Group justify="flex-end">
-              <Button component={Link} to={returnTo}>
+              <Button disabled={busy} onClick={() => void navigate(returnTo)}>
                 Cancel
               </Button>
               <Button
                 variant="primary"
                 type="submit"
-                disabled={
-                  busy || !name.trim() || (moves.length > 0 && !boards.data)
-                }
+                loading={busy}
+                disabled={!name.trim() || (moves.length > 0 && !boards.data)}
               >
                 {initial ? 'Save changes' : 'Create board'}
               </Button>

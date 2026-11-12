@@ -33,6 +33,8 @@ Runs tables share the Automations row spacing, title-case headings, typography, 
 
 AI Settings has three URL-backed tabs: Harnesses, Agent presets, and Execution settings. Collections and policy forms use a 1040px content column and keep actions beside their headings. Harnesses shows one row per built-in harness or custom integration. **Edit defaults** expands the fields inside the row, with its own save action. **Add integration** opens a form for choosing the execution mode, transport, and command or URL. HTTP headers, launcher hooks, and advanced settings expand in place.
 
+Board settings, new prompts, and custom integration forms confirm before discarding unsaved edits. Keep editing returns to the same draft. A pending save blocks in-app navigation, and the browser warns before leaving or reloading a dirty or saving form. A failed save keeps the inputs available for retry.
+
 **New preset** and **Edit** use the same modal with a fixed action footer. Reordering preserves each choice's values. Dismissal protects dirty edits, and revision conflicts offer reload. Tab navigation and browser Back or Forward use the workspace discard guard. Within a tab, anchor navigation preserves edits.
 
 The Agent node's **Executor** select lists **Workflow default** and **Connected agent** before the available harness and preset groups. A saved unavailable choice remains visible, but cannot be selected again. Direct harness selections group model and thinking effort below Executor. Inherited settings show the resolved harness and model when known.
