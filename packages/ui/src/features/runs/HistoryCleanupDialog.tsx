@@ -18,6 +18,11 @@ import { useEffect, useRef, useState } from 'react';
 
 import { api, errorMessage } from '../../lib/api';
 import type { Action } from '../../lib/useActionFeedback';
+import { trpc, useQuery } from '../../lib/query';
+import {
+  WorkspaceReadWarning,
+  workspaceRead,
+} from '../../components/WorkspaceReads';
 import styles from './HistoryCleanupDialog.module.css';
 
 type Preview = Awaited<
@@ -33,17 +38,23 @@ const bytes = (size: number) =>
 
 export function HistoryCleanupDialog({
   workflowId,
-  workflows,
+  workflowName,
   act,
   onClose,
   returnFocusTo,
 }: {
   workflowId?: string;
-  workflows: { value: string; label: string }[];
+  workflowName?: string;
   act: Action;
   onClose: () => void;
   returnFocusTo?: () => HTMLElement | null;
 }) {
+  const catalog = useQuery(
+    trpc.workflows.catalog.queryOptions(undefined, { enabled: !workflowId }),
+  );
+  const workflows = workflowId
+    ? [{ value: workflowId, label: workflowName ?? workflowId }]
+    : (catalog.data ?? []).map(({ id, name }) => ({ value: id, label: name }));
   const [workflow, setWorkflow] = useState<string | null>(workflowId ?? null);
   const [before, setBefore] = useState('');
   const [preview, setPreview] = useState<Preview>();
@@ -140,6 +151,12 @@ export function HistoryCleanupDialog({
             Remove selected run trees and their values, assignments, usage, and
             audit history. Workflows and published versions remain.
           </Text>
+          {!workflowId && (
+            <WorkspaceReadWarning
+              reads={[workspaceRead('workflow choices', catalog)]}
+              inline
+            />
+          )}
           <SimpleGrid cols={{ base: 1, sm: 2 }}>
             <Select
               label="Root workflow"
@@ -147,7 +164,7 @@ export function HistoryCleanupDialog({
               clearable
               data={workflows}
               value={workflow}
-              disabled={busy || Boolean(workflowId)}
+              disabled={busy || Boolean(workflowId) || !catalog.data}
               onChange={(value) => {
                 invalidate();
                 setWorkflow(value);

@@ -6,6 +6,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { UiTestProvider as DesignSystemProvider } from './uiTestProvider';
 import {
   blankDefinition,
+  workflowCatalogEntry,
   definitionSchema,
   applyWorkflowPositions,
   workflowPositions,
@@ -25,25 +26,30 @@ const rpc = vi.hoisted(() => ({
   update: vi.fn(),
   saveLayout: vi.fn(),
   get: vi.fn(),
+  catalog: vi.fn(),
   publish: vi.fn(),
   versions: vi.fn(),
   remove: vi.fn(),
   createChild: vi.fn(),
 }));
-vi.mock('../packages/ui/src/lib/api', () => ({
-  errorMessage: (error: Error) => error.message,
-  api: {
-    workflows: {
-      update: { mutate: rpc.update },
-      saveLayout: { mutate: rpc.saveLayout },
-      get: { query: rpc.get },
-      createChild: { mutate: rpc.createChild },
-      publish: { mutate: rpc.publish },
-      versions: { query: rpc.versions },
-      delete: { mutate: rpc.remove },
-    },
-  },
-}));
+vi.mock('../packages/ui/src/lib/api', async () => {
+  const { mockRpcClient } = await import('./mockRpcClient');
+  return {
+    errorMessage: (error: Error) => error.message,
+    api: mockRpcClient({
+      workflows: {
+        update: { mutate: rpc.update },
+        saveLayout: { mutate: rpc.saveLayout },
+        get: { query: rpc.get },
+        catalog: { query: rpc.catalog },
+        createChild: { mutate: rpc.createChild },
+        publish: { mutate: rpc.publish },
+        versions: { query: rpc.versions },
+        delete: { mutate: rpc.remove },
+      },
+    }),
+  };
+});
 vi.mock(
   '../packages/ui/node_modules/@xyflow/react',
   async (importOriginal) => ({
@@ -193,7 +199,7 @@ const runAction = async (fn: () => Promise<unknown>) => {
   }
 };
 let section: 'editor' | 'runs';
-let promptsRead: WorkspaceRead | undefined;
+let workflowsRead: WorkspaceRead | undefined;
 const deleted = vi.fn();
 let strict = false;
 const render = async (visible = true, deletingOutside = false) => {
@@ -204,10 +210,10 @@ const render = async (visible = true, deletingOutside = false) => {
       ? h(WorkflowEditor, {
           workflow,
           section,
-          promptsRead,
+          workflowsRead,
           onDeleted: deleted,
           runsView: h('p', {}, 'Workflow runs'),
-          workflows: [workflow],
+          workflows: [workflowCatalogEntry(workflow)],
           onBack: vi.fn(),
           onOpenWorkflow: opened,
           onReport: reportOpened,
@@ -277,7 +283,7 @@ beforeEach(() => {
   (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
   vi.clearAllMocks();
   section = 'editor';
-  promptsRead = undefined;
+  workflowsRead = undefined;
   strict = false;
   rawEditor.props = undefined;
   window.matchMedia = vi.fn().mockReturnValue({
@@ -318,6 +324,7 @@ beforeEach(() => {
       };
     },
   );
+  rpc.catalog.mockReset().mockResolvedValue([]);
   rpc.get.mockImplementation(async () => ({
     ...workflow,
     draft: applyWorkflowPositions(workflow.draft, layoutPositions),
@@ -646,10 +653,7 @@ it('checks a lost publication response without replacing a newer Raw draft', asy
   ].find((candidate) => candidate.textContent === 'Check published version')!;
   rpc.get.mockResolvedValueOnce({ ...workflow, latestVersion: 1 });
   await act(async () => check.click());
-  expect(rpc.get).toHaveBeenLastCalledWith(
-    { id: workflow.id },
-    expect.objectContaining({ signal: expect.anything() }),
-  );
+  expect(rpc.get).toHaveBeenLastCalledWith({ id: workflow.id });
   expect(publicationChecked).toHaveBeenLastCalledWith(workflow.id, 1);
   expect(saved).not.toHaveBeenCalled();
   expect(rawEditor.props.value).toBe('{newer raw edit');
@@ -1199,34 +1203,38 @@ it('keeps raw text and dirty protection across Runs and disables hidden editor s
   expect(button('Undo').disabled).toBe(false);
 });
 
-it('keeps staged workflow settings from Runs while the prompt catalog fails and recovers', async () => {
+it('keeps staged workflow settings from Runs while workflow choices fail and recovers', async () => {
   section = 'runs';
   const retry = vi.fn();
-  promptsRead = {
-    resource: 'prompts',
+  workflowsRead = {
+    resource: 'workflow choices',
     ready: false,
     error: 'Catalog unavailable',
     fetching: false,
     retry,
   };
   await render();
-  expect(container.textContent).not.toContain('Could not load prompts.');
+  expect(container.textContent).not.toContain(
+    'Could not load workflow choices.',
+  );
   await click('Workflow settings');
   await click('Apply local edit');
   expect(onDirty).toHaveBeenLastCalledWith(true);
 
   section = 'editor';
   await render();
-  expect(container.textContent).toContain('Could not load prompts.');
+  expect(container.textContent).toContain('Could not load workflow choices.');
   expect(container.textContent).toContain('Unsaved changes');
-  await click('Retry prompts');
+  await click('Retry workflow choices');
   expect(retry).toHaveBeenCalledTimes(1);
 
   section = 'runs';
   await render();
   expect(onDirty).toHaveBeenLastCalledWith(true);
-  expect(container.textContent).not.toContain('Could not load prompts.');
-  promptsRead = { ...promptsRead, ready: true, error: '' };
+  expect(container.textContent).not.toContain(
+    'Could not load workflow choices.',
+  );
+  workflowsRead = { ...workflowsRead, ready: true, error: '' };
   section = 'editor';
   await render();
   expect(button('Save draft').disabled).toBe(false);

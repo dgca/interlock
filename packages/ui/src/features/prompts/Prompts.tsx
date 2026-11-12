@@ -20,12 +20,14 @@ import { Link, useNavigate } from 'react-router';
 
 import { ArrowRight, Plus, Save, Search, Trash2 } from 'lucide-react';
 import {
+  promptCatalogEntry,
   promptContentSchema,
   promptRevisionConflict,
   samePromptContent,
   type PromptContent,
   type PromptUsage,
   type SavedPrompt,
+  type PromptCatalogEntry,
 } from '@interlock/core';
 
 import type { Action } from '../../lib/useActionFeedback';
@@ -90,7 +92,7 @@ function PromptFields({
   );
 }
 
-export function PromptLibrary({ prompts }: { prompts: SavedPrompt[] }) {
+export function PromptLibrary({ prompts }: { prompts: PromptCatalogEntry[] }) {
   const [query, setQuery] = useState('');
   const searchInput = useRef<HTMLInputElement>(null);
   const visible = prompts
@@ -238,30 +240,41 @@ export function PromptEditor({
   }, [dirty, busy, conflict, unconfirmedUpdate, prompt, baseline]);
 
   const cachePrompt = (saved: SavedPrompt) => {
-    const list = trpc.prompts.list.queryFilter();
-    void client.cancelQueries(list);
-    client.setQueryData(trpc.prompts.list.queryKey(), (current) => {
-      if (!current) return current;
-      return current.some((item) => item.id === saved.id)
-        ? current.map((item) =>
-            item.id === saved.id && item.revision <= saved.revision
-              ? saved
-              : item,
-          )
-        : [...current, saved];
-    });
+    const catalogKey = trpc.prompts.catalog.queryKey();
+    const catalog = client.getQueryData(catalogKey);
+    if (catalog) {
+      void client.cancelQueries({ queryKey: catalogKey, exact: true });
+      const entry = promptCatalogEntry(saved);
+      client.setQueryData(
+        catalogKey,
+        catalog.some((item) => item.id === saved.id)
+          ? catalog.map((item) =>
+              item.id === saved.id && item.revision <= saved.revision
+                ? entry
+                : item,
+            )
+          : [...catalog, entry],
+      );
+    }
 
     const input = { id: saved.id };
+    const instructionsKey = trpc.prompts.instructions.queryKey(input);
+    const instructions = client.getQueryData(instructionsKey);
+    if (!instructions || instructions.revision <= saved.revision) {
+      void client.cancelQueries({ queryKey: instructionsKey, exact: true });
+      client.setQueryData(instructionsKey, saved);
+    }
     const key = trpc.prompts.get.queryKey(input);
-    void client.cancelQueries(trpc.prompts.get.queryFilter(input));
     const current = client.getQueryData(key);
     if (current && current.revision > saved.revision) return;
+    const updatedAt = client.getQueryState(key)?.dataUpdatedAt ?? 0;
+    void client.cancelQueries(trpc.prompts.get.queryFilter(input));
     // A creation receipt can return a prompt already used by a workflow.
     // Keep the read timestamp unset until the usage query has succeeded.
     client.setQueryData(
       key,
       { ...current, ...saved, usage: current?.usage ?? [] },
-      { updatedAt: client.getQueryState(key)?.dataUpdatedAt ?? 0 },
+      { updatedAt },
     );
   };
 
@@ -382,10 +395,16 @@ export function PromptEditor({
     await act(
       async () => {
         await api.prompts.delete.mutate({ id: baseline.id });
-        void client.cancelQueries(trpc.prompts.list.queryFilter());
-        client.setQueryData(trpc.prompts.list.queryKey(), (current) =>
+        const catalog = trpc.prompts.catalog.queryKey();
+        void client.cancelQueries({ queryKey: catalog, exact: true });
+        client.setQueryData(catalog, (current) =>
           current?.filter((item) => item.id !== baseline.id),
         );
+        const instructions = trpc.prompts.instructions.queryFilter({
+          id: baseline.id,
+        });
+        void client.cancelQueries(instructions);
+        client.removeQueries(instructions);
         const detail = trpc.prompts.get.queryFilter({ id: baseline.id });
         void client.cancelQueries(detail);
         client.removeQueries(detail);

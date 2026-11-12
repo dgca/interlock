@@ -4,7 +4,6 @@ import {
   Link,
   useNavigate,
   useLocation,
-  useOutletContext,
   useParams,
   useSearchParams,
 } from 'react-router';
@@ -34,7 +33,6 @@ import {
   WorkspaceReadWarning,
   workspaceRead,
 } from '../../components/WorkspaceReads';
-import type { AppContext } from '../../App';
 import { paths, runOffset } from '../../routes/paths';
 import { requestActionLabel } from '../runs/runAttention';
 import type { api } from '../../lib/api';
@@ -67,9 +65,9 @@ export function BoardLibrary() {
   const term = search.trim().toLocaleLowerCase();
   const boards = useQuery(trpc.boards.list.queryOptions());
   const boardsRead = workspaceRead('boards', boards, searchInput);
-  const { workflows } = useOutletContext<AppContext>();
+  const catalog = useQuery(trpc.workflows.catalog.queryOptions());
   const byId = new Map(
-    workflows.map((workflow) => [workflow.id, workflow.name]),
+    (catalog.data ?? []).map((workflow) => [workflow.id, workflow.name]),
   );
   const visible = boards.data?.filter((board) =>
     board.name.toLocaleLowerCase().includes(term),
@@ -179,7 +177,9 @@ function WorkflowBoard({ id }: { id: string }) {
   const navigate = useNavigate();
   const location = useLocation();
   const acknowledged = location.state?.savedBoard;
-  const { workflows } = useOutletContext<AppContext>();
+  const catalog = useQuery(
+    trpc.workflows.catalog.queryOptions({ boardId: id }),
+  );
   const status = boardStatusSchema.catch('all').parse(search.get('status'));
   const workflowId = search.get('workflow') || undefined;
   const target = parseRequestTarget(search.get('request'));
@@ -255,18 +255,17 @@ function WorkflowBoard({ id }: { id: string }) {
                 aria-label="Workflow"
                 w={180}
                 allowDeselect={false}
+                disabled={!catalog.data}
                 value={workflowId ?? ''}
                 onChange={(value) =>
                   void change({ workflow: value || undefined })
                 }
                 data={[
                   { value: '', label: 'All workflows' },
-                  ...workflows
-                    .filter((workflow) => workflow.boardId === id)
-                    .map((workflow) => ({
-                      value: workflow.id,
-                      label: workflow.name,
-                    })),
+                  ...(catalog.data ?? []).map((workflow) => ({
+                    value: workflow.id,
+                    label: workflow.name,
+                  })),
                 ]}
               />
               <Select
@@ -310,6 +309,14 @@ function WorkflowBoard({ id }: { id: string }) {
             </Button>
           }
         />
+        {catalog.error && (
+          <div className={classes.content}>
+            <WorkspaceReadWarning
+              reads={[workspaceRead('workflow choices', catalog)]}
+              inline
+            />
+          </div>
+        )}
         {boardRead.error && (
           <div className={classes.content}>
             <WorkspaceReadWarning reads={[boardRead]} inline showDetails />

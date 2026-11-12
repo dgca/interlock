@@ -5,7 +5,11 @@ import { createRoot, type Root } from 'react-dom/client';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { UiTestProvider as DesignSystemProvider } from './uiTestProvider';
 import { afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest';
-import { calculateDistribution, type WorkflowReport } from '@interlock/core';
+import {
+  blankDefinition,
+  calculateDistribution,
+  type WorkflowReport,
+} from '@interlock/core';
 import { routes } from '../packages/ui/src/routes';
 
 const query = vi.hoisted(() => vi.fn());
@@ -20,9 +24,15 @@ vi.mock('../packages/ui/src/lib/api', async () => {
         query: async () => ({ engineUrl: 'http://127.0.0.1:4310' }),
       },
       workflows: {
-        list: { query: async () => [{ id: 'w1', name: 'Tagged work' }] },
+        catalog: { query: async () => [{ id: 'w1', name: 'Tagged work' }] },
+        get: {
+          query: async () => ({
+            id: 'w1',
+            name: 'Tagged work',
+            draft: blankDefinition(),
+          }),
+        },
       },
-      prompts: { list: { query: async () => [] } },
       requests: { list: { query: async () => ({ items: [], total: 0 }) } },
       triggers: { attention: { query: async () => ({ items: [], total: 0 }) } },
       pauses: { list: { query: async () => ({ items: [], total: 0 }) } },

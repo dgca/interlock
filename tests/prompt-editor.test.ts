@@ -4,14 +4,19 @@ import { createRoot, type Root } from 'react-dom/client';
 import { UiTestProvider as DesignSystemProvider } from './uiTestProvider';
 import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { nodeSchema, type SavedPrompt } from '@interlock/core';
-import type { WorkspaceRead } from '../packages/ui/src/components/WorkspaceReads';
+import {
+  nodeSchema,
+  promptCatalogEntry,
+  type SavedPrompt,
+} from '@interlock/core';
 import type { Action } from '../packages/ui/src/lib/useActionFeedback';
 import { PromptEditor } from '../packages/ui/src/features/prompts/Prompts';
 import { PromptPicker } from '../packages/ui/src/features/prompts/PromptPicker';
 
 const queries = vi.hoisted(() => ({
   get: vi.fn(),
+  catalog: vi.fn(),
+  instructions: vi.fn(),
   update: vi.fn(),
   delete: vi.fn(),
 }));
@@ -21,6 +26,8 @@ vi.mock('../packages/ui/src/lib/api', async () => {
     api: mockRpcClient({
       prompts: {
         get: { query: queries.get },
+        catalog: { query: queries.catalog },
+        instructions: { query: queries.instructions },
         update: { mutate: queries.update },
         delete: { mutate: queries.delete },
       },
@@ -120,6 +127,10 @@ it('clears picker search after selection, preserves order, and exposes missing r
     name: 'Style',
     content: 'Write clearly',
   };
+  queries.catalog.mockResolvedValue([
+    promptCatalogEntry(prompt),
+    promptCatalogEntry(second),
+  ]);
   const changed = vi.fn();
   function Picker() {
     const [ids, setIds] = useState<string[]>([]);
@@ -133,7 +144,6 @@ it('clears picker search after selection, preserves order, and exposes missing r
     if (node.kind !== 'agent') throw new Error('Agent');
     return h(PromptPicker, {
       node,
-      prompts: [prompt, second],
       onChange: (value) => {
         setIds(value);
         changed(value);
@@ -183,7 +193,7 @@ it('clears picker search after selection, preserves order, and exposes missing r
       h(
         DesignSystemProvider,
         { env: 'test' },
-        h(PromptPicker, { node, prompts: [], onChange: changed }),
+        h(PromptPicker, { node, onChange: changed }),
       ),
     ),
   );
@@ -199,46 +209,44 @@ it('waits for the prompt catalog without treating existing references as missing
   });
   if (node.kind !== 'agent') throw new Error('Agent');
   const onChange = vi.fn();
-  const retry = vi.fn();
-  const read: WorkspaceRead = {
-    resource: 'prompts',
-    ready: false,
-    error: '',
-    fetching: true,
-    retry,
-  };
-  const picker = async (promptsRead: WorkspaceRead) =>
-    act(async () =>
-      root.render(
-        h(
-          DesignSystemProvider,
-          { env: 'test' },
-          h(PromptPicker, {
-            node,
-            prompts: promptsRead.ready ? [prompt] : [],
-            promptsRead,
-            onChange,
-          }),
-        ),
+  let reject!: (reason: Error) => void;
+  queries.catalog.mockReturnValueOnce(
+    new Promise((_, fail) => {
+      reject = fail;
+    }),
+  );
+  await act(async () =>
+    root.render(
+      h(
+        DesignSystemProvider,
+        { env: 'test' },
+        h(PromptPicker, { node, onChange }),
       ),
-    );
-  await picker(read);
+    ),
+  );
   expect(
     container.querySelector('[aria-label="Loading saved prompts"]'),
   ).not.toBeNull();
   expect(container.querySelector('[role="combobox"]')).toBeNull();
   expect(container.textContent).not.toContain('Missing prompt');
 
-  await picker({ ...read, error: 'Catalog unavailable', fetching: false });
+  await act(async () => reject(new Error('Catalog unavailable')));
   expect(container.textContent).toContain('Could not load prompts.');
+  queries.catalog.mockResolvedValueOnce([promptCatalogEntry(prompt)]);
   await click('Retry prompts');
-  expect(retry).toHaveBeenCalledTimes(1);
   expect(onChange).not.toHaveBeenCalled();
-  expect(container.textContent).not.toContain('Missing prompt');
-
-  await picker({ ...read, ready: true, fetching: false });
   expect(container.querySelector('[role="combobox"]')).not.toBeNull();
   expect(container.textContent).toContain(prompt.name);
+  expect(queries.instructions).not.toHaveBeenCalled();
+
+  queries.instructions.mockResolvedValueOnce(prompt);
+  await act(async () => {
+    const disclosure = container.querySelector('details')!;
+    disclosure.open = true;
+    disclosure.dispatchEvent(new Event('toggle'));
+  });
+  expect(queries.instructions).toHaveBeenCalledWith({ id: prompt.id });
+  expect(container.textContent).toContain(prompt.content);
   expect(onChange).not.toHaveBeenCalled();
 });
 

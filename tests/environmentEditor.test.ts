@@ -10,14 +10,23 @@ import {
 } from '@interlock/core';
 import { EnvironmentEditor } from '../packages/ui/src/features/variables/EnvironmentEditor';
 import { SettingsDialog } from '../packages/ui/src/features/workflows/SettingsDialog';
+import {
+  createQueryClient,
+  refreshQueries,
+  trpc,
+} from '../packages/ui/src/lib/query';
 const read = vi.hoisted(() => vi.fn());
-vi.mock('../packages/ui/src/lib/api', () => ({
-  api: { variables: { read: { query: read } } },
-  errorMessage: (e: Error) => e.message,
-}));
+vi.mock('../packages/ui/src/lib/api', async () => {
+  const { mockRpcClient } = await import('./mockRpcClient');
+  return {
+    api: mockRpcClient({ variables: { read: { query: read } } }),
+    errorMessage: (e: Error) => e.message,
+  };
+});
 let root: Root,
   container: HTMLDivElement,
-  latest: ScriptEnvironment | undefined;
+  latest: ScriptEnvironment | undefined,
+  queryClient: ReturnType<typeof createQueryClient>;
 let variables: {
   id: string;
   name: string;
@@ -66,7 +75,13 @@ async function render(
   language = scriptLanguage;
   polling = scriptCheck;
   await act(async () =>
-    root.render(h(DesignSystemProvider, {}, h(Harness, { key: ++key }))),
+    root.render(
+      h(
+        DesignSystemProvider,
+        { client: queryClient },
+        h(Harness, { key: ++key }),
+      ),
+    ),
   );
   await settle();
 }
@@ -76,17 +91,18 @@ async function choose(name: string, row = 0) {
   )[row];
   if (picker.getAttribute('aria-expanded') !== 'true')
     await act(async () => picker.click());
-  const listId = picker.getAttribute('aria-controls');
-  const option = [
-    ...document.querySelectorAll<HTMLElement>(
-      `[id="${listId}"] [role="option"]`,
-    ),
-  ].find((o) => o.textContent?.startsWith(`${name} · `));
+  const options = document.querySelectorAll<HTMLElement>(
+    `[role="listbox"][aria-labelledby="${picker.id}-label"] [role="option"]`,
+  );
+  const option = [...options].find((o) =>
+    o.textContent?.startsWith(`${name} · `),
+  );
   expect(option, `option ${name}`).toBeTruthy();
   await act(async () => option!.click());
 }
 async function input(el: HTMLInputElement, value: string) {
   await act(async () => {
+    el.focus();
     Object.getOwnPropertyDescriptor(
       HTMLInputElement.prototype,
       'value',
@@ -155,6 +171,7 @@ beforeEach(() => {
   container = document.createElement('div');
   document.body.append(container);
   root = createRoot(container);
+  queryClient = createQueryClient();
 });
 afterEach(async () => {
   await act(async () => root.unmount());
@@ -250,6 +267,38 @@ it('keeps an imported reference and its label during metadata refresh failures',
   expect(container.textContent).not.toContain('Missing variable');
   expect(latest).toEqual([{ name: 'API_KEY', variableId: 'portable-token' }]);
 });
+it('keeps the selected reference while a different variable search fails', async () => {
+  await render([{ name: 'API_KEY', variableId: 'token' }]);
+  const picker = container.querySelector<HTMLInputElement>(
+    'input[role="combobox"]',
+  )!;
+  expect(picker.value).toContain('GITHUB_TOKEN');
+  const original = read.getMockImplementation()!;
+  let fail!: (error: Error) => void;
+  const pending = new Promise((_, reject) => {
+    fail = reject;
+  });
+  read.mockImplementation((query) =>
+    query.action === 'list' && query.search === 'token'
+      ? pending
+      : original(query),
+  );
+
+  await act(async () => picker.click());
+  await input(picker, 'token');
+  const options = () =>
+    document.getElementById(picker.getAttribute('aria-controls')!)
+      ?.textContent ?? '';
+  expect(options()).not.toContain('Other_token');
+  await settle();
+  await act(async () => fail(new Error('Search unavailable')));
+  expect(options()).not.toContain('Other_token');
+  expect(container.textContent).toContain('Search unavailable');
+  await act(async () => picker.blur());
+  expect(picker.value).toContain('GITHUB_TOKEN');
+  expect(latest).toEqual([{ name: 'API_KEY', variableId: 'token' }]);
+});
+
 it('finds variables by description without leaking the selected label into server search', async () => {
   await render(undefined, 'javascript');
   await click('Add variable');
@@ -302,17 +351,12 @@ it('makes clearing a source accessible, preserves its target name and restores p
   expect(picker.validity.valid).toBe(false);
   expect(latest).toEqual([{ name: 'API_KEY', variableId: '' }]);
 });
-it('refreshes metadata when returning to a visible tab without renaming the script key', async () => {
+it('uses shared cache refresh without renaming the script key', async () => {
   await render([{ name: 'API_KEY', variableId: 'token' }], 'javascript');
-  const before = read.mock.calls.length;
   variables[0].name = 'RENAMED_TOKEN';
-  const visibility = vi.spyOn(document, 'visibilityState', 'get');
-  visibility.mockReturnValue('hidden');
-  await act(async () => document.dispatchEvent(new Event('visibilitychange')));
-  await settle();
-  expect(read.mock.calls).toHaveLength(before);
-  visibility.mockReturnValue('visible');
-  await act(async () => document.dispatchEvent(new Event('visibilitychange')));
+  await act(async () =>
+    refreshQueries(queryClient, trpc.variables.read.queryFilter()),
+  );
   await settle();
   expect(
     container.querySelector<HTMLInputElement>('input[role="combobox"]')!.value,

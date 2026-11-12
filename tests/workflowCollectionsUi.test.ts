@@ -4,20 +4,28 @@ import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router';
 import { UiTestProvider as DesignSystemProvider } from './uiTestProvider';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { blankDefinition, type Workflow } from '@interlock/core';
+import {
+  blankDefinition,
+  workflowCatalogEntry,
+  type Workflow,
+} from '@interlock/core';
 import { WorkflowLibrary } from '../packages/ui/src/features/workflows/WorkflowLibrary';
 import { WorkflowChildren } from '../packages/ui/src/features/workflows/WorkflowChildren';
 const rpc = vi.hoisted(() => ({ create: vi.fn(), delete: vi.fn() }));
-vi.mock('../packages/ui/src/lib/api', () => ({
-  api: {
-    workflows: {
-      create: { mutate: rpc.create },
-      delete: { mutate: rpc.delete },
-    },
-  },
-  download: vi.fn(),
-  errorMessage: (e: Error) => e.message,
-}));
+vi.mock('../packages/ui/src/lib/api', async () => {
+  const { mockRpcClient } = await import('./mockRpcClient');
+  return {
+    api: mockRpcClient({
+      workflows: {
+        catalog: { query: async () => [] },
+        create: { mutate: rpc.create },
+        delete: { mutate: rpc.delete },
+      },
+    }),
+    download: vi.fn(),
+    errorMessage: (e: Error) => e.message,
+  };
+});
 function workflow(
   id: string,
   name: string,
@@ -104,7 +112,7 @@ async function search(label: string, text: string) {
 it('keeps child workflows out of library results and switches archive scope while searching', async () => {
   await render(
     h(WorkflowLibrary, {
-      workflows,
+      workflows: workflows.map(workflowCatalogEntry),
       onSaved: vi.fn(),
       onOpen: vi.fn(),
       act: perform,
@@ -143,7 +151,12 @@ it('keeps New workflow stable and prevents repeated pending creation', async () 
       }),
   );
   await render(
-    h(WorkflowLibrary, { workflows, onSaved: vi.fn(), onOpen, act: perform }),
+    h(WorkflowLibrary, {
+      workflows: workflows.map(workflowCatalogEntry),
+      onSaved: vi.fn(),
+      onOpen,
+      act: perform,
+    }),
   );
   const create = button('New workflow');
   await act(async () => {
@@ -160,7 +173,10 @@ it('scopes child cards to their owner and preserves disabled navigation', async 
   const onOpen = vi.fn();
   const props = {
     workflow: parent,
-    workflows: [...workflows, workflow('second', 'Second helper', 'parent')],
+    workflows: [
+      ...workflows,
+      workflow('second', 'Second helper', 'parent'),
+    ].map(workflowCatalogEntry),
     onOpen,
     onCreate: vi.fn(),
     act: perform,

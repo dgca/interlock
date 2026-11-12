@@ -16,10 +16,12 @@ import {
   samePromptContent,
   type RunQuery,
   type ReportFilter,
+  type WorkflowCatalogQuery,
 } from '@interlock/core';
 import { migrate, type MigrationResult } from './migrations.js';
 import { continuationState } from './continuation.js';
 import { runSummaries } from './runSummaries.js';
+import { workflowCatalog, promptCatalog } from './catalogs.js';
 import { boardRuns, referencedBoardColumns } from './workflowBoards.js';
 import { Transcripts } from './transcripts.js';
 import { runsForReport } from './report.js';
@@ -457,6 +459,12 @@ export class Store {
       ...w,
       ownerWorkflowId: w.ownerWorkflowId ?? null,
     }));
+  }
+  workflowCatalog(query: WorkflowCatalogQuery = {}) {
+    return workflowCatalog(this.db, query);
+  }
+  promptCatalog() {
+    return promptCatalog(this.db);
   }
   runs() {
     return this.list<Run>('runs');

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, createElement as h } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { DesignSystemProvider } from '../packages/ui/src/design-system';
+import { UiTestProvider } from './uiTestProvider';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { ImportWorkflowDialog } from '../packages/ui/src/features/workflows/ImportWorkflowDialog';
 const calls = vi.hoisted(() => ({
@@ -14,21 +14,24 @@ const calls = vi.hoisted(() => ({
   preview: vi.fn(),
   variables: vi.fn(),
 }));
-vi.mock('../packages/ui/src/lib/api', () => ({
-  api: {
-    variables: { read: { query: calls.variables } },
-    workflows: {
-      discoverGithub: { query: calls.discover },
-      importGithub: { mutate: calls.import },
-      create: { mutate: calls.create },
-      import: { mutate: calls.bundle },
-      starters: { query: calls.starters },
-      importStarter: { mutate: calls.add },
-      previewImport: { query: calls.preview },
-    },
-  },
-  errorMessage: (e: Error) => e.message,
-}));
+vi.mock('../packages/ui/src/lib/api', async () => {
+  const { mockRpcClient } = await import('./mockRpcClient');
+  return {
+    api: mockRpcClient({
+      variables: { read: { query: calls.variables } },
+      workflows: {
+        discoverGithub: { query: calls.discover },
+        importGithub: { mutate: calls.import },
+        create: { mutate: calls.create },
+        import: { mutate: calls.bundle },
+        starters: { query: calls.starters },
+        importStarter: { mutate: calls.add },
+        previewImport: { query: calls.preview },
+      },
+    }),
+    errorMessage: (e: Error) => e.message,
+  };
+});
 const source = {
   owner: 'o',
   repo: 'r',
@@ -68,8 +71,8 @@ async function render(rows: any[] = catalog, allowLocalFile = true) {
   await act(async () =>
     root.render(
       h(
-        DesignSystemProvider,
-        {},
+        UiTestProvider,
+        { env: 'test' },
         h(ImportWorkflowDialog, {
           key: ++key,
           onClose: close,
@@ -414,15 +417,14 @@ it('requires complete variable choices before enabling a local bundle import', a
     select.dispatchEvent(new Event('change', { bubbles: true }));
   });
   expect(button('Import workflow').disabled).toBe(true);
-  await act(async () => {
-    await new Promise((r) => setTimeout(r, 190));
-  });
   await act(async () =>
     document.querySelector<HTMLInputElement>('input[role="combobox"]')!.click(),
   );
-  await act(async () =>
-    document.querySelector<HTMLElement>('[role="option"]')!.click(),
+  const option = () => document.querySelector<HTMLElement>('[role="option"]');
+  await vi.waitFor(() =>
+    expect(option()?.textContent).toContain('LOCAL_TOKEN'),
   );
+  await act(async () => option()!.click());
   expect(button('Import workflow').disabled).toBe(false);
   await click('Import workflow');
   expect(calls.bundle).toHaveBeenCalledWith({

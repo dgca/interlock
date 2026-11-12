@@ -22,6 +22,7 @@ vi.mock('../packages/ui/src/lib/api', async () => {
   const { mockRpcClient } = await import('./mockRpcClient');
   return {
     api: mockRpcClient({
+      workflows: { catalog: { query: async () => [] } },
       triggers: {
         attention: {
           query: () =>
@@ -113,7 +114,7 @@ it('defaults lazy and data loading to List and switches to Overview when selecte
           h(RoutedRunList, {
             offset: 0,
             onOffsetChange: vi.fn(),
-            workflows: [],
+
             tab: 'active',
             onTabChange: vi.fn(),
           }),
@@ -200,7 +201,7 @@ it('retries only the failed Overview preview and keeps its confirmed count', asy
           h(RoutedRunList, {
             offset: 0,
             onOffsetChange: vi.fn(),
-            workflows: [],
+
             tab: 'active',
             onTabChange: vi.fn(),
             mode: 'overview',
@@ -279,7 +280,7 @@ it('scopes empty board messages to exact tag filters and clears them through the
     return h(RoutedRunList, {
       offset: 0,
       onOffsetChange: vi.fn(),
-      workflows: [],
+
       tab: 'active',
       onTabChange: vi.fn(),
       tags,
@@ -378,7 +379,7 @@ it('renders active and history pages and opens the selected run', async () => {
       h(RoutedRunList, {
         offset: 0,
         onOffsetChange: vi.fn(),
-        workflows: [],
+
         tab,
         onTabChange: setTab,
       }),
@@ -476,7 +477,7 @@ it('requests the selected workflow and opens its invocation', async () => {
           h(RoutedRunList, {
             offset: 0,
             onOffsetChange: vi.fn(),
-            workflows: [],
+
             workflowId: 'selected',
             tab: 'history',
             onTabChange: vi.fn(),
@@ -547,7 +548,7 @@ it('29f3cb6-attention-row: preserves stage and actor with specific attention and
         h(RoutedRunList, {
           offset: 0,
           onOffsetChange: vi.fn(),
-          workflows: [],
+
           tab: 'attention',
           onTabChange: vi.fn(),
         }),
@@ -643,7 +644,7 @@ it('applies all exact tag pairs before paging and clears the filter', async () =
       h(RoutedRunList, {
         offset,
         onOffsetChange: setOffset,
-        workflows: [],
+
         tab: 'history',
         onTabChange: vi.fn(),
       }),
@@ -777,7 +778,7 @@ it('uses an independent bounded active preview and adds recovery and completed r
           h(RoutedRunList, {
             offset: 100,
             onOffsetChange: changePage,
-            workflows: [],
+
             workflowId: 'selected',
             tags: { repository: 'org/repo' },
             tab: 'active',
@@ -885,7 +886,7 @@ it('does not let an old workflow preview replace the current board', async () =>
         h(RoutedRunList, {
           offset: 0,
           onOffsetChange: vi.fn(),
-          workflows: [],
+
           workflowId,
           tab: 'active',
           onTabChange: vi.fn(),
@@ -955,7 +956,7 @@ it('coalesces refreshes while a board preview is loading and accepts the in-flig
         h(RoutedRunList, {
           offset: 0,
           onOffsetChange: vi.fn(),
-          workflows: [],
+
           tab: 'active',
           onTabChange: vi.fn(),
         }),
@@ -1044,7 +1045,7 @@ it('keeps automation attention visible in Overview even when exact tags match no
           h(RoutedRunList, {
             offset: 100,
             onOffsetChange: vi.fn(),
-            workflows: [],
+
             tab: 'history',
             mode: 'overview',
             tags: { repo: 'missing' },
@@ -1099,7 +1100,7 @@ it('offers one History settings menu across List tabs and Overview in global and
               h(RoutedRunList, {
                 offset: 0,
                 onOffsetChange: vi.fn(),
-                workflows: [],
+
                 tab,
                 mode,
                 workflowId,
@@ -1137,7 +1138,7 @@ it('offers one History settings menu across List tabs and Overview in global and
           h(RoutedRunList, {
             offset: 0,
             onOffsetChange: vi.fn(),
-            workflows: [],
+
             tab: 'history',
             mode: 'overview',
             onTabChange: vi.fn(),
@@ -1175,7 +1176,7 @@ it.each(['Retention settings', 'Clean up history'])(
             h(RoutedRunList, {
               offset: 0,
               onOffsetChange: vi.fn(),
-              workflows: [{ id: 'selected', name: 'Selected workflow' }],
+              workflowName: 'Selected workflow',
               tab: 'active',
               mode: 'overview',
               workflowId: 'selected',
@@ -1261,7 +1262,7 @@ it('reuses the exact cached Runs page on remount while refreshing, retaining it 
             offset: 0,
             tab: 'active',
             workflowId,
-            workflows: [],
+
             onOffsetChange: vi.fn(),
             onTabChange: vi.fn(),
           })

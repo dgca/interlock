@@ -14,7 +14,7 @@ import {
 import { useId, useRef, useState } from 'react';
 
 import { Plus, Search, Trash2 } from 'lucide-react';
-import type { Workflow } from '@interlock/core';
+import type { Workflow, WorkflowCatalogEntry } from '@interlock/core';
 
 import type { Action } from '../../lib/useActionFeedback';
 import { DeleteWorkflowDialog } from './DeleteWorkflowDialog';
@@ -36,7 +36,7 @@ export function WorkflowChildren({
   disabled,
 }: {
   workflow: Workflow;
-  workflows: Workflow[];
+  workflows: WorkflowCatalogEntry[];
   onOpen: (id: string) => void;
   onCreate: (name: string) => Promise<void>;
   act: Action;
@@ -49,7 +49,7 @@ export function WorkflowChildren({
   const [archived, setArchived] = useState(false);
   const [query, setQuery] = useState('');
   const [creating, setCreating] = useState(false);
-  const [deleting, setDeleting] = useState<Workflow>();
+  const [deleting, setDeleting] = useState<WorkflowCatalogEntry>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const owned = workflows.filter((w) => w.ownerWorkflowId === workflow.id);
@@ -109,9 +109,7 @@ export function WorkflowChildren({
                 (node) =>
                   node.kind === 'workflow' && node.workflowId === child.id,
               ).length;
-              const steps = child.draft.nodes.filter(
-                (node) => node.kind !== 'entry' && node.kind !== 'exit',
-              ).length;
+              const steps = child.stepCount;
               return (
                 <WorkflowCard
                   key={child.id}

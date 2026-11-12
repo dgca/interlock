@@ -25,7 +25,7 @@ import {
   Download,
   MoreHorizontal,
 } from 'lucide-react';
-import type { Workflow } from '@interlock/core';
+import type { Workflow, WorkflowCatalogEntry } from '@interlock/core';
 
 import { StatusBadge } from '../../components/StatusBadge/StatusBadge';
 import { api, download } from '../../lib/api';
@@ -45,7 +45,7 @@ export function WorkflowLibrary({
   onSaved,
   act,
 }: {
-  workflows: Workflow[];
+  workflows: WorkflowCatalogEntry[];
   onOpen: (id: string) => void;
   onSaved: (workflow: Workflow) => void;
   act: Action;
@@ -55,7 +55,7 @@ export function WorkflowLibrary({
     [archived, setArchived] = useState(false);
   const [importing, setImporting] = useState(false);
   const searchInput = useRef<HTMLInputElement>(null);
-  const [deleting, setDeleting] = useState<Workflow>();
+  const [deleting, setDeleting] = useState<WorkflowCatalogEntry>();
   const [importedIds, setImportedIds] = useState<string[]>([]);
   const [creating, setCreating] = useState(false);
   const createPending = useRef(false);
@@ -143,7 +143,7 @@ export function WorkflowLibrary({
                     />
                   }
                   metadata={[
-                    `${w.draft.nodes.length} nodes`,
+                    `${w.nodeCount} nodes`,
                     childCount
                       ? `${childCount} ${childCount === 1 ? 'child' : 'children'}`
                       : '',
@@ -284,9 +284,6 @@ export function WorkflowLibrary({
       {deleting && (
         <DeleteWorkflowDialog
           workflow={deleting}
-          hasChildren={workflows.some(
-            (child) => child.ownerWorkflowId === deleting.id,
-          )}
           act={act}
           onClose={() => setDeleting(undefined)}
           onDeleted={() => setDeleting(undefined)}

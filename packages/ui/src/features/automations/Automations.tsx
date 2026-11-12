@@ -16,12 +16,12 @@ import {
 } from '../../components/WorkspaceReads';
 import { ListTable, ListTableRow } from '../../components/ListTable/ListTable';
 import { useEffect, useRef } from 'react';
+import type { WorkflowCatalogEntry } from '@interlock/core';
 import { trpc, useQuery } from '../../lib/query';
 import {
   Link,
   useLocation,
   useNavigate,
-  useOutletContext,
   useParams,
   useSearchParams,
 } from 'react-router';
@@ -33,7 +33,6 @@ import {
   Timer,
   Workflow as WorkflowIcon,
 } from 'lucide-react';
-import type { AppContext } from '../../App';
 import { PageTabs } from '../../components/PageLayout/PageLayout';
 import { automationDraftKey, paths } from '../../routes/paths';
 import { AutomationEditor } from './AutomationEditor';
@@ -57,23 +56,36 @@ import {
 import classes from './Automations.module.css';
 
 export function Automations() {
-  const { workflowsRead } = useOutletContext<AppContext>();
   const { automationId } = useParams();
   const location = useLocation();
   const [search] = useSearchParams();
-  const editing = automationId && location.pathname.endsWith('/edit');
-  if (automationId && !editing)
-    return <AutomationDetail key={automationId} id={automationId} />;
-
+  const editing = Boolean(automationId && location.pathname.endsWith('/edit'));
   const creating = location.pathname.endsWith('/new');
   const kind = search.get('type');
-  if (creating && kind !== 'schedule' && kind !== 'event')
-    return <AutomationType />;
+  const detail = Boolean(automationId && !editing);
+  const chooseType = creating && kind !== 'schedule' && kind !== 'event';
+  const catalog = useQuery(
+    trpc.workflows.catalog.queryOptions(undefined, {
+      enabled: !detail && !chooseType,
+    }),
+  );
+  if (detail) return <AutomationDetail key={automationId} id={automationId!} />;
+  if (chooseType) return <AutomationType />;
 
+  const workflows = catalog.data ?? [];
+  const workflowsRead = workspaceRead('workflows', catalog);
   const editor = editing ? (
-    <AutomationEditor key={automationId} id={automationId} />
+    <AutomationEditor
+      key={automationId}
+      id={automationId}
+      workflows={workflows}
+    />
   ) : creating && (kind === 'schedule' || kind === 'event') ? (
-    <AutomationEditor key={automationDraftKey(search)} kind={kind} />
+    <AutomationEditor
+      key={automationDraftKey(search)}
+      kind={kind}
+      workflows={workflows}
+    />
   ) : null;
   return (
     <WorkspaceReads
@@ -93,7 +105,7 @@ export function Automations() {
         )
       }
     >
-      {editor ?? <AutomationList />}
+      {editor ?? <AutomationList workflows={workflows} />}
     </WorkspaceReads>
   );
 }
@@ -150,8 +162,7 @@ function AutomationType() {
   );
 }
 
-function AutomationList() {
-  const { workflows } = useOutletContext<AppContext>();
+function AutomationList({ workflows }: { workflows: WorkflowCatalogEntry[] }) {
   const [search, setSearch] = useSearchParams();
   const query = listQuery(search);
   const searchInput = useRef<HTMLInputElement>(null);

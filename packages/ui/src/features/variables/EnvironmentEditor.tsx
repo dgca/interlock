@@ -15,6 +15,7 @@ import { Plus, RefreshCw, Trash2 } from 'lucide-react';
 import type { ScriptEnvironment } from '@interlock/core';
 
 import { paths } from '../../routes/paths';
+import { refreshQueries, trpc, useQueryClient } from '../../lib/query';
 import { VariablePicker, type VariableSummary } from './VariablePicker';
 import styles from './EnvironmentEditor.module.css';
 
@@ -25,14 +26,12 @@ function EnvironmentRow({
   entry,
   otherNames,
   language,
-  refreshKey,
   onChange,
   onRemove,
 }: {
   entry: Entry;
   otherNames: string[];
   language?: 'javascript' | 'bash';
-  refreshKey: number;
   onChange: (entry: Entry) => void;
   onRemove: () => void;
 }) {
@@ -70,7 +69,6 @@ function EnvironmentRow({
           value={entry.variableId}
           onChange={choose}
           autoFocus={!entry.variableId}
-          refreshKey={refreshKey}
           showManagement={false}
           required
         />
@@ -141,7 +139,7 @@ export function EnvironmentEditor({
   polling?: boolean;
   onChange: (value: ScriptEnvironment | undefined) => void;
 }) {
-  const [refreshKey, setRefreshKey] = useState(0);
+  const client = useQueryClient();
   const keys = useRef(new WeakMap<Entry, number>());
   const nextKey = useRef(0);
   const keyFor = (entry: Entry) => {
@@ -175,7 +173,6 @@ export function EnvironmentEditor({
           entry={entry}
           otherNames={value.filter((_, i) => i !== index).map((v) => v.name)}
           language={language}
-          refreshKey={refreshKey}
           onChange={(next) => {
             keys.current.set(next, keyFor(entry));
             update(value.map((v, i) => (i === index ? next : v)));
@@ -196,7 +193,9 @@ export function EnvironmentEditor({
         {!!value.length && (
           <Button
             variant="ghost"
-            onClick={() => setRefreshKey((key) => key + 1)}
+            onClick={() =>
+              void refreshQueries(client, trpc.variables.read.queryFilter())
+            }
           >
             <RefreshCw size={14} />
             Refresh variables

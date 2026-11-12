@@ -195,8 +195,10 @@ it.each([1440, 900, 390])(
       expect(await page.getByText('No runs match these filters.').count()).toBe(
         0,
       );
+      await retryBoard
+        .and(page.getByRole('button', { disabled: false }))
+        .focus();
       completedFailure = false;
-      await retryBoard.focus();
       await page.keyboard.press('Enter');
       await page.getByText('No runs match these filters.').waitFor();
       expect(
@@ -251,6 +253,17 @@ it('returns keyboard focus to Filter by tags after a Runs retry or filter reset'
           .split(',')
           .includes('runs.summaries'),
       async (route) => {
+        const url = new URL(route.request().url());
+        const procedures = url.pathname.slice('/trpc/'.length).split(',');
+        const input = JSON.parse(url.searchParams.get('input')!);
+        const isFilteredRuns = procedures.some(
+          (procedure, index) =>
+            procedure === 'runs.summaries' &&
+            input[index]?.tab === 'active' &&
+            input[index]?.offset === 0 &&
+            input[index]?.tags?.purpose === tags.purpose,
+        );
+        if (!isFilteredRuns) return route.continue();
         if (unavailable) {
           await route.abort('failed');
           return;
@@ -263,7 +276,11 @@ it('returns keyboard focus to Filter by tags after a Runs retry or filter reset'
         await route.continue();
       },
     );
-    const retry = page.getByRole('button', { name: 'Retry runs', exact: true });
+    const retry = page.getByRole('button', {
+      name: 'Retry runs',
+      exact: true,
+      disabled: false,
+    });
     const filter = page.getByRole('button', { name: /^Filter by tags/ });
     const clear = page.getByRole('button', {
       name: 'Clear filters',
@@ -279,9 +296,9 @@ it('returns keyboard focus to Filter by tags after a Runs retry or filter reset'
       ).toBe(true);
 
     await page.goto(app.url + list);
-    await retry.waitFor();
+    await retry.focus();
     unavailable = false;
-    await keyboardActivate(retry);
+    await page.keyboard.press('Enter');
     await clear.waitFor();
     await expectFocus(filter);
     await keyboardActivate(clear);
@@ -297,10 +314,10 @@ it('returns keyboard focus to Filter by tags after a Runs retry or filter reset'
 
     unavailable = true;
     await page.goto(app.url + list);
-    await retry.waitFor();
-    unavailable = false;
+    await retry.focus();
     holdRetry = true;
-    await keyboardActivate(retry);
+    unavailable = false;
+    await page.keyboard.press('Enter');
     await delayed.started.promise;
     const history = page.getByRole('button', { name: 'History settings' });
     await history.focus();

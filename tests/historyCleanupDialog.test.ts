@@ -1,20 +1,26 @@
 // @vitest-environment jsdom
 import { act, createElement as h } from 'react';
 import { createRoot } from 'react-dom/client';
-import { DesignSystemProvider } from '../packages/ui/src/design-system';
+import { UiTestProvider as DesignSystemProvider } from './uiTestProvider';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { HistoryCleanupDialog } from '../packages/ui/src/features/runs/HistoryCleanupDialog';
 
 const mocks = vi.hoisted(() => ({ preview: vi.fn(), remove: vi.fn() }));
-vi.mock('../packages/ui/src/lib/api', () => ({
-  api: {
-    runs: {
-      previewHistoryDeletion: { query: mocks.preview },
-      deleteHistory: { mutate: mocks.remove },
-    },
-  },
-  errorMessage: (error: Error) => error.message,
-}));
+vi.mock('../packages/ui/src/lib/api', async () => {
+  const { mockRpcClient } = await import('./mockRpcClient');
+  return {
+    api: mockRpcClient({
+      workflows: {
+        catalog: { query: async () => [{ id: 'workflow', name: 'Research' }] },
+      },
+      runs: {
+        previewHistoryDeletion: { query: mocks.preview },
+        deleteHistory: { mutate: mocks.remove },
+      },
+    }),
+    errorMessage: (error: Error) => error.message,
+  };
+});
 let root: ReturnType<typeof createRoot>, container: HTMLDivElement;
 const item = {
   rootRunId: 'root',
@@ -69,7 +75,6 @@ beforeEach(async () => {
         DesignSystemProvider,
         { env: 'test' },
         h(HistoryCleanupDialog, {
-          workflows: [{ value: 'workflow', label: 'Research' }],
           onClose: vi.fn(),
           act: async (fn, _success, onError) => {
             try {

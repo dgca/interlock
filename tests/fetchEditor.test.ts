@@ -1,15 +1,18 @@
 // @vitest-environment jsdom
 import { act, createElement as h, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { DesignSystemProvider } from '../packages/ui/src/design-system';
+import { UiTestProvider as DesignSystemProvider } from './uiTestProvider';
 import { beforeEach, afterEach, it, expect, vi } from 'vitest';
 import { nodeSchema, type FetchNode } from '@interlock/core';
 import { FetchEditor } from '../packages/ui/src/features/workflows/FetchEditor';
 const variableRead = vi.hoisted(() => vi.fn());
-vi.mock('../packages/ui/src/lib/api', () => ({
-  api: { variables: { read: { query: variableRead } } },
-  errorMessage: (error: unknown) => String(error),
-}));
+vi.mock('../packages/ui/src/lib/api', async () => {
+  const { mockRpcClient } = await import('./mockRpcClient');
+  return {
+    api: mockRpcClient({ variables: { read: { query: variableRead } } }),
+    errorMessage: (error: unknown) => String(error),
+  };
+});
 let root: Root, container: HTMLDivElement, latest: FetchNode;
 const scrollIntoView = HTMLElement.prototype.scrollIntoView;
 function Harness() {

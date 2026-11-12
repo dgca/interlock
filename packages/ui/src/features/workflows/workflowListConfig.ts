@@ -3,7 +3,7 @@ export const workflowViews = [
   { value: 'active', label: 'Active' },
   { value: 'archived', label: 'Archived' },
 ];
-export function workflowTabs(workflows: Workflow[]) {
+export function workflowTabs(workflows: Pick<Workflow, 'archived'>[]) {
   return workflowViews.map((view) => ({
     ...view,
     count: workflows.filter(

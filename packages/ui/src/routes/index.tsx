@@ -20,7 +20,8 @@ import { runMode, type RunMode } from '../features/runs/runListConfig';
 import { flushSync } from 'react-dom';
 import { lazy, Suspense } from 'react';
 
-import { WorkspaceReads } from '../components/WorkspaceReads';
+import { WorkspaceReads, workspaceRead } from '../components/WorkspaceReads';
+import { workflowCatalogEntry } from '@interlock/core';
 import { errorMessage } from '../lib/api';
 import { trpc, useQuery } from '../lib/query';
 import { RouteSkeleton } from './RouteSkeleton';
@@ -191,7 +192,8 @@ function ReportRoute() {
 }
 
 function PromptsRoute() {
-  const { prompts, promptsRead } = useOutletContext<AppContext>();
+  const query = useQuery(trpc.prompts.catalog.queryOptions());
+  const promptsRead = workspaceRead('prompts', query);
   return (
     <WorkspaceReads
       reads={[promptsRead]}
@@ -200,7 +202,7 @@ function PromptsRoute() {
       loading={<RouteSkeleton subject="prompts" />}
     >
       <Suspense fallback={<RouteSkeleton subject="prompts" />}>
-        <PromptLibrary prompts={prompts} />
+        <PromptLibrary prompts={query.data ?? []} />
       </Suspense>
     </WorkspaceReads>
   );
@@ -258,8 +260,9 @@ function PromptRoute() {
 }
 
 function LibraryRoute() {
-  const { workflows, workflowsRead, act, onSaved } =
-    useOutletContext<AppContext>();
+  const { act, onSaved } = useOutletContext<AppContext>();
+  const catalog = useQuery(trpc.workflows.catalog.queryOptions());
+  const workflowsRead = workspaceRead('workflows', catalog);
   const navigate = useNavigate();
   return (
     <WorkspaceReads
@@ -270,7 +273,7 @@ function LibraryRoute() {
     >
       <Suspense fallback={<RouteSkeleton subject="workflows" />}>
         <WorkflowLibrary
-          workflows={workflows}
+          workflows={catalog.data ?? []}
           onSaved={onSaved}
           act={act}
           onOpen={(id) => void navigate(paths.workflow(id))}
@@ -347,43 +350,64 @@ function WorkflowRoute() {
   const context = useOutletContext<AppContext>();
   const navigate = useNavigate();
   const { search, setSearch, page } = useRunPage();
-  const workflow = context.workflows.find((w) => w.id === workflowId);
-  const redirectToSchedules = search.get('view') === 'schedules';
-  if (!workflow || redirectToSchedules)
-    return (
-      <WorkspaceReads
-        reads={[context.workflowsRead]}
-        subject="workflow"
-        loading={<RouteSkeleton subject="workflow" />}
-      >
-        {workflow ? (
-          <Navigate
-            replace
-            to={paths.workflowSchedule(
-              workflow.id,
-              search.get('schedule') ?? undefined,
-            )}
-          />
-        ) : (
-          <NotFound title="Workflow not found" />
-        )}
-      </WorkspaceReads>
-    );
+  const read = useQuery(trpc.workflows.get.queryOptions({ id: workflowId! }));
+  const workflow = read.data;
+  const workflowRead = workspaceRead('workflow', read);
   const view = search.get('view');
+  const redirectToSchedules = view === 'schedules';
   const section =
     view === 'runs'
       ? 'runs'
-      : view === 'children' && !workflow.ownerWorkflowId
+      : view === 'children' && !workflow?.ownerWorkflowId
         ? 'children'
         : 'editor';
+  const catalog = useQuery(
+    trpc.workflows.catalog.queryOptions(undefined, {
+      enabled: Boolean(workflow) && !redirectToSchedules && section !== 'runs',
+    }),
+  );
+  const ownerId = workflow?.ownerWorkflowId ?? undefined;
+  const owner = useQuery(
+    trpc.workflows.get.queryOptions(
+      { id: ownerId ?? '' },
+      {
+        enabled: Boolean(ownerId) && !redirectToSchedules,
+      },
+    ),
+  );
+  if (!workflow && workflowRead.error === 'Workflow not found')
+    return <NotFound title="Workflow not found" />;
+  if (!workflow)
+    return (
+      <WorkspaceReads
+        reads={[workflowRead]}
+        subject="workflow"
+        loading={<RouteSkeleton subject="workflow" />}
+      >
+        {null}
+      </WorkspaceReads>
+    );
+  if (redirectToSchedules)
+    return (
+      <Navigate
+        replace
+        to={paths.workflowSchedule(
+          workflow.id,
+          search.get('schedule') ?? undefined,
+        )}
+      />
+    );
   const editor = (
     <Suspense fallback={<RouteSkeleton subject="workflow" />}>
       <WorkflowEditor
         key={workflow.id}
         workflow={workflow}
-        workflows={context.workflows}
-        prompts={context.prompts}
-        promptsRead={context.promptsRead}
+        workflows={catalog.data ?? [workflowCatalogEntry(workflow)]}
+        workflowsRead={workspaceRead('workflow choices', catalog)}
+        owner={owner.data}
+        ownerRead={
+          ownerId ? workspaceRead('parent workflow', owner) : undefined
+        }
         act={context.act}
         onDirty={context.onDirty}
         onSaved={context.onSaved}
@@ -420,8 +444,8 @@ function WorkflowRoute() {
             <RunList
               {...page}
               act={context.act}
-              workflows={context.workflows}
               workflowId={workflow.id}
+              workflowName={workflow.name}
             />
           </Suspense>
         }
@@ -430,7 +454,7 @@ function WorkflowRoute() {
   );
   return (
     <WorkspaceReads
-      reads={[context.workflowsRead]}
+      reads={[workflowRead]}
       subject="workflow"
       loading={<RouteSkeleton subject="workflow" />}
     >
@@ -440,11 +464,11 @@ function WorkflowRoute() {
 }
 
 function RunsRoute() {
-  const { act, workflows } = useOutletContext<AppContext>();
+  const { act } = useOutletContext<AppContext>();
   const { page } = useRunPage();
   return (
     <Suspense fallback={<RunListSkeleton />}>
-      <RunList {...page} act={act} workflows={workflows} />
+      <RunList {...page} act={act} />
     </Suspense>
   );
 }

@@ -25,6 +25,8 @@ const rpc = vi.hoisted(() => ({
   preview: vi.fn(),
   manage: vi.fn(),
   versions: vi.fn(),
+  catalog: vi.fn(),
+  workflow: vi.fn(),
 }));
 vi.mock('../packages/ui/src/lib/api', async () => {
   const { mockRpcClient } = await import('./mockRpcClient');
@@ -36,7 +38,11 @@ vi.mock('../packages/ui/src/lib/api', async () => {
         preview: { query: rpc.preview },
         manage: { mutate: rpc.manage },
       },
-      workflows: { versions: { query: rpc.versions } },
+      workflows: {
+        catalog: { query: rpc.catalog },
+        versions: { query: rpc.versions },
+        get: { query: rpc.workflow },
+      },
     }),
     errorMessage: (e: Error) => e.message,
   };
@@ -108,18 +114,7 @@ function Layout() {
     'div',
     {},
     h('output', { 'data-location': true }, location.pathname + location.search),
-    h(Outlet, {
-      context: {
-        workflowsRead: {
-          resource: 'workflows',
-          ready: true,
-          error: '',
-          fetching: false,
-          retry: vi.fn(),
-        },
-        workflows: [workflow],
-      },
-    }),
+    h(Outlet, {}),
   );
 }
 beforeEach(() => {
@@ -139,6 +134,8 @@ beforeEach(() => {
       disconnect() {}
     },
   );
+  rpc.catalog.mockReset().mockResolvedValue([workflow]);
+  rpc.workflow.mockReset().mockResolvedValue(workflow);
   rpc.versions.mockResolvedValue([{ workflowId: 'w', version: 1, definition }]);
   rpc.preview.mockResolvedValue({ upcoming: [] });
   rpc.inspect.mockResolvedValue(inspection());
@@ -243,6 +240,51 @@ it('saves exact input keys and typed values, defaults disabled, and opens ordina
   );
   expect(document.body.textContent).not.toContain('Review before enabling');
 });
+it('waits for and retries the exact unpublished Schedule contract', async () => {
+  const draft = { ...workflow, latestVersion: 0 };
+  rpc.catalog.mockResolvedValue([draft]);
+  rpc.versions.mockResolvedValueOnce([]);
+  let fail!: (error: Error) => void;
+  rpc.workflow
+    .mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          fail = reject;
+        }),
+    )
+    .mockResolvedValueOnce(draft);
+  await render();
+  await fill(field('Name'), 'Morning review');
+  expect(button('Create').disabled).toBe(true);
+  await submit();
+  expect(rpc.manage).not.toHaveBeenCalled();
+  await act(async () => fail(new Error('Draft contract unavailable')));
+  expect(document.body.textContent).toContain('Draft contract unavailable');
+  expect(button('Create').disabled).toBe(true);
+  await submit();
+  expect(rpc.manage).not.toHaveBeenCalled();
+  await act(async () => button('Retry contract').click());
+  expect(rpc.workflow).toHaveBeenCalledTimes(2);
+  expect(rpc.versions).toHaveBeenCalledTimes(1);
+  expect(field('Name').value).toBe('Morning review');
+  await submit();
+  expect(rpc.manage).not.toHaveBeenCalled();
+  await fill(field('Repository'), 'dgca/interlock');
+  await fill(field('Attempts'), '3');
+  await submit();
+  expect(rpc.manage).toHaveBeenCalledExactlyOnceWith(
+    expect.objectContaining({
+      workflowId: draft.id,
+      config: expect.objectContaining({
+        input: expect.objectContaining({
+          repository: 'dgca/interlock',
+          attempts: 3,
+        }),
+      }),
+    }),
+  );
+});
+
 it('keeps the Create label when enabling and prevents duplicate pending submissions', async () => {
   await render();
   expect(

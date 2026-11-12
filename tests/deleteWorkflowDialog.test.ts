@@ -3,12 +3,23 @@ import { act, createElement as h } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { DeleteWorkflowDialog } from '../packages/ui/src/features/workflows/DeleteWorkflowDialog';
-import { QueryProvider, createQueryClient } from '../packages/ui/src/lib/query';
-const remove = vi.hoisted(() => vi.fn());
-vi.mock('../packages/ui/src/lib/api', () => ({
-  api: { workflows: { delete: { mutate: remove } } },
-  errorMessage: (error: Error) => error.message,
+import { UiTestProvider } from './uiTestProvider';
+const { catalog, remove } = vi.hoisted(() => ({
+  catalog: vi.fn(),
+  remove: vi.fn(),
 }));
+vi.mock('../packages/ui/src/lib/api', async () => {
+  const { mockRpcClient } = await import('./mockRpcClient');
+  return {
+    api: mockRpcClient({
+      workflows: {
+        catalog: { query: catalog },
+        delete: { mutate: remove },
+      },
+    }),
+    errorMessage: (error: Error) => error.message,
+  };
+});
 vi.mock('../packages/ui/src/design-system/Modal/Modal', () => ({
   Modal: ({ children }: any) => h('div', { role: 'dialog' }, children),
 }));
@@ -21,15 +32,25 @@ const close = vi.fn(),
   deleted = vi.fn();
 beforeEach(async () => {
   vi.clearAllMocks();
+  catalog.mockResolvedValue([]);
   (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
+  vi.stubGlobal(
+    'matchMedia',
+    vi.fn().mockReturnValue({
+      matches: false,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }),
+  );
   container = document.createElement('div');
   document.body.append(container);
   root = createRoot(container);
   await act(async () =>
     root.render(
-      h(QueryProvider, {
-        client: createQueryClient(),
-        children: h(DeleteWorkflowDialog, {
+      h(
+        UiTestProvider,
+        { env: 'test' },
+        h(DeleteWorkflowDialog, {
           workflow: { id: 'workflow', name: 'My workflow' },
           onClose: close,
           onDeleted: deleted,
@@ -41,13 +62,14 @@ beforeEach(async () => {
             }
           },
         }),
-      }),
+      ),
     ),
   );
 });
 afterEach(async () => {
   await act(async () => root.unmount());
   container.remove();
+  vi.unstubAllGlobals();
 });
 const click = async (label: string) =>
   act(async () => {
@@ -58,6 +80,9 @@ const click = async (label: string) =>
 it('requires Delete confirmation and leaves Cancel nondestructive', async () => {
   expect(container.textContent).toContain('My workflow');
   expect(container.textContent).toContain('cannot be undone');
+  expect(catalog).toHaveBeenCalledExactlyOnceWith({
+    ownerWorkflowId: 'workflow',
+  });
   expect(remove).not.toHaveBeenCalled();
   await click('Cancel');
   expect(close).toHaveBeenCalledOnce();

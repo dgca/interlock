@@ -93,7 +93,6 @@ it('UI236-R1 retains attention offset across unrelated engine refreshes and clam
               onOffsetChange: vi.fn(),
               tab: 'attention',
               onTabChange: vi.fn(),
-              workflows: [],
             }),
           ),
         ),

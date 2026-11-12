@@ -18,7 +18,9 @@ import type { Action } from '../../lib/useActionFeedback';
 import { useEditorDraft } from '../../lib/useEditorDraft';
 import { flushSync } from 'react-dom';
 import { WorkflowChildren } from './WorkflowChildren';
+import { WorkflowCardsSkeleton } from '../../components/WorkflowCards/WorkflowCards';
 import {
+  WorkspaceReads,
   WorkspaceReadWarning,
   type WorkspaceRead,
 } from '../../components/WorkspaceReads';
@@ -59,6 +61,7 @@ import {
   parallelConnectionError,
   outgoingPorts,
   type Workflow,
+  type WorkflowCatalogEntry,
   type WorkflowNode,
   type WorkflowEdge,
   type WorkflowDefinition,
@@ -153,8 +156,9 @@ function ResetClickConnection({ request }: { request: number }) {
 export function WorkflowEditor({
   workflow,
   workflows,
-  prompts = [],
-  promptsRead,
+  workflowsRead,
+  owner,
+  ownerRead,
   onBack,
   onRun,
   onSaved,
@@ -169,9 +173,10 @@ export function WorkflowEditor({
   onReport,
 }: {
   workflow: Workflow & { layoutRevision?: number };
-  workflows: Workflow[];
-  prompts?: import('@interlock/core').SavedPrompt[];
-  promptsRead?: WorkspaceRead;
+  workflows: WorkflowCatalogEntry[];
+  workflowsRead?: WorkspaceRead;
+  owner?: Workflow;
+  ownerRead?: WorkspaceRead;
   onBack: () => void;
   onRun: (workflow: Workflow) => void;
   onSaved: (w: Workflow) => void;
@@ -185,8 +190,6 @@ export function WorkflowEditor({
   onReport?: () => void;
   runsView?: ReactNode;
 }) {
-  const owner = workflows.find((w) => w.id === workflow.ownerWorkflowId);
-  const hasChildren = workflows.some((w) => w.ownerWorkflowId === workflow.id);
   const [deleting, setDeleting] = useState(false);
   const [confirmReload, setConfirmReload] = useState(false);
   const [review, setReview] = useState<{
@@ -815,7 +818,13 @@ export function WorkflowEditor({
       <PageHeader
         title={name}
         onBack={onBack}
-        backLabel={owner ? `Back to ${owner.name}` : 'Back to workflows'}
+        backLabel={
+          owner
+            ? `Back to ${owner.name}`
+            : workflow.ownerWorkflowId
+              ? 'Back to parent workflow'
+              : 'Back to workflows'
+        }
         status={
           <span className={styles.draftStatus} data-dirty={dirty || undefined}>
             {dirty ? 'Unsaved changes' : 'Draft saved'} ·{' '}
@@ -1003,7 +1012,9 @@ export function WorkflowEditor({
               disabled={
                 !workflow.latestVersion ||
                 workflow.archived ||
-                Boolean(owner?.archived) ||
+                Boolean(
+                  workflow.ownerWorkflowId && (!owner || owner.archived),
+                ) ||
                 Boolean(pending)
               }
               onClick={() => onRun(workflow)}
@@ -1023,6 +1034,7 @@ export function WorkflowEditor({
           </Button>
         </div>
       )}
+      {ownerRead && <WorkspaceReadWarning reads={[ownerRead]} />}
       {owner && (
         <div className={styles.conflict}>
           <span>
@@ -1086,8 +1098,8 @@ export function WorkflowEditor({
               : []),
           ]}
         />
-        {section === 'editor' && promptsRead && (
-          <WorkspaceReadWarning reads={[promptsRead]} />
+        {section === 'editor' && workflowsRead && (
+          <WorkspaceReadWarning reads={[workflowsRead]} />
         )}
         {section === 'editor' && publicationNotice && (
           <div role="status" className={styles.conflict}>
@@ -1426,25 +1438,35 @@ export function WorkflowEditor({
             value="children"
             className={`${styles.runsView} ${styles.childListView}`}
           >
-            <WorkflowChildren
-              workflow={{ ...workflow, draft }}
-              workflows={workflows}
-              disabled={
-                Boolean(pending) || rawEdited || rawInvalid || remoteChanged
-              }
-              onOpen={(id) => onOpenWorkflow?.(id)}
-              onCreate={(childName) =>
-                createChild(childName, { name, description, definition: draft })
-              }
-              act={act}
-            />
+            <WorkspaceReads
+              reads={workflowsRead ? [workflowsRead] : []}
+              subject="child workflows"
+              loading={<WorkflowCardsSkeleton />}
+            >
+              <WorkflowChildren
+                workflow={{ ...workflow, draft }}
+                workflows={workflows}
+                disabled={
+                  Boolean(pending) || rawEdited || rawInvalid || remoteChanged
+                }
+                onOpen={(id) => onOpenWorkflow?.(id)}
+                onCreate={(childName) =>
+                  createChild(childName, {
+                    name,
+                    description,
+                    definition: draft,
+                  })
+                }
+                act={act}
+              />
+            </WorkspaceReads>
           </Tabs.Panel>
         )}
         <Tabs.Panel
           value="runs"
           className={`${styles.runsView} ${styles.runListView}`}
         >
-          {runsView}
+          {section === 'runs' && runsView}
         </Tabs.Panel>
       </Tabs>
       {confirmReload && remoteChanged && (
@@ -1533,7 +1555,6 @@ export function WorkflowEditor({
       {deleting && (
         <DeleteWorkflowDialog
           workflow={workflow}
-          hasChildren={hasChildren}
           act={act}
           returnFocusTo={() => workflowActions.current}
           onClose={() => setDeleting(false)}
@@ -1542,8 +1563,7 @@ export function WorkflowEditor({
       )}
       {editing && (
         <SettingsDialog
-          prompts={prompts}
-          promptsRead={promptsRead}
+          workflowsRead={workflowsRead}
           node={editing.node}
           creating={editing.creating}
           parentBatchId={editing.batchId}
@@ -1553,6 +1573,7 @@ export function WorkflowEditor({
           definition={draft}
           workflows={workflows}
           workflowId={workflow.id}
+          workflowBoardId={workflow.boardId}
           onBoardSaved={onSaved}
           canExport={true}
           returnFocusTo={() => {

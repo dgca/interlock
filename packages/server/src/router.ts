@@ -52,6 +52,7 @@ import {
   definitionSchema,
   authoringJsonSchema,
   workflowLayoutInputSchema,
+  workflowCatalogQuerySchema,
   draftLayoutSchema,
   workflowEditsSchema,
   jsonSchema,
@@ -350,6 +351,10 @@ export const appRouter = t.router({
   }),
   prompts: t.router({
     list: p.query(({ ctx }) => ctx.engine.prompts.list()),
+    catalog: p.query(({ ctx }) => ctx.engine.store.promptCatalog()),
+    instructions: p
+      .input(id)
+      .query(({ ctx, input }) => ctx.engine.prompts.get(input.id)),
     get: p
       .input(promptReadSchema)
       .query(({ ctx, input }) => ctx.engine.prompts.read(input)),
@@ -542,6 +547,9 @@ export const appRouter = t.router({
           )
           .map((workflow) => ctx.engine.describeWorkflow(workflow)),
       ),
+    catalog: p
+      .input(workflowCatalogQuerySchema.optional())
+      .query(({ ctx, input }) => ctx.engine.store.workflowCatalog(input)),
     get: p
       .input(id)
       .query(({ ctx, input }) =>
