@@ -278,6 +278,8 @@ The engine yields after one rollover per chain per pump and reads only active ru
 
 Board membership is workflow metadata outside the draft and published definitions. Bound nodes retain a column ID. The runtime records that ID when a step starts. Storage selects the last matching entry in persisted event order across the root lifecycle, including waited descendants and continue-as-new members. Detached runs start separate lifecycles for board placement. The existing active-stage projection remains available in run summaries.
 
+Board reads use the workflow, chain, parent, and event indexes to scope placement to the board's matching lifecycles. SQLite ranks cards and applies the terminal cap before calculating column totals and selecting pages. The runtime projects progress and attaches request summaries only for selected cards. Totals still require metadata and placement for matching candidates, and a terminal status filter may read the last terminal event across the selected workflow's retained history. Attention counts use the selected workflow scope independently of status and column filters.
+
 Human input uses the External input wait with a per-visit capture of the question, context, evidence, and answer contract. The shared response transaction checks the visit and revision, validates the answer, and records the receipt. It accepts the answer in that transaction when no pause or hold applies. A held answer requires a separate acceptance after release. Only the request targeted by the answer resolves.
 
 ## External input

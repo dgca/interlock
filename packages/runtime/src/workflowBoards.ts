@@ -4,6 +4,7 @@ import {
   boardSettingsRevisionConflict,
   type BoardMembership,
   type BoardQuery,
+  type BoardRun,
   type RunProjection,
   type SaveBoard,
   type Workflow,
@@ -13,7 +14,8 @@ import type { Store } from '@interlock/storage';
 import type { Requests } from './requests.js';
 
 const collection = 'workflowBoards';
-const terminalStatuses = new Set(['completed', 'failed', 'cancelled']);
+const terminalWindowMs = 86_400_000;
+const terminalLimit = 20;
 
 export class WorkflowBoards {
   constructor(
@@ -168,46 +170,22 @@ export class WorkflowBoards {
   read(query: BoardQuery) {
     const board = this.get(query.id);
     const requests = this.requests.byCard();
-    const rows = this.store.boardRuns(
+    const page = this.store.boardRuns(
       board,
-      [...requests.keys()],
-      new Date(this.now() - 86_400_000).toISOString(),
-      query.workflowId,
+      query,
+      Object.fromEntries([...requests].map(([id, open]) => [id, open.length])),
+      new Date(this.now() - terminalWindowMs).toISOString(),
+      terminalLimit,
     );
-    const rank = (run: (typeof rows)[number]) =>
-      requests.has(run.id) ? 0 : terminalStatuses.has(run.status) ? 2 : 1;
-    rows.sort((left, right) => rank(left) - rank(right));
-    const counts = new Map<string, number>();
-    const terminalCounts = new Map<string, number>();
     const cards = new Map<string, ReturnType<typeof this.card>[]>();
-    let attentionCount = 0;
-    for (const run of rows) {
-      const open = requests.get(run.id) ?? [];
-      attentionCount += open.length;
-      if (
-        query.status === 'attention'
-          ? !open.length
-          : query.status !== 'all' && query.status !== run.status
-      )
-        continue;
-      const column =
-        run.status === 'queued' ? 'queued' : (run.columnId ?? 'unstaged');
-      if (!open.length && terminalStatuses.has(run.status)) {
-        const total = terminalCounts.get(column) ?? 0;
-        if (total >= 20) continue;
-        terminalCounts.set(column, total + 1);
-      }
-      const index = counts.get(column) ?? 0;
-      counts.set(column, index + 1);
-      if (query.column && query.column !== column) continue;
-      if (index < query.offset || index >= query.offset + query.limit) continue;
+    for (const { column, run } of page.cards) {
       const items = cards.get(column) ?? [];
-      items.push(this.card(run, open));
+      items.push(this.card(run, requests.get(run.id) ?? []));
       cards.set(column, items);
     }
     return {
       board,
-      attentionCount,
+      attentionCount: page.attentionCount,
       columns: [
         { id: 'queued', name: 'Queued' },
         { id: 'unstaged', name: 'Unstaged' },
@@ -216,20 +194,17 @@ export class WorkflowBoards {
         .filter(
           (column) =>
             !['queued', 'unstaged'].includes(column.id) ||
-            counts.has(column.id),
+            page.totals.has(column.id),
         )
         .map((column) => ({
           ...column,
-          total: counts.get(column.id) ?? 0,
+          total: page.totals.get(column.id) ?? 0,
           cards: cards.get(column.id) ?? [],
         })),
     };
   }
 
-  private card(
-    run: ReturnType<Store['boardRuns']>[number],
-    open: ReturnType<Requests['current']>,
-  ) {
+  private card(run: BoardRun, open: ReturnType<Requests['current']>) {
     return {
       ...run,
       ...this.projectRun(run.runId),
