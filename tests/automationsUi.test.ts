@@ -285,6 +285,149 @@ it('waits for and retries the exact unpublished Schedule contract', async () => 
   );
 });
 
+it('keeps malformed nested input focused while a published Schedule contract refreshes', async () => {
+  await render('/automations/t/edit');
+  await fill(field('Repository'), 'my local repository');
+  const options = document.querySelector<HTMLTextAreaElement>(
+    'textarea[aria-label="options"]',
+  )!;
+  await act(async () => options.focus());
+  await fill(options, '{"local":');
+  const expectLocalInput = () => {
+    expect(options.isConnected).toBe(true);
+    expect(options.value).toBe('{"local":');
+    expect(document.activeElement).toBe(options);
+    expect(field('Repository').value).toBe('my local repository');
+  };
+
+  let fail!: (error: Error) => void;
+  rpc.versions.mockImplementationOnce(
+    () =>
+      new Promise((_resolve, reject) => {
+        fail = reject;
+      }),
+  );
+  rpc.catalog.mockResolvedValue([{ ...workflow, latestVersion: 2 }]);
+  await act(async () =>
+    refreshQueries(queryClient, trpc.workflows.catalog.queryFilter()),
+  );
+  expect(button('Save changes').disabled).toBe(true);
+  expectLocalInput();
+  await submit();
+  expect(rpc.manage).not.toHaveBeenCalled();
+
+  await act(async () => fail(new Error('Published contract unavailable')));
+  expect(document.body.textContent).toContain('Published contract unavailable');
+  expect(button('Save changes').disabled).toBe(true);
+  expectLocalInput();
+
+  await act(async () => button('Retry contract').click());
+  expect(document.body.textContent).toContain(
+    'Could not read the latest workflow contract',
+  );
+  expect(button('Save changes').disabled).toBe(true);
+  expectLocalInput();
+
+  rpc.versions.mockResolvedValueOnce([
+    {
+      workflowId: workflow.id,
+      version: 2,
+      definition: {
+        ...definition,
+        inputSchema: {
+          ...definition.inputSchema,
+          properties: {
+            ...definition.inputSchema.properties,
+            options: {
+              type: 'string',
+              title: 'Release token',
+              pattern: '^release-',
+            },
+          },
+        },
+      },
+    },
+  ]);
+  await act(async () => button('Retry contract').click());
+  expectLocalInput();
+  await fill(options, '"other"');
+  expect(field('Release token').value).toBe('other');
+  await submit();
+  expect(rpc.manage).not.toHaveBeenCalled();
+  expect(document.body.textContent).toContain('Workflow inputs');
+  await fill(field('Release token'), 'release-2');
+  await submit();
+  expect(rpc.manage).toHaveBeenCalledExactlyOnceWith(
+    expect.objectContaining({
+      config: expect.objectContaining({
+        input: {
+          repository: 'my local repository',
+          attempts: 2,
+          options: 'release-2',
+        },
+      }),
+    }),
+  );
+});
+
+it('keeps malformed whole input through first publication of a Schedule target', async () => {
+  const draft = {
+    ...workflow,
+    latestVersion: 0,
+    draft: { ...definition, inputSchema: { type: 'string' } },
+  };
+  rpc.catalog.mockResolvedValue([draft]);
+  rpc.versions.mockResolvedValueOnce([]);
+  rpc.workflow.mockResolvedValue(draft);
+  await render();
+  await fill(field('Name'), 'Morning review');
+  const input = document.querySelector<HTMLTextAreaElement>(
+    'textarea[aria-label="Workflow input"]',
+  )!;
+  await act(async () => input.focus());
+  await fill(input, '{"repository":');
+
+  let publish!: (versions: unknown[]) => void;
+  rpc.versions.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        publish = resolve;
+      }),
+  );
+  // The exact draft read can observe publication before the catalog does.
+  rpc.workflow.mockResolvedValue({ ...draft, latestVersion: 1 });
+  await act(async () =>
+    refreshQueries(
+      queryClient,
+      trpc.workflows.get.queryFilter({ id: workflow.id }),
+    ),
+  );
+  expect(button('Create').disabled).toBe(true);
+  expect(input.isConnected).toBe(true);
+  expect(input.value).toBe('{"repository":');
+  expect(document.activeElement).toBe(input);
+
+  await act(async () =>
+    publish([{ workflowId: workflow.id, version: 1, definition }]),
+  );
+  expect(input.isConnected).toBe(true);
+  expect(input.value).toBe('{"repository":');
+  expect(document.activeElement).toBe(input);
+  await submit();
+  expect(rpc.manage).not.toHaveBeenCalled();
+  await fill(input, '{"repository":"local","attempts":5}');
+  expect(field('Repository').value).toBe('local');
+  expect(field('Name').value).toBe('Morning review');
+  await submit();
+  expect(rpc.manage).toHaveBeenCalledExactlyOnceWith(
+    expect.objectContaining({
+      config: expect.objectContaining({
+        input: { repository: 'local', attempts: 5 },
+      }),
+    }),
+  );
+});
+
 it('keeps the Create label when enabling and prevents duplicate pending submissions', async () => {
   await render();
   expect(

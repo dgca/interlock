@@ -112,6 +112,14 @@ function defaultTimingDrafts() {
   };
 }
 
+type VersionRead = {
+  workflowId: string;
+  expectedVersion: number;
+  attempt: number;
+  version?: WorkflowVersion;
+  error?: string;
+};
+
 export function AutomationEditor({
   id,
   kind = 'schedule',
@@ -141,13 +149,17 @@ export function AutomationEditor({
   const [unconfirmedUpdate, setUnconfirmedUpdate] = useState(false);
   const [issues, setIssues] = useState<Record<string, string>>({});
   const [inputValid, setInputValid] = useState(true);
-  const [version, setVersion] = useState<WorkflowVersion>();
-  const [contractLoading, setContractLoading] = useState(false);
-  const [contractError, setContractError] = useState('');
+  const [versionRead, setVersionRead] = useState<VersionRead>();
   const [reload, setReload] = useState(0);
+  const [inputPresentation, setInputPresentation] = useState<{
+    key: string;
+    schema: Record<string, unknown> | undefined;
+  }>();
   const [upcoming, setUpcoming] = useState<string[]>([]);
   const [previewError, setPreviewError] = useState('');
-  const previousWorkflow = useRef('');
+  const previousWorkflow = useRef<{ id: string; version: number } | undefined>(
+    undefined,
+  );
   const formId = useId();
   const timingDrafts = useRef(defaultTimingDrafts());
   const initialNewState = useRef({
@@ -156,6 +168,24 @@ export function AutomationEditor({
     enableOnCreate: false,
   });
   const workflow = workflows.find((w) => w.id === workflowId);
+  const catalogVersion = workflow?.latestVersion ?? 0;
+  const observedVersion =
+    versionRead?.workflowId === workflowId && versionRead.attempt === reload
+      ? versionRead
+      : undefined;
+  const readDraft =
+    config.kind === 'schedule' &&
+    catalogVersion === 0 &&
+    observedVersion?.expectedVersion === 0 &&
+    !observedVersion.error &&
+    !observedVersion.version;
+  const draftContract = useQuery(
+    trpc.workflows.get.queryOptions({ id: workflowId }, { enabled: readDraft }),
+  );
+  const expectedVersion = Math.max(
+    catalogVersion,
+    draftContract.data?.latestVersion ?? 0,
+  );
   const current = JSON.stringify({ config, workflowId, enableOnCreate });
   const dirty =
     !inputValid ||
@@ -214,6 +244,7 @@ export function AutomationEditor({
           setWorkflowId(trigger.workflowId);
           setRevision(trigger.revision);
           setInputValid(true);
+          setInputPresentation(undefined);
           setIssues({});
           setBaseline(
             JSON.stringify({
@@ -236,47 +267,59 @@ export function AutomationEditor({
     };
   }, [id, readAttempt]);
   useEffect(() => {
-    setVersion(undefined);
-    setContractError('');
-    if (!workflowId) {
-      setContractLoading(false);
-      return;
-    }
+    if (!workflowId) return;
     let active = true;
-    setContractLoading(true);
-    void api.workflows.versions
-      .query({ id: workflowId })
-      .then(
-        (versions) => {
-          if (!active) return;
-          const latest = [...versions].sort((a, b) => b.version - a.version)[0];
-          setVersion(latest);
-          if (!id && previousWorkflow.current !== workflowId && latest) {
-            const input = defaultInput(latest.definition.inputSchema);
-            const initial = initialNewState.current;
-            if (
-              initial.workflowId === workflowId &&
-              initial.config.kind === 'schedule'
-            )
-              initialNewState.current = {
-                ...initial,
-                config: { ...initial.config, input },
-              };
-            setConfig((c) => (c.kind === 'schedule' ? { ...c, input } : c));
-          }
-          previousWorkflow.current = workflowId;
-        },
-        (e) => {
-          if (active) setContractError(errorMessage(e));
-        },
-      )
-      .finally(() => {
-        if (active) setContractLoading(false);
-      });
+    const request = { workflowId, expectedVersion, attempt: reload };
+    void api.workflows.versions.query({ id: workflowId }).then(
+      (versions) => {
+        if (!active) return;
+        const latest = versions
+          .filter((version) => version.workflowId === workflowId)
+          .sort((a, b) => b.version - a.version)[0];
+        const previous = previousWorkflow.current;
+        const minimumVersion = Math.max(
+          expectedVersion,
+          previous?.id === workflowId ? previous.version : 0,
+        );
+        if ((latest?.version ?? 0) < minimumVersion) {
+          setVersionRead({
+            ...request,
+            error: 'Could not read the latest workflow contract. Try again.',
+          });
+          return;
+        }
+        if (!id && previous?.id !== workflowId && latest) {
+          const input = defaultInput(latest.definition.inputSchema);
+          const initial = initialNewState.current;
+          if (
+            initial.workflowId === workflowId &&
+            initial.config.kind === 'schedule'
+          )
+            initialNewState.current = {
+              ...initial,
+              config: { ...initial.config, input },
+            };
+          setConfig((c) => (c.kind === 'schedule' ? { ...c, input } : c));
+        }
+        previousWorkflow.current = {
+          id: workflowId,
+          version: latest?.version ?? 0,
+        };
+        setVersionRead({ ...request, version: latest });
+      },
+      (error) => {
+        if (active)
+          setVersionRead({
+            ...request,
+            error:
+              errorMessage(error) || 'Could not read the workflow contract.',
+          });
+      },
+    );
     return () => {
       active = false;
     };
-  }, [workflowId, workflow?.latestVersion, reload]);
+  }, [workflowId, expectedVersion, reload]);
   const timingKey =
     config.kind === 'schedule' ? JSON.stringify(config.timing) : '';
   useEffect(() => {
@@ -305,25 +348,41 @@ export function AutomationEditor({
     if (!needsReload && !unconfirmedCreation) setError('');
   };
   const back = id ? itemHref(id, search) : returnHref(search);
-  const published = version?.workflowId === workflowId ? version : undefined;
-  const needsDraftContract =
-    config.kind === 'schedule' && workflow?.latestVersion === 0 && !published;
-  const draftContract = useQuery(
-    trpc.workflows.get.queryOptions(
-      { id: workflowId },
-      { enabled: needsDraftContract },
-    ),
-  );
-  const draftContractError =
-    needsDraftContract && draftContract.error
-      ? errorMessage(draftContract.error)
-      : '';
+  const currentRead =
+    observedVersion?.expectedVersion === expectedVersion
+      ? observedVersion
+      : undefined;
+  const published = currentRead?.version;
+  const contractError = currentRead?.error;
+  const needsDraftContract = readDraft && currentRead !== undefined;
   const loadingContract =
-    contractLoading || (needsDraftContract && draftContract.isPending);
-  const contractFailure = contractError || draftContractError;
+    (Boolean(workflowId) && !currentRead) ||
+    (needsDraftContract &&
+      (draftContract.isPending || draftContract.isFetching));
+  const contractFailure =
+    contractError ||
+    (needsDraftContract && draftContract.error
+      ? errorMessage(draftContract.error) ||
+        'Could not read the workflow contract.'
+      : '');
   const schema =
     published?.definition.inputSchema ??
     (needsDraftContract ? draftContract.data?.draft.inputSchema : undefined);
+  const inputKey = `${workflowId}:${revision ?? 'new'}`;
+  const previousInput =
+    inputPresentation?.key === inputKey ? inputPresentation : undefined;
+  // Retain the current controls through refresh. A contract that changes a
+  // control's type can take effect after its local JSON is valid again.
+  const useCurrentInput =
+    config.kind === 'schedule' &&
+    Boolean(workflowId) &&
+    !loadingContract &&
+    !contractFailure &&
+    inputValid;
+  const inputSchema = useCurrentInput ? schema : previousInput?.schema;
+  useEffect(() => {
+    if (useCurrentInput) setInputPresentation({ key: inputKey, schema });
+  }, [useCurrentInput, inputKey, schema]);
   const save = async () => {
     if (
       busy ||
@@ -756,8 +815,12 @@ export function AutomationEditor({
                       value={workflowId || null}
                       data={workflowOptions}
                       onChange={(value) => {
-                        setWorkflowId(value ?? '');
+                        const next = value ?? '';
+                        if (next === workflowId) return;
+                        setWorkflowId(next);
+                        setVersionRead(undefined);
                         setInputValid(true);
+                        setInputPresentation(undefined);
                       }}
                       error={issues.workflowId}
                     />
@@ -837,17 +900,22 @@ export function AutomationEditor({
                         </p>
                       </details>
                     </>
-                  ) : loadingContract ? (
-                    <FormPlaceholder />
-                  ) : contractFailure && !schema ? null : schema &&
-                    schema.type === 'object' &&
-                    schema.properties &&
+                  ) : !useCurrentInput && !previousInput ? (
+                    loadingContract ? (
+                      <FormPlaceholder />
+                    ) : !workflowId ? (
+                      <p className={classes.hint}>
+                        Choose a workflow to configure its inputs.
+                      </p>
+                    ) : null
+                  ) : inputSchema?.type === 'object' &&
+                    inputSchema.properties &&
                     config.input !== null &&
                     typeof config.input === 'object' &&
                     !Array.isArray(config.input) ? (
                     <SchemaInput
-                      key={`${workflowId}:${published?.version ?? 'draft'}:${revision ?? 'new'}`}
-                      schema={schema}
+                      key={inputKey}
+                      schema={inputSchema}
                       value={config.input}
                       onChange={(input) => patch({ input })}
                       onValidityChange={setInputValid}
@@ -855,18 +923,14 @@ export function AutomationEditor({
                         (path) => (path && !path.includes('.') ? [path] : []),
                       )}
                     />
-                  ) : workflowId ? (
+                  ) : (
                     <JsonEditor
-                      key={revision}
+                      key={inputKey}
                       label="Workflow input"
                       value={config.input}
                       onChange={(input) => patch({ input })}
                       onValidityChange={setInputValid}
                     />
-                  ) : (
-                    <p className={classes.hint}>
-                      Choose a workflow to configure its inputs.
-                    </p>
                   )}
                   {config.kind === 'schedule' &&
                     Object.values(config.bindings).some(Boolean) && (
