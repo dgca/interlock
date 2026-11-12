@@ -12,6 +12,7 @@ import {
 } from '@interlock/core';
 import { workflowCall } from './fixtures/detached';
 import { batchDefinition } from './fixtures/batch';
+import { parallelDefinition } from './fixtures/parallel';
 import { appRouter } from '../packages/server/src/router';
 
 const engines: Engine[] = [];
@@ -64,6 +65,25 @@ it('validates bounded stage and title and includes the title in start identity',
       externalTask: { ...task, title: 'Changed' },
     }),
   ).toThrow();
+});
+
+it('projects an in-flight Parallel path ahead of an unclaimed sibling', () => {
+  const e = setup();
+  const workflowId = publish(e, parallelDefinition());
+  const runId = e.start(workflowId, {}).run.id;
+  const waiting = e.projectRun(runId).waiting?.detail.workId;
+  expect(waiting).toBeDefined();
+  const sibling = e.available(runId).find((work) => work.id !== waiting)!;
+  const claimed = e.claim(sibling.id, worker);
+
+  expect(e.projectRun(runId)).toMatchObject({ actor: 'agent', waiting: null });
+  expect(e.available(runId).map((work) => work.id)).toEqual([waiting]);
+
+  e.submit(claimed.id, claimed.token!, {});
+  expect(e.projectRun(runId).waiting).toMatchObject({
+    kind: 'claim_queue',
+    detail: { workId: waiting },
+  });
 });
 
 it('projects the deepest active waited stage and falls back through unlabeled children', () => {

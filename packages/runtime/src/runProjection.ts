@@ -11,6 +11,7 @@ type Branch = {
   stage?: string;
   actor: RunProjection['actor'];
   waiting: RunWaiting | null;
+  working: boolean;
 };
 const order = (a: Branch, b: Branch) =>
   b.depth - a.depth ||
@@ -98,6 +99,7 @@ export function createRunProjector(
         stage: node?.stage,
         actor: 'engine',
         waiting: null,
+        working: false,
       };
       const wait = (
         kind: RunWaiting['kind'],
@@ -267,6 +269,7 @@ export function createRunProjector(
           };
         }
       }
+      branch.working = inFlight && branch.waiting === null;
       branches.push(branch);
       const children =
         current?.childRunIds.filter((childId) => {
@@ -282,7 +285,10 @@ export function createRunProjector(
     const stage = branches.filter((b) => b.stage).sort(order)[0]?.stage ?? null;
     const rank = { agent: 0, engine: 1, person: 2 };
     const selected = leaves.sort(
-      (a, b) => rank[a.actor] - rank[b.actor] || order(a, b),
+      (a, b) =>
+        Number(b.working) - Number(a.working) ||
+        rank[a.actor] - rank[b.actor] ||
+        order(a, b),
     )[0];
     return {
       stage,

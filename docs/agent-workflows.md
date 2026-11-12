@@ -20,7 +20,7 @@ All run summaries, full run/descendant inspection, briefings, compact start/subm
 | `timer`          | Wait deadline pending                                                 | engine                                    |
 | `poll`           | Polling Wait pending                                                  | engine                                    |
 
-Person applies only when every active waited leaf requires intervention. A branch that can progress takes precedence, then agent before engine, then the stage tie order. External input uses agent because an integration can submit and accept automatically. Read briefing blocker lists to see branches omitted by the single waiting choice. Claimed connected work uses agent with null waiting; native execution uses engine.
+Person applies only when every active waited leaf requires intervention. In-flight work with no waiting reason takes precedence. The remaining order is agent, engine, then person, with the same tiebreakers as stage. External input uses agent because an integration can submit and accept automatically. Read briefing blocker lists to see branches omitted by the single waiting choice. Claimed connected work uses agent with null waiting; native execution uses engine.
 
 Polling detail includes deadlines and `lastCheck` with count, at, optional error capped at 500 characters, and optional JSON output text capped at 512 characters. `truncated` indicates an incomplete preview; use full inspection for the original output. `pause` reports applicable named holds and `admission_queue` reports queued start blockers. Existing `waitReason` stays compatible. Historical events can omit projection fields; new events capture them when recorded.
 
