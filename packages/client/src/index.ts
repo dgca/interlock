@@ -5,19 +5,14 @@ import {
   splitLink,
 } from '@trpc/client';
 import type { AppRouter } from '@interlock/server';
+import { largeQueryProcedures } from '@interlock/server/transport';
+
 export function createClient(url = 'http://127.0.0.1:4310') {
   return createTRPCClient<AppRouter>({
     links: [
       splitLink({
         // Candidate definitions can exceed the HTTP request-line limit.
-        condition: (operation) =>
-          [
-            'workflows.validate',
-            'workflows.previewImport',
-            'work.preflight',
-            'work.size',
-            'testbench.preview',
-          ].includes(operation.path),
+        condition: (operation) => largeQueryProcedures.includes(operation.path),
         true: httpLink({
           url: `${url}/trpc`,
           methodOverride: 'POST',

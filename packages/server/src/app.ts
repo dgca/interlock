@@ -7,6 +7,11 @@ import { bodyLimit } from 'hono/body-limit';
 import type { Engine } from '@interlock/runtime';
 import { appRouter } from './router.js';
 import type { ConnectionConfig } from './connection.js';
+import { largeQueryProcedures } from './transport.js';
+
+const largeQueryPaths = largeQueryProcedures.map(
+  (procedure) => `/trpc/${procedure}`,
+);
 
 export function createApp(engine: Engine, connection?: ConnectionConfig) {
   const app = new Hono();
@@ -76,13 +81,7 @@ export function createApp(engine: Engine, connection?: ConnectionConfig) {
       req: c.req.raw,
       router: appRouter,
       // Keep the query contract and legacy GET callers while accepting large bodies.
-      allowMethodOverride: [
-        '/trpc/workflows.validate',
-        '/trpc/workflows.previewImport',
-        '/trpc/work.preflight',
-        '/trpc/work.size',
-        '/trpc/testbench.preview',
-      ].includes(c.req.path),
+      allowMethodOverride: largeQueryPaths.includes(c.req.path),
       createContext: () => ({ engine, connection, signal: c.req.raw.signal }),
     }),
   );
