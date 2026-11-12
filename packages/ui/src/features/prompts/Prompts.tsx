@@ -19,6 +19,7 @@ import { Link, useNavigate, useOutletContext } from 'react-router';
 
 import { ArrowRight, Plus, Save, Search, Trash2 } from 'lucide-react';
 import {
+  promptContentSchema,
   promptRevisionConflict,
   samePromptContent,
   type PromptContent,
@@ -194,6 +195,7 @@ export function PromptEditor({
     prompt ? fields(prompt) : blankPrompt,
   );
   const [retryId, setRetryId] = useState<string>();
+  const [unconfirmedUpdate, setUnconfirmedUpdate] = useState<PromptContent>();
   const [saveError, setSaveError] = useState('');
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
@@ -207,11 +209,16 @@ export function PromptEditor({
   const busy = saving || loadingLatest;
   const conflict = Boolean(
     baseline &&
+    !unconfirmedUpdate &&
     (saveError === promptRevisionConflict ||
       (dirty && prompt && prompt.revision > baseline.revision)),
   );
   const canSave =
-    dirty && !conflict && draft.name.trim() && draft.content.trim();
+    dirty &&
+    !conflict &&
+    !unconfirmedUpdate &&
+    draft.name.trim() &&
+    draft.content.trim();
   const openLibrary = () => void navigate(paths.prompts);
 
   useEffect(() => () => latestRequest.current?.abort(), []);
@@ -219,6 +226,8 @@ export function PromptEditor({
     if (
       !dirty &&
       !busy &&
+      !conflict &&
+      !unconfirmedUpdate &&
       prompt &&
       baseline &&
       prompt.revision > baseline.revision
@@ -226,7 +235,7 @@ export function PromptEditor({
       setBaseline(prompt);
       setDraft(fields(prompt));
     }
-  }, [dirty, busy, prompt, baseline]);
+  }, [dirty, busy, conflict, unconfirmedUpdate, prompt, baseline]);
 
   const cachePrompt = (saved: SavedPrompt) => {
     const list = trpc.prompts.list.queryFilter();
@@ -259,6 +268,7 @@ export function PromptEditor({
   const save = async () => {
     if (!canSave || latestRequest.current || !beginSave()) return;
     setSaveError('');
+    setLoadError('');
     const requestId = baseline ? undefined : (retryId ?? crypto.randomUUID());
     let saved: SavedPrompt;
     try {
@@ -273,11 +283,19 @@ export function PromptEditor({
       if (!finishSave(false)) return;
       const rejected =
         error instanceof TRPCClientError && error.data?.code === 'BAD_REQUEST';
+      const message = errorMessage(error);
+      if (baseline && !rejected && message !== promptRevisionConflict) {
+        setUnconfirmedUpdate(draft);
+        setSaveError(
+          'Interlock could not confirm whether your changes were saved. Check the saved prompt before trying again.',
+        );
+        return;
+      }
       if (requestId && (!rejected || retryId)) setRetryId(requestId);
       setSaveError(
         requestId && !rejected
           ? 'Interlock could not confirm whether the prompt was saved. Retry creation to recover it safely. If you leave this page, check Prompts before creating it again.'
-          : errorMessage(error),
+          : message,
       );
       return;
     }
@@ -308,16 +326,30 @@ export function PromptEditor({
       if (request.signal.aborted) return;
       const key = trpc.prompts.get.queryKey(input);
       if (
-        latest.revision <= baseline.revision ||
+        latest.revision < baseline.revision ||
+        (!unconfirmedUpdate && latest.revision === baseline.revision) ||
         latest.revision < (client.getQueryData(key)?.revision ?? 0)
       ) {
         setLoadError('Could not read the latest prompt revision. Try again.');
         return;
       }
-      cachePrompt(latest);
+      void client.cancelQueries({ queryKey: key, exact: true });
       client.setQueryData(key, latest);
+      if (unconfirmedUpdate) {
+        const submitted = promptContentSchema.safeParse(unconfirmedUpdate);
+        setUnconfirmedUpdate(undefined);
+        if (!submitted.success || !samePromptContent(submitted.data, latest)) {
+          setSaveError(
+            latest.revision > baseline.revision
+              ? promptRevisionConflict
+              : 'The saved revision is still the same. Your edits are available to save again.',
+          );
+          return;
+        }
+      }
       setBaseline(latest);
-      setDraft(fields(latest));
+      if (!unconfirmedUpdate || samePromptContent(draft, unconfirmedUpdate))
+        setDraft(fields(latest));
       setSaveError('');
     } catch (error) {
       if (!request.signal.aborted)
@@ -382,8 +414,11 @@ export function PromptEditor({
         actions={
           <>
             <Button
-              disabled={busy || Boolean(baseline && !dirty && !conflict)}
-              loading={loadingLatest}
+              disabled={
+                busy ||
+                Boolean(unconfirmedUpdate || (baseline && !dirty && !conflict))
+              }
+              loading={loadingLatest && !unconfirmedUpdate}
               onClick={discard}
             >
               {conflict
@@ -398,7 +433,7 @@ export function PromptEditor({
                 ref={deleteTrigger}
                 aria-label="Delete prompt"
                 leftSection={<Trash2 size={16} aria-hidden="true" />}
-                disabled={busy || dirty}
+                disabled={busy || dirty || Boolean(unconfirmedUpdate)}
                 onClick={() => {
                   setDeleteError('');
                   setDeleting(true);
@@ -407,22 +442,32 @@ export function PromptEditor({
                 Delete
               </Button>
             )}
-            <Button
-              form={formId}
-              type="submit"
-              variant="primary"
-              disabled={busy || !canSave}
-              loading={saving && !deleting}
-              leftSection={
-                baseline ? <Save size={16} aria-hidden="true" /> : undefined
-              }
-            >
-              {baseline
-                ? 'Save changes'
-                : retryId
-                  ? 'Retry creation'
-                  : 'Create prompt'}
-            </Button>
+            {unconfirmedUpdate ? (
+              <Button
+                variant="primary"
+                loading={loadingLatest}
+                onClick={() => void loadLatest()}
+              >
+                Check saved prompt
+              </Button>
+            ) : (
+              <Button
+                form={formId}
+                type="submit"
+                variant="primary"
+                disabled={busy || !canSave}
+                loading={saving && !deleting}
+                leftSection={
+                  baseline ? <Save size={16} aria-hidden="true" /> : undefined
+                }
+              >
+                {baseline
+                  ? 'Save changes'
+                  : retryId
+                    ? 'Retry creation'
+                    : 'Create prompt'}
+              </Button>
+            )}
           </>
         }
       />

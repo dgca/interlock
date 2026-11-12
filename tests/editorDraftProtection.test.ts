@@ -621,6 +621,8 @@ it('opens the create page and saves when neither catalog is available', async ()
 });
 
 it('guards an existing prompt save and loads a conflicting revision only after confirmation', async () => {
+  const catalog = deferred<(typeof prompt)[]>();
+  rpc.listPrompts.mockReturnValueOnce(catalog.promise);
   await render(paths.prompt(prompt.id));
   await ready(() => expect(field('Instructions')).toBeTruthy());
   await fill('Instructions', 'My unsaved edit');
@@ -655,7 +657,95 @@ it('guards an existing prompt save and loads a conflicting revision only after c
   expect(field('Instructions').value).toBe(latest.content);
   expect(warnsBeforeUnload()).toBe(false);
   expect(rpc.updatePrompt).toHaveBeenCalledTimes(1);
+  const catalogKey = trpc.prompts.list.queryKey();
+  expect(queryClient.getQueryState(catalogKey)?.fetchStatus).toBe('fetching');
+  await act(async () => catalog.resolve([prompt]));
+  expect(queryClient.getQueryData(catalogKey)).toEqual([prompt]);
+  expect(rpc.listPrompts).toHaveBeenCalledTimes(1);
 });
+
+it('checks an uncertain update by ID and retains edits made after the attempted save', async () => {
+  rpc.updatePrompt.mockRejectedValueOnce(
+    new TRPCClientError('Failed to fetch'),
+  );
+  await render(paths.prompt(prompt.id));
+  await ready(() => expect(field('Instructions')).toBeTruthy());
+  await fill('Name', '  Normalized name  ');
+  await fill('Instructions', 'Submitted instructions');
+  await click('Save changes');
+  await ready(() => button('Check saved prompt'));
+  const stored = {
+    ...prompt,
+    revision: 2,
+    name: 'Normalized name',
+    content: 'Submitted instructions',
+    usage: [],
+  };
+  await act(async () => {
+    queryClient.setQueryData(
+      trpc.prompts.get.queryKey({ id: prompt.id }),
+      stored,
+    );
+  });
+  expect(document.body.textContent).toContain(
+    'could not confirm whether your changes were saved',
+  );
+  expect(document.body.textContent).not.toContain('changed elsewhere');
+  await fill('Instructions', 'Newer local instructions');
+  rpc.getPrompt.mockRejectedValueOnce(new Error('Read unavailable'));
+  await click('Check saved prompt');
+  expect(document.body.textContent).toContain('Read unavailable');
+  expect(field('Instructions').value).toBe('Newer local instructions');
+  rpc.getPrompt.mockResolvedValue(stored);
+  await click('Check saved prompt');
+  expect(rpc.getPrompt).toHaveBeenLastCalledWith({ id: prompt.id });
+  expect(document.body.textContent).toContain('Unsaved changes · Revision 2');
+  expect(field('Instructions').value).toBe('Newer local instructions');
+  expect(rpc.updatePrompt).toHaveBeenCalledTimes(1);
+  expect(button('Save changes').disabled).toBe(false);
+  rpc.updatePrompt.mockResolvedValue({
+    ...stored,
+    revision: 3,
+    content: 'Newer local instructions',
+  });
+  await click('Save changes');
+  expect(rpc.updatePrompt).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      revision: 2,
+      content: 'Newer local instructions',
+    }),
+  );
+});
+
+it.each([
+  [
+    'a newer version',
+    { ...prompt, revision: 2, content: 'Another edit' },
+    'Load latest',
+  ],
+  ['the previous version', prompt, 'Save changes'],
+])(
+  'retains an uncertain draft when the saved prompt shows %s',
+  async (_label, stored, action) => {
+    rpc.updatePrompt.mockRejectedValueOnce(
+      new TRPCClientError('Failed to fetch'),
+    );
+    await render(paths.prompt(prompt.id));
+    await ready(() => expect(field('Instructions')).toBeTruthy());
+    await fill('Instructions', 'My edit');
+    await click('Save changes');
+    rpc.getPrompt.mockResolvedValue({ ...stored, usage: [] });
+    await click('Check saved prompt');
+    expect(field('Instructions').value).toBe('My edit');
+    expect(button(action).disabled).toBe(false);
+    expect(rpc.updatePrompt).toHaveBeenCalledTimes(1);
+    if (action === 'Load latest') {
+      await click(action);
+      expect(discardDialog()).toBeDefined();
+      expect(field('Instructions').value).toBe('My edit');
+    }
+  },
+);
 
 it('discards a custom integration draft on confirmed tab navigation and keeps a failed edit available', async () => {
   await render('/settings/ai');

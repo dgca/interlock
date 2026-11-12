@@ -95,6 +95,7 @@ it.each([1440, 900, 390])(
       const create = page.getByRole('button', { name: 'Create prompt' });
       await create.click();
       await created.promise;
+      expect(app.engine.prompts.list()).toHaveLength(1);
       expect(await create.isDisabled()).toBe(true);
       expect(
         await page
@@ -147,6 +148,30 @@ it.each([1440, 900, 390])(
       expect(
         await page.getByRole('button', { name: 'Save changes' }).isDisabled(),
       ).toBe(true);
+
+      let updates = 0;
+      await page.route(
+        (url) => url.pathname === '/trpc/prompts.update',
+        async (route) => {
+          updates++;
+          const response = await route.fetch();
+          await response.dispose();
+          await route.abort('failed');
+        },
+      );
+      await name.fill('  Approved release review  ');
+      await instructions.fill('Confirmed by reading the saved prompt');
+      await page.getByRole('button', { name: 'Save changes' }).click();
+      const checkSaved = page.getByRole('button', {
+        name: 'Check saved prompt',
+      });
+      await checkSaved.waitFor();
+      expect(app.engine.prompts.get(saved.id).revision).toBe(3);
+      await checkSaved.click();
+      await page.getByText('Saved · Revision 3').waitFor();
+      expect(await name.inputValue()).toBe('Approved release review');
+      expect(updates).toBe(1);
+
       expect(
         await page.evaluate(
           () => document.documentElement.scrollWidth <= window.innerWidth,

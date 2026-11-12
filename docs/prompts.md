@@ -8,7 +8,7 @@
 
 If Interlock cannot confirm creation, the editor keeps your submitted text. Select **Retry creation** to recover the saved prompt or complete the original request. If you leave the page, check the Prompts library before creating it again.
 
-The editor lists workflows that reference the prompt, including drafts and published versions. It asks before you leave with unsaved edits. If someone changes the prompt while you edit, select **Load latest** and confirm before replacing your text with the latest revision. If a saved prompt's details fail to refresh, **Retry prompt details** repeats the read.
+The editor lists workflows that reference the prompt, including drafts and published versions. It asks before you leave with unsaved edits. If Interlock cannot confirm an update, select **Check saved prompt** to compare the stored revision with what you submitted. If someone changes the prompt while you edit, select **Load latest** and confirm before replacing your text with the latest revision. If a saved prompt's details fail to refresh, **Retry prompt details** repeats the read.
 
 ## Attach prompts to an Agent node
 
