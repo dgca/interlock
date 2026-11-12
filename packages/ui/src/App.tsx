@@ -9,6 +9,7 @@ import { Outlet, useBlocker, useMatch, useNavigate } from 'react-router';
 import { automationDraftKey, paths } from './routes/paths';
 import { useActionFeedback } from './lib/useActionFeedback';
 import type { Workflow, SavedPrompt } from '@interlock/core';
+import { TRPCClientError } from '@interlock/client';
 import { Sidebar, type AttentionFailure } from './components/Sidebar/Sidebar';
 import { RunDialog } from './features/runs/RunDialog';
 import { ConnectDialog } from './components/ConnectDialog/ConnectDialog';
@@ -19,6 +20,25 @@ import { aiSettingsTab } from './features/executors/aiSettingsNavigation';
 import { DiscardChangesDialog } from './components/DiscardChangesDialog';
 import { workspaceRead, type WorkspaceRead } from './components/WorkspaceReads';
 import { WorkflowLayoutNotice } from './features/workflows/WorkflowLayoutNotice';
+
+function isRetryableReadFailure(error: unknown) {
+  if (
+    !(error instanceof TRPCClientError) ||
+    error.data?.domainRejection === true
+  )
+    return false;
+  const response = error.meta?.response;
+  const status =
+    error.data?.httpStatus ??
+    (response instanceof Response ? response.status : undefined);
+  return (
+    status === undefined ||
+    status < 400 ||
+    status === 408 ||
+    status === 429 ||
+    status >= 500
+  );
+}
 
 type EditorGuard = 'dirty' | 'saving' | undefined;
 
@@ -162,7 +182,8 @@ export function App() {
               .findAll({ type: 'active' })
               .some(
                 (query) =>
-                  query.meta?.engineRefresh !== false && query.state.error,
+                  query.meta?.engineRefresh !== false &&
+                  isRetryableReadFailure(query.state.error),
               ),
           ),
         () => updateRefreshHealth(true),

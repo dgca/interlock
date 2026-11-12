@@ -873,13 +873,25 @@ it('guards an existing prompt save and loads a conflicting revision only after c
     content: 'Concurrent edit',
     usage: [],
   };
-  rpc.getPrompt.mockResolvedValue(latest);
+  const key = trpc.prompts.get.queryKey({ id: prompt.id });
+  const olderDetail = deferred<typeof latest>();
+  rpc.getPrompt
+    .mockReturnValueOnce(olderDetail.promise)
+    .mockResolvedValueOnce(latest)
+    .mockRejectedValueOnce(new Error('Follow-up detail unavailable'));
+  await act(async () => {
+    void queryClient.refetchQueries({ queryKey: key, exact: true });
+  });
   await click('Load latest');
   await click('Keep editing');
   expect(field('Instructions').value).toBe('My unsaved edit');
   await click('Load latest');
   await click('Discard changes', discardDialog());
   expect(field('Instructions').value).toBe(latest.content);
+  await act(async () => olderDetail.resolve({ ...prompt, usage: [] }));
+  expect(queryClient.getQueryData(key)).toEqual(latest);
+  await ready(() => button('Retry prompt details'));
+  expect(document.body.textContent).toContain('Saved · Revision 2');
   expect(warnsBeforeUnload()).toBe(false);
   expect(rpc.updatePrompt).toHaveBeenCalledTimes(1);
   const catalogKey = trpc.prompts.list.queryKey();

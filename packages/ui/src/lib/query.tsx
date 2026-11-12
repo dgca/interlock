@@ -100,16 +100,20 @@ export async function refreshQueries(
     predicate: (query) =>
       query.meta?.engineRefresh !== false && (scope.predicate?.(query) ?? true),
   };
-  const pending = new Set(
-    client
-      .getQueryCache()
-      .findAll({ ...filter, type: 'active', fetchStatus: 'fetching' }),
-  );
-  await client.invalidateQueries(filter, { cancelRefetch: false });
-  // A pending read may have captured state before the event.
-  if (pending.size)
-    await client.refetchQueries(
-      { predicate: (query) => pending.has(query) && query.isActive() },
-      { cancelRefetch: false },
-    );
+  const pending = client
+    .getQueryCache()
+    .findAll({ ...filter, type: 'active', fetchStatus: 'fetching' });
+  const options = { cancelRefetch: false };
+  const refreshing = client.invalidateQueries(filter, options);
+  await Promise.all([
+    refreshing,
+    ...pending.map(async (query) => {
+      const exact = {
+        predicate: (entry: typeof query) => entry === query && entry.isActive(),
+      };
+      // Join and follow this read without waiting for unrelated queries.
+      await client.refetchQueries(exact, options);
+      await client.refetchQueries(exact, options);
+    }),
+  ]);
 }

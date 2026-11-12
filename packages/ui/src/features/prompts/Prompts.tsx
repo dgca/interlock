@@ -331,9 +331,11 @@ export function PromptEditor({
         setLoadError('Could not read the latest prompt revision. Try again.');
         return;
       }
+      const filter = { queryKey: key, exact: true };
       const pending = client.getQueryState(key)?.fetchStatus === 'fetching';
+      if (pending) void client.cancelQueries(filter);
       client.setQueryData(key, latest);
-      if (pending) void refreshQueries(client, { queryKey: key, exact: true });
+      if (pending) void refreshQueries(client, filter);
       if (unconfirmedUpdate) {
         const submitted = promptContentSchema.safeParse(unconfirmedUpdate);
         setUnconfirmedUpdate(undefined);

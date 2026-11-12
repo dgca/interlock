@@ -134,7 +134,8 @@ interlock variables read '{"action":"inspect","id":"VARIABLE_ID"}'
 ```
 
 Replace `VARIABLE_ID` and `expectedRevision` with the current metadata. Read a
-Config value explicitly with `action:"config_value"`; that action rejects Secrets.
+Config value explicitly with `action:"config_value"`. The result contains `id`,
+`value`, and the saved `valueRevision` for that value. Secret reads are rejected.
 Metadata edits, disable/enable, deletion, and binding changes are revision protected.
 
 Through MCP, use **read_variables** and **manage_variables**, with the operation

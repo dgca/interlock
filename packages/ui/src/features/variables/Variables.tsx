@@ -58,7 +58,15 @@ import { VariablePicker } from './VariablePicker';
 
 type Read = Awaited<ReturnType<typeof api.variables.read.query>>;
 type Inspection = Extract<Read, { dependencies: unknown }>;
-type ConfigValue = { id: string; value: string };
+type ConfigValue = Extract<Read, { value: string }>;
+class ConfigValueChangedError extends Error {
+  constructor() {
+    super(
+      'The Config value changed while loading. Retry to load its current revision.',
+    );
+  }
+}
+
 // The value revision belongs to cache identity, not the server input. Secret
 // values never use this read path or enter the query cache.
 function configReadOptions(id: string, revision: number) {
@@ -89,7 +97,9 @@ function configReadOptions(id: string, revision: number) {
         typeof result.value !== 'string'
       )
         throw new Error('Could not read the config value.');
-      return { id: result.id, value: result.value };
+      if (result.valueRevision !== revision)
+        throw new ConfigValueChangedError();
+      return result;
     },
   };
 }
@@ -295,7 +305,7 @@ function VariableEditor({ id }: { id: string }) {
       return undefined;
     if (initial.valueRevision === null) return { revision: null, value: '' };
     const cachedValue = queryClient.getQueryData<ConfigValue>(
-      configReadOptions(id, initial.valueRevision).queryKey,
+      configReadOptions(initial.id, initial.valueRevision).queryKey,
     );
     return cachedValue && 'value' in cachedValue
       ? { revision: initial.valueRevision, value: cachedValue.value }
@@ -344,10 +354,14 @@ function VariableEditor({ id }: { id: string }) {
   const readConfig = async (inspection: Inspection) => {
     if (inspection.kind !== 'config' || inspection.availability === 'locked')
       return undefined;
-    if (config?.revision === inspection.valueRevision) return config;
+    if (
+      saved?.id === inspection.id &&
+      config?.revision === inspection.valueRevision
+    )
+      return config;
     if (inspection.valueRevision === null) return { revision: null, value: '' };
     const result = await queryClient.fetchQuery(
-      configReadOptions(id, inspection.valueRevision),
+      configReadOptions(inspection.id, inspection.valueRevision),
     );
     return { revision: inspection.valueRevision, value: result.value };
   };
@@ -367,7 +381,7 @@ function VariableEditor({ id }: { id: string }) {
     ...trpc.variables.read.queryOptions({ action: 'inspect', id, offset }),
     enabled: readEnabled,
     select: (data) => {
-      if (!('dependencies' in data) || data.id !== id)
+      if (!('dependencies' in data) || (data.referenceId ?? data.id) !== id)
         throw new Error('Could not read variable details.');
       return data;
     },
@@ -378,31 +392,39 @@ function VariableEditor({ id }: { id: string }) {
       ? observed.valueRevision
       : undefined;
   const configRead = useQuery({
-    ...configReadOptions(id, configRevision ?? 0),
+    ...configReadOptions(observed?.id ?? id, configRevision ?? 0),
     enabled: readEnabled && typeof configRevision === 'number',
   });
   const readError =
     recoveryError || (inspection.error ? errorMessage(inspection.error) : '');
   const configError = configRead.error ? errorMessage(configRead.error) : '';
   const retryDetails = () => void inspection.refetch({ cancelRefetch: false });
+  const retryConfig = () => {
+    if (configRead.error instanceof ConfigValueChangedError) retryDetails();
+    else void configRead.refetch({ cancelRefetch: false });
+  };
   useEffect(() => () => latestRequest.current?.abort(), []);
   useEffect(() => {
     if (
       !readEnabled ||
       !observed ||
-      (saved && observed.revision < saved.revision)
+      (saved?.id === observed.id && observed.revision < saved.revision)
     )
       return;
+    const currentConfig = saved?.id === observed.id ? config : undefined;
     let nextConfig: typeof config;
     if (configRevision === null) {
       nextConfig =
-        config?.revision === null ? config : { revision: null, value: '' };
+        currentConfig?.revision === null
+          ? currentConfig
+          : { revision: null, value: '' };
     } else if (configRevision !== undefined) {
-      if (config?.revision === configRevision) nextConfig = config;
+      if (currentConfig?.revision === configRevision)
+        nextConfig = currentConfig;
       else if (configRead.data)
         nextConfig = { revision: configRevision, value: configRead.data.value };
-      else if (configRead.error) nextConfig = config;
-      else return;
+      else if (configRead.error) nextConfig = currentConfig;
+      else if (!saved || saved.id === observed.id) return;
     }
     applyInspection(observed, nextConfig);
   }, [
@@ -508,7 +530,7 @@ function VariableEditor({ id }: { id: string }) {
             }
           : {
               action: 'update',
-              id,
+              id: saved!.id,
               expectedRevision: saved!.revision,
               name,
               description,
@@ -581,7 +603,11 @@ function VariableEditor({ id }: { id: string }) {
         if (savedValue !== undefined)
           queryClient.setQueryData<ConfigValue>(
             configReadOptions(result.id, result.valueRevision).queryKey,
-            { id: result.id, value: savedValue },
+            {
+              id: result.id,
+              valueRevision: result.valueRevision,
+              value: savedValue,
+            },
           );
       }
       if (active && creating)
@@ -607,12 +633,21 @@ function VariableEditor({ id }: { id: string }) {
         } else {
           await api.variables.manage.mutate({
             action: 'delete',
-            id,
+            id: saved.id,
             expectedRevision: saved.revision,
           });
           for (const filter of [
-            trpc.variables.read.queryFilter({ action: 'inspect', id }),
-            trpc.variables.read.queryFilter({ action: 'config_value', id }),
+            trpc.variables.read.queryFilter({
+              action: 'inspect',
+              id: saved.id,
+            }),
+            trpc.variables.read.queryFilter({
+              action: 'config_value',
+              id: saved.id,
+            }),
+            ...(id === saved.id
+              ? []
+              : [trpc.variables.read.queryFilter({ action: 'inspect', id })]),
           ]) {
             void queryClient.cancelQueries(filter);
             queryClient.removeQueries(filter);
@@ -934,9 +969,7 @@ function VariableEditor({ id }: { id: string }) {
                           <Button
                             variant="ghost"
                             disabled={dirty || busy}
-                            onClick={() =>
-                              void configRead.refetch({ cancelRefetch: false })
-                            }
+                            onClick={retryConfig}
                           >
                             Retry Config value
                           </Button>

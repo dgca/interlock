@@ -179,7 +179,7 @@ it('encrypts both kinds, bounds metadata, enforces names and revisions, and neve
   ).toThrow(/cannot be read back/);
   expect(
     engine.variables.read({ action: 'config_value', id: config.id }),
-  ).toEqual({ id: config.id, value: 'ordinary' });
+  ).toEqual({ id: config.id, value: 'ordinary', valueRevision: 1 });
   expect(() => create(engine, 'secret', 'other', 'SERVICE_TOKEN')).toThrow(
     /already exists/,
   );

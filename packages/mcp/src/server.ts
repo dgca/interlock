@@ -277,7 +277,7 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
   );
   tool(
     'read_variables',
-    'Read instance-wide workflow variables. request.action:list returns metadata only, with search and offset/limit (25 default, 100 max), exact total and truncation. inspect returns metadata, availability, the local key-file location for recovery, paged dependent workflows and portable bindings (20 default, 50 max), plus active-run/comparison counts; retained-version samples cap at 20. config_value is an explicit ordinary Config-value read; Secret read-back always rejects. Inspect before revision-protected edits or rebinding. Disabled, unset and locked values remain discoverable. No multi-user isolation is provided.',
+    'Read instance-wide workflow variables. request.action:list returns metadata only, with search and offset/limit (25 default, 100 max), exact total and truncation. inspect returns metadata, availability, the local key-file location for recovery, paged dependent workflows and portable bindings (20 default, 50 max), plus active-run/comparison counts; retained-version samples cap at 20. config_value returns the ordinary Config value and its valueRevision. Secret read-back always rejects. Inspect before revision-protected edits or rebinding. Disabled, unset and locked values remain discoverable. No multi-user isolation is provided.',
     z.object({ request: variableReadSchema }).strict(),
     (input) => client.variables.read(input.request),
   );

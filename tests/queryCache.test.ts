@@ -79,14 +79,16 @@ it('preserves literal metadata keys when replacing an existing cached response',
   }
 });
 
-it('refreshes after an event that arrives during an initial read without running opt-in diagnostics', async () => {
+it('follows a pending inspector read independently of an unrelated read and skips diagnostics', async () => {
   const client = createQueryClient();
   let resolve!: (data: string) => void;
+  let resolveUnrelated!: () => void;
   let reads = 0;
   let diagnostics = 0;
+  let unrelatedReads = 0;
   function Page() {
     const result = useQuery({
-      queryKey: ['events'],
+      queryKey: ['runs', 'inspect', 'current-run'],
       queryFn: () => {
         reads++;
         return reads === 1
@@ -95,6 +97,15 @@ it('refreshes after an event that arrives during an initial read without running
             })
           : Promise.resolve('after event');
       },
+    });
+    useQuery({
+      queryKey: ['unrelated'],
+      queryFn: () =>
+        ++unrelatedReads === 1
+          ? new Promise<string>((done) => {
+              resolveUnrelated = () => done('other page data');
+            })
+          : Promise.resolve('current unrelated data'),
     });
     useQuery({
       queryKey: ['diagnostics'],
@@ -114,14 +125,19 @@ it('refreshes after an event that arrives during an initial read without running
       root.render(h(QueryProvider, { client, children: h(Page) })),
     );
     expect(container.textContent).toBe('skeleton');
+    let refreshing!: Promise<void>;
     await act(async () => {
-      const refreshing = refreshQueries(client);
+      refreshing = refreshQueries(client);
       resolve('before event');
-      await refreshing;
     });
     expect(reads).toBe(2);
     expect(container.textContent).toBe('after event');
     expect(diagnostics).toBe(1);
+    expect(client.getQueryState(['unrelated'])?.fetchStatus).toBe('fetching');
+    await act(async () => {
+      resolveUnrelated();
+      await refreshing;
+    });
   } finally {
     await act(async () => root.unmount());
     client.clear();

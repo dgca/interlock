@@ -6,7 +6,11 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { UiTestProvider } from './uiTestProvider';
 import { VariableRoute } from '../packages/ui/src/features/variables/Variables';
 
-import { refreshQueries, useQueryClient } from '../packages/ui/src/lib/query';
+import {
+  refreshQueries,
+  trpc,
+  useQueryClient,
+} from '../packages/ui/src/lib/query';
 
 const read = vi.hoisted(() => vi.fn());
 const manage = vi.hoisted(() => vi.fn());
@@ -126,7 +130,9 @@ it.each(['secret', 'config'] as const)(
   async (kind) => {
     const saved = savedVariable(kind);
     read.mockImplementation(async ({ action }) =>
-      action === 'inspect' ? saved : { id: 'v', value: 'Saved config value' },
+      action === 'inspect'
+        ? saved
+        : { id: 'v', value: 'Saved config value', valueRevision: 1 },
     );
     await show();
     expect(field('Name').value).toBe('saved_variable');
@@ -286,7 +292,11 @@ it('retains the last Config value when reading a new revision fails and retries 
   read.mockImplementation(async ({ action }) => {
     if (action === 'inspect') return current;
     if (failValueRead) throw new Error('Config read failed');
-    return { id: 'v', value: `Value revision ${current.valueRevision}` };
+    return {
+      id: 'v',
+      value: `Value revision ${current.valueRevision}`,
+      valueRevision: current.valueRevision,
+    };
   });
   await show();
   expect(field('Config value').value).toBe('Value revision 1');
@@ -309,4 +319,85 @@ it('retains the last Config value when reading a new revision fails and retries 
   expect(read.mock.calls.map(([input]) => input)).toEqual([
     { action: 'config_value', id: 'v' },
   ]);
+});
+
+it('rejects a Config value from a newer revision until the metadata catches up', async () => {
+  let metadata = savedVariable('config');
+  read.mockImplementation(async ({ action }) =>
+    action === 'inspect'
+      ? metadata
+      : { id: 'v', value: 'Value revision 2', valueRevision: 2 },
+  );
+  await show();
+  expect(field('Config value').value).toBe('');
+  expect(field('Config value').disabled).toBe(true);
+  expect(container.textContent).toContain(
+    'The Config value changed while loading.',
+  );
+  const key = trpc.variables.read.queryFilter({
+    action: 'config_value',
+    id: 'v',
+  });
+  expect(
+    client.getQueriesData(key).every(([, data]) => data === undefined),
+  ).toBe(true);
+
+  metadata = { ...metadata, revision: 2, valueRevision: 2 };
+  const retry = [...container.querySelectorAll('button')].find(
+    (button) => button.textContent === 'Retry Config value',
+  )!;
+  read.mockClear();
+  await act(async () => retry.click());
+  expect(read.mock.calls.map(([input]) => input.action)).toEqual([
+    'inspect',
+    'config_value',
+  ]);
+  expect(field('Config value').value).toBe('Value revision 2');
+  expect(field('Config value').disabled).toBe(false);
+});
+
+it('keeps a portable Variable draft tied to its saved variable across a rebind', async () => {
+  const original = {
+    ...savedVariable('config'),
+    referenceId: 'portable',
+  };
+  let target = original;
+  read.mockImplementation(async ({ action, id }) =>
+    action === 'inspect'
+      ? target
+      : { id, value: `Config for ${id}`, valueRevision: 1 },
+  );
+  manage.mockImplementation(async ({ name }) => ({
+    ...original,
+    name,
+    revision: 2,
+  }));
+
+  await show(true, 'portable');
+  expect(field('Config value').value).toBe('Config for v');
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      'value',
+    )!.set!.call(field('Name'), 'local_edit');
+    field('Name').dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  target = { ...original, id: 'other', name: 'other_variable' };
+  await act(async () => refreshQueries(client));
+  expect(field('Name').value).toBe('local_edit');
+  await act(async () =>
+    container
+      .querySelector('form')!
+      .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })),
+  );
+  expect(manage).toHaveBeenCalledWith(
+    expect.objectContaining({
+      id: 'v',
+      expectedRevision: 1,
+      name: 'local_edit',
+    }),
+  );
+  await act(async () => refreshQueries(client));
+  expect(field('Name').value).toBe('other_variable');
+  expect(field('Config value').value).toBe('Config for other');
 });
