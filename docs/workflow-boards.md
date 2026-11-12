@@ -12,7 +12,7 @@ If the board changes elsewhere before you save, the editor keeps your draft. Cho
 If Interlock cannot confirm creation, check **Boards** for the board before starting another draft.
 If Interlock cannot confirm an update, use **Load latest** to check the saved board revision.
 
-Membership applies to existing and future runs as soon as you save. It is independent of publication. To place runs in a stage, open a node's settings, choose a board column in **Stage**, and publish the workflow. Selecting a column binds its ID. Typing stage text creates a label for run summaries, even if the text matches a column. Renaming or reordering a column preserves its bindings. A draft, retained version, or retained run can prevent column removal.
+Membership applies to existing and future runs as soon as you save. It is independent of publication. Reimporting a workflow keeps its board membership. To place runs in a stage, open a node's settings, choose a board column in **Stage**, and publish the workflow. Selecting a column binds its ID. Typing stage text creates a label for run summaries, even if the text matches a column. Renaming or reordering a column preserves its bindings. A draft, retained version, or retained run can prevent column removal.
 
 ## Find work and answer a request
 

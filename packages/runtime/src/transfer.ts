@@ -605,6 +605,7 @@ export function importWorkflows(
         name: entry.name,
         description: entry.description,
         archived: existing?.archived ?? false,
+        boardId: existing?.boardId,
         draft: sameDraft ? existing!.draft : entry.draft,
         draftRevision: existing
           ? existing.draftRevision + (sameDraft ? 0 : 1)
