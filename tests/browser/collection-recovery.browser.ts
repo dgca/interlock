@@ -83,7 +83,6 @@ it.each([1440, 900, 390])(
           const procedures = url.pathname.slice('/trpc/'.length).split(',');
           if (listFailure && procedures.includes('boards.list')) {
             const failure = listFailure;
-            listFailure = undefined;
             failure.started.resolve();
             await failure.release.promise;
             await route.abort('failed');
@@ -109,13 +108,17 @@ it.each([1440, 900, 390])(
       await boardsLoading.waitFor();
       await initial.started.promise;
       initial.release.resolve();
-      const retryBoards = page.getByRole('button', { name: 'Retry boards' });
+      const retryBoards = page.getByRole('button', {
+        name: 'Retry boards',
+        disabled: false,
+      });
       await retryBoards.waitFor();
       expect(await boardsLoading.count()).toBe(0);
       expect(
         await page.getByRole('heading', { name: 'No boards yet' }).count(),
       ).toBe(0);
       await retryBoards.focus();
+      listFailure = undefined;
       await page.keyboard.press('Enter');
 
       const search = page.getByRole('textbox', { name: 'Search boards' });
@@ -151,12 +154,15 @@ it.each([1440, 900, 390])(
       await operations.waitFor();
       expect(await boardsLoading.count()).toBe(0);
       refresh.release.resolve();
-      await page
-        .getByText(/Could not refresh boards\. Showing the last loaded data\./)
-        .waitFor();
+      const staleBoards = page.getByText(
+        /Could not refresh boards\. Showing the last loaded data\./,
+      );
+      await staleBoards.waitFor();
       await operations.waitFor();
-      await retryBoards.click();
-      await retryBoards.waitFor({ state: 'hidden' });
+      await retryBoards.focus();
+      listFailure = undefined;
+      await page.keyboard.press('Enter');
+      await staleBoards.waitFor({ state: 'hidden' });
 
       await operations.click();
       await run.waitFor();
