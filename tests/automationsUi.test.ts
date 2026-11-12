@@ -406,17 +406,29 @@ it('preserves advanced configuration and rejects revision conflicts without disc
   await act(async () =>
     document.querySelector<HTMLInputElement>('input[value=interval]')!.click(),
   );
+  await act(async () => {
+    const unit = field('Unit');
+    unit.value = '3600000';
+    unit.dispatchEvent(new Event('change', { bubbles: true }));
+  });
   const options = () =>
     document.querySelector<HTMLTextAreaElement>(
       'textarea[aria-label=options]',
     )!;
   await fill(options(), '{invalid');
   rpc.inspect.mockResolvedValue(
-    inspection({ ...saved, revision: 5, name: 'Remote edit' } as any),
+    inspection({
+      ...saved,
+      revision: 5,
+      name: 'Remote edit',
+      timing: { type: 'interval', intervalMs: 30000 },
+    } as any),
   );
   await act(async () => button('Load latest').click());
   await act(async () => button('Discard changes').click());
   expect(field('Name').value).toBe('Remote edit');
+  expect(field('Run every').value).toBe('30');
+  expect(field('Unit').value).toBe('1000');
   expect(options().value).toBe('{}');
   await act(async () =>
     document.querySelector<HTMLInputElement>('input[value=cron]')!.click(),

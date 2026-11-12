@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Link, useNavigate, useOutletContext, useParams } from 'react-router';
-import { TRPCClientError } from '@interlock/client';
+import { isConfirmedWriteRejection } from '../../lib/isConfirmedWriteRejection';
 import { ArrowDown, ArrowUp, Plus, X } from 'lucide-react';
 import { boardSettingsRevisionConflict } from '@interlock/core';
 import {
@@ -269,8 +269,7 @@ function BoardSettings({ initial }: { initial?: Settings }) {
               const message = errorMessage(error);
               if (
                 message === boardSettingsRevisionConflict ||
-                (error instanceof TRPCClientError &&
-                  error.data?.code === 'BAD_REQUEST')
+                isConfirmedWriteRejection(error)
               ) {
                 setError(message);
               } else if (baseline) {

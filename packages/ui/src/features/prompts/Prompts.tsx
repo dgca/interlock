@@ -1,4 +1,4 @@
-import { TRPCClientError } from '@interlock/client';
+import { isConfirmedWriteRejection } from '../../lib/isConfirmedWriteRejection';
 import {
   Button,
   Stack,
@@ -277,8 +277,7 @@ export function PromptEditor({
         : await api.prompts.create.mutate({ ...draft, requestId });
     } catch (error) {
       if (!finishSave(false)) return;
-      const rejected =
-        error instanceof TRPCClientError && error.data?.code === 'BAD_REQUEST';
+      const rejected = isConfirmedWriteRejection(error);
       const message = errorMessage(error);
       if (baseline && !rejected && message !== promptRevisionConflict) {
         setUnconfirmedUpdate(draft);

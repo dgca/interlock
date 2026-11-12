@@ -33,7 +33,10 @@ export type AppContext = {
   onDirty: (dirty: boolean) => void;
   onEditorGuard: (guard: EditorGuard) => void;
   editorNavigationBlocked: boolean;
-  onSaved: (workflow: Workflow) => void;
+  onSaved: (
+    workflow: Workflow & { layoutRevision?: number },
+    source?: 'read',
+  ) => Workflow | void;
   onRun: (workflow: Workflow) => void;
   onConnect?: () => void;
 };
@@ -242,10 +245,24 @@ export function App() {
     onDirty: setEditorDirty,
     onEditorGuard,
     editorNavigationBlocked,
-    onSaved: (w) => {
+    onSaved: (w, source) => {
+      const key = trpc.workflows.list.queryKey();
+      if (source === 'read') {
+        const cached = queryClient
+          .getQueryData(key)
+          ?.find((item) => item.id === w.id);
+        if (
+          cached &&
+          (cached.draftRevision > w.draftRevision ||
+            cached.latestVersion > w.latestVersion ||
+            (w.layoutRevision !== undefined &&
+              cached.layoutRevision > w.layoutRevision))
+        )
+          return cached;
+      }
       // Cancellation is synchronous; earlier list reads cannot replace this acknowledgement.
       void queryClient.cancelQueries(trpc.workflows.list.queryFilter());
-      queryClient.setQueryData(trpc.workflows.list.queryKey(), (all = []) =>
+      queryClient.setQueryData(key, (all = []) =>
         all.some((old) => old.id === w.id)
           ? all.map((old) =>
               old.id === w.id
@@ -254,6 +271,7 @@ export function App() {
             )
           : [...all, { draftMatchesLatest: null, layoutRevision: 0, ...w }],
       );
+      return w;
     },
     onRun: setRunDialog,
     onConnect: features.connectAgent ? () => setConnectDialog(true) : undefined,

@@ -23,6 +23,14 @@ it.each([1440, 900, 390])(
     const hold = new Promise<void>((resolve) => {
       releasePublish = resolve;
     });
+    let releaseCheck!: () => void;
+    const holdCheck = new Promise<void>((resolve) => {
+      releaseCheck = resolve;
+    });
+    let capturedCheck!: () => void;
+    const staleCheck = new Promise<void>((resolve) => {
+      capturedCheck = resolve;
+    });
     try {
       const workflow = app.engine.create(
         'Draft for review',
@@ -49,7 +57,14 @@ it.each([1440, 900, 390])(
             .slice('/trpc/'.length)
             .split(',')
             .includes('workflows.get'),
-        (route) => (failCheck ? route.abort('failed') : route.continue()),
+        async (route) => {
+          if (failCheck) return route.abort('failed');
+          const response = await route.fetch();
+          capturedCheck();
+          await holdCheck;
+          await route.fulfill({ response });
+          await response.dispose();
+        },
       );
       await page.goto(`${app.url}/workflows`);
       await page.locator(`a[href="${path}"]`).click();
@@ -82,11 +97,22 @@ it.each([1440, 900, 390])(
       expect(publications).toBe(1);
       failCheck = false;
       await check.click();
-      await page.getByText('Published version v1 is available.').waitFor();
+      await staleCheck;
+      app.engine.update(workflow.id, { name: 'Newer workflow' });
+      app.engine.publish(workflow.id);
+      await page.evaluate(() =>
+        document.dispatchEvent(new Event('visibilitychange')),
+      );
+      const newerWorkflow = page.getByText('Newer workflow', { exact: true });
+      await newerWorkflow.waitFor();
+      releaseCheck();
+      await page.getByText('Published version v2 is available.').waitFor();
+      expect(await newerWorkflow.isVisible()).toBe(true);
       expect(publications).toBe(1);
       expect(new URL(page.url()).pathname).toBe(path);
     } finally {
       releasePublish();
+      releaseCheck();
       await page.close();
       await app.close();
     }

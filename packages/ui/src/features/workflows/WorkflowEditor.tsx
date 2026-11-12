@@ -13,7 +13,8 @@ import {
 } from '../../design-system';
 
 import { WorkflowPauseButton, PauseBanner } from '../pauses/PauseControls';
-import { TRPCClientError } from '@interlock/client';
+import type { AppContext } from '../../App';
+import { isConfirmedWriteRejection } from '../../lib/isConfirmedWriteRejection';
 import type { Action } from '../../lib/useActionFeedback';
 import { useEditorDraft } from '../../lib/useEditorDraft';
 import { flushSync } from 'react-dom';
@@ -173,7 +174,7 @@ export function WorkflowEditor({
   promptsRead?: WorkspaceRead;
   onBack: () => void;
   onRun: (workflow: Workflow) => void;
-  onSaved: (w: Workflow) => void;
+  onSaved: AppContext['onSaved'];
   act: Action;
   onDirty: (dirty: boolean) => void;
   onDeleted?: () => void;
@@ -514,17 +515,18 @@ export function WorkflowEditor({
         { signal: request.signal },
       );
       if (request.signal.aborted) return;
-      if (
-        current.latestVersion < unconfirmedVersion ||
-        current.latestVersion < workflow.latestVersion
-      )
+      if (current.latestVersion < unconfirmedVersion)
         throw new Error(
           'Could not read the current published version. Try again.',
         );
-      onSaved(current);
+      const cached = onSaved(current, 'read');
+      const latestVersion = Math.max(
+        current.latestVersion,
+        cached?.latestVersion ?? 0,
+      );
       setPublicationNotice(
-        current.latestVersion > unconfirmedVersion
-          ? `Published version v${current.latestVersion} is available.`
+        latestVersion > unconfirmedVersion
+          ? `Published version v${latestVersion} is available.`
           : 'No newer published version was found. Review the draft to publish again.',
       );
       setUnconfirmedVersion(undefined);
@@ -1510,23 +1512,20 @@ export function WorkflowEditor({
                   ? { ...current, revision: savedWorkflow.draftRevision }
                   : current,
               );
+              let published: Workflow;
               try {
-                const published = await api.workflows.publish.mutate({
+                published = await api.workflows.publish.mutate({
                   id: workflow.id,
                 });
-                onSaved(published);
-                setReview(undefined);
-                return published;
               } catch (error) {
-                if (
-                  error instanceof TRPCClientError &&
-                  error.data?.code === 'BAD_REQUEST'
-                )
-                  throw error;
+                if (isConfirmedWriteRejection(error)) throw error;
                 if (mounted.current)
                   setUnconfirmedVersion(savedWorkflow.latestVersion);
                 return;
               }
+              onSaved(published);
+              setReview(undefined);
+              return published;
             });
           }}
         />

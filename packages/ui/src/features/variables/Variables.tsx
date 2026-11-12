@@ -30,7 +30,7 @@ import {
 } from 'react-router';
 
 import { ArrowRight, ChevronRight, Plus, Search, Trash2 } from 'lucide-react';
-import { TRPCClientError } from '@interlock/client';
+import { isConfirmedWriteRejection } from '../../lib/isConfirmedWriteRejection';
 import type { AppContext } from '../../App';
 import {
   variableRequirementSchema,
@@ -519,7 +519,7 @@ function VariableEditor({ id }: { id: string }) {
       const message = errorMessage(error);
       if (
         message === variableRevisionConflict ||
-        (error instanceof TRPCClientError && error.data?.code === 'BAD_REQUEST')
+        isConfirmedWriteRejection(error)
       ) {
         setError(message);
       } else {

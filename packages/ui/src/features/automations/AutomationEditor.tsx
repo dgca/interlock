@@ -17,7 +17,7 @@ import {
 } from '../../design-system';
 
 import { useEffect, useId, useRef, useState } from 'react';
-import { TRPCClientError } from '@interlock/client';
+import { isConfirmedWriteRejection } from '../../lib/isConfirmedWriteRejection';
 import {
   Link,
   useNavigate,
@@ -416,7 +416,7 @@ export function AutomationEditor({
       const message = errorMessage(error);
       if (
         message === triggerRevisionConflict ||
-        (error instanceof TRPCClientError && error.data?.code === 'BAD_REQUEST')
+        isConfirmedWriteRejection(error)
       ) {
         setError(message);
       } else if (id) {
@@ -571,6 +571,7 @@ export function AutomationEditor({
                         />
                         {config.timing.type === 'interval' ? (
                           <IntervalInput
+                            key={revision}
                             intervalMs={config.timing.intervalMs}
                             onChange={(intervalMs) =>
                               patch({

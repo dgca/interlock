@@ -650,6 +650,7 @@ it('checks a lost publication response without replacing a newer Raw draft', asy
   );
   expect(saved).toHaveBeenLastCalledWith(
     expect.objectContaining({ latestVersion: 1 }),
+    'read',
   );
   expect(rawEditor.props.value).toBe('{newer raw edit');
   expect(rpc.publish).toHaveBeenCalledTimes(1);
