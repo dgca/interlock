@@ -17,6 +17,7 @@ import {
 } from '../../design-system';
 import type { AppContext } from '../../App';
 import { DiscardChangesDialog } from '../../components/DiscardChangesDialog';
+import { WorkspaceReadWarning } from '../../components/WorkspaceReads';
 import { api, errorMessage } from '../../lib/api';
 import {
   refreshQueries,
@@ -85,7 +86,8 @@ function BoardSettings({ initial }: { initial?: Settings }) {
     selected.some((id) => !originalWorkflows.has(id));
   const { busy: saving, beginSave, finishSave } = useEditorDraft(dirty);
   const busy = saving || loadingLatest;
-  const { workflows, editorNavigationBlocked } = useOutletContext<AppContext>();
+  const { workflows, workflowsRead, editorNavigationBlocked } =
+    useOutletContext<AppContext>();
   const boards = useQuery(trpc.boards.list.queryOptions());
   const client = useQueryClient();
   const navigate = useNavigate();
@@ -297,6 +299,7 @@ function BoardSettings({ initial }: { initial?: Settings }) {
                   label: workflow.name,
                 }))}
               />
+              <WorkspaceReadWarning reads={[workflowsRead]} inline />
               {moves.map((workflow) => {
                 const source = boards.data?.find(
                   (board) => board.id === workflow.boardId,

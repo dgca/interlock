@@ -1,4 +1,4 @@
-import { Button, Group, Notification, Text } from './design-system';
+import { Notification } from './design-system';
 
 import { PauseProvider } from './features/pauses/PauseControls';
 import { useUiFeatures } from './lib/uiFeatures';
@@ -9,7 +9,7 @@ import { Outlet, useBlocker, useMatch, useNavigate } from 'react-router';
 import { paths } from './routes/paths';
 import { useActionFeedback } from './lib/useActionFeedback';
 import type { Workflow, SavedPrompt } from '@interlock/core';
-import { Sidebar } from './components/Sidebar/Sidebar';
+import { Sidebar, type AttentionFailure } from './components/Sidebar/Sidebar';
 import { RunDialog } from './features/runs/RunDialog';
 import { ConnectDialog } from './components/ConnectDialog/ConnectDialog';
 import { errorMessage } from './lib/api';
@@ -18,6 +18,7 @@ import { subscribeToEngineEvents } from './lib/engineEvents';
 import type { Action } from './lib/useActionFeedback';
 import { aiSettingsTab } from './features/executors/aiSettingsNavigation';
 import { DiscardChangesDialog } from './components/DiscardChangesDialog';
+import type { WorkspaceRead } from './components/WorkspaceReads';
 import { WorkflowLayoutNotice } from './features/workflows/WorkflowLayoutNotice';
 
 type EditorGuard = 'dirty' | 'saving' | undefined;
@@ -25,9 +26,8 @@ type EditorGuard = 'dirty' | 'saving' | undefined;
 export type AppContext = {
   workflows: Workflow[];
   prompts: SavedPrompt[];
-  loaded: boolean;
-  loadError: string;
-  retryLoad: () => Promise<void>;
+  workflowsRead: WorkspaceRead;
+  promptsRead: WorkspaceRead;
   tick: number;
   act: Action;
   onDirty: (dirty: boolean) => void;
@@ -86,20 +86,23 @@ export function App() {
   });
   const workflows = workflowsQuery.data ?? [];
   const prompts = promptsQuery.data ?? [];
-  const attentionCount = attentionQuery.data?.total ?? 0;
-  const scheduleAttentionCount = scheduleQuery.data?.total ?? 0;
-  const loaded = [
-    workflowsQuery,
-    promptsQuery,
-    attentionQuery,
-    scheduleQuery,
-  ].every((query) => query.data !== undefined);
-  const readError = [
-    workflowsQuery,
-    promptsQuery,
-    attentionQuery,
-    scheduleQuery,
-  ].find((query) => query.error)?.error;
+  const attentionCount =
+    attentionQuery.data && scheduleQuery.data
+      ? attentionQuery.data.total + scheduleQuery.data.total
+      : undefined;
+  const attentionFailures: AttentionFailure[] = [];
+  if (attentionQuery.error)
+    attentionFailures.push({
+      source: 'requests',
+      retrying: attentionQuery.isFetching,
+      retry: () => void attentionQuery.refetch({ cancelRefetch: false }),
+    });
+  if (scheduleQuery.error)
+    attentionFailures.push({
+      source: 'automations',
+      retrying: scheduleQuery.isFetching,
+      retry: () => void scheduleQuery.refetch({ cancelRefetch: false }),
+    });
   const engineHost = connectionQuery.data
     ? new URL(connectionQuery.data.engineUrl).host
     : undefined;
@@ -112,9 +115,6 @@ export function App() {
   const [scheduleDirty, setScheduleDirty] = useState(false);
   const [schedulePending, setSchedulePending] = useState(false);
   const [connectDialog, setConnectDialog] = useState(false);
-  const [loadError, setLoadError] = useState('');
-  const effectiveLoadError =
-    loadError || (readError ? errorMessage(readError) : '');
   const blocker = useBlocker(({ currentLocation, nextLocation }) => {
     const leavingEditor =
       currentLocation.pathname !== nextLocation.pathname ||
@@ -137,59 +137,37 @@ export function App() {
     if (blocker.state === 'blocked' && blockedWhileSaving.current)
       blocker.reset();
   }, [blocker]);
-  const [connected, setConnected] = useState(false),
-    [tick, setTick] = useState(0),
-    [runDialog, setRunDialog] = useState<Workflow>();
-  useEffect(() => {
-    if (readError) setConnected(false);
-    else if (loaded && !loadError) setConnected(true);
-  }, [loaded, readError, loadError]);
-  const refresh = useCallback(async () => {
-    await refreshQueries(queryClient);
-    const workspaceError = [
-      trpc.workflows.list.queryKey(),
-      trpc.prompts.list.queryKey(),
-      trpc.requests.list.queryKey({ limit: 1 }),
-      trpc.triggers.attention.queryKey({ limit: 1 }),
-    ]
-      .map((key) => queryClient.getQueryState(key)?.error)
-      .find(Boolean);
-    if (workspaceError) throw workspaceError;
-    setConnected(true);
-    setLoadError('');
-  }, [queryClient]);
-  const retryLoad = useCallback(async () => {
-    try {
-      await refresh();
-      setTick((t) => t + 1);
-    } catch (e) {
-      setConnected(false);
-      setLoadError(errorMessage(e));
-    }
-  }, [refresh]);
+  const [tick, setTick] = useState(0);
+  const [runDialog, setRunDialog] = useState<Workflow>();
   useEffect(() => {
     let mounted = true;
     let streamHealthy = false;
     let refreshFailed = false;
     let interval: ReturnType<typeof setInterval> | undefined;
+    const checkConnection = () =>
+      void queryClient.refetchQueries(trpc.connection.queryFilter(), {
+        cancelRefetch: false,
+      });
+    const updateRefreshHealth = (failed: boolean) => {
+      if (!mounted) return;
+      if (failed) checkConnection();
+      if (refreshFailed !== failed) {
+        refreshFailed = failed;
+        resetPolling();
+      }
+    };
     const update = () => {
       if (document.visibilityState === 'hidden') return;
-      void refresh().then(
-        () => {
-          if (mounted && refreshFailed) {
-            refreshFailed = false;
-            resetPolling();
-          }
-        },
-        (e) => {
-          if (!mounted) return;
-          setConnected(false);
-          setLoadError(errorMessage(e));
-          if (!refreshFailed) {
-            refreshFailed = true;
-            resetPolling();
-          }
-        },
+      if (queryClient.getQueryState(trpc.connection.queryKey())?.error)
+        checkConnection();
+      void refreshQueries(queryClient).then(
+        () =>
+          updateRefreshHealth(
+            [trpc.workflows.list.queryKey(), trpc.prompts.list.queryKey()].some(
+              (key) => queryClient.getQueryState(key)?.error,
+            ),
+          ),
+        () => updateRefreshHealth(true),
       );
       setTick((t) => t + 1);
     };
@@ -225,7 +203,7 @@ export function App() {
       },
       onError: () => {
         streamHealthy = false;
-        setConnected(false);
+        checkConnection();
         resetPolling();
       },
     });
@@ -237,9 +215,9 @@ export function App() {
       clearInterval(interval);
       clearTimeout(pending);
     };
-  }, [refresh]);
+  }, [queryClient]);
   const { act, feedback, dismiss, success } = useActionFeedback(async () => {
-    await refresh();
+    await refreshQueries(queryClient);
     setTick((t) => t + 1);
   });
   const openRun = (id: string) => {
@@ -249,9 +227,20 @@ export function App() {
   const context: AppContext = {
     workflows,
     prompts,
-    loaded,
-    loadError: effectiveLoadError,
-    retryLoad,
+    workflowsRead: {
+      resource: 'workflows',
+      ready: workflowsQuery.data !== undefined,
+      error: workflowsQuery.error ? errorMessage(workflowsQuery.error) : '',
+      fetching: workflowsQuery.isFetching,
+      retry: () => void workflowsQuery.refetch({ cancelRefetch: false }),
+    },
+    promptsRead: {
+      resource: 'prompts',
+      ready: promptsQuery.data !== undefined,
+      error: promptsQuery.error ? errorMessage(promptsQuery.error) : '',
+      fetching: promptsQuery.isFetching,
+      retry: () => void promptsQuery.refetch({ cancelRefetch: false }),
+    },
     tick,
     act,
     onDirty: setEditorDirty,
@@ -282,22 +271,13 @@ export function App() {
           compactAt960={Boolean(boardMatch || requestMatch)}
           onConnect={context.onConnect}
           page={page}
-          attentionCount={attentionCount + scheduleAttentionCount}
-          connected={connected}
-          connectionError={!!effectiveLoadError}
+          attentionCount={attentionCount}
+          attentionFailures={attentionFailures}
+          connected={Boolean(connectionQuery.data && !connectionQuery.error)}
+          connectionError={Boolean(connectionQuery.error)}
           engineHost={engineHost}
         />
         <main className="main">
-          {loaded && effectiveLoadError && (
-            <Group className="engine-warning" justify="space-between" gap="xs">
-              <Text size="sm" role="status">
-                Could not refresh workspace data. Open views may be out of date.
-              </Text>
-              <Button variant="secondary" onClick={() => void retryLoad()}>
-                Retry connection
-              </Button>
-            </Group>
-          )}
           {feedback && (
             <Notification
               key={feedback.id}

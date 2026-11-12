@@ -17,6 +17,10 @@ import type { Action } from '../../lib/useActionFeedback';
 import { useBeforeUnloadWarning } from '../../lib/useBeforeUnloadWarning';
 import { flushSync } from 'react-dom';
 import { WorkflowChildren } from './WorkflowChildren';
+import {
+  WorkspaceReadWarning,
+  type WorkspaceRead,
+} from '../../components/WorkspaceReads';
 import { useMemo, useState, useRef, useEffect, type ReactNode } from 'react';
 
 import { useMergedRef, useResizeObserver } from '@mantine/hooks';
@@ -149,6 +153,7 @@ export function WorkflowEditor({
   workflow,
   workflows,
   prompts = [],
+  promptsRead,
   onBack,
   onRun,
   onSaved,
@@ -164,6 +169,7 @@ export function WorkflowEditor({
   workflow: Workflow & { layoutRevision?: number };
   workflows: Workflow[];
   prompts?: import('@interlock/core').SavedPrompt[];
+  promptsRead?: WorkspaceRead;
   onBack: () => void;
   onRun: (workflow: Workflow) => void;
   onSaved: (w: Workflow) => void;
@@ -995,6 +1001,9 @@ export function WorkflowEditor({
               : []),
           ]}
         />
+        {section === 'editor' && promptsRead && (
+          <WorkspaceReadWarning reads={[promptsRead]} />
+        )}
         {remoteChanged && (dirty || editing) && !pending && (
           <div role="alert" className={styles.conflict}>
             <span>
@@ -1426,6 +1435,7 @@ export function WorkflowEditor({
       {editing && (
         <SettingsDialog
           prompts={prompts}
+          promptsRead={promptsRead}
           node={editing.node}
           creating={editing.creating}
           parentBatchId={editing.batchId}

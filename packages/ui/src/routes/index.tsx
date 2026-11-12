@@ -1,10 +1,4 @@
-import {
-  Button,
-  Center,
-  Loader,
-  PageHeader,
-  workspacePage,
-} from '../design-system';
+import { Center, Loader } from '../design-system';
 
 import {
   runTab as parseRunTab,
@@ -24,9 +18,10 @@ import { App, type AppContext } from '../App';
 import { paths, runOffset, runTagFilter } from './paths';
 import { runMode, type RunMode } from '../features/runs/runListConfig';
 import { flushSync } from 'react-dom';
-import { lazy, Suspense, useState } from 'react';
+import { lazy, Suspense } from 'react';
 
-import { RouteSkeleton, type LoadingSubject } from './RouteSkeleton';
+import { WorkspaceReads } from '../components/WorkspaceReads';
+import { RouteSkeleton } from './RouteSkeleton';
 
 import { RunListSkeleton } from '../features/runs/RunListSkeleton';
 import {
@@ -178,47 +173,68 @@ function ReportRoute() {
 }
 
 function PromptsRoute() {
-  const context = useOutletContext<AppContext>();
-  if (!context.loaded) return <Loading subject="prompts" />;
+  const { prompts, promptsRead, act } = useOutletContext<AppContext>();
   return (
-    <Suspense fallback={<RouteSkeleton subject="prompts" />}>
-      <PromptLibrary prompts={context.prompts} act={context.act} />
-    </Suspense>
+    <WorkspaceReads
+      reads={[promptsRead]}
+      subject="prompts"
+      loading={<RouteSkeleton subject="prompts" />}
+    >
+      <Suspense fallback={<RouteSkeleton subject="prompts" />}>
+        <PromptLibrary prompts={prompts} act={act} />
+      </Suspense>
+    </WorkspaceReads>
   );
 }
 
 function PromptRoute() {
   const { promptId } = useParams();
-  const context = useOutletContext<AppContext>();
-  const prompt = context.prompts.find((p) => p.id === promptId);
-  if (!context.loaded) return <Loading subject="prompt" />;
-  if (!prompt) return <NotFound title="Prompt not found" />;
+  const { prompts, promptsRead, act, onDirty, tick } =
+    useOutletContext<AppContext>();
+  const prompt = prompts.find((p) => p.id === promptId);
   return (
-    <Suspense fallback={<RouteSkeleton subject="prompt" />}>
-      <PromptEditor
-        key={prompt.id}
-        prompt={prompt}
-        act={context.act}
-        onDirty={context.onDirty}
-        tick={context.tick}
-      />
-    </Suspense>
+    <WorkspaceReads
+      reads={[promptsRead]}
+      subject="prompt"
+      loading={<RouteSkeleton subject="prompt" />}
+    >
+      {prompt ? (
+        <Suspense fallback={<RouteSkeleton subject="prompt" />}>
+          <PromptEditor
+            key={prompt.id}
+            prompt={prompt}
+            act={act}
+            onDirty={onDirty}
+            tick={tick}
+          />
+        </Suspense>
+      ) : (
+        <NotFound title="Prompt not found" />
+      )}
+    </WorkspaceReads>
   );
 }
 
 function LibraryRoute() {
-  const { workflows, act, loaded, onSaved } = useOutletContext<AppContext>();
+  const { workflows, workflowsRead, act, onSaved } =
+    useOutletContext<AppContext>();
   const navigate = useNavigate();
-  if (!loaded) return <Loading subject="workflows" />;
   return (
-    <Suspense fallback={<RouteSkeleton subject="workflows" />}>
-      <WorkflowLibrary
-        workflows={workflows}
-        onSaved={onSaved}
-        act={act}
-        onOpen={(id) => void navigate(paths.workflow(id))}
-      />
-    </Suspense>
+    <WorkspaceReads
+      reads={[workflowsRead]}
+      subject="workflows"
+      title="Workflows"
+      loading={<RouteSkeleton subject="workflows" />}
+    >
+      <Suspense fallback={<RouteSkeleton subject="workflows" />}>
+        <WorkflowLibrary
+          workflows={workflows}
+          onSaved={onSaved}
+          act={act}
+          onOpen={(id) => void navigate(paths.workflow(id))}
+        />
+      </Suspense>
+    </WorkspaceReads>
   );
 }
 
@@ -238,38 +254,6 @@ function VariableItemRoute() {
     >
       <VariableRoute />
     </Suspense>
-  );
-}
-
-function Loading({ subject }: { subject: LoadingSubject }) {
-  const { loadError, retryLoad } = useOutletContext<AppContext>();
-  const [retrying, setRetrying] = useState(false);
-  if (!loadError) return <RouteSkeleton subject={subject} />;
-  const failure = (
-    <>
-      <p role="alert">
-        Could not load {subject}. {loadError}
-      </p>
-      <Button
-        variant="secondary"
-        disabled={retrying}
-        onClick={async () => {
-          setRetrying(true);
-          await retryLoad();
-          setRetrying(false);
-        }}
-      >
-        {retrying ? 'Retrying…' : 'Retry'}
-      </Button>
-    </>
-  );
-  return subject === 'workflows' ? (
-    <section className={workspacePage.page}>
-      <PageHeader title="Workflows" />
-      <div className={workspacePage.content}>{failure}</div>
-    </section>
-  ) : (
-    <div className="content-page">{failure}</div>
   );
 }
 
@@ -323,25 +307,42 @@ function WorkflowRoute() {
   const location = useLocation();
   const { search, setSearch, page } = useRunPage();
   const workflow = context.workflows.find((w) => w.id === workflowId);
-  if (!context.loaded) return <Loading subject="workflow" />;
-  if (!workflow) return <NotFound title="Workflow not found" />;
-  if (search.get('view') === 'schedules')
+  const redirectToSchedules = search.get('view') === 'schedules';
+  if (!workflow || redirectToSchedules)
     return (
-      <Navigate
-        replace
-        to={paths.workflowSchedule(
-          workflow.id,
-          search.get('schedule') ?? undefined,
+      <WorkspaceReads
+        reads={[context.workflowsRead]}
+        subject="workflow"
+        loading={<RouteSkeleton subject="workflow" />}
+      >
+        {workflow ? (
+          <Navigate
+            replace
+            to={paths.workflowSchedule(
+              workflow.id,
+              search.get('schedule') ?? undefined,
+            )}
+          />
+        ) : (
+          <NotFound title="Workflow not found" />
         )}
-      />
+      </WorkspaceReads>
     );
-  return (
+  const view = search.get('view');
+  const section =
+    view === 'runs'
+      ? 'runs'
+      : view === 'children' && !workflow.ownerWorkflowId
+        ? 'children'
+        : 'editor';
+  const editor = (
     <Suspense fallback={<RouteSkeleton subject="workflow" />}>
       <WorkflowEditor
         key={workflow.id}
         workflow={workflow}
         workflows={context.workflows}
         prompts={context.prompts}
+        promptsRead={context.promptsRead}
         act={context.act}
         onDirty={context.onDirty}
         onSaved={context.onSaved}
@@ -363,13 +364,7 @@ function WorkflowRoute() {
               : paths.workflows,
           );
         }}
-        section={
-          search.get('view') === 'runs'
-            ? 'runs'
-            : search.get('view') === 'children' && !workflow.ownerWorkflowId
-              ? 'children'
-              : 'editor'
-        }
+        section={section}
         onSectionChange={(section) => {
           setSearch((previous) => {
             const next = new URLSearchParams(previous);
@@ -409,6 +404,15 @@ function WorkflowRoute() {
         }
       />
     </Suspense>
+  );
+  return (
+    <WorkspaceReads
+      reads={[context.workflowsRead]}
+      subject="workflow"
+      loading={<RouteSkeleton subject="workflow" />}
+    >
+      {editor}
+    </WorkspaceReads>
   );
 }
 

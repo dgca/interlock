@@ -448,6 +448,35 @@ it('retains the Board draft and its ordinary retry for a separate workflow membe
   expect(button('Save changes').disabled).toBe(false);
 });
 
+it('keeps Board settings usable and retries only unavailable workflow choices', async () => {
+  rpc.listWorkflows.mockRejectedValue(new Error('Workflow list unavailable'));
+  await render('/boards/board/settings');
+  await ready(() => field('Board name'));
+  expect(document.body.textContent).toContain('Could not load workflows.');
+  expect(field('Board name').disabled).toBe(false);
+  await fill('Board name', 'Unsaved rename');
+
+  rpc.listWorkflows.mockResolvedValue([
+    { id: 'workflow', name: 'Shared workflow' },
+  ]);
+  await click('Retry workflows');
+  expect(rpc.listWorkflows).toHaveBeenCalledTimes(2);
+  expect(rpc.boardSettings).toHaveBeenCalledTimes(1);
+  expect(rpc.listPrompts).toHaveBeenCalledTimes(1);
+  expect(document.body.textContent).not.toContain('Could not load workflows.');
+
+  rpc.listWorkflows.mockRejectedValue(
+    new Error('Workflow refresh unavailable'),
+  );
+  await act(async () =>
+    queryClient.refetchQueries(trpc.workflows.list.queryFilter()),
+  );
+  expect(document.body.textContent).toContain('Could not refresh workflows.');
+  expect(button('Retry workflows')).toBeDefined();
+  expect(field('Board name').value).toBe('Unsaved rename');
+  expect(button('Save changes').disabled).toBe(false);
+});
+
 it('guards new prompt dismissal and Back, and opens the acknowledged prompt after a failed attempt', async () => {
   await render('/prompts');
   await ready(() => button('New prompt'));
@@ -466,11 +495,16 @@ it('guards new prompt dismissal and Back, and opens the acknowledged prompt afte
   await escape();
   expect(discardDialog()).toBeUndefined();
   await ready(() => expect(document.activeElement).toBe(field('Instructions')));
-  await click('Close dialog', formDialog());
-  await click('Keep editing');
-  await click('Cancel', formDialog());
-  await click('Keep editing');
-  await act(async () => field('Instructions').focus());
+  for (const dismiss of ['Close dialog', 'Cancel']) {
+    await click(dismiss, formDialog());
+    await ready(() =>
+      expect(document.activeElement).toBe(button('Keep editing')),
+    );
+    await click('Keep editing');
+    await ready(() =>
+      expect(document.activeElement).toBe(field('Instructions')),
+    );
+  }
   await back();
   expect(discardDialog()).toBeDefined();
   await click('Keep editing');
@@ -501,6 +535,32 @@ it('guards new prompt dismissal and Back, and opens the acknowledged prompt afte
   // The acknowledged prompt remains available after the background read fails.
   await act(async () => refresh.reject(new Error('Prompt refresh failed')));
   expect(field('Instructions').value).toBe(prompt.content);
+  expect(document.body.textContent).toContain('Could not refresh prompts.');
+  expect(button('Retry prompts')).toBeDefined();
+});
+
+it('keeps prompt creation successful when the unrelated workflow refresh fails', async () => {
+  rpc.listWorkflows.mockRejectedValue(
+    new Error('Unrelated workflows read unavailable'),
+  );
+  rpc.listPrompts.mockResolvedValueOnce([]).mockResolvedValue([prompt]);
+  rpc.createPrompt.mockResolvedValue(prompt);
+  await render('/prompts');
+  await ready(() => button('New prompt'));
+  await click('New prompt');
+  await fill('Name', prompt.name);
+  await fill('Instructions', prompt.content);
+  await click('Create prompt');
+  await ready(() => expect(field('Instructions').value).toBe(prompt.content));
+  expect(router.state.location.pathname).toBe('/prompts/new');
+  expect(rpc.listWorkflows).toHaveBeenCalledTimes(2);
+  expect(document.body.textContent).toContain('Prompt created.');
+  expect(document.body.textContent).not.toContain(
+    'Action completed, but the view could not refresh',
+  );
+  expect(document.body.textContent).not.toContain(
+    'Unrelated workflows read unavailable',
+  );
 });
 
 it('discards a custom integration draft on confirmed tab navigation and keeps a failed edit available', async () => {

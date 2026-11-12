@@ -111,7 +111,7 @@ Use the shared `Modal`, `ModalBody`, and `ModalFooter` from the design-system ba
 
 ## Loading views
 
-Gate each page on its required data. A failed sidebar counter must not block an otherwise usable editor or appear as a confirmed zero. Keep background refreshes from replacing unsaved input. When changing refresh logic, test an event arriving during a pending read so the final view includes that change.
+Gate each page on its required data. A failed sidebar counter must not block an otherwise usable editor or appear as a confirmed zero. The Runs badge shows the combined request and automation attention count. A question mark means the total is unavailable. A tilde marks a total that includes stale data after a failed refresh. **Retry attention count** refreshes only the failed sources. The workflow editor keeps its draft available while the saved prompt picker waits for the prompt catalog. Keep background refreshes from replacing unsaved input. When changing refresh logic, test an event arriving during a pending read so the final view includes that change.
 
 Use static skeletons shaped like the content being loaded. Keep the loading announcement available to assistive technology and hide the decorative placeholders from it. Preserve the action label when a write is in progress.
 

@@ -5,6 +5,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { UiTestProvider as DesignSystemProvider } from './uiTestProvider';
 import { createBrowserRouter, RouterProvider } from 'react-router';
 import { afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest';
+import { WorkspaceReadWarning } from '../packages/ui/src/components/WorkspaceReads';
 import { routes } from '../packages/ui/src/routes';
 import { blankDefinition, type Workflow } from '@interlock/core';
 import { trpc, useQueryClient } from '../packages/ui/src/lib/query';
@@ -14,6 +15,8 @@ beforeAll(async () => {
   await import('../packages/ui/src/features/workflows/WorkflowLibrary');
   await import('../packages/ui/src/features/runs/RunList');
   await import('../packages/ui/src/features/diagnostics/Diagnostics');
+  await import('../packages/ui/src/features/prompts/Prompts');
+  await import('../packages/ui/src/features/automations/Automations');
 });
 
 const queries = vi.hoisted(() => ({
@@ -23,6 +26,11 @@ const queries = vi.hoisted(() => ({
   realLibrary: false,
   summaries: vi.fn(),
   attention: vi.fn(),
+  requestCount: vi.fn(),
+  automationCount: vi.fn(),
+  automationInspect: vi.fn(),
+  prompts: vi.fn(),
+  connection: vi.fn(),
   doctor: vi.fn(),
 }));
 const streamListeners = new Map<string, () => void>();
@@ -44,9 +52,16 @@ vi.mock('../packages/ui/src/lib/api', async () => {
     api: mockRpcClient({
       system: { doctor: { query: queries.doctor } },
       triggers: {
-        attention: {
-          query: () =>
-            Promise.resolve({ items: [], total: 0, nextOffset: null }),
+        attention: { query: queries.automationCount },
+        inspect: { query: queries.automationInspect },
+        preview: { query: async () => ({ upcoming: [] }) },
+        list: {
+          query: async () => ({
+            items: [],
+            total: 0,
+            nextOffset: null,
+            counts: { all: 0, enabled: 0, disabled: 0, attention: 0 },
+          }),
         },
       },
       pauses: {
@@ -55,9 +70,7 @@ vi.mock('../packages/ui/src/lib/api', async () => {
             Promise.resolve({ items: [], total: 0, nextOffset: null }),
         },
       },
-      connection: {
-        query: () => Promise.resolve({ engineUrl: 'http://127.0.0.1:4310' }),
-      },
+      connection: { query: queries.connection },
       workflows: {
         list: { query: queries.workflows },
         create: { mutate: queries.createWorkflow },
@@ -67,16 +80,11 @@ vi.mock('../packages/ui/src/lib/api', async () => {
         summaries: { query: queries.summaries },
         attention: { query: queries.attention },
       },
-      requests: {
-        list: {
-          query: async () => ({
-            items: [],
-            total: (await queries.attention()).length,
-            nextOffset: null,
-          }),
-        },
+      requests: { list: { query: queries.requestCount } },
+      prompts: {
+        list: { query: queries.prompts },
+        get: { query: async () => ({ usage: [] }) },
       },
-      prompts: { list: { query: () => Promise.resolve([]) } },
     }),
     errorMessage: (error: Error) => error.message,
   };
@@ -133,6 +141,7 @@ vi.mock('../packages/ui/src/features/workflows/WorkflowEditor', () => ({
     onSectionChange,
     runsView,
     onDeleted,
+    promptsRead,
   }: any) => {
     useEffect(() => () => onDirty(false), [onDirty]);
     return h(
@@ -147,6 +156,10 @@ vi.mock('../packages/ui/src/features/workflows/WorkflowEditor', () => ({
       ),
       h('button', { onClick: onDeleted }, 'Confirm deletion'),
       section === 'runs' ? runsView : null,
+      section === 'children' ? 'Child workflows content' : null,
+      section === 'editor' && promptsRead
+        ? h(WorkspaceReadWarning, { reads: [promptsRead] })
+        : null,
       h('button', { onClick: () => onDirty(true) }, 'Edit draft'),
       h('button', { onClick: () => onDirty(false) }, 'Save draft'),
       h('button', { onClick: onBack }, 'Back to library'),
@@ -214,6 +227,14 @@ beforeEach(() => {
     addEventListener: vi.fn(),
     removeEventListener: vi.fn(),
   });
+  Object.defineProperty(document, 'fonts', {
+    configurable: true,
+    value: {
+      ready: Promise.resolve(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    },
+  });
   // Use Node's signal with Node's Request; jsdom's signal is a different class.
   vi.stubGlobal(
     'AbortController',
@@ -225,6 +246,20 @@ beforeEach(() => {
   );
   streamListeners.clear();
   queries.attention.mockResolvedValue([]);
+  queries.requestCount.mockReset().mockImplementation(async () => ({
+    items: [],
+    total: (await queries.attention()).length,
+    nextOffset: null,
+  }));
+  queries.automationCount.mockReset().mockResolvedValue({
+    items: [],
+    total: 0,
+    nextOffset: null,
+  });
+  queries.prompts.mockReset().mockResolvedValue([]);
+  queries.connection
+    .mockReset()
+    .mockResolvedValue({ engineUrl: 'http://127.0.0.1:4310' });
   queries.doctor.mockResolvedValue({
     status: 'warn',
     checkedAt: '2026-11-09T00:00:00Z',
@@ -483,6 +518,225 @@ it('distinguishes a failed initial load from a missing workflow', async () => {
   expect(window.location.pathname).toBe('/workflows/w1');
 });
 
+it('opens a cold workflow editor while one sidebar count fails and the other is pending', async () => {
+  queries.requestCount.mockRejectedValue(new Error('Request count failed'));
+  let finish!: (value: unknown) => void;
+  queries.automationCount.mockReturnValue(
+    new Promise((resolve) => {
+      finish = resolve;
+    }),
+  );
+  await mount('/workflows/w1');
+  expect(container.textContent).toContain('Editor w1');
+  expect(container.textContent).toContain('Local engine connected');
+  const runsLink = container.querySelector('nav a[href="/runs"]');
+  expect(runsLink?.getAttribute('aria-label')).toBe(
+    'Runs, attention count unavailable',
+  );
+  expect(runsLink?.textContent).toBe('Runs?');
+
+  queries.requestCount.mockResolvedValue({ items: [], total: 2 });
+  const retry = container.querySelector<HTMLButtonElement>(
+    'button[aria-label="Retry attention count for requests"]',
+  );
+  expect(retry).not.toBeNull();
+  await act(async () => retry!.click());
+  expect(queries.requestCount).toHaveBeenCalledTimes(2);
+  expect(queries.automationCount).toHaveBeenCalledTimes(1);
+  expect(queries.workflows).toHaveBeenCalledTimes(1);
+  expect(queries.prompts).toHaveBeenCalledTimes(1);
+  expect(runsLink?.getAttribute('aria-label')).toBe(
+    'Runs, loading attention count',
+  );
+  await act(async () => finish({ items: [], total: 1 }));
+  expect(runsLink?.getAttribute('aria-label')).toBe(
+    'Runs, 3 items need attention',
+  );
+});
+
+it('opens the workflow library without prompts and offers a local prompts retry in the editor', async () => {
+  queries.prompts.mockRejectedValue(new Error('Prompt library unavailable'));
+  await mount('/workflows');
+  expect(container.textContent).toContain('Open workflow');
+  expect(container.textContent).not.toContain('Prompt library unavailable');
+  await click('Open workflow');
+  expect(container.textContent).toContain('Editor w1');
+  expect(container.textContent).toContain('Could not load prompts.');
+  expect(container.textContent).not.toContain('Workflow not found');
+  expect(container.textContent).toContain('Local engine connected');
+  queries.prompts.mockResolvedValue([]);
+  await click('Retry prompts');
+  expect(container.textContent).toContain('Editor w1');
+  expect(container.textContent).not.toContain('Could not load prompts.');
+  expect(queries.prompts).toHaveBeenCalledTimes(2);
+  expect(queries.workflows).toHaveBeenCalledTimes(1);
+  expect(queries.requestCount).toHaveBeenCalledTimes(1);
+  expect(queries.automationCount).toHaveBeenCalledTimes(1);
+});
+
+it.each([
+  ['runs', 'pending'],
+  ['children', 'failed'],
+])(
+  'opens a direct workflow %s tab while prompts are %s',
+  async (section, status) => {
+    if (status === 'pending')
+      queries.prompts.mockReturnValue(new Promise(() => {}));
+    else
+      queries.prompts.mockRejectedValue(
+        new Error('Prompt library unavailable'),
+      );
+    await mount(`/workflows/w1?view=${section}`);
+    expect(container.textContent).toContain('Editor w1');
+    expect(container.textContent).not.toContain('Prompt library unavailable');
+    if (section === 'runs')
+      expect(queries.summaries).toHaveBeenCalledWith(
+        expect.objectContaining({ workflowId: 'w1' }),
+      );
+    else expect(container.textContent).toContain('Child workflows content');
+
+    const editor = container.querySelector('main section');
+    await click('Edit draft');
+    await click('Workflow editor');
+    expect(container.querySelector('main section')).toBe(editor);
+    expect(container.textContent).toContain('Editor w1');
+    if (status === 'failed')
+      expect(container.textContent).toContain('Could not load prompts.');
+
+    await click('Prompts');
+    expect(document.body.textContent).toContain('Discard unsaved changes?');
+    await click('Keep editing');
+    await traverse('back');
+    expect(window.location.search).toBe(`?view=${section}`);
+    expect(container.querySelector('main section')).toBe(editor);
+    expect(container.textContent).not.toContain('Could not load prompts.');
+  },
+);
+
+it.each(['/prompts', '/prompts/prompt-id'])(
+  'opens %s without workflows or a healthy automation attention count',
+  async (path) => {
+    queries.workflows.mockRejectedValue(
+      new Error('Workflow library unavailable'),
+    );
+    queries.automationCount.mockRejectedValue(
+      new Error('Automation count failed'),
+    );
+    queries.prompts.mockResolvedValue([
+      {
+        id: 'prompt-id',
+        name: 'Saved review prompt',
+        description: '',
+        content: 'Review the proposed change.',
+        revision: 1,
+        createdAt: '2026-11-11T00:00:00Z',
+        updatedAt: '2026-11-11T00:00:00Z',
+      },
+    ]);
+    await mount(path);
+    await vi.waitFor(async () => {
+      await act(async () => {});
+      expect(container.textContent).toContain('Saved review prompt');
+    });
+    expect(container.textContent).toContain('Local engine connected');
+    expect(container.textContent).not.toContain('Workflow library unavailable');
+    expect(
+      container.querySelector(
+        'button[aria-label="Retry attention count for automations"]',
+      ),
+    ).not.toBeNull();
+  },
+);
+
+it.each([
+  ['/automations', 'input[aria-label="Filter by workflow"]'],
+  ['/automations/new?type=schedule', 'input[role="combobox"]'],
+])('opens %s without prompts or sidebar counts', async (path, readyControl) => {
+  queries.workflows.mockResolvedValue([{ id: 'w1', name: 'Workflow one' }]);
+  queries.prompts.mockRejectedValue(new Error('Prompts unavailable'));
+  queries.requestCount.mockRejectedValue(new Error('Request count failed'));
+  queries.automationCount.mockRejectedValue(
+    new Error('Automation count failed'),
+  );
+  await mount(path);
+  await vi.waitFor(async () => {
+    await act(async () => {});
+    expect(container.querySelector(readyControl)).not.toBeNull();
+  });
+  expect(container.textContent).not.toContain('Could not load automations');
+  expect(container.textContent).toContain('Local engine connected');
+});
+
+it('opens the automation type picker without workflow data', async () => {
+  queries.workflows.mockRejectedValue(
+    new Error('Workflow library unavailable'),
+  );
+  await mount('/automations/new');
+  await vi.waitFor(async () => {
+    await act(async () => {});
+    expect(container.textContent).toContain('What should start the workflow?');
+  });
+  expect(container.textContent).not.toContain('Workflow library unavailable');
+});
+
+it('reports an automation detail read failure independently of workflow data', async () => {
+  queries.workflows.mockRejectedValue(
+    new Error('Workflow library unavailable'),
+  );
+  queries.automationInspect.mockRejectedValue(
+    new Error('Automation inspection unavailable'),
+  );
+  await mount('/automations/schedule-id');
+  await vi.waitFor(async () => {
+    await act(async () => {});
+    expect(container.textContent).toContain(
+      'Automation inspection unavailable',
+    );
+  });
+  expect(container.textContent).not.toContain('Workflow library unavailable');
+  await click('Reload automation');
+  expect(queries.automationInspect).toHaveBeenCalledTimes(2);
+  expect(queries.workflows).toHaveBeenCalledTimes(1);
+  expect(queries.requestCount).toHaveBeenCalledTimes(1);
+  expect(queries.automationCount).toHaveBeenCalledTimes(1);
+});
+
+it('marks a cached combined total stale and retries only the failing attention source', async () => {
+  queries.requestCount.mockResolvedValue({ items: [], total: 2 });
+  queries.automationCount.mockResolvedValue({ items: [], total: 3 });
+  await mount('/workflows');
+  const runsLink = container.querySelector('nav a[href="/runs"]');
+  expect(runsLink?.textContent).toBe('Runs5');
+
+  queries.automationCount.mockRejectedValueOnce(
+    new Error('Automation count failed'),
+  );
+  await act(async () =>
+    libraryClient.refetchQueries(
+      trpc.triggers.attention.queryFilter({ limit: 1 }),
+    ),
+  );
+  expect(runsLink?.textContent).toBe('Runs~5');
+  expect(runsLink?.getAttribute('aria-label')).toBe(
+    'Runs, attention count 5, includes stale data',
+  );
+  expect(container.textContent).toContain('Local engine connected');
+  expect(container.textContent).toContain('Open workflow');
+
+  queries.automationCount.mockResolvedValue({ items: [], total: 1 });
+  const retry = container.querySelector<HTMLButtonElement>(
+    'button[aria-label="Retry attention count for automations"]',
+  );
+  expect(retry).not.toBeNull();
+  await act(async () => retry!.click());
+  expect(runsLink?.textContent).toBe('Runs3');
+  expect(runsLink?.getAttribute('aria-label')).toBe(
+    'Runs, 3 items need attention',
+  );
+  expect(queries.requestCount).toHaveBeenCalledTimes(1);
+  expect(queries.automationCount).toHaveBeenCalledTimes(3);
+});
+
 it('decodes resource IDs and gives newly started runs a URL', async () => {
   await mount('/workflows/a%20b%25%3F');
   expect(container.textContent).toContain('Editor a b%?');
@@ -689,6 +943,22 @@ it('backs off with a healthy stream and refreshes on return to a visible tab', a
   } finally {
     vi.restoreAllMocks();
   }
+});
+
+it('checks engine connectivity separately after the event stream drops', async () => {
+  vi.useFakeTimers();
+  await mount('/workflows');
+  expect(container.textContent).toContain('Local engine connected');
+  queries.connection.mockRejectedValueOnce(new Error('Engine unreachable'));
+  await act(async () => streamListeners.get('error')!());
+  expect(container.querySelector('aside footer')?.textContent).toContain(
+    'Engine unavailable',
+  );
+  expect(container.textContent).toContain('Open workflow');
+
+  await act(async () => vi.advanceTimersByTimeAsync(5_000));
+  expect(container.textContent).toContain('Local engine connected');
+  expect(queries.connection).toHaveBeenCalledTimes(3);
 });
 
 it('retries a failed refresh promptly even while the event stream is healthy', async () => {
@@ -912,9 +1182,16 @@ it('reports a background workspace query failure even when refresh was initiated
     new Error('Background read unavailable'),
   );
   await click('Refresh library');
-  expect(container.textContent).toContain('Could not refresh workspace data.');
+  expect(container.textContent).toContain('Could not refresh workflows.');
   expect(container.textContent).toContain('Open workflow');
   expect(container.textContent).not.toContain('Loading workflows');
+  expect(container.textContent).toContain('Local engine connected');
+  const counterReads = queries.requestCount.mock.calls.length;
+  const automationReads = queries.automationCount.mock.calls.length;
+  await click('Retry workflows');
+  expect(container.textContent).not.toContain('Could not refresh workflows.');
+  expect(queries.requestCount).toHaveBeenCalledTimes(counterReads);
+  expect(queries.automationCount).toHaveBeenCalledTimes(automationReads);
 });
 
 it('returns to cached Runs immediately while its revisit request is pending', async () => {

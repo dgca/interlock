@@ -104,7 +104,13 @@ function Layout() {
     h('output', { 'data-location': true }, location.pathname + location.search),
     h(Outlet, {
       context: {
-        loaded: true,
+        workflowsRead: {
+          resource: 'workflows',
+          ready: true,
+          error: '',
+          fetching: false,
+          retry: vi.fn(),
+        },
         workflows: [workflow],
         tick,
         onScheduleDirty: vi.fn(),

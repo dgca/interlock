@@ -8,6 +8,7 @@ import {
   workspacePage,
 } from '../../design-system';
 
+import { WorkspaceReads } from '../../components/WorkspaceReads';
 import { ListTable, ListTableRow } from '../../components/ListTable/ListTable';
 import { useEffect } from 'react';
 import { trpc, useQuery, useRefreshOnTick } from '../../lib/query';
@@ -54,52 +55,45 @@ import {
 import classes from './Automations.module.css';
 
 export function Automations() {
-  const context = useOutletContext<AppContext>();
+  const { workflowsRead } = useOutletContext<AppContext>();
   const { automationId } = useParams();
   const location = useLocation();
   const [search] = useSearchParams();
-  if (
-    !context.loaded &&
-    !context.loadError &&
-    location.pathname === paths.automations
-  )
-    return <AutomationListSkeleton />;
-  if (!context.loaded)
-    return (
-      <section className={workspacePage.page}>
-        <PageHeader title="Automations" />
-        <div className={workspacePage.content}>
-          {context.loadError ? (
-            <>
-              <Alert color="red">{context.loadError}</Alert>
-              <Button
-                variant="primary"
-                onClick={() => void context.retryLoad()}
-              >
-                Retry loading
-              </Button>
-            </>
-          ) : (
-            <Loader aria-label="Loading automations" />
-          )}
-        </div>
-      </section>
-    );
-  if (automationId)
-    return location.pathname.endsWith('/edit') ? (
-      <AutomationEditor key={automationId} id={automationId} />
-    ) : (
-      <AutomationDetail key={automationId} id={automationId} />
-    );
-  if (location.pathname.endsWith('/new')) {
-    const kind = search.get('type');
-    return kind === 'schedule' || kind === 'event' ? (
-      <AutomationEditor key={kind} kind={kind} />
-    ) : (
-      <AutomationType />
-    );
-  }
-  return <AutomationList />;
+  const editing = automationId && location.pathname.endsWith('/edit');
+  if (automationId && !editing)
+    return <AutomationDetail key={automationId} id={automationId} />;
+
+  const creating = location.pathname.endsWith('/new');
+  const kind = search.get('type');
+  if (creating && kind !== 'schedule' && kind !== 'event')
+    return <AutomationType />;
+
+  const editor = editing ? (
+    <AutomationEditor key={automationId} id={automationId} />
+  ) : creating && (kind === 'schedule' || kind === 'event') ? (
+    <AutomationEditor key={kind} kind={kind} />
+  ) : null;
+  return (
+    <WorkspaceReads
+      reads={[workflowsRead]}
+      subject="automations"
+      title="Automations"
+      loading={
+        editor ? (
+          <section className={workspacePage.page}>
+            <PageHeader title="Automations" />
+            <div className={workspacePage.content}>
+              <Loader aria-label="Loading automations" />
+            </div>
+          </section>
+        ) : (
+          <AutomationListSkeleton />
+        )
+      }
+    >
+      {editor ?? <AutomationList />}
+    </WorkspaceReads>
+  );
 }
 
 function AutomationType() {
