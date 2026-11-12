@@ -740,6 +740,16 @@ export class Store {
     }
     return result;
   }
+  workStatus(id: string): WorkRequest['status'] | undefined {
+    const row = this.db
+      .prepare(
+        "SELECT json_extract(value, '$.status') AS status FROM documents WHERE collection = 'work' AND id = ?",
+      )
+      .get(id);
+    return (
+      (row?.status as WorkRequest['status'] | null | undefined) ?? undefined
+    );
+  }
   work(status?: WorkRequest['status'], runId?: string): WorkRequest[] {
     if (status !== undefined || runId !== undefined)
       return this.db

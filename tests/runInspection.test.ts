@@ -174,7 +174,7 @@ it('keeps full inspection scoped to ordered related runs, work, holds, and selec
   let unrelatedParses = 0;
   const parse = JSON.parse;
   const spy = vi.spyOn(JSON, 'parse').mockImplementation((text, reviver) => {
-    if (text.includes(marker)) unrelatedParses++;
+    if (typeof text === 'string' && text.includes(marker)) unrelatedParses++;
     return parse(text, reviver);
   });
   try {

@@ -128,7 +128,7 @@ export function continuationState(db: DatabaseSync, id: string) {
     db
       .prepare(
         `${tree}
-    SELECT coalesce(max(r.revision), 0) AS revision FROM tree JOIN run_revisions r ON r.run_id = tree.id
+    SELECT coalesce(max(r.revision), 0) AS revision FROM tree CROSS JOIN run_revisions r ON r.run_id = tree.id
   `,
       )
       .get(id)!.revision,

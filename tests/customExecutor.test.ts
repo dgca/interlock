@@ -207,6 +207,51 @@ it('executes direct turn mode via HTTP POST and handles result envelope', async 
   }
 });
 
+it('projects a busy launcher slot during inspection without parsing the occupying assignment', async () => {
+  const e = create();
+  const profile = e.executors.saveProfile({
+    id: 'inspection-limited-launcher',
+    name: 'Inspection limited launcher',
+    harness: 'custom',
+    enabled: true,
+    expectedRevision: 0,
+    concurrency: 1,
+    mode: 'launcher',
+    transport: 'subprocess',
+    launchCommand: `node ${referenceFixture} launch`,
+  });
+  e.executors.start(nativeAdapters);
+  const w = workflow(e, profile.id);
+  const marker = 'UNRELATED_LIVE_LAUNCH_PAYLOAD';
+  const first = e.start(w.id, { payload: marker + 'x'.repeat(4096) });
+  await vi.waitFor(() =>
+    expect(e.executors.inspect(first.work[0].id).items[0]?.state).toBe(
+      'running',
+    ),
+  );
+  const queued = e.start(w.id, { payload: 'selected run' });
+
+  let unrelatedParses = 0;
+  const parse = JSON.parse;
+  const spy = vi.spyOn(JSON, 'parse').mockImplementation((value, reviver) => {
+    if (typeof value === 'string' && value.includes(marker)) unrelatedParses++;
+    return parse(value, reviver);
+  });
+  let result: ReturnType<typeof e.inspect>;
+  try {
+    result = e.inspect(queued.run.id);
+  } finally {
+    spy.mockRestore();
+  }
+  expect(unrelatedParses).toBe(0);
+  const reason = 'Waiting for this profile assignment slot';
+  expect(result.run.waiting?.detail.message).toBe(reason);
+  expect(result.work[0].managedExecution).toMatchObject({
+    state: 'queued',
+    reason,
+  });
+});
+
 it('dispatches delegated launcher mode, enforces claim ticket, supports idempotency and archives on completion', async () => {
   const e = create();
   e.executors.saveProfile({
