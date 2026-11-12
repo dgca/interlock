@@ -31,7 +31,7 @@ import {
 } from './runAttention';
 import { runProjectionText } from './runProjectionText';
 
-import { useId, useRef, useState } from 'react';
+import { useId, useRef, useState, type MouseEventHandler } from 'react';
 import { Link } from 'react-router';
 import { paths } from '../../routes/paths';
 import { trpc, useQuery, useRefreshOnTick } from '../../lib/query';
@@ -75,6 +75,7 @@ export function RunList({
   onTagsChange?: (tags?: Record<string, string>) => void;
 }) {
   const tagFilterId = useId();
+  const tagFilterTrigger = useRef<HTMLButtonElement>(null);
   const historyTrigger = useRef<HTMLButtonElement>(null);
   const [localTags, setLocalTags] = useState(tags);
   const selectedTags = onTagsChange ? tags : localTags;
@@ -85,7 +86,13 @@ export function RunList({
       onOffsetChange(0);
     }
   };
-  const clearFilters = () => changeTags(undefined);
+  const clearFilters: MouseEventHandler<HTMLButtonElement> = ({
+    currentTarget,
+  }) => {
+    if (document.activeElement === currentTarget)
+      tagFilterTrigger.current?.focus({ preventScroll: true });
+    changeTags(undefined);
+  };
   const [localMode, setLocalMode] = useState<RunMode>('list');
   const selectedMode = mode ?? localMode;
   const changeMode = (next: RunMode) => {
@@ -161,14 +168,22 @@ export function RunList({
     completed.isFetching,
   );
   const page = runs.data;
-  const read = workspaceRead('runs', runs);
+  const read = workspaceRead('runs', runs, tagFilterTrigger);
   const counts = page?.counts;
   const filtered = Object.keys(selectedTags ?? {}).length > 0;
   const preview: BoardPreview = {
     attention: attention.data,
     completed: completed.data,
-    attentionRead: workspaceRead('attention preview', attention),
-    completedRead: workspaceRead('completed preview', completed),
+    attentionRead: workspaceRead(
+      'attention preview',
+      attention,
+      tagFilterTrigger,
+    ),
+    completedRead: workspaceRead(
+      'completed preview',
+      completed,
+      tagFilterTrigger,
+    ),
   };
   const historyActions = act ? (
     <Menu
@@ -209,6 +224,7 @@ export function RunList({
       <RunTagFilter
         key={workflowId ?? 'library'}
         filterId={tagFilterId}
+        triggerRef={tagFilterTrigger}
         value={selectedTags}
         onChange={changeTags}
       />

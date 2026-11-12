@@ -415,6 +415,11 @@ it('opens the requested AI task and maps legacy execution anchors before renderi
   await act(async () => harnessLink.click());
   expect(container.querySelector('#harnesses')).toBeTruthy();
   expect(container.querySelector('#concurrency')).toBeNull();
+  rpc.manage.mockRejectedValueOnce(new Error('Installation check unavailable'));
+  await act(async () => button('Check installations').click());
+  expect(container.querySelector('#harnesses')?.textContent).toContain(
+    'Installation check unavailable',
+  );
   await act(async () =>
     container
       .querySelector<HTMLAnchorElement>('a[href*="tab=model-aliases"]')!
@@ -422,6 +427,15 @@ it('opens the requested AI task and maps legacy execution anchors before renderi
   );
   expect(container.querySelector('#model-aliases')).toBeTruthy();
   expect(container.querySelector('#harnesses')).toBeNull();
+  expect(container.textContent).not.toContain('Installation check unavailable');
+  await act(async () =>
+    container
+      .querySelector<HTMLAnchorElement>('a[href*="tab=harnesses"]')!
+      .click(),
+  );
+  expect(container.querySelector('#harnesses')?.textContent).toContain(
+    'Installation check unavailable',
+  );
 });
 
 it('clears dirty policy state when leaving its task and restores the saved policy on return', async () => {

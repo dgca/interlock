@@ -148,11 +148,6 @@ export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
       />
       <div className={`${workspacePage.content} ${styles.aiContent}`}>
         <WorkspaceReadWarning reads={[read]} inline showDetails />
-        {checkError && (
-          <ActionError
-            message={`Could not check installations. ${checkError}`}
-          />
-        )}
         {activeTab === 'harnesses' && (
           <section
             id="harnesses"
@@ -184,6 +179,11 @@ export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
                 </>
               </div>
             </div>
+            {checkError && (
+              <ActionError
+                message={`Could not check installations. ${checkError}`}
+              />
+            )}
             {!profiles ? (
               !read.error && <HarnessRowsSkeleton />
             ) : harnesses?.length ? (

@@ -6,7 +6,7 @@ import {
 } from '../../components/WorkspaceReads';
 import { ArrowUpRight } from 'lucide-react';
 import { Link } from 'react-router';
-import { useId, type ReactNode } from 'react';
+import { useId, type MouseEventHandler, type ReactNode } from 'react';
 import type { api } from '../../lib/api';
 import { ComparisonContext } from './ComparisonContext';
 import { RunTags } from './RunTags';
@@ -172,7 +172,7 @@ export function RunListBoard({
   runHref: (id: string, executionId?: string) => string;
   returnTo: string;
   onTabChange: (tab: RunTab) => void;
-  onClearFilters?: () => void;
+  onClearFilters?: MouseEventHandler<HTMLButtonElement>;
 }) {
   // Keep every run in the bounded active preview visible. The bounded attention
   // preview also includes terminal runs still waiting for recovery confirmation.
@@ -274,7 +274,7 @@ export function RunListBoard({
       </BoardColumn>
       <BoardColumn
         title="Completed runs"
-        count={completed.length}
+        count={preview.completed ? completed.length : undefined}
         tone="completed"
       >
         {cards(completed)}

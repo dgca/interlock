@@ -149,29 +149,51 @@ it('defaults lazy and data loading to List and switches to Overview when selecte
   }
 });
 
-it('retries only the failed Overview preview', async () => {
+it('retries only the failed Overview preview and keeps its confirmed count', async () => {
+  const empty = {
+    items: [],
+    counts: { active: 0, attention: 2, history: 0 },
+    scheduleAttentionCount: 1,
+    total: 0,
+    offset: 0,
+    nextOffset: null,
+  };
+  const completed = {
+    ...empty,
+    items: [
+      {
+        id: 'completed',
+        workflowId: 'workflow',
+        workflowName: 'Finished run',
+        version: 1,
+        status: 'completed',
+        createdAt: '2026-11-09T12:00:00Z',
+        executionCount: 1,
+      },
+    ],
+    total: 1,
+  };
+  let finish!: (page: typeof completed) => void;
+  const pending = new Promise<typeof completed>((resolve) => {
+    finish = resolve;
+  });
   let failed = true;
   query.mockImplementation(async ({ tab }) => {
-    if (tab === 'attention' && failed) throw new Error('Attention read failed');
-    return {
-      items: [],
-      counts: { active: 0, attention: 0, history: 0 },
-      total: 0,
-      offset: 0,
-      nextOffset: null,
-    };
+    if (tab !== 'history') return empty;
+    if (failed) throw new Error('Completed read failed');
+    return pending;
   });
   const container = document.createElement('div');
   document.body.append(container);
   const root = createRoot(container);
-  try {
-    await act(async () =>
+  const render = (tick: number) =>
+    act(async () =>
       root.render(
         h(
           DesignSystemProvider,
           { env: 'test' },
           h(RoutedRunList, {
-            tick: 0,
+            tick,
             offset: 0,
             onOffsetChange: vi.fn(),
             workflows: [],
@@ -182,16 +204,39 @@ it('retries only the failed Overview preview', async () => {
         ),
       ),
     );
-    expect(container.textContent).toContain('Attention read failed');
-    expect(container.textContent).toContain('No completed runs yet.');
-    const retry = [...container.querySelectorAll('button')].find(
-      (button) => button.textContent === 'Retry attention preview',
+  const heading = (name: string) =>
+    [...container.querySelectorAll('h2')].find(
+      (node) => node.textContent === name,
+    )?.parentElement?.textContent;
+  const button = (name: string) =>
+    [...container.querySelectorAll('button')].find(
+      (node) => node.textContent === name,
     )!;
+  try {
+    await render(0);
+    expect(container.textContent).toContain('Completed read failed');
+    expect(heading('Completed runs')).toBe('Completed runs');
+    expect(heading('Needs attention')).toBe('Needs attention3');
+    const retry = button('Retry completed preview');
     failed = false;
     query.mockClear();
-    await act(async () => retry.click());
-    expect(query.mock.calls.map(([input]) => input.tab)).toEqual(['attention']);
-    expect(container.textContent).toContain('No runs need your attention.');
+    await act(async () => {
+      retry.focus();
+      retry.click();
+    });
+    expect(query.mock.calls.map(([input]) => input.tab)).toEqual(['history']);
+    expect(heading('Completed runs')).toBe('Completed runs');
+    await act(async () => finish(completed));
+    expect(heading('Completed runs')).toBe('Completed runs1');
+    expect(document.activeElement).toBe(button('Filter by tags'));
+
+    failed = true;
+    await render(1);
+    expect(container.textContent).toContain(
+      'Could not refresh completed preview.',
+    );
+    expect(container.textContent).toContain('Finished run');
+    expect(heading('Completed runs')).toBe('Completed runs1');
   } finally {
     await act(async () => root.unmount());
     container.remove();

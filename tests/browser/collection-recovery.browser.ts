@@ -226,3 +226,84 @@ it.each([1440, 900, 390])(
     }
   },
 );
+
+it('returns keyboard focus to Filter by tags after a Runs retry or filter reset', async () => {
+  const app = await openBrowserApp();
+  const page = await browser.newPage({ viewport: { width: 390, height: 900 } });
+  page.setDefaultTimeout(5000);
+  const delayed = heldRead();
+  let unavailable = true;
+  let holdRetry = false;
+  try {
+    const tags = { purpose: 'fixture' };
+    const list = paths.runs('active', 0, tags);
+    await page.route(
+      (url) =>
+        url.pathname.startsWith('/trpc/') &&
+        url.pathname
+          .slice('/trpc/'.length)
+          .split(',')
+          .includes('runs.summaries'),
+      async (route) => {
+        if (unavailable) {
+          await route.abort('failed');
+          return;
+        }
+        if (holdRetry) {
+          holdRetry = false;
+          delayed.started.resolve();
+          await delayed.release.promise;
+        }
+        await route.continue();
+      },
+    );
+    const retry = page.getByRole('button', { name: 'Retry runs', exact: true });
+    const filter = page.getByRole('button', { name: /^Filter by tags/ });
+    const clear = page.getByRole('button', {
+      name: 'Clear filters',
+      exact: true,
+    });
+    const keyboardActivate = async (button: typeof retry) => {
+      await button.focus();
+      await page.keyboard.press('Enter');
+    };
+    const expectFocus = async (button: typeof retry) =>
+      expect(
+        await button.evaluate((element) => document.activeElement === element),
+      ).toBe(true);
+
+    await page.goto(app.url + list);
+    await retry.waitFor();
+    unavailable = false;
+    await keyboardActivate(retry);
+    await clear.waitFor();
+    await expectFocus(filter);
+    await keyboardActivate(clear);
+    await page.getByText('No active runs.', { exact: true }).waitFor();
+    await expectFocus(filter);
+    expect(new URL(page.url()).searchParams.has('tags')).toBe(false);
+
+    await page.goto(app.url + paths.runs('active', 0, tags, 'overview'));
+    await keyboardActivate(clear);
+    await page.getByText('No active runs.', { exact: true }).waitFor();
+    await expectFocus(filter);
+    expect(new URL(page.url()).searchParams.has('tags')).toBe(false);
+
+    unavailable = true;
+    await page.goto(app.url + list);
+    await retry.waitFor();
+    unavailable = false;
+    holdRetry = true;
+    await keyboardActivate(retry);
+    await delayed.started.promise;
+    const history = page.getByRole('button', { name: 'History settings' });
+    await history.focus();
+    delayed.release.resolve();
+    await clear.waitFor();
+    await expectFocus(history);
+  } finally {
+    delayed.release.resolve();
+    await page.close();
+    await app.close();
+  }
+});

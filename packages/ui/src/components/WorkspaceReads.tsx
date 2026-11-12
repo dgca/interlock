@@ -41,7 +41,7 @@ export function workspaceRead(
           isSuccess &&
           trigger instanceof HTMLButtonElement &&
           (document.activeElement === trigger ||
-            document.activeElement === document.body)
+            (!trigger.isConnected && document.activeElement === document.body))
         )
           focusAfterRetry?.current?.focus();
       });
