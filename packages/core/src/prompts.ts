@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { WorkflowDefinition } from './index.js';
+import { startRequestIdSchema } from './runStarts.js';
 
 export const promptContentSchema = z.object({
   name: z
@@ -21,6 +22,13 @@ export const promptContentSchema = z.object({
     .refine((s) => s.trim().length > 0, 'Instructions cannot be blank')
     .describe(
       'Reusable Markdown instructions. Must contain non-whitespace text. Included in full at workflow run startup; does not grant capabilities.',
+    ),
+});
+export const promptCreateSchema = promptContentSchema.extend({
+  requestId: startRequestIdSchema
+    .optional()
+    .describe(
+      'Stable key for retrying the same creation after a lost response, up to 120 characters.',
     ),
 });
 export const savedPromptSchema = promptContentSchema.extend({

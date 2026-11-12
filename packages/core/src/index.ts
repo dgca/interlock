@@ -1462,6 +1462,7 @@ export {
 } from './continuation.js';
 export {
   promptContentSchema,
+  promptCreateSchema,
   savedPromptSchema,
   promptReadSchema,
   promptIds,

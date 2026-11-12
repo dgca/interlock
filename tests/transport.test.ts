@@ -1509,10 +1509,23 @@ it.each(['stdio', 'http'])(
         tools.find((t) => t.name === 'create_prompt')!.inputSchema.properties!
           .description,
       ).toMatchObject({ default: '' });
-      const savedPrompt = await call('create_prompt', {
+      const createPromptTool = tools.find((t) => t.name === 'create_prompt')!;
+      expect(createPromptTool.inputSchema.properties?.requestId).toMatchObject({
+        maxLength: 120,
+      });
+      expect(createPromptTool.inputSchema.required).not.toContain('requestId');
+      const createPrompt = {
         name: 'Transport guidance',
         content: 'Use original guidance',
-      });
+        requestId: 'transport-guidance',
+      };
+      const savedPrompt = await call('create_prompt', createPrompt);
+      expect(await call('create_prompt', createPrompt)).toEqual(savedPrompt);
+      expect(
+        (await call('list_prompts', {})).filter(
+          (p: { name: string }) => p.name === createPrompt.name,
+        ),
+      ).toHaveLength(1);
       expect(
         (await call('list_prompts', {})).find(
           (p: any) => p.id === savedPrompt.id,

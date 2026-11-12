@@ -1,3 +1,4 @@
+import { TRPCClientError } from '@interlock/client';
 import {
   Button,
   Stack,
@@ -192,6 +193,7 @@ function NewPromptDialog({
   const formId = useId();
   const [draft, setDraft] = useState(blankPrompt);
   const [error, setError] = useState('');
+  const [retryId, setRetryId] = useState<string>();
   const dirty = !same(draft, blankPrompt);
   const { busy, beginSave, finishSave } = useEditorDraft(dirty);
   const { dismiss, covered, confirmation } = useDraftDismissal(
@@ -212,36 +214,55 @@ function NewPromptDialog({
         <ModalBody>
           <form
             id={formId}
-            onSubmit={(e) => {
-              e.preventDefault();
+            onSubmit={async (event) => {
+              event.preventDefault();
               if (!beginSave()) return;
               setError('');
-              void act(
-                async () => {
-                  const created = await api.prompts.create.mutate(draft);
-                  void queryClient.cancelQueries(
-                    trpc.prompts.list.queryFilter(),
-                  );
-                  queryClient.setQueryData(
-                    trpc.prompts.list.queryKey(),
-                    (prompts = []) =>
-                      prompts.some((prompt) => prompt.id === created.id)
-                        ? prompts
-                        : [...prompts, created],
-                  );
-                  if (finishSave(true)) {
-                    onClose();
-                    void navigate(paths.prompt(created.id));
-                  }
-                },
-                'Prompt created.',
-                (message) => {
-                  if (finishSave(false)) setError(message);
-                },
-              );
+              const requestId = retryId ?? crypto.randomUUID();
+              let created: SavedPrompt;
+              try {
+                created = await api.prompts.create.mutate({
+                  ...draft,
+                  requestId,
+                });
+              } catch (error) {
+                if (!finishSave(false)) return;
+                const rejected =
+                  error instanceof TRPCClientError &&
+                  error.data?.code === 'BAD_REQUEST';
+                if (!rejected || retryId) setRetryId(requestId);
+                setError(
+                  rejected
+                    ? errorMessage(error)
+                    : 'Interlock could not confirm whether the prompt was saved. Retry creation to recover it safely. If you close this dialog, check Prompts before creating it again.',
+                );
+                return;
+              }
+              void act(async () => {
+                void queryClient.cancelQueries(trpc.prompts.list.queryFilter());
+                queryClient.setQueryData(
+                  trpc.prompts.list.queryKey(),
+                  (prompts = []) =>
+                    prompts.some((prompt) => prompt.id === created.id)
+                      ? prompts.map((prompt) =>
+                          prompt.id === created.id &&
+                          prompt.revision < created.revision
+                            ? created
+                            : prompt,
+                        )
+                      : [...prompts, created],
+                );
+                if (finishSave(true)) {
+                  onClose();
+                  void navigate(paths.prompt(created.id));
+                }
+              }, 'Prompt created.');
             }}
           >
-            <fieldset disabled={busy} className={styles.fields}>
+            <fieldset
+              disabled={busy || Boolean(retryId)}
+              className={styles.fields}
+            >
               <PromptFields value={draft} onChange={setDraft} />
             </fieldset>
             <ActionError message={error} />
@@ -255,9 +276,10 @@ function NewPromptDialog({
             type="submit"
             form={formId}
             variant="primary"
-            disabled={busy || !draft.name.trim() || !draft.content.trim()}
+            loading={busy}
+            disabled={!draft.name.trim() || !draft.content.trim()}
           >
-            {busy ? 'Creating…' : 'Create prompt'}
+            {retryId ? 'Retry creation' : 'Create prompt'}
           </Button>
         </ModalFooter>
       </Modal>

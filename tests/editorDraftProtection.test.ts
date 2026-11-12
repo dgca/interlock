@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { TRPCClientError } from '@interlock/client';
 import { transferableAbortController } from 'node:util';
 import {
   boardSettingsRevisionConflict,
@@ -521,13 +522,23 @@ it('guards new prompt dismissal and Back, and opens the acknowledged prompt afte
   expect(discardDialog()).toBeUndefined();
   expect(router.state.location.pathname).toBe('/prompts');
   await act(async () => failedSave.reject(new Error('Prompt save failed')));
-  expect(document.body.textContent).toContain('Prompt save failed');
+  expect(document.body.textContent).toContain(
+    'could not confirm whether the prompt was saved',
+  );
   expect(field('Instructions').value).toBe(prompt.content);
+  expect(field('Instructions').closest('fieldset')?.disabled).toBe(true);
+  const originalRequest = rpc.createPrompt.mock.calls[0][0];
+  expect(originalRequest).toMatchObject({
+    name: prompt.name,
+    content: prompt.content,
+    requestId: expect.any(String),
+  });
 
   const refresh = deferred<never>();
   rpc.createPrompt.mockResolvedValue(prompt);
   rpc.listPrompts.mockReturnValueOnce(refresh.promise);
-  await click('Create prompt');
+  await click('Retry creation');
+  expect(rpc.createPrompt.mock.calls[1][0]).toEqual(originalRequest);
   expect(router.state.location.pathname).toBe('/prompts/new');
   expect(warnsBeforeUnload()).toBe(false);
   await ready(() => expect(field('Instructions').value).toBe(prompt.content));
@@ -537,6 +548,40 @@ it('guards new prompt dismissal and Back, and opens the acknowledged prompt afte
   expect(field('Instructions').value).toBe(prompt.content);
   expect(document.body.textContent).toContain('Could not refresh prompts.');
   expect(button('Retry prompts')).toBeDefined();
+});
+
+it('allows correction after a confirmed prompt rejection', async () => {
+  rpc.createPrompt
+    .mockRejectedValueOnce(
+      new TRPCClientError('Correct the prompt name', {
+        result: {
+          error: {
+            code: -32600,
+            message: 'Correct the prompt name',
+            data: { code: 'BAD_REQUEST' },
+          },
+        },
+      }),
+    )
+    .mockResolvedValue(prompt);
+  await render('/prompts');
+  await ready(() => button('New prompt'));
+  await click('New prompt');
+  await fill('Name', 'First name');
+  await fill('Instructions', prompt.content);
+  await click('Create prompt');
+  await ready(() =>
+    expect(document.body.textContent).toContain('Correct the prompt name'),
+  );
+  expect(field('Name').closest('fieldset')?.disabled).toBe(false);
+  await fill('Name', prompt.name);
+  await click('Create prompt');
+  expect(rpc.createPrompt.mock.calls[1][0]).toMatchObject({
+    name: prompt.name,
+  });
+  expect(rpc.createPrompt.mock.calls[1][0].requestId).not.toBe(
+    rpc.createPrompt.mock.calls[0][0].requestId,
+  );
 });
 
 it('keeps prompt creation successful when the unrelated workflow refresh fails', async () => {

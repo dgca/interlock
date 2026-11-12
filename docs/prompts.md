@@ -6,6 +6,8 @@
 2. Enter a name and Markdown instructions. Add a description if it helps you find the prompt.
 3. Select **Create prompt**. Use **Save** for subsequent edits, or **Discard changes** to return to the latest saved content.
 
+If Interlock cannot confirm creation, the dialog keeps your submitted text available. Select **Retry creation** to recover the saved prompt or complete the original request. If you close the dialog, check the Prompts library before creating it again.
+
 The editor lists workflows that reference the prompt, including drafts and published versions. Unsaved text receives navigation protection. If someone changes the prompt while you edit, saving fails and preserves your text. Discard your changes to load the latest revision before editing again.
 
 ## Attach prompts to an Agent node
@@ -51,6 +53,8 @@ Importing a previously deleted prompt creates a revision newer than its retained
 ## Use prompts through MCP
 
 Discover IDs with `list_prompts` and inspect content and usage with `get_prompt`. Use `create_prompt`, revision-protected `update_prompt`, and guarded `delete_prompt` for management.
+
+Give `create_prompt` a nonblank `requestId` of up to 120 characters to make creation retryable. After losing a response, send the same key and content to recover the current saved prompt. The same key with changed content or a missing prompt returns an error. Omit the key for an independent creation.
 
 An Agent definition can include:
 
