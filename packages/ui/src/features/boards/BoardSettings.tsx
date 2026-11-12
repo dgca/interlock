@@ -118,6 +118,11 @@ function BoardSettings({ initial }: { initial?: Settings }) {
                     .map((workflow) => [workflow.id, workflow.boardId ?? null]),
                 ),
               });
+              // The write omits protected columns. Reopen from a fresh settings read.
+              client.removeQueries({
+                ...trpc.boards.settings.queryFilter({ id: board.id }),
+                exact: true,
+              });
               void refreshQueries(client);
               if (finishSave(true)) void navigate(paths.board(board.id));
             } catch (error) {

@@ -25,7 +25,7 @@ import { executorProfileSchema, type ExecutorProfile } from '@interlock/core';
 
 import { useBeforeUnloadWarning } from '../../lib/useBeforeUnloadWarning';
 import { api, errorMessage } from '../../lib/api';
-import { trpc, useQuery } from '../../lib/query';
+import { trpc, useQuery, useQueryClient } from '../../lib/query';
 
 import { ListTable, ListTableRow } from '../../components/ListTable/ListTable';
 import { HarnessRowsSkeleton, harnessColumns } from './HarnessListSkeleton';
@@ -46,6 +46,8 @@ const harnessSetup: Record<string, string> = {
   custom: 'https://docs.interlock.dev/managed-executors',
 };
 type Profile = Awaited<ReturnType<typeof api.executors.profiles.query>>[number];
+
+const savedCustomProfileKey = (id: string) => ['savedCustomProfile', id];
 
 type DirtySetting = (id: string, dirty: boolean) => void;
 
@@ -82,6 +84,7 @@ export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
     [trackDirty],
   );
   const request = useRef(0);
+  const queryClient = useQueryClient();
   const profilesQuery = useQuery(trpc.executors.profiles.queryOptions());
   const profiles = profilesQuery.data;
   const [checkError, setCheckError] = useState('');
@@ -201,7 +204,14 @@ export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
                       onConfigureCustom={(prof) => {
                         customTrigger.current =
                           document.activeElement as HTMLElement;
-                        setCustomModalProfile(prof);
+                        const saved = queryClient.getQueryData<ExecutorProfile>(
+                          savedCustomProfileKey(prof.id),
+                        );
+                        setCustomModalProfile(
+                          saved && saved.revision > prof.revision
+                            ? saved
+                            : prof,
+                        );
                       }}
                     />
                   ))}
@@ -243,10 +253,28 @@ export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
               : addButton.current
           }
           onSave={async (data) => {
-            await api.executors.manage.mutate({
+            const result = await api.executors.manage.mutate({
               action: 'save',
               profile: data,
             });
+            const saved = executorProfileSchema.parse(result);
+            // Older reads must not replace the acknowledged configuration.
+            void queryClient.cancelQueries(
+              trpc.executors.profiles.queryFilter(),
+            );
+            queryClient.setQueryData(savedCustomProfileKey(saved.id), saved);
+            queryClient.setQueryData(
+              trpc.executors.profiles.queryKey(),
+              (profiles) =>
+                profiles?.map((profile) =>
+                  profile.id === saved.id &&
+                  profile.revision < saved.revision &&
+                  profile.detection.status === 'detected' &&
+                  profile.command === saved.command
+                    ? { ...saved, detection: profile.detection }
+                    : profile,
+                ),
+            );
             void refresh();
           }}
         />

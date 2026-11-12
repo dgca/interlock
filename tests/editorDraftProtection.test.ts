@@ -290,6 +290,18 @@ it('guards Board column edits and holds navigation during a retryable save', asy
   );
   expect(router.state.location.pathname).toBe('/boards/board');
   await ready(() => expect(warnsBeforeUnload()).toBe(false));
+  expect(rpc.listWorkflows).toHaveBeenCalledTimes(2);
+  const settingsRead = deferred<typeof board>();
+  rpc.boardSettings.mockReturnValueOnce(settingsRead.promise);
+  await act(async () => router.navigate('/boards/board/settings'));
+  expect(
+    document.querySelector('[aria-label="Loading board settings"]'),
+  ).toBeTruthy();
+  expect(rpc.boardSettings).toHaveBeenCalledTimes(2);
+  await act(async () =>
+    settingsRead.resolve({ ...board, name: 'Local board', revision: 4 }),
+  );
+  expect(field('Board name').value).toBe('Local board');
   await act(async () => refresh.resolve([]));
 });
 
@@ -358,6 +370,7 @@ it('guards new prompt dismissal and Back, and opens the acknowledged prompt afte
   expect(router.state.location.pathname).toBe('/prompts/new');
   expect(warnsBeforeUnload()).toBe(false);
   await ready(() => expect(field('Instructions').value).toBe(prompt.content));
+  expect(rpc.listPrompts).toHaveBeenCalledTimes(2);
   // The acknowledged prompt remains available after the background read fails.
   await act(async () => refresh.reject(new Error('Prompt refresh failed')));
   expect(field('Instructions').value).toBe(prompt.content);
@@ -410,13 +423,36 @@ it('discards a custom integration draft on confirmed tab navigation and keeps a 
   expect(document.body.textContent).toContain('Integration save failed');
   expect(field('Status command').value).toBe('local-status');
   const refresh = deferred<(typeof profile)[]>();
-  rpc.saveIntegration.mockResolvedValue(undefined);
+  const { detection, ...configuration } = profile;
+  const saved = {
+    ...configuration,
+    name: 'Renamed integration',
+    statusCommand: 'local-status',
+    revision: 5,
+  };
+  await fill('Name', saved.name);
+  rpc.saveIntegration.mockResolvedValue(saved);
   rpc.profiles.mockReturnValueOnce(refresh.promise);
   await click('Save changes', formDialog());
   expect(document.querySelector('[role="dialog"]')).toBeNull();
   expect(router.state.location.pathname).toBe('/settings/ai');
   expect(warnsBeforeUnload()).toBe(false);
+  expect(rpc.profiles).toHaveBeenCalledTimes(2);
+
+  await click('Edit integration');
+  expect(field('Name').value).toBe(saved.name);
+  expect(field('Status command').value).toBe(saved.statusCommand);
+  const latest = { ...saved, statusCommand: 'second-edit', revision: 6 };
+  await fill('Status command', latest.statusCommand);
+  rpc.saveIntegration.mockResolvedValueOnce(latest);
+  rpc.profiles.mockReturnValueOnce(refresh.promise);
+  await click('Save changes', formDialog());
+  expect(rpc.saveIntegration).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      profile: expect.objectContaining({ expectedRevision: saved.revision }),
+    }),
+  );
   await act(async () => router.navigate('/boards'));
   expect(router.state.location.pathname).toBe('/boards');
-  await act(async () => refresh.resolve([profile]));
+  await act(async () => refresh.resolve([{ ...latest, detection }]));
 });
