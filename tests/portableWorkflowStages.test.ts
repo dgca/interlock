@@ -160,6 +160,39 @@ it('exports portable board suggestions and creates the suggested board atomicall
   ).toThrow('different arguments');
 });
 
+it('keeps an identical same-instance reimport unchanged and replays setup across a board revision', () => {
+  const { engine, board, build, review, workflow, bundle } = stageFixture();
+  const original = engine.workflow(workflow.id);
+  const originalBoard = engine.boards.settings(board.id);
+  expect(importWorkflows(engine.store, bundle).changed).toEqual([]);
+  expect(engine.workflow(workflow.id)).toEqual(original);
+  expect(engine.boards.settings(board.id)).toEqual(originalBoard);
+
+  const boardSetup = {
+    requestId: 'update-local-board',
+    choices: [
+      {
+        suggestionId: board.id,
+        action: 'existing',
+        boardId: board.id,
+        expectedRevision: originalBoard.revision,
+        expectedBoards: { [workflow.id]: board.id },
+        stageColumns: {
+          [workflow.id]: { [build.id]: review.id, [review.id]: review.id },
+        },
+      },
+    ],
+  } satisfies BoardImportSetup;
+  const result = importWorkflows(engine.store, bundle, { boardSetup });
+  expect(engine.boards.settings(board.id).revision).toBe(
+    originalBoard.revision + 1,
+  );
+  expect(importWorkflows(engine.store, bundle, { boardSetup })).toEqual(result);
+  expect(engine.boards.settings(board.id).revision).toBe(
+    originalBoard.revision + 1,
+  );
+});
+
 it('maps stable stages to existing columns and preserves definitions, revision safety and history', () => {
   const { board, build, review, workflow, bundle } = stageFixture();
   const target = open();

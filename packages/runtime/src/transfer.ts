@@ -628,6 +628,10 @@ export function importWorkflows(
           ),
           importedPositions,
         );
+      const boardSuggestion =
+        entry.boardSuggestion?.id === existing?.boardId
+          ? existing?.boardSuggestion
+          : (entry.boardSuggestion ?? existing?.boardSuggestion);
       const workflow: Workflow = {
         id: entry.id,
         ownerWorkflowId: entry.ownerWorkflowId,
@@ -638,12 +642,7 @@ export function importWorkflows(
         ...(existing?.boardStageColumns
           ? { boardStageColumns: existing.boardStageColumns }
           : {}),
-        ...((entry.boardSuggestion ?? existing?.boardSuggestion)
-          ? {
-              boardSuggestion:
-                entry.boardSuggestion ?? existing?.boardSuggestion,
-            }
-          : {}),
+        ...(boardSuggestion ? { boardSuggestion } : {}),
         draft: sameDraft ? existing!.draft : entry.draft,
         draftRevision: existing
           ? existing.draftRevision + (sameDraft ? 0 : 1)
