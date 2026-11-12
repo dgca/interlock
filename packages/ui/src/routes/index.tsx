@@ -448,6 +448,32 @@ function RunsRoute() {
   );
 }
 
+function runReturnParams(search: URLSearchParams) {
+  return {
+    workflowId: search.get('workflow') || undefined,
+    tab: search.has('tab') ? parseRunTab(search.get('tab')) : undefined,
+    mode: search.has('mode') ? runMode(search.get('mode')) : undefined,
+    offset: runOffset(search.get('offset')),
+    tags: runTagFilter(search.get('tags')),
+  };
+}
+
+function runsReturnPath(
+  { workflowId, tab, mode, offset, tags }: ReturnType<typeof runReturnParams>,
+  fallbackTab: RunTab = 'active',
+) {
+  const scopedTab = tab ?? 'active';
+  if (workflowId)
+    return paths.workflowRuns(workflowId, scopedTab, offset, tags, mode);
+  const globalTab = tab ?? (mode ? 'active' : fallbackTab);
+  return paths.runs(
+    globalTab,
+    globalTab === scopedTab ? offset : 0,
+    tags,
+    mode,
+  );
+}
+
 function RunRoute() {
   const { runId } = useParams();
   const { tick, act, onConnect } = useOutletContext<AppContext>();
@@ -457,25 +483,15 @@ function RunRoute() {
   const explicitReturn = runReturnLocation(search.get('returnTo'));
   const historyReturn = location.state?.returnLabel as string | undefined;
   const returnLabel = historyReturn ?? explicitReturn?.label;
-  const workflowId = search.get('workflow') || undefined;
-  const returnTab = parseRunTab(search.get('tab'));
-  const returnMode = search.has('mode')
-    ? runMode(search.get('mode'))
-    : undefined;
-  const offset = runOffset(search.get('offset'));
-  const tags = runTagFilter(search.get('tags'));
+  const returnParams = runReturnParams(search);
   const runPath = (
     id: string,
     executionId?: string,
     returnTo = explicitReturn?.path,
   ) =>
     paths.run(id, {
-      workflowId,
-      tab: search.has('tab') ? returnTab : undefined,
+      ...(returnTo ? {} : returnParams),
       executionId,
-      offset,
-      tags,
-      mode: returnMode,
       returnTo,
     });
   // Keep the source collection when coming back from a request. Each nested
@@ -495,7 +511,12 @@ function RunRoute() {
         url.searchParams.delete('request');
         return url.pathname + url.search + url.hash;
       }
-      original = runReturnLocation(url.searchParams.get('returnTo'));
+      const nested = runReturnLocation(url.searchParams.get('returnTo'));
+      if (!nested && original.label === 'Back to run') {
+        const params = runReturnParams(url.searchParams);
+        if (Object.values(params).some(Boolean)) return runsReturnPath(params);
+      }
+      original = nested;
     }
     return '';
   })();
@@ -541,30 +562,11 @@ function RunRoute() {
             void navigate(explicitReturn.path);
             return;
           }
-          const tab =
-            returnMode !== undefined || search.has('tab')
-              ? returnTab
-              : status === 'queued' ||
-                  status === 'running' ||
-                  status === 'waiting'
-                ? 'active'
-                : 'history';
-          void navigate(
-            workflowId
-              ? paths.workflowRuns(
-                  workflowId,
-                  returnTab,
-                  offset,
-                  tags,
-                  returnMode,
-                )
-              : paths.runs(
-                  tab,
-                  tab === returnTab ? offset : 0,
-                  tags,
-                  returnMode,
-                ),
-          );
+          const fallbackTab =
+            status === 'queued' || status === 'running' || status === 'waiting'
+              ? 'active'
+              : 'history';
+          void navigate(runsReturnPath(returnParams, fallbackTab));
         }}
       />
     </Suspense>

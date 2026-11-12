@@ -74,6 +74,15 @@ function seedBoard(
 
 const requestAt = (url: URL) => JSON.parse(url.searchParams.get('request')!);
 
+async function reviewRequestAgain(page: Page) {
+  await page.getByRole('link', { name: 'Open run' }).click();
+  await page
+    .getByRole('link', { name: 'Review request', exact: true })
+    .first()
+    .click();
+  return address(page);
+}
+
 it.each([1440, 900, 390])(
   'opens exact run and request destinations and returns to their source at %dpx',
   async (width) => {
@@ -131,19 +140,9 @@ it.each([1440, 900, 390])(
           name: `Review request · Review details · ${branches[0]}`,
         })
         .click();
-      await inspector.getByRole('link', { name: 'Open run' }).click();
-      await inspector
-        .getByRole('link', { name: 'Review request', exact: true })
-        .first()
-        .click();
+      const repeatUrl = await reviewRequestAgain(inspector);
       expect(requestAt(new URL(inspector.url()))).toEqual(selected);
-      const repeatUrl = address(inspector);
-      await inspector.getByRole('link', { name: 'Open run' }).click();
-      await inspector
-        .getByRole('link', { name: 'Review request', exact: true })
-        .first()
-        .click();
-      expect(address(inspector)).toBe(repeatUrl);
+      expect(await reviewRequestAgain(inspector)).toBe(repeatUrl);
       await inspector.getByRole('button', { name: 'Back to run' }).click();
       await inspector.getByRole('button', { name: 'Back to board' }).click();
       expect(address(inspector)).toBe(sourceBoard);
@@ -229,6 +228,42 @@ it.each([1440, 900, 390])(
     }
   },
 );
+
+it('returns to the filtered second page of workflow Runs after repeated request visits', async () => {
+  const app = await openBrowserApp();
+  const page = await browser.newPage();
+  page.setDefaultTimeout(5000);
+  try {
+    const { workflow } = seedBoard(app, 101);
+    const source = paths.workflowRuns(workflow.id, 'attention', 100, tags);
+    await page.goto(app.url + source);
+
+    const title = page.getByRole('link', { name: /^Fixture run / });
+    const runTitle = (await title.textContent())!.trim();
+    const inspector = await openInNewTab(page, title);
+    await inspector.getByRole('button', { name: 'Review 2 items' }).click();
+    const request = inspector.getByRole('menuitem', {
+      name: `Review request · Review details · ${branches[0]}`,
+    });
+    const target = requestAt(
+      new URL((await request.getAttribute('href'))!, app.url),
+    );
+    await request.click();
+    const repeatUrl = await reviewRequestAgain(inspector);
+    expect(requestAt(new URL(inspector.url()))).toEqual(target);
+    expect(await reviewRequestAgain(inspector)).toBe(repeatUrl);
+
+    await inspector.getByRole('button', { name: 'Back to run' }).click();
+    await inspector.getByRole('button', { name: 'Back to runs' }).click();
+    expect(address(inspector)).toBe(source);
+    await inspector
+      .getByRole('link', { name: runTitle, exact: true })
+      .waitFor();
+  } finally {
+    await page.context().close();
+    await app.close();
+  }
+});
 
 it('restores large Board depths sequentially and stops at a failed page', async () => {
   const app = await openBrowserApp();
