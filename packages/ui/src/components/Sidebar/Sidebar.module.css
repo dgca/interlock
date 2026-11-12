@@ -154,6 +154,10 @@
 .navLabel {
   flex: 1;
 }
+.retryAttention {
+  align-self: flex-start;
+  margin-top: 4px;
+}
 .attentionCount {
   flex-shrink: 0;
   min-width: 22px;
@@ -225,6 +229,12 @@
     min-width: 14px;
     padding-inline: 3px;
     font-size: 9px;
+  }
+  .sidebar[data-compact] .retryAttention {
+    align-self: center;
+  }
+  .sidebar[data-compact] .retryAttentionLabel {
+    display: none;
   }
   .sidebar[data-compact] footer {
     justify-content: center;

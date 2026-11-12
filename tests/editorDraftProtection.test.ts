@@ -466,11 +466,16 @@ it('guards new prompt dismissal and Back, and opens the acknowledged prompt afte
   await escape();
   expect(discardDialog()).toBeUndefined();
   await ready(() => expect(document.activeElement).toBe(field('Instructions')));
-  await click('Close dialog', formDialog());
-  await click('Keep editing');
-  await click('Cancel', formDialog());
-  await click('Keep editing');
-  await act(async () => field('Instructions').focus());
+  for (const dismiss of ['Close dialog', 'Cancel']) {
+    await click(dismiss, formDialog());
+    await ready(() =>
+      expect(document.activeElement).toBe(button('Keep editing')),
+    );
+    await click('Keep editing');
+    await ready(() =>
+      expect(document.activeElement).toBe(field('Instructions')),
+    );
+  }
   await back();
   expect(discardDialog()).toBeDefined();
   await click('Keep editing');

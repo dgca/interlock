@@ -1,4 +1,4 @@
-import { Badge } from '../../design-system';
+import { Badge, Button } from '../../design-system';
 
 import {
   GitBranch,
@@ -11,14 +11,22 @@ import {
   BarChart2,
   Zap,
   Columns3,
+  RefreshCw,
 } from 'lucide-react';
 import { VERSION } from '../../../../core/src/version';
 import { Link } from 'react-router';
 import { paths } from '../../routes/paths';
 import styles from './Sidebar.module.css';
+export type AttentionFailure = {
+  source: 'requests' | 'automations';
+  retrying: boolean;
+  retry: () => void;
+};
+
 export function Sidebar({
   page,
-  attentionCount = 0,
+  attentionCount,
+  attentionFailures,
   connected,
   connectionError,
   engineHost,
@@ -36,12 +44,29 @@ export function Sidebar({
     | 'harnesses'
     | 'diagnostics';
   attentionCount?: number;
+  attentionFailures: AttentionFailure[];
   connected: boolean;
   connectionError: boolean;
   engineHost?: string;
   onConnect?: () => void;
   compactAt960?: boolean;
 }) {
+  const failed = attentionFailures.length > 0;
+  const badge = failed
+    ? attentionCount === undefined
+      ? '?'
+      : `~${attentionCount}`
+    : attentionCount || undefined;
+  const runLabel = failed
+    ? attentionCount === undefined
+      ? 'Runs, attention count unavailable'
+      : `Runs, last known attention count ${attentionCount}, may be out of date`
+    : attentionCount === undefined
+      ? 'Runs, loading attention count'
+      : attentionCount
+        ? `Runs, ${attentionCount} ${attentionCount === 1 ? 'item needs' : 'items need'} attention`
+        : 'Runs';
+  const retryLabel = `Retry attention count for ${attentionFailures.map(({ source }) => source).join(' and ')}`;
   return (
     <aside className={styles.sidebar} data-compact={compactAt960 || undefined}>
       <div className={styles.brand}>
@@ -95,17 +120,19 @@ export function Sidebar({
             key={id}
             className={page === id ? styles.active : ''}
             to={to}
-            title={compactAt960 ? label : undefined}
-            aria-current={page === id ? 'page' : undefined}
-            aria-label={
-              id === 'runs' && attentionCount
-                ? `Runs, ${attentionCount} ${attentionCount === 1 ? 'item needs' : 'items need'} attention`
-                : label
+            title={
+              id === 'runs' && failed
+                ? runLabel
+                : compactAt960
+                  ? label
+                  : undefined
             }
+            aria-current={page === id ? 'page' : undefined}
+            aria-label={id === 'runs' ? runLabel : label}
           >
             <Icon size={16} />
             <span className={styles.navLabel}>{label}</span>
-            {id === 'runs' && attentionCount > 0 && (
+            {id === 'runs' && badge !== undefined && (
               <Badge
                 className={styles.attentionCount}
                 color="yellow"
@@ -113,12 +140,31 @@ export function Sidebar({
                 size="sm"
                 aria-hidden="true"
               >
-                {attentionCount}
+                {badge}
               </Badge>
             )}
           </Link>
         ))}
       </nav>
+      {failed && (
+        <Button
+          variant="ghost"
+          size="compact-sm"
+          className={styles.retryAttention}
+          aria-label={retryLabel}
+          title={retryLabel}
+          loading={attentionFailures.every(({ retrying }) => retrying)}
+          onClick={() => {
+            for (const failure of attentionFailures)
+              if (!failure.retrying) failure.retry();
+          }}
+        >
+          <RefreshCw size={14} aria-hidden="true" />
+          <span className={styles.retryAttentionLabel}>
+            Retry attention count
+          </span>
+        </Button>
+      )}
       <div className={styles.utilities}>
         <nav aria-label="Utilities" className={styles.utilityNavigation}>
           <Link
