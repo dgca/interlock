@@ -95,6 +95,25 @@ it('preserves legacy GET validation with and without batching', async () =>
     }
   }));
 
+it('keeps POST query overrides scoped to individual allowlisted paths', async () =>
+  withServer(async (_engine, url, id) => {
+    const cases = [
+      { path: 'workflows.versions', body: { id } },
+      {
+        path: 'workflows.validate,workflows.versions?batch=1',
+        body: { 0: { id }, 1: { id } },
+      },
+    ];
+    for (const { path, body } of cases) {
+      const response = await fetch(`${url}/trpc/${path}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      expect(response.status).toBe(405);
+    }
+  }));
+
 it('accepts a 2 MiB UTF-8 request and explains rejection one byte over the limit', async () =>
   withServer(async (_engine, url, id) => {
     const definition = candidate('');
