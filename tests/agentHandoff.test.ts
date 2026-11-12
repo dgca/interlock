@@ -2,6 +2,10 @@
 import { act, createElement as h } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { UiTestProvider as DesignSystemProvider } from './uiTestProvider';
+import {
+  createQueryClient,
+  refreshQueries,
+} from '../packages/ui/src/lib/query';
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import { Engine } from '@interlock/runtime';
 import { Store } from '@interlock/storage';
@@ -53,7 +57,9 @@ let container: HTMLDivElement, root: Root, detail: any;
 const onOpen = vi.fn();
 const onConnect = vi.fn(),
   writeText = vi.fn();
+let client: ReturnType<typeof createQueryClient>;
 beforeEach(() => {
+  client = createQueryClient();
   (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
   Object.defineProperty(document, 'fonts', {
     configurable: true,
@@ -95,7 +101,7 @@ beforeEach(() => {
     events: [],
     children: [],
   };
-  rpc.get.mockReset().mockImplementation(async () => detail);
+  rpc.get.mockReset().mockImplementation(async () => structuredClone(detail));
   rpc.work
     .mockReset()
     .mockResolvedValue([{ id: 'child-assignment', runId: 'child-run' }]);
@@ -108,15 +114,15 @@ afterEach(async () => {
   container.remove();
   vi.unstubAllGlobals();
 });
-async function render(tick = 0, id = 'root-run') {
+async function render(id = 'root-run') {
   await act(async () =>
     root.render(
       h(
         DesignSystemProvider,
-        { env: 'test' },
+        { env: 'test', client },
         h(RunInspector, {
           id,
-          tick,
+
           onBack: vi.fn(),
           onOpen,
           onConnect,
@@ -216,11 +222,11 @@ it('shows a clipboard error and permits retry', async () => {
 it('removes the prompt after available assignments are claimed and hides it for finished runs', async () => {
   await render();
   rpc.work.mockResolvedValue([]);
-  await render(1);
+  await act(async () => refreshQueries(client));
   expect(container.textContent).not.toContain('Waiting for an agent');
   rpc.work.mockResolvedValue([{ id: 'stale-assignment' }]);
   detail.run.status = 'completed';
-  await render(2);
+  await act(async () => refreshQueries(client));
   expect(container.textContent).not.toContain('Waiting for an agent');
 });
 it('does not mistake a waiting script or child workflow for an available agent assignment', async () => {
@@ -262,7 +268,7 @@ it('keeps a chosen Batch item selected across live updates without substituting 
     engine.submit(work.id, claim.token!, 'second result');
     detail = engine.inspect(run.id);
     detail.run = { ...detail.run, id: 'root-run' };
-    await render(1);
+    await act(async () => refreshQueries(client));
     expect(graph.props.selected).toBe('work');
     expect(
       container.querySelector('[data-json-label="Input"]')?.textContent,
@@ -307,7 +313,7 @@ it('shows active detached work after parent completion without a parent handoff 
       container.querySelector('[data-json-label="Output"]')?.textContent,
     ).toContain(result.children[0].id);
     detail.run.status = 'waiting';
-    await render(1);
+    await act(async () => refreshQueries(client));
     expect(container.textContent).toContain(
       'will keep running if you cancel this run',
     );
@@ -343,12 +349,12 @@ it('shows comparison context and navigates to the counterpart without changing n
   await act(async () => candidate!.click());
   expect(onOpen).toHaveBeenCalledWith('candidate-run');
   detail.run.comparison.comparisonId = '87654321-second';
-  await render(1);
+  await act(async () => refreshQueries(client));
   expect(container.textContent).toContain('Comparison 87654321');
   expect(container.textContent).not.toContain('Comparison 12345678');
   delete detail.run.comparison;
   delete detail.counterpartRunId;
-  await render(2);
+  await act(async () => refreshQueries(client));
   expect(container.textContent).not.toContain('Evidence checks');
   expect(container.textContent).not.toContain('Candidate run');
 });
@@ -494,7 +500,7 @@ it('inspects a Parallel path and its attempts within the selected visit', async 
     submit('r1', 2);
     detail = engine.inspect(run.id);
     rpc.work.mockResolvedValue([]);
-    await render(0, run.id);
+    await render(run.id);
     expect(container.textContent).not.toContain('Child runs');
     const visits = Array.from(
       container.querySelectorAll<HTMLButtonElement>('button[aria-expanded]'),
@@ -593,7 +599,7 @@ it('opens tree cancellation from a completed predecessor whose terminal successo
   try {
     const { first, successor, child } =
       chainWithIndependentSuccessorWork(engine);
-    await render(0, first);
+    await render(first);
     expect(
       [...container.querySelectorAll('button')].some(
         (b) => b.textContent === 'Cancel run tree',
@@ -646,7 +652,7 @@ it('refreshes tree cancellation availability when detached work beneath a termin
   const engine = new Engine(new Store(':memory:'), process.cwd());
   try {
     const { first, child, finish } = chainWithIndependentSuccessorWork(engine);
-    await render(0, first);
+    await render(first);
     expect(
       [...container.querySelectorAll('button')].some(
         (b) => b.textContent === 'Cancel run tree',
@@ -664,10 +670,14 @@ it('refreshes tree cancellation availability when detached work beneath a termin
           resolveStale = resolve;
         }),
     );
-    await render(1, first);
+    await act(async () => {
+      void refreshQueries(client);
+    });
     finish(child);
     const before = engine.store.historyRuns();
-    await render(2, first);
+    await act(async () => {
+      void refreshQueries(client);
+    });
     expect(rpc.preview).toHaveBeenLastCalledWith({
       id: first,
       includeDetached: true,
@@ -677,7 +687,7 @@ it('refreshes tree cancellation availability when detached work beneath a termin
       [...container.querySelectorAll('button')].some(
         (b) => b.textContent === 'Cancel run tree',
       ),
-    ).toBe(false);
+    ).toBe(true);
     await act(async () => resolveStale(stalePreview));
     expect(
       [...container.querySelectorAll('button')].some(
@@ -692,7 +702,7 @@ it('refreshes tree cancellation availability when detached work beneath a termin
   }
 });
 
-it('supersedes an initial pending availability read after a run change', async () => {
+it('follows an initial pending availability read after a run change', async () => {
   const engine = new Engine(new Store(':memory:'), process.cwd());
   try {
     const { first, child, finish } = chainWithIndependentSuccessorWork(engine);
@@ -708,13 +718,15 @@ it('supersedes an initial pending availability read after a run change', async (
           resolve = done;
         }),
     );
-    await render(0, first);
+    await render(first);
     expect(container.textContent).toContain('Loading run…');
     finish(child);
-    await render(1, first);
-    expect(container.textContent).not.toContain('Loading run…');
-    expect(container.textContent).not.toContain('Cancel run tree');
+    await act(async () => {
+      void refreshQueries(client);
+    });
+    expect(container.textContent).toContain('Loading run…');
     await act(async () => resolve(stale));
+    expect(container.textContent).not.toContain('Loading run…');
     expect(container.textContent).not.toContain('Cancel run tree');
     expect(rpc.cancel).not.toHaveBeenCalled();
   } finally {
@@ -753,7 +765,7 @@ it.each([
       since: new Date().toISOString(),
     };
     detail.run.actor = actor;
-    await render(0, id);
+    await render(id);
     const summary = liveSummary();
     expect(summary.querySelector('strong')?.textContent).toBe(title);
     expect(summary.textContent?.split(title).length).toBe(2);
@@ -777,7 +789,7 @@ it('keeps distinct step labels, recovery guidance and failed-run detail', async 
     detail.run.actor = 'engine';
     detail.run.error = 'Tool failed\nPrivate stack';
     detail.handledFailure = true;
-    await render(0, id);
+    await render(id);
     expect(liveSummary().querySelector('strong')?.textContent).toBe('Failed');
     expect(liveSummary().textContent).toContain('Investigation');
     expect(liveSummary().textContent).toContain('Draft report');
@@ -799,7 +811,7 @@ it('keeps distinct step labels, recovery guidance and failed-run detail', async 
       since: new Date().toISOString(),
     };
     detail.run.actor = 'person';
-    await render(1, id);
+    await act(async () => refreshQueries(client));
     expect(liveSummary().querySelector('strong')?.textContent).toBe(
       'Recovery needed',
     );
@@ -817,7 +829,7 @@ it('keeps cancellation reasons and continuation context in the live summary', as
     detail.run.waiting = null;
     detail.run.actor = 'engine';
     detail.run.cancellationReason = 'Stopped by operator';
-    await render(0, id);
+    await render(id);
     expect(liveSummary().querySelector('strong')?.textContent).toBe(
       'Cancelled',
     );
@@ -827,7 +839,7 @@ it('keeps cancellation reasons and continuation context in the live summary', as
     detail.run.status = 'completed';
     detail.run.chain = { index: 1, rootRunId: id, nextRunId: 'next-run' };
     detail.chain = { maxRuns: 3, latestStatus: 'completed' };
-    await render(1, id);
+    await act(async () => refreshQueries(client));
     expect(liveSummary().querySelector('strong')?.textContent).toBe(
       'Continued as new',
     );
@@ -935,7 +947,7 @@ it('retains falsy polling output and copies the exact external-input target from
     childRunIds: [],
     startedAt: new Date().toISOString(),
   });
-  await render(1);
+  await act(async () => refreshQueries(client));
   await act(async () => graph.props.onSelect('input'));
   await click('Copy submission target');
   expect(JSON.parse(writeText.mock.calls[0][0])).toEqual({

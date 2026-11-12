@@ -27,7 +27,6 @@ export type AppContext = {
   prompts: SavedPrompt[];
   workflowsRead: WorkspaceRead;
   promptsRead: WorkspaceRead;
-  tick: number;
   act: Action;
   onDirty: (dirty: boolean) => void;
   onEditorGuard: (guard: EditorGuard) => void;
@@ -133,7 +132,6 @@ export function App() {
     if (blocker.state === 'blocked' && blockedWhileSaving.current)
       blocker.reset();
   }, [blocker]);
-  const [tick, setTick] = useState(0);
   const [runDialog, setRunDialog] = useState<Workflow>();
   useEffect(() => {
     let mounted = true;
@@ -159,13 +157,16 @@ export function App() {
       void refreshQueries(queryClient).then(
         () =>
           updateRefreshHealth(
-            [trpc.workflows.list.queryKey(), trpc.prompts.list.queryKey()].some(
-              (key) => queryClient.getQueryState(key)?.error,
-            ),
+            queryClient
+              .getQueryCache()
+              .findAll({ type: 'active' })
+              .some(
+                (query) =>
+                  query.meta?.engineRefresh !== false && query.state.error,
+              ),
           ),
         () => updateRefreshHealth(true),
       );
-      setTick((t) => t + 1);
     };
     const resetPolling = () => {
       clearInterval(interval);
@@ -212,10 +213,9 @@ export function App() {
       clearTimeout(pending);
     };
   }, [queryClient]);
-  const { act, feedback, dismiss, success } = useActionFeedback(async () => {
-    await refreshQueries(queryClient);
-    setTick((t) => t + 1);
-  });
+  const { act, feedback, dismiss, success } = useActionFeedback(() =>
+    refreshQueries(queryClient),
+  );
   const openRun = (id: string) => {
     void navigate(
       paths.run(id, { workflowId: workflowMatch?.params.workflowId }),
@@ -227,7 +227,6 @@ export function App() {
     prompts,
     workflowsRead: workspaceRead('workflows', workflowsQuery),
     promptsRead: workspaceRead('prompts', promptsQuery),
-    tick,
     act,
     onDirty: setEditorDirty,
     onEditorGuard,
@@ -286,7 +285,7 @@ export function App() {
     onConnect: features.connectAgent ? () => setConnectDialog(true) : undefined,
   };
   return (
-    <PauseProvider tick={tick}>
+    <PauseProvider>
       <div className="app">
         <Sidebar
           compactAt960={Boolean(boardMatch || requestMatch)}

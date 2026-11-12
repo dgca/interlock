@@ -6,6 +6,8 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { UiTestProvider } from './uiTestProvider';
 import { VariableRoute } from '../packages/ui/src/features/variables/Variables';
 
+import { refreshQueries, useQueryClient } from '../packages/ui/src/lib/query';
+
 const read = vi.hoisted(() => vi.fn());
 const manage = vi.hoisted(() => vi.fn());
 vi.mock('../packages/ui/src/lib/api', async () => {
@@ -17,12 +19,13 @@ vi.mock('../packages/ui/src/lib/api', async () => {
     errorMessage: (error: Error) => error.message,
   };
 });
-let root: Root, container: HTMLDivElement, tick: number;
+let root: Root, container: HTMLDivElement;
+let client: ReturnType<typeof useQueryClient>;
 const onEditorGuard = vi.fn();
 function Context() {
+  client = useQueryClient();
   return h(Outlet, {
     context: {
-      tick,
       onEditorGuard,
       act: async (fn: () => Promise<unknown>) => {
         await fn();
@@ -65,7 +68,6 @@ function field(name: string) {
   return document.getElementById(label.htmlFor) as HTMLInputElement;
 }
 beforeEach(() => {
-  tick = 0;
   onEditorGuard.mockReset();
   (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
   window.matchMedia = vi.fn().mockReturnValue({
@@ -144,8 +146,7 @@ it.each(['secret', 'config'] as const)(
       )!.set!.call(field('Name'), 'local_edit');
       field('Name').dispatchEvent(new Event('input', { bubbles: true }));
     });
-    tick += 1;
-    await show();
+    await act(async () => refreshQueries(client));
     expect(field('Name').value).toBe('local_edit');
     expect(onEditorGuard).toHaveBeenLastCalledWith('dirty');
     expect(read).toHaveBeenCalledTimes(count);
@@ -277,4 +278,35 @@ it('keeps already-disabled variables read-only about their status while metadata
   expect(container.textContent).toContain(
     'This variable is disabled. Restore access with the CLI.',
   );
+});
+
+it('retains the last Config value when reading a new revision fails and retries that revision', async () => {
+  let current = savedVariable('config');
+  let failValueRead = false;
+  read.mockImplementation(async ({ action }) => {
+    if (action === 'inspect') return current;
+    if (failValueRead) throw new Error('Config read failed');
+    return { id: 'v', value: `Value revision ${current.valueRevision}` };
+  });
+  await show();
+  expect(field('Config value').value).toBe('Value revision 1');
+
+  current = { ...current, revision: 2, valueRevision: 2 };
+  failValueRead = true;
+  await act(async () => refreshQueries(client));
+  expect(field('Config value').value).toBe('Value revision 1');
+  expect(field('Config value').disabled).toBe(true);
+  expect(container.textContent).toContain('Config read failed');
+
+  failValueRead = false;
+  const retry = [...container.querySelectorAll('button')].find(
+    (button) => button.textContent === 'Retry Config value',
+  )!;
+  read.mockClear();
+  await act(async () => retry.click());
+  expect(field('Config value').value).toBe('Value revision 2');
+  expect(field('Config value').disabled).toBe(false);
+  expect(read.mock.calls.map(([input]) => input)).toEqual([
+    { action: 'config_value', id: 'v' },
+  ]);
 });

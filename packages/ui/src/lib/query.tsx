@@ -2,13 +2,19 @@ import {
   QueryClient,
   QueryClientProvider,
   replaceEqualDeep,
+  type QueryFilters,
 } from '@tanstack/react-query';
 import { createTRPCOptionsProxy } from '@trpc/tanstack-react-query';
 import type { AppRouter } from '@interlock/client';
-import { useEffect, useRef, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { api } from './api';
 
-export { useQuery, useQueryClient, notifyManager } from '@tanstack/react-query';
+export {
+  useQuery,
+  useQueryClient,
+  notifyManager,
+  type QueryClient,
+} from '@tanstack/react-query';
 
 // Preserve literal metadata keys such as __proto__ while sorting object keys.
 // Assigning sorted keys to {} would silently drop those filters from the hash.
@@ -84,81 +90,22 @@ export function QueryProvider({
   return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
 }
 
-type Refetch = (options?: { cancelRefetch?: boolean }) => Promise<unknown>;
-
-/** Bridge existing engine ticks without discarding events during a pending read. */
-export function useRefreshOnTick(
-  tick: number,
-  refetch: Refetch,
-  enabled = true,
-  isFetching = false,
-) {
-  const previous = useRef(tick);
-  const latest = useRef(refetch);
-  latest.current = refetch;
-  const latestEnabled = useRef(enabled);
-  latestEnabled.current = enabled;
-  const state = useRef({ active: true, pending: false, queued: false });
-  useEffect(() => {
-    state.current.active = true;
-    return () => {
-      state.current.active = false;
-      state.current.queued = false;
-    };
-  }, []);
-  useEffect(() => {
-    if (previous.current === tick) return;
-    previous.current = tick;
-    if (!enabled) {
-      state.current.queued = false;
-      return;
-    }
-    if (state.current.pending) {
-      state.current.queued = true;
-      return;
-    }
-    state.current.pending = true;
-    void (async () => {
-      try {
-        let followPendingRead = isFetching;
-        do {
-          state.current.queued = false;
-          await latest.current({ cancelRefetch: false });
-          if (followPendingRead) {
-            state.current.queued = true;
-            followPendingRead = false;
-          }
-        } while (
-          state.current.active &&
-          latestEnabled.current &&
-          state.current.queued
-        );
-      } catch {
-        // Query state owns read failures; event callbacks must not reject.
-      } finally {
-        state.current.pending = false;
-      }
-    })();
-  }, [tick, enabled]);
-}
-
 /** Refresh page reads after engine events or mutations, retaining cached data. */
-export async function refreshQueries(client: QueryClient) {
+export async function refreshQueries(
+  client: QueryClient,
+  scope: QueryFilters = {},
+) {
+  const filter: QueryFilters = {
+    ...scope,
+    predicate: (query) =>
+      query.meta?.engineRefresh !== false && (scope.predicate?.(query) ?? true),
+  };
   const pending = new Set(
     client
       .getQueryCache()
-      .getAll()
-      .filter(
-        (query) =>
-          query.meta?.engineRefresh !== false &&
-          query.isActive() &&
-          query.state.fetchStatus === 'fetching',
-      ),
+      .findAll({ ...filter, type: 'active', fetchStatus: 'fetching' }),
   );
-  await client.invalidateQueries(
-    { predicate: (query) => query.meta?.engineRefresh !== false },
-    { cancelRefetch: false },
-  );
+  await client.invalidateQueries(filter, { cancelRefetch: false });
   // A pending read may have captured state before the event.
   if (pending.size)
     await client.refetchQueries(

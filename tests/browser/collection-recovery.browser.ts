@@ -307,3 +307,76 @@ it('returns keyboard focus to Filter by tags after a Runs retry or filter reset'
     await app.close();
   }
 });
+
+it('refreshes the exact inspector read after an event arrives while it is pending', async () => {
+  const app = await openBrowserApp();
+  const page = await browser.newPage({ viewport: { width: 900, height: 900 } });
+  page.setDefaultTimeout(5000);
+  const initial = heldRead();
+  const procedure = (url: URL, name: string) =>
+    url.pathname.startsWith('/trpc/') &&
+    url.pathname.slice('/trpc/'.length).split(',').includes(name);
+  let inspectorReads = 0;
+  let inspectorReadFailed = false;
+  try {
+    const workflow = app.engine.create(
+      'Inspector refresh fixture',
+      '',
+      blankDefinition(),
+    );
+    app.engine.publish(workflow.id);
+    const run = app.engine.startSummary(
+      workflow.id,
+      {},
+      undefined,
+      1,
+      undefined,
+      {
+        title: 'Refresh while reading',
+      },
+    );
+    await page.route(
+      (url) => procedure(url, 'runs.get'),
+      async (route) => {
+        inspectorReads++;
+        if (inspectorReads > 1) {
+          await route.continue();
+          return;
+        }
+        const beforeEvent = await route.fetch();
+        initial.started.resolve();
+        await initial.release.promise;
+        await route.fulfill({ response: beforeEvent });
+      },
+    );
+    page.on('requestfailed', (request) => {
+      if (procedure(new URL(request.url()), 'runs.get'))
+        inspectorReadFailed = true;
+    });
+
+    await page.goto(app.url + paths.runs());
+    await page
+      .getByRole('link', { name: 'Refresh while reading', exact: true })
+      .click();
+    await initial.started.promise;
+    await page.getByText('Loading run…', { exact: true }).waitFor();
+
+    const eventRefresh = page.waitForRequest((request) =>
+      procedure(new URL(request.url()), 'triggers.attention'),
+    );
+    app.engine.cancel(run.runId);
+    await eventRefresh;
+    expect(inspectorReads).toBe(1);
+    initial.release.resolve();
+
+    const summary = page.getByRole('status').filter({ hasText: 'Cancelled' });
+    await summary.waitFor();
+    expect(new URL(page.url()).pathname).toBe(paths.run(run.runId));
+    expect(inspectorReads).toBe(2);
+    expect(inspectorReadFailed).toBe(false);
+  } finally {
+    initial.release.resolve();
+    await page.close();
+    await app.close();
+  }
+});

@@ -13,25 +13,13 @@ import {
 } from '../../design-system';
 
 import { useEffect, useRef, useState } from 'react';
-import {
-  Link,
-  useLocation,
-  useNavigate,
-  useOutletContext,
-  useSearchParams,
-} from 'react-router';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router';
 
 import { Trash2 } from 'lucide-react';
-import type { AppContext } from '../../App';
 import { PageTabs } from '../../components/PageLayout/PageLayout';
 
 import { api, errorMessage } from '../../lib/api';
-import {
-  trpc,
-  useQuery,
-  useQueryClient,
-  useRefreshOnTick,
-} from '../../lib/query';
+import { trpc, useQuery, useQueryClient } from '../../lib/query';
 import { paths, runOffset } from '../../routes/paths';
 import {
   automationStatus,
@@ -46,7 +34,6 @@ import {
 import classes from './Automations.module.css';
 
 export function AutomationDetail({ id }: { id: string }) {
-  const { tick } = useOutletContext<AppContext>();
   const navigate = useNavigate();
   const location = useLocation();
   const saved = location.state?.savedAutomation;
@@ -62,7 +49,6 @@ export function AutomationDetail({ id }: { id: string }) {
     limit: 20,
   });
   const inspection = useQuery(inspectionOptions);
-  useRefreshOnTick(tick, inspection.refetch, true, inspection.isFetching);
   const data = inspection.data;
   const error = inspection.error ? errorMessage(inspection.error) : '';
   const [actionError, setActionError] = useState('');

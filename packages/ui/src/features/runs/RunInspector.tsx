@@ -6,6 +6,7 @@ import {
   ScrollArea,
   Button,
   JsonEditor,
+  Group,
   ActionError,
   PageHeader,
   workspacePage,
@@ -40,7 +41,12 @@ import {
 } from 'lucide-react';
 
 import { api, download, errorMessage } from '../../lib/api';
-import { trpc, useQuery, useQueryClient } from '../../lib/query';
+import {
+  refreshQueries,
+  trpc,
+  useQuery,
+  useQueryClient,
+} from '../../lib/query';
 
 import { StatusBadge } from '../../components/StatusBadge/StatusBadge';
 
@@ -129,7 +135,6 @@ function TimelineStep({
 
 export function RunInspector({
   id,
-  tick,
   onBack,
   onOpen,
   act,
@@ -139,7 +144,6 @@ export function RunInspector({
   requestHref,
 }: {
   id: string;
-  tick: number;
   onBack: (status: RunStatus) => void;
   onOpen: (id: string, executionId?: string, returnTo?: RunReturn) => void;
   initialExecutionId?: string;
@@ -159,50 +163,25 @@ export function RunInspector({
   const runActions = useRef<HTMLButtonElement>(null);
   const [cancellationDialog, setCancellationDialog] = useState(false);
   const [returnMenuFocus, setReturnMenuFocus] = useState(true);
-  const queryClient = useQueryClient();
-  const detail = useQuery(trpc.runs.get.queryOptions({ id }));
-  const workQuery = useQuery(trpc.work.list.queryOptions({ runId: id }));
-  const cancellation = useQuery(
-    trpc.runs.previewCancellation.queryOptions({
-      id,
-      includeDetached: true,
-      limit: 1,
-    }),
-  );
-  const previousTick = useRef(tick);
-  useEffect(() => {
-    if (previousTick.current === tick) return;
-    previousTick.current = tick;
-    let current = true;
-    // Explicit cancellation also supersedes an initial read with no cached
-    // data; refetch alone joins that initial request instead of replacing it.
-    void Promise.all([
-      queryClient.cancelQueries(trpc.runs.get.queryFilter({ id })),
-      queryClient.cancelQueries(trpc.work.list.queryFilter({ runId: id })),
-      queryClient.cancelQueries(
-        trpc.runs.previewCancellation.queryFilter({
-          id,
-          includeDetached: true,
-          limit: 1,
-        }),
-      ),
-    ]).then(() => {
-      if (!current) return;
-      void detail.refetch();
-      void workQuery.refetch();
-      void cancellation.refetch();
-    });
-    return () => {
-      current = false;
-    };
-  }, [
-    tick,
+  const client = useQueryClient();
+  const detailOptions = trpc.runs.get.queryOptions({ id });
+  const workOptions = trpc.work.list.queryOptions({ runId: id });
+  const cancellationOptions = trpc.runs.previewCancellation.queryOptions({
     id,
-    queryClient,
-    detail.refetch,
-    workQuery.refetch,
-    cancellation.refetch,
-  ]);
+    includeDetached: true,
+    limit: 1,
+  });
+  const detail = useQuery(detailOptions);
+  const workQuery = useQuery(workOptions);
+  const cancellation = useQuery(cancellationOptions);
+  const refresh = () => {
+    for (const { queryKey } of [
+      detailOptions,
+      workOptions,
+      cancellationOptions,
+    ])
+      void refreshQueries(client, { queryKey, exact: true });
+  };
   const data =
     detail.data && workQuery.data && cancellation.data
       ? {
@@ -226,10 +205,9 @@ export function RunInspector({
     detailRef.current?.focus();
     detailRef.current?.scrollIntoView?.({ block: 'start' });
   }, [selected]);
-  const refresh = () => {
-    void detail.refetch();
-    void workQuery.refetch();
-    void cancellation.refetch();
+  const retryReads = () => {
+    for (const read of [detail, workQuery, cancellation])
+      if (read.error) void read.refetch({ cancelRefetch: false });
   };
   useEffect(() => {
     if (!data) return;
@@ -250,6 +228,7 @@ export function RunInspector({
     return error ? (
       <div className="content-page" role="alert">
         {error}
+        <Button onClick={retryReads}>Retry run details</Button>
       </div>
     ) : (
       <LoadingSkeleton label="Loading run…" className={styles.page}>
@@ -300,7 +279,6 @@ export function RunInspector({
         async () => {
           await api.runs.retry.mutate({ id });
           setRetryRequested(true);
-          refresh();
         },
         undefined,
         setRetryError,
@@ -651,7 +629,6 @@ export function RunInspector({
                   onClick={() =>
                     void act(async () => {
                       await api.runs.cancel.mutate({ id, scope: 'chain' });
-                      refresh();
                     }, 'Run chain stopped.')
                   }
                 >
@@ -673,7 +650,6 @@ export function RunInspector({
                 onClick={() =>
                   void act(async () => {
                     await api.runs.cancel.mutate({ id });
-                    refresh();
                   }, 'Run cancelled.')
                 }
               >
@@ -767,7 +743,6 @@ export function RunInspector({
           key={id}
           runId={id}
           onClose={() => setCancellationDialog(false)}
-          onCancelled={refresh}
           onOpen={onOpen}
         />
       )}
@@ -860,7 +835,12 @@ export function RunInspector({
           <a href="#workflow-result">View result</a>
         )}
       </div>
-      <ActionError message={error} />
+      {error && (
+        <Group align="center">
+          <ActionError message={error} />
+          <Button onClick={retryReads}>Retry run details</Button>
+        </Group>
+      )}
       <ActionError message={retryError} />
       {!!run.variableCaptures?.length && (
         <details className={styles.independent}>
@@ -1446,7 +1426,7 @@ export function RunInspector({
               </section>
             )}
           </div>
-          <RunUsage id={id} tick={tick} />
+          <RunUsage id={id} />
         </section>
       </div>
     </div>

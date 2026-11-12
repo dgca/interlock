@@ -2,6 +2,10 @@
 import { act, createElement as h, useState, type ComponentProps } from 'react';
 import { createRoot } from 'react-dom/client';
 import { UiTestProvider as DesignSystemProvider } from './uiTestProvider';
+import {
+  createQueryClient,
+  refreshQueries,
+} from '../packages/ui/src/lib/query';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { RunSummary } from '@interlock/core';
 import { RunList } from '../packages/ui/src/features/runs/RunList';
@@ -38,7 +42,9 @@ vi.mock('../packages/ui/src/lib/api', async () => {
   };
 });
 
+let client: ReturnType<typeof createQueryClient>;
 beforeEach(() => {
+  client = createQueryClient();
   (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
   window.matchMedia = vi.fn().mockReturnValue({
     matches: false,
@@ -103,9 +109,8 @@ it('defaults lazy and data loading to List and switches to Overview when selecte
       root.render(
         h(
           DesignSystemProvider,
-          { env: 'test' },
+          { env: 'test', client },
           h(RoutedRunList, {
-            tick: 0,
             offset: 0,
             onOffsetChange: vi.fn(),
             workflows: [],
@@ -186,14 +191,13 @@ it('retries only the failed Overview preview and keeps its confirmed count', asy
   const container = document.createElement('div');
   document.body.append(container);
   const root = createRoot(container);
-  const render = (tick: number) =>
+  const render = () =>
     act(async () =>
       root.render(
         h(
           DesignSystemProvider,
-          { env: 'test' },
+          { env: 'test', client },
           h(RoutedRunList, {
-            tick,
             offset: 0,
             onOffsetChange: vi.fn(),
             workflows: [],
@@ -213,7 +217,7 @@ it('retries only the failed Overview preview and keeps its confirmed count', asy
       (node) => node.textContent === name,
     )!;
   try {
-    await render(0);
+    await render();
     expect(container.textContent).toContain('Completed read failed');
     expect(heading('Completed runs')).toBe('Completed runs');
     expect(heading('Needs attention')).toBe('Needs attention3');
@@ -231,7 +235,7 @@ it('retries only the failed Overview preview and keeps its confirmed count', asy
     expect(document.activeElement).toBe(button('Filter by tags'));
 
     failed = true;
-    await render(1);
+    await act(async () => refreshQueries(client));
     expect(container.textContent).toContain(
       'Could not refresh completed preview.',
     );
@@ -273,7 +277,6 @@ it('scopes empty board messages to exact tag filters and clears them through the
       priority: 'High',
     });
     return h(RoutedRunList, {
-      tick: 0,
       offset: 0,
       onOffsetChange: vi.fn(),
       workflows: [],
@@ -373,7 +376,6 @@ it('renders active and history pages and opens the selected run', async () => {
       DesignSystemProvider,
       {},
       h(RoutedRunList, {
-        tick: 0,
         offset: 0,
         onOffsetChange: vi.fn(),
         workflows: [],
@@ -470,9 +472,8 @@ it('requests the selected workflow and opens its invocation', async () => {
       root.render(
         h(
           DesignSystemProvider,
-          { env: 'test' },
+          { env: 'test', client },
           h(RoutedRunList, {
-            tick: 0,
             offset: 0,
             onOffsetChange: vi.fn(),
             workflows: [],
@@ -538,13 +539,12 @@ it('29f3cb6-attention-row: preserves stage and actor with specific attention and
   const container = document.createElement('div');
   document.body.append(container);
   const root = createRoot(container);
-  const render = (tick = 0) =>
+  const render = () =>
     root.render(
       h(
         DesignSystemProvider,
-        { env: 'test' },
+        { env: 'test', client },
         h(RoutedRunList, {
-          tick,
           offset: 0,
           onOffsetChange: vi.fn(),
           workflows: [],
@@ -579,7 +579,7 @@ it('29f3cb6-attention-row: preserves stage and actor with specific attention and
       nextOffset: null,
       total: 1,
     });
-    await act(async () => render(1));
+    await act(async () => refreshQueries(client));
     row = container.querySelector<HTMLElement>('.run-row')!;
     expect(row.textContent).toContain('Build · Waiting for an agent · Agent');
     expect(row.textContent).toContain('Approval requested');
@@ -641,7 +641,6 @@ it('applies all exact tag pairs before paging and clears the filter', async () =
       DesignSystemProvider,
       { env: 'test' },
       h(RoutedRunList, {
-        tick: 0,
         offset,
         onOffsetChange: setOffset,
         workflows: [],
@@ -774,9 +773,8 @@ it('uses an independent bounded active preview and adds recovery and completed r
       root.render(
         h(
           DesignSystemProvider,
-          { env: 'test' },
+          { env: 'test', client },
           h(RoutedRunList, {
-            tick: 0,
             offset: 100,
             onOffsetChange: changePage,
             workflows: [],
@@ -883,9 +881,8 @@ it('does not let an old workflow preview replace the current board', async () =>
     root.render(
       h(
         DesignSystemProvider,
-        { env: 'test' },
+        { env: 'test', client },
         h(RoutedRunList, {
-          tick: 0,
           offset: 0,
           onOffsetChange: vi.fn(),
           workflows: [],
@@ -950,13 +947,12 @@ it('coalesces refreshes while a board preview is loading and accepts the in-flig
   const container = document.createElement('div');
   document.body.append(container);
   const root = createRoot(container);
-  const render = (tick: number) =>
+  const render = () =>
     root.render(
       h(
         DesignSystemProvider,
-        { env: 'test' },
+        { env: 'test', client },
         h(RoutedRunList, {
-          tick,
           offset: 0,
           onOffsetChange: vi.fn(),
           workflows: [],
@@ -966,10 +962,14 @@ it('coalesces refreshes while a board preview is loading and accepts the in-flig
       ),
     );
   try {
-    await act(async () => render(0));
+    await act(async () => render());
     await showOverview(container);
-    await act(async () => render(1));
-    await act(async () => render(2));
+    await act(async () => {
+      void refreshQueries(client);
+    });
+    await act(async () => {
+      void refreshQueries(client);
+    });
     expect(pending).toHaveLength(2);
     await act(async () => pending.slice(0, 2).forEach((resolve) => resolve()));
     expect(container.textContent).toContain('Completed during refresh');
@@ -1040,9 +1040,8 @@ it('keeps automation attention visible in Overview even when exact tags match no
       root.render(
         h(
           DesignSystemProvider,
-          { env: 'test' },
+          { env: 'test', client },
           h(RoutedRunList, {
-            tick: 0,
             offset: 100,
             onOffsetChange: vi.fn(),
             workflows: [],
@@ -1098,7 +1097,6 @@ it('offers one History settings menu across List tabs and Overview in global and
               DesignSystemProvider,
               { env: 'test' },
               h(RoutedRunList, {
-                tick: 0,
                 offset: 0,
                 onOffsetChange: vi.fn(),
                 workflows: [],
@@ -1135,9 +1133,8 @@ it('offers one History settings menu across List tabs and Overview in global and
       root.render(
         h(
           DesignSystemProvider,
-          { env: 'test' },
+          { env: 'test', client },
           h(RoutedRunList, {
-            tick: 0,
             offset: 0,
             onOffsetChange: vi.fn(),
             workflows: [],
@@ -1176,7 +1173,6 @@ it.each(['Retention settings', 'Clean up history'])(
             DesignSystemProvider,
             { env: 'test' },
             h(RoutedRunList, {
-              tick: 0,
               offset: 0,
               onOffsetChange: vi.fn(),
               workflows: [{ id: 'selected', name: 'Selected workflow' }],
@@ -1262,7 +1258,6 @@ it('reuses the exact cached Runs page on remount while refreshing, retaining it 
       { env: 'test' },
       visible
         ? h(RoutedRunList, {
-            tick: 0,
             offset: 0,
             tab: 'active',
             workflowId,

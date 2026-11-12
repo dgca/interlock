@@ -419,7 +419,6 @@ function WorkflowRoute() {
           <Suspense fallback={<RunListSkeleton embedded />}>
             <RunList
               {...page}
-              tick={context.tick}
               act={context.act}
               workflows={context.workflows}
               workflowId={workflow.id}
@@ -441,11 +440,11 @@ function WorkflowRoute() {
 }
 
 function RunsRoute() {
-  const { tick, act, workflows } = useOutletContext<AppContext>();
+  const { act, workflows } = useOutletContext<AppContext>();
   const { page } = useRunPage();
   return (
     <Suspense fallback={<RunListSkeleton />}>
-      <RunList {...page} tick={tick} act={act} workflows={workflows} />
+      <RunList {...page} act={act} workflows={workflows} />
     </Suspense>
   );
 }
@@ -478,7 +477,7 @@ function runsReturnPath(
 
 function RunRoute() {
   const { runId } = useParams();
-  const { tick, act, onConnect } = useOutletContext<AppContext>();
+  const { act, onConnect } = useOutletContext<AppContext>();
   const navigate = useNavigate();
   const location = useLocation();
   const [search] = useSearchParams();
@@ -527,7 +526,6 @@ function RunRoute() {
       <RunInspector
         key={runId}
         id={runId!}
-        tick={tick}
         act={act}
         onConnect={onConnect}
         initialExecutionId={search.get('execution') ?? undefined}

@@ -14,7 +14,11 @@ import {
   type Workflow,
 } from '@interlock/core';
 import { Automations } from '../packages/ui/src/features/automations/Automations';
-import { trpc, useQueryClient } from '../packages/ui/src/lib/query';
+import {
+  refreshQueries,
+  trpc,
+  useQueryClient,
+} from '../packages/ui/src/lib/query';
 const rpc = vi.hoisted(() => ({
   list: vi.fn(),
   inspect: vi.fn(),
@@ -95,7 +99,7 @@ const inspection = (t = trigger()) => ({
   fires: { items: [], total: 0, nextOffset: null },
   deliveries: { items: [], total: 0, nextOffset: null },
 });
-let root: Root, container: HTMLDivElement, tick: number;
+let root: Root, container: HTMLDivElement;
 let queryClient: ReturnType<typeof useQueryClient>;
 function Layout() {
   queryClient = useQueryClient();
@@ -114,14 +118,12 @@ function Layout() {
           retry: vi.fn(),
         },
         workflows: [workflow],
-        tick,
       },
     }),
   );
 }
 beforeEach(() => {
   vi.clearAllMocks();
-  tick = 0;
   (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
   window.matchMedia = vi.fn().mockReturnValue({
     matches: false,
@@ -649,8 +651,7 @@ it("does not show another query's rows when a filter request fails and retries t
 it('retains rows on a failed refresh of the same query', async () => {
   await render('/automations');
   rpc.list.mockRejectedValueOnce(new Error('Refresh failed'));
-  tick++;
-  await render('/automations');
+  await act(async () => refreshQueries(queryClient));
   expect(document.body.textContent).toContain(
     'Could not refresh automations. Showing the last loaded data.',
   );

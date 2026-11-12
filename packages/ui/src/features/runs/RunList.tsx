@@ -34,7 +34,7 @@ import { runProjectionText } from './runProjectionText';
 import { useId, useRef, useState, type MouseEventHandler } from 'react';
 import { Link } from 'react-router';
 import { paths } from '../../routes/paths';
-import { trpc, useQuery, useRefreshOnTick } from '../../lib/query';
+import { trpc, useQuery } from '../../lib/query';
 import { HistoryCleanupDialog } from './HistoryCleanupDialog';
 import { RetentionSettingsDialog } from './RetentionSettings';
 import type { Action } from '../../lib/useActionFeedback';
@@ -48,7 +48,6 @@ import { runDisplayTitle } from '@interlock/core';
 const pageSize = 100;
 
 export function RunList({
-  tick,
   offset,
   onOffsetChange,
   tab,
@@ -63,7 +62,6 @@ export function RunList({
 }: {
   mode?: RunMode;
   onModeChange?: (mode: RunMode) => void;
-  tick: number;
   offset: number;
   onOffsetChange: (offset: number) => void;
   tab: RunTab;
@@ -154,19 +152,6 @@ export function RunList({
       { enabled: selectedMode === 'overview' },
     ),
   );
-  useRefreshOnTick(tick, runs.refetch, true, runs.isFetching);
-  useRefreshOnTick(
-    tick,
-    attention.refetch,
-    selectedMode === 'overview',
-    attention.isFetching,
-  );
-  useRefreshOnTick(
-    tick,
-    completed.refetch,
-    selectedMode === 'overview',
-    completed.isFetching,
-  );
   const page = runs.data;
   const read = workspaceRead('runs', runs, tagFilterTrigger);
   const counts = page?.counts;
@@ -242,7 +227,6 @@ export function RunList({
       {selectedMode === 'list' && tab === 'attention' && (
         <AutomationAlerts
           key={workflowId === undefined ? 'library' : `workflow:${workflowId}`}
-          tick={tick}
           workflowId={workflowId}
         />
       )}

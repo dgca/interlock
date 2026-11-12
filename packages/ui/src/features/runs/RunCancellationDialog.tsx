@@ -17,7 +17,7 @@ import { useEffect, useRef, useState } from 'react';
 import { StatusBadge } from '../../components/StatusBadge/StatusBadge';
 
 import { api, errorMessage } from '../../lib/api';
-import { trpc, useQueryClient } from '../../lib/query';
+import { refreshQueries, trpc, useQueryClient } from '../../lib/query';
 import styles from './RunCancellationDialog.module.css';
 
 type Preview = Awaited<ReturnType<typeof api.runs.previewCancellation.query>>;
@@ -26,15 +26,13 @@ const pageSize = 20;
 export function RunCancellationDialog({
   runId,
   onClose,
-  onCancelled,
   onOpen,
 }: {
   runId: string;
   onClose: () => void;
-  onCancelled: () => void;
   onOpen: (id: string) => void;
 }) {
-  const queryClient = useQueryClient();
+  const client = useQueryClient();
   const [includeDetached, setIncludeDetached] = useState(false);
   const [reason, setReason] = useState('');
   const [preview, setPreview] = useState<Preview>();
@@ -94,14 +92,10 @@ export function RunCancellationDialog({
         includeDetached,
         reason: reason.trim(),
       });
-      // Supersede reads that could have captured the tree before cancellation.
-      await Promise.all([
-        queryClient.cancelQueries(trpc.runs.pathFilter()),
-        queryClient.cancelQueries(trpc.work.pathFilter()),
-      ]);
-      void queryClient.invalidateQueries(trpc.runs.pathFilter());
-      void queryClient.invalidateQueries(trpc.work.pathFilter());
-      onCancelled();
+      // The acknowledged cancellation supersedes any pre-mutation snapshot.
+      const scopes = [trpc.runs.pathFilter(), trpc.work.pathFilter()];
+      await Promise.all(scopes.map((scope) => client.cancelQueries(scope)));
+      for (const scope of scopes) void refreshQueries(client, scope);
       onClose();
     } catch (failure) {
       setError(errorMessage(failure));

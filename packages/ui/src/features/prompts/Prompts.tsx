@@ -32,7 +32,7 @@ import type { Action } from '../../lib/useActionFeedback';
 import { useDraftDismissal } from '../../lib/useDraftDismissal';
 import { useEditorDraft } from '../../lib/useEditorDraft';
 import { api, errorMessage } from '../../lib/api';
-import { trpc, useQueryClient } from '../../lib/query';
+import { refreshQueries, trpc, useQueryClient } from '../../lib/query';
 import { paths } from '../../routes/paths';
 import layout from '../../components/PageLayout/PageLayout.module.css';
 
@@ -331,8 +331,9 @@ export function PromptEditor({
         setLoadError('Could not read the latest prompt revision. Try again.');
         return;
       }
-      void client.cancelQueries({ queryKey: key, exact: true });
+      const pending = client.getQueryState(key)?.fetchStatus === 'fetching';
       client.setQueryData(key, latest);
+      if (pending) void refreshQueries(client, { queryKey: key, exact: true });
       if (unconfirmedUpdate) {
         const submitted = promptContentSchema.safeParse(unconfirmedUpdate);
         setUnconfirmedUpdate(undefined);

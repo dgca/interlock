@@ -67,7 +67,7 @@ async function render() {
             {},
             h(
               Route,
-              { element: h(Outlet, { context: { tick: 0 } }) },
+              { element: h(Outlet, { context: {} }) },
               h(Route, { path: '/', element: h(VariableLibrary) }),
             ),
           ),

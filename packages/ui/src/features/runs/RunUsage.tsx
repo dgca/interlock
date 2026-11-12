@@ -12,7 +12,7 @@ import { useEffect, useState } from 'react';
 
 import type { UsageMetric } from '@interlock/core';
 import { errorMessage } from '../../lib/api';
-import { trpc, useQuery, useRefreshOnTick } from '../../lib/query';
+import { trpc, useQuery } from '../../lib/query';
 
 import styles from './RunUsage.module.css';
 
@@ -25,7 +25,7 @@ export function usageMetricText(metric: UsageMetric, scale = 1) {
   return metric.coverage === 'partial' ? `${value} · partial` : value;
 }
 
-export function RunUsage({ id, tick }: { id: string; tick: number }) {
+export function RunUsage({ id }: { id: string }) {
   const [includeDescendants, setIncludeDescendants] = useState(false);
   const [offset, setOffset] = useState(0);
   const [groupBy, setGroupBy] = useState<'node' | 'attempt'>('node');
@@ -42,7 +42,6 @@ export function RunUsage({ id, tick }: { id: string; tick: number }) {
       groupBy,
     }),
   );
-  useRefreshOnTick(tick, result.refetch, true, result.isFetching);
   const report = result.data;
   const error = result.error ? errorMessage(result.error) : '';
   const totals = report?.totals;

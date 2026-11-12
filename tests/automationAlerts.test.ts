@@ -3,6 +3,10 @@ import { act, createElement as h } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router';
 import { UiTestProvider as DesignSystemProvider } from './uiTestProvider';
+import {
+  createQueryClient,
+  refreshQueries,
+} from '../packages/ui/src/lib/query';
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import { RunList } from '../packages/ui/src/features/runs/RunList';
 const rpc = vi.hoisted(() => ({ attention: vi.fn(), summaries: vi.fn() }));
@@ -17,7 +21,9 @@ vi.mock('../packages/ui/src/lib/api', async () => {
   };
 });
 let root: Root, container: HTMLDivElement;
+let client: ReturnType<typeof createQueryClient>;
 beforeEach(() => {
+  client = createQueryClient();
   (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
   vi.clearAllMocks();
   window.matchMedia = vi.fn().mockReturnValue({
@@ -60,7 +66,7 @@ function button(name: string) {
 async function click(name: string) {
   await act(async () => button(name).click());
 }
-it('UI236-R1 retains attention offset across unrelated run ticks and clamps after the last page disappears', async () => {
+it('UI236-R1 retains attention offset across unrelated engine refreshes and clamps after the last page disappears', async () => {
   rpc.attention.mockImplementation(async ({ offset }: { offset: number }) => ({
     items: Array.from({ length: offset ? 4 : 20 }, (_, i) => ({
       triggerId: `t-${offset + i}`,
@@ -73,17 +79,16 @@ it('UI236-R1 retains attention offset across unrelated run ticks and clamps afte
     total: 24,
     nextOffset: offset ? null : 20,
   }));
-  const render = async (tick: number) =>
+  const render = async () =>
     act(async () =>
       root.render(
         h(
           DesignSystemProvider,
-          {},
+          { client },
           h(
             MemoryRouter,
             {},
             h(RunList, {
-              tick,
               offset: 0,
               onOffsetChange: vi.fn(),
               tab: 'attention',
@@ -94,17 +99,17 @@ it('UI236-R1 retains attention offset across unrelated run ticks and clamps afte
         ),
       ),
     );
-  await render(0);
+  await render();
   await click('More automation alerts');
   expect(document.body.textContent).toContain('Alert 23');
-  await render(1);
+  await act(async () => refreshQueries(client));
   expect(document.body.textContent).toContain('Alert 23');
   expect(button('Previous automation alerts')).toBeTruthy();
   expect(rpc.attention).toHaveBeenLastCalledWith(
     expect.objectContaining({ offset: 20 }),
   );
   rpc.attention.mockResolvedValue({ items: [], total: 2, nextOffset: null });
-  await render(2);
+  await act(async () => refreshQueries(client));
   expect(rpc.attention).toHaveBeenLastCalledWith(
     expect.objectContaining({ offset: 0 }),
   );

@@ -39,12 +39,7 @@ import {
   type VariableBinding,
 } from '@interlock/core';
 import { api, errorMessage } from '../../lib/api';
-import {
-  trpc,
-  useQuery,
-  useQueryClient,
-  useRefreshOnTick,
-} from '../../lib/query';
+import { trpc, useQuery, useQueryClient } from '../../lib/query';
 import { useDraftDismissal } from '../../lib/useDraftDismissal';
 import { useEditorDraft } from '../../lib/useEditorDraft';
 
@@ -77,14 +72,20 @@ function configReadOptions(id: string, revision: number) {
   ];
   return {
     queryKey,
-    queryFn: async (): Promise<ConfigValue> => {
-      const result = await api.variables.read.query({
-        action: 'config_value',
-        id,
-      });
+    staleTime: Infinity,
+    meta: { engineRefresh: false },
+    queryFn: async ({
+      signal,
+    }: {
+      signal: AbortSignal;
+    }): Promise<ConfigValue> => {
+      const result = await api.variables.read.query(
+        { action: 'config_value', id },
+        { signal },
+      );
       if (
         !('value' in result) ||
-        typeof result.id !== 'string' ||
+        result.id !== id ||
         typeof result.value !== 'string'
       )
         throw new Error('Could not read the config value.');
@@ -101,7 +102,6 @@ const statusName = {
 } as const;
 
 export function VariableLibrary() {
-  const { tick } = useOutletContext<AppContext>();
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [offset, setOffset] = useState(0);
@@ -114,12 +114,6 @@ export function VariableLibrary() {
       return page;
     },
   });
-  useRefreshOnTick(
-    tick,
-    result.refetch,
-    search === debouncedSearch,
-    result.isFetching,
-  );
   const data = result.data;
   const read = workspaceRead('variables', result, searchInput);
   const loading = !read.ready && !read.error;
@@ -266,7 +260,7 @@ export function VariableRoute() {
 function VariableEditor({ id }: { id: string }) {
   const creating = id === 'new';
   const formId = useId();
-  const { act, tick } = useOutletContext<AppContext>();
+  const { act } = useOutletContext<AppContext>();
   const navigate = useNavigate();
   const location = useLocation();
   const acknowledged = location.state?.savedVariable;
@@ -308,14 +302,12 @@ function VariableEditor({ id }: { id: string }) {
       : undefined;
   });
   const [configDraft, setConfigDraft] = useState<string>();
-  const [configError, setConfigError] = useState('');
   const [valueRequired, setValueRequired] = useState(false);
   const [error, setError] = useState('');
-  const [readError, setReadError] = useState('');
+  const [recoveryError, setRecoveryError] = useState('');
   const [loadingLatest, setLoadingLatest] = useState(false);
   const [unconfirmedWrite, setUnconfirmedWrite] = useState(false);
   const latestRequest = useRef<AbortController>(null);
-  const [refresh, setRefresh] = useState(0);
   const [offset, setOffset] = useState(0);
   const [deleting, setDeleting] = useState(false);
   const [rebind, setRebind] = useState<{
@@ -370,35 +362,58 @@ function VariableEditor({ id }: { id: string }) {
     setDescription(inspection.description);
     setKind(inspection.kind);
   };
+  const readEnabled = !creating && !dirty && !busy && !needsReload;
+  const inspection = useQuery({
+    ...trpc.variables.read.queryOptions({ action: 'inspect', id, offset }),
+    enabled: readEnabled,
+    select: (data) => {
+      if (!('dependencies' in data) || data.id !== id)
+        throw new Error('Could not read variable details.');
+      return data;
+    },
+  });
+  const observed = inspection.data;
+  const configRevision =
+    observed?.kind === 'config' && observed.availability !== 'locked'
+      ? observed.valueRevision
+      : undefined;
+  const configRead = useQuery({
+    ...configReadOptions(id, configRevision ?? 0),
+    enabled: readEnabled && typeof configRevision === 'number',
+  });
+  const readError =
+    recoveryError || (inspection.error ? errorMessage(inspection.error) : '');
+  const configError = configRead.error ? errorMessage(configRead.error) : '';
+  const retryDetails = () => void inspection.refetch({ cancelRefetch: false });
   useEffect(() => () => latestRequest.current?.abort(), []);
   useEffect(() => {
-    if (creating || dirty || busy || needsReload) return;
-    let active = true;
-    void queryClient
-      .fetchQuery(
-        trpc.variables.read.queryOptions({ action: 'inspect', id, offset }),
-      )
-      .then(async (r) => {
-        if (!active || !('dependencies' in r)) return;
-        let nextConfig: typeof config = undefined;
-        let configFailure = '';
-        try {
-          nextConfig = await readConfig(r);
-        } catch (e) {
-          configFailure = errorMessage(e);
-        }
-        if (!active) return;
-        applyInspection(r, nextConfig);
-        setConfigError(configFailure);
-        setReadError('');
-      })
-      .catch((e) => {
-        if (active) setReadError(errorMessage(e));
-      });
-    return () => {
-      active = false;
-    };
-  }, [id, creating, dirty, busy, needsReload, tick, refresh, offset, config]);
+    if (
+      !readEnabled ||
+      !observed ||
+      (saved && observed.revision < saved.revision)
+    )
+      return;
+    let nextConfig: typeof config;
+    if (configRevision === null) {
+      nextConfig =
+        config?.revision === null ? config : { revision: null, value: '' };
+    } else if (configRevision !== undefined) {
+      if (config?.revision === configRevision) nextConfig = config;
+      else if (configRead.data)
+        nextConfig = { revision: configRevision, value: configRead.data.value };
+      else if (configRead.error) nextConfig = config;
+      else return;
+    }
+    applyInspection(observed, nextConfig);
+  }, [
+    readEnabled,
+    observed,
+    configRevision,
+    configRead.data,
+    configRead.error,
+    config,
+    saved,
+  ]);
   useEffect(() => {
     if (replacingSecret) valueInput.current?.focus();
     else if (!busy && returnToValue.current) {
@@ -422,7 +437,7 @@ function VariableEditor({ id }: { id: string }) {
     const request = new AbortController();
     latestRequest.current = request;
     setLoadingLatest(true);
-    setReadError('');
+    setRecoveryError('');
     try {
       const input = { action: 'inspect' as const, id, offset };
       const latest = await api.variables.read.query(input, {
@@ -456,10 +471,9 @@ function VariableEditor({ id }: { id: string }) {
         return;
       }
       clear();
-      setConfigError('');
       applyInspection(latest, nextConfig);
     } catch (error) {
-      if (!request.signal.aborted) setReadError(errorMessage(error));
+      if (!request.signal.aborted) setRecoveryError(errorMessage(error));
     } finally {
       if (!request.signal.aborted) {
         latestRequest.current = null;
@@ -699,10 +713,7 @@ function VariableEditor({ id }: { id: string }) {
                 }
               >
                 {readError}
-                <Button
-                  variant="ghost"
-                  onClick={() => setRefresh((n) => n + 1)}
-                >
+                <Button variant="ghost" onClick={retryDetails}>
                   Retry loading
                 </Button>
               </Alert>
@@ -838,7 +849,7 @@ function VariableEditor({ id }: { id: string }) {
                 <Button
                   variant="ghost"
                   disabled={dirty || busy}
-                  onClick={() => setRefresh((n) => n + 1)}
+                  onClick={retryDetails}
                 >
                   Retry variable details
                 </Button>
@@ -907,7 +918,9 @@ function VariableEditor({ id }: { id: string }) {
                           autoComplete="off"
                           spellCheck={false}
                           rows={3}
-                          disabled={!config}
+                          disabled={
+                            !config || config.revision !== saved.valueRevision
+                          }
                           value={configDraft ?? config?.value ?? ''}
                           error={configError || undefined}
                           description={
@@ -917,7 +930,19 @@ function VariableEditor({ id }: { id: string }) {
                           }
                           onChange={(e) => setConfigDraft(e.target.value)}
                         />
-                        {config?.revision === null &&
+                        {configError && (
+                          <Button
+                            variant="ghost"
+                            disabled={dirty || busy}
+                            onClick={() =>
+                              void configRead.refetch({ cancelRefetch: false })
+                            }
+                          >
+                            Retry Config value
+                          </Button>
+                        )}
+                        {saved.valueRevision === null &&
+                          config?.revision === null &&
                           configDraft === undefined && (
                             <Button
                               className={styles.valueAction}
