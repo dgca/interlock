@@ -247,7 +247,7 @@ export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
               action: 'save',
               profile: data,
             });
-            await refresh();
+            void refresh();
           }}
         />
       )}

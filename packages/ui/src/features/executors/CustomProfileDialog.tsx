@@ -541,8 +541,8 @@ export function CustomProfileDialog({
         <Button variant="secondary" onClick={dismiss} disabled={busy}>
           Cancel
         </Button>
-        <Button variant="primary" type="submit" form={formId} disabled={busy}>
-          {busy ? 'Saving…' : isNew ? 'Add integration' : 'Save changes'}
+        <Button variant="primary" type="submit" form={formId} loading={busy}>
+          {isNew ? 'Add integration' : 'Save changes'}
         </Button>
       </ModalFooter>
     </Modal>

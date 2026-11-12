@@ -118,7 +118,7 @@ function BoardSettings({ initial }: { initial?: Settings }) {
                     .map((workflow) => [workflow.id, workflow.boardId ?? null]),
                 ),
               });
-              await refreshQueries(client);
+              void refreshQueries(client);
               if (finishSave(true)) void navigate(paths.board(board.id));
             } catch (error) {
               if (finishSave(false)) setError(errorMessage(error));
@@ -247,11 +247,10 @@ function BoardSettings({ initial }: { initial?: Settings }) {
               <Button
                 variant="primary"
                 type="submit"
-                disabled={
-                  busy || !name.trim() || (moves.length > 0 && !boards.data)
-                }
+                loading={busy}
+                disabled={!name.trim() || (moves.length > 0 && !boards.data)}
               >
-                {busy ? 'Saving…' : initial ? 'Save changes' : 'Create board'}
+                {initial ? 'Save changes' : 'Create board'}
               </Button>
             </Group>
           </Stack>

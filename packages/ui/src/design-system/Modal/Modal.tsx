@@ -32,6 +32,22 @@ export function Modal({
   returnFocusTo?: () => HTMLElement | null;
 }) {
   const dismissButton = useRef<HTMLButtonElement>(null);
+  const lastFocused = useRef<HTMLElement | null>(null);
+  const focusBeforeCover = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (covered) {
+      focusBeforeCover.current = lastFocused.current;
+      return;
+    }
+    const target = focusBeforeCover.current;
+    if (!target) return;
+    // Restore after Mantine reactivates its focus trap and runs initial focus.
+    const timer = window.setTimeout(() => {
+      focusBeforeCover.current = null;
+      if (target.isConnected) target.focus({ preventScroll: true });
+    });
+    return () => window.clearTimeout(timer);
+  }, [covered]);
   useEffect(() => {
     if (backLabel) dismissButton.current?.focus();
   }, [backLabel]);
@@ -81,6 +97,10 @@ export function Modal({
         icon: backLabel ? (
           <ArrowLeft size={18} aria-hidden="true" />
         ) : undefined,
+      }}
+      onFocusCapture={(event) => {
+        if (event.target instanceof HTMLElement)
+          lastFocused.current = event.target;
       }}
       inert={covered}
       trapFocus={!covered}

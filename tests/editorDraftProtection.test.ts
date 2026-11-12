@@ -12,6 +12,7 @@ const rpc = vi.hoisted(() => ({
   boardSettings: vi.fn(),
   createPrompt: vi.fn(),
   listPrompts: vi.fn(),
+  listWorkflows: vi.fn(),
   saveIntegration: vi.fn(),
   profiles: vi.fn(),
 }));
@@ -27,7 +28,7 @@ vi.mock('../packages/ui/src/lib/api', async () => {
         list: { query: empty },
         save: { mutate: rpc.saveBoard },
       },
-      workflows: { list: { query: empty } },
+      workflows: { list: { query: rpc.listWorkflows } },
       prompts: {
         list: { query: rpc.listPrompts },
         get: { query: async () => ({ usage: [] }) },
@@ -95,6 +96,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   rpc.boardSettings.mockResolvedValue(board);
   rpc.listPrompts.mockResolvedValue([]);
+  rpc.listWorkflows.mockResolvedValue([]);
   rpc.profiles.mockResolvedValue([profile]);
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
   vi.stubGlobal(
@@ -222,6 +224,16 @@ function warnsBeforeUnload() {
   return !window.dispatchEvent(new Event('beforeunload', { cancelable: true }));
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (error: Error) => void;
+  const promise = new Promise<T>((fulfill, fail) => {
+    resolve = fulfill;
+    reject = fail;
+  });
+  return { promise, resolve, reject };
+}
+
 function submitTwice(control: HTMLInputElement | HTMLTextAreaElement) {
   return act(async () => {
     const submit = () =>
@@ -247,10 +259,8 @@ it('guards Board column edits and holds navigation during a retryable save', asy
 
   await fill('Board name', 'Local board');
   expect(warnsBeforeUnload()).toBe(true);
-  let reject!: (error: Error) => void;
-  rpc.saveBoard.mockReturnValueOnce(
-    new Promise((_resolve, fail) => (reject = fail)),
-  );
+  const failedSave = deferred<never>();
+  rpc.saveBoard.mockReturnValueOnce(failedSave.promise);
   await submitTwice(field('Board name'));
   expect(rpc.saveBoard).toHaveBeenCalledTimes(1);
   expect(button('Cancel').disabled).toBe(true);
@@ -264,23 +274,23 @@ it('guards Board column edits and holds navigation during a retryable save', asy
   expect(router.state.location.pathname).toBe('/boards/board/settings');
   expect(discardDialog()).toBeUndefined();
 
-  await act(async () => reject(new Error('Board save failed')));
+  await act(async () => failedSave.reject(new Error('Board save failed')));
   expect(document.body.textContent).toContain('Board save failed');
   expect(field('Board name').value).toBe('Local board');
   expect(discardDialog()).toBeUndefined();
-  let acknowledge!: () => void;
-  rpc.saveBoard.mockReturnValueOnce(
-    new Promise((resolve) => {
-      acknowledge = () =>
-        resolve({ ...board, name: 'Local board', revision: 4 });
-    }),
-  );
+  const retry = deferred<typeof board>();
+  const refresh = deferred<[]>();
+  rpc.saveBoard.mockReturnValueOnce(retry.promise);
+  rpc.listWorkflows.mockReturnValueOnce(refresh.promise);
   await click('Save changes');
   await back();
   expect(router.state.location.pathname).toBe('/boards/board/settings');
-  await act(async () => acknowledge());
+  await act(async () =>
+    retry.resolve({ ...board, name: 'Local board', revision: 4 }),
+  );
   expect(router.state.location.pathname).toBe('/boards/board');
   await ready(() => expect(warnsBeforeUnload()).toBe(false));
+  await act(async () => refresh.resolve([]));
 });
 
 it('leaves a clean new Board freely and abandons its draft only after confirmation', async () => {
@@ -311,23 +321,25 @@ it('guards new prompt dismissal and Back, and opens the acknowledged prompt afte
   await fill('Name', prompt.name);
   await fill('Instructions', prompt.content);
   expect(warnsBeforeUnload()).toBe(true);
+  await act(async () => field('Instructions').focus());
   await escape();
   expect(discardDialog()).toBeDefined();
   await escape();
   expect(discardDialog()).toBeUndefined();
+  await ready(() => expect(document.activeElement).toBe(field('Instructions')));
   await click('Close dialog', formDialog());
   await click('Keep editing');
   await click('Cancel', formDialog());
   await click('Keep editing');
+  await act(async () => field('Instructions').focus());
   await back();
   expect(discardDialog()).toBeDefined();
   await click('Keep editing');
+  await ready(() => expect(document.activeElement).toBe(field('Instructions')));
   expect(field('Instructions').value).toBe(prompt.content);
 
-  let reject!: (error: Error) => void;
-  rpc.createPrompt.mockReturnValueOnce(
-    new Promise((_resolve, fail) => (reject = fail)),
-  );
+  const failedSave = deferred<never>();
+  rpc.createPrompt.mockReturnValueOnce(failedSave.promise);
   await submitTwice(field('Name'));
   expect(rpc.createPrompt).toHaveBeenCalledTimes(1);
   expect(button('Close dialog', formDialog()).disabled).toBe(true);
@@ -335,17 +347,20 @@ it('guards new prompt dismissal and Back, and opens the acknowledged prompt afte
   await back();
   expect(discardDialog()).toBeUndefined();
   expect(router.state.location.pathname).toBe('/prompts');
-  await act(async () => reject(new Error('Prompt save failed')));
+  await act(async () => failedSave.reject(new Error('Prompt save failed')));
   expect(document.body.textContent).toContain('Prompt save failed');
   expect(field('Instructions').value).toBe(prompt.content);
 
-  // A failed refresh must not hide an acknowledged creation.
+  const refresh = deferred<never>();
   rpc.createPrompt.mockResolvedValue(prompt);
-  rpc.listPrompts.mockRejectedValue(new Error('Prompt refresh failed'));
+  rpc.listPrompts.mockReturnValueOnce(refresh.promise);
   await click('Create prompt');
   expect(router.state.location.pathname).toBe('/prompts/new');
   expect(warnsBeforeUnload()).toBe(false);
   await ready(() => expect(field('Instructions').value).toBe(prompt.content));
+  // The acknowledged prompt remains available after the background read fails.
+  await act(async () => refresh.reject(new Error('Prompt refresh failed')));
+  expect(field('Instructions').value).toBe(prompt.content);
 });
 
 it('discards a custom integration draft on confirmed tab navigation and keeps a failed edit available', async () => {
@@ -371,24 +386,37 @@ it('discards a custom integration draft on confirmed tab navigation and keeps a 
   await click('Edit defaults for Test integration');
   await click('Edit integration');
   await fill('Status command', 'local-status');
+  await act(async () => {
+    const command = field('Status command');
+    command.closest('details')!.open = true;
+    command.focus();
+  });
   await escape();
   expect(discardDialog()).toBeDefined();
   await click('Keep editing');
-  let reject!: (error: Error) => void;
-  rpc.saveIntegration.mockReturnValueOnce(
-    new Promise((_resolve, fail) => (reject = fail)),
+  await ready(() =>
+    expect(document.activeElement).toBe(field('Status command')),
   );
+  const failedSave = deferred<never>();
+  rpc.saveIntegration.mockReturnValueOnce(failedSave.promise);
   await submitTwice(field('Name'));
   expect(rpc.saveIntegration).toHaveBeenCalledTimes(1);
   await back();
   expect(router.state.location.pathname).toBe('/settings/ai');
   expect(discardDialog()).toBeUndefined();
-  await act(async () => reject(new Error('Integration save failed')));
+  await act(async () =>
+    failedSave.reject(new Error('Integration save failed')),
+  );
   expect(document.body.textContent).toContain('Integration save failed');
   expect(field('Status command').value).toBe('local-status');
+  const refresh = deferred<(typeof profile)[]>();
   rpc.saveIntegration.mockResolvedValue(undefined);
+  rpc.profiles.mockReturnValueOnce(refresh.promise);
   await click('Save changes', formDialog());
   expect(document.querySelector('[role="dialog"]')).toBeNull();
   expect(router.state.location.pathname).toBe('/settings/ai');
   expect(warnsBeforeUnload()).toBe(false);
+  await act(async () => router.navigate('/boards'));
+  expect(router.state.location.pathname).toBe('/boards');
+  await act(async () => refresh.resolve([profile]));
 });

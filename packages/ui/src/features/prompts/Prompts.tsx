@@ -212,16 +212,14 @@ function NewPromptDialog({
         <ModalBody>
           <form
             id={formId}
-            onSubmit={async (e) => {
+            onSubmit={(e) => {
               e.preventDefault();
               if (!beginSave()) return;
               setError('');
-              let saved: SavedPrompt | undefined;
-              await act(
+              void act(
                 async () => {
                   const created = await api.prompts.create.mutate(draft);
-                  saved = created;
-                  await queryClient.cancelQueries(
+                  void queryClient.cancelQueries(
                     trpc.prompts.list.queryFilter(),
                   );
                   queryClient.setQueryData(
@@ -231,14 +229,16 @@ function NewPromptDialog({
                         ? prompts
                         : [...prompts, created],
                   );
+                  if (finishSave(true)) {
+                    onClose();
+                    void navigate(paths.prompt(created.id));
+                  }
                 },
                 'Prompt created.',
-                setError,
+                (message) => {
+                  if (finishSave(false)) setError(message);
+                },
               );
-              if (finishSave(Boolean(saved)) && saved) {
-                onClose();
-                void navigate(paths.prompt(saved.id));
-              }
             }}
           >
             <fieldset disabled={busy} className={styles.fields}>
