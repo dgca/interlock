@@ -461,19 +461,38 @@ export function RunInspector({
       });
     else onOpen(child.id, executionId);
   };
-  const assignmentScope = (w: (typeof allWork)[number]) => {
-    if (w.runId === run.id) return undefined;
-    const item = progress.nodes[w.nodeId]?.items.find(
-      (item) => item.run.id === w.runId,
-    );
-    const owner = runIndex.get(w.runId);
+  const executionScope = (runId: string, nodeId: string) => {
+    if (runId === run.id) return undefined;
+    const owner = runIndex.get(runId);
     if (owner?.parallelBranch) return owner.parallelBranch.key;
-    return owner?.batchNodeId && item
-      ? `Item ${item.index + 1}`
-      : w.runId !== run.id
-        ? `${owner?.workflowName ?? 'Child run'} · ${w.runId.slice(0, 8)}`
-        : undefined;
+    if (owner?.batchNodeId) {
+      const index =
+        owner.batchItemIndex ??
+        progress.nodes[nodeId]?.items.find((item) => item.run.id === runId)
+          ?.index;
+      if (index !== undefined) return `Item ${index + 1}`;
+    }
   };
+  const assignmentScope = (work: WorkRequest) =>
+    executionScope(work.runId, work.nodeId) ??
+    (work.runId !== run.id
+      ? `${runIndex.get(work.runId)?.workflowName ?? 'Child run'} · ${work.runId.slice(0, 8)}`
+      : undefined);
+  const humanReviewItems = humanRequests.map(({ runId, execution }) => {
+    const scope =
+      executionScope(runId, execution.nodeId) ??
+      (runId !== run.id ? runIndex.get(runId)?.workflowName : undefined);
+    return {
+      runId,
+      executionId: execution.id,
+      label: [requestActionLabel('human'), execution.label, scope]
+        .filter(Boolean)
+        .join(' · '),
+    };
+  });
+  const reviewLabelCounts = new Map<string, number>();
+  for (const { label } of humanReviewItems)
+    reviewLabelCounts.set(label, (reviewLabelCounts.get(label) ?? 0) + 1);
   const reviewWork = (w: (typeof allWork)[number]) => {
     const owner = runIndex.get(w.runId);
     if (
@@ -820,16 +839,15 @@ export function RunInspector({
                         </Menu.Item>
                       );
                     })}
-                    {humanRequests.map(({ runId, execution }) => (
+                    {humanReviewItems.map(({ runId, executionId, label }) => (
                       <Menu.Item
-                        key={execution.id}
+                        key={executionId}
                         component={Link}
-                        to={humanReviewHref(runId, execution.id)}
+                        to={humanReviewHref(runId, executionId)}
                       >
-                        {requestActionLabel('human')} · {execution.label}
-                        {runId !== run.id
-                          ? ` · ${runIndex.get(runId)?.workflowName ?? runId.slice(0, 8)}`
-                          : ''}
+                        {label}
+                        {(reviewLabelCounts.get(label) ?? 0) > 1 &&
+                          ` · ${executionId}`}
                       </Menu.Item>
                     ))}
                   </ScrollArea.Autosize>

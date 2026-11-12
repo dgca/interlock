@@ -1,4 +1,5 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useQueries } from '@tanstack/react-query';
 import {
   Link,
   useNavigate,
@@ -362,7 +363,29 @@ function StageColumn({
   rememberOpener: (element: HTMLAnchorElement) => void;
 }) {
   const pages = Math.max(1, runOffset(search.get(`page:${column.id}`)));
-  const visiblePages = Math.min(pages, Math.ceil(column.total / pageSize));
+  const visiblePages = Math.min(
+    pages,
+    Math.max(1, Math.ceil(column.total / pageSize)),
+  );
+  const [mountedDepth, setMountedDepth] = useState(2);
+  const depth = Math.min(visiblePages, mountedDepth);
+  const extraPages = useQueries({
+    queries: Array.from({ length: depth - 1 }, (_, page) =>
+      trpc.boards.get.queryOptions({
+        ...filters,
+        column: column.id,
+        offset: (page + 1) * pageSize,
+        limit: pageSize,
+      }),
+    ),
+  });
+  const ready = extraPages.every((page) => page.isSuccess && !page.isFetching);
+  useEffect(() => {
+    // Restore the requested depth one bounded read at a time.
+    if (mountedDepth > Math.max(2, visiblePages))
+      setMountedDepth(Math.max(2, visiblePages));
+    else if (ready && depth < visiblePages) setMountedDepth(depth + 1);
+  }, [depth, mountedDepth, ready, visiblePages]);
   const card = (item: Card) => (
     <BoardCard
       key={item.id}
@@ -382,46 +405,38 @@ function StageColumn({
       </Group>
       <Stack gap="xs">
         {column.cards.map(card)}
-        {Array.from({ length: Math.max(0, visiblePages - 1) }, (_, page) => (
-          <MoreCards
-            key={page}
-            filters={filters}
-            column={column.id}
-            offset={(page + 1) * pageSize}
-            card={card}
-          />
+        {extraPages.map((page, index) => (
+          <Fragment key={index}>
+            {page.data?.columns
+              .find((item) => item.id === column.id)
+              ?.cards.map(card)}
+            {page.error ? (
+              <Stack gap="xs">
+                <ActionError message={errorMessage(page.error)} />
+                <Button
+                  variant="secondary"
+                  onClick={() => void page.refetch({ cancelRefetch: false })}
+                >
+                  Retry page {index + 2} in {column.name}
+                </Button>
+              </Stack>
+            ) : (
+              !page.data && <Loader size="xs" aria-label="Loading more cards" />
+            )}
+          </Fragment>
         ))}
         {pages * pageSize < column.total && (
-          <Button variant="ghost" onClick={() => onMore(pages + 1)}>
+          <Button
+            variant="ghost"
+            disabled={!ready || depth < visiblePages}
+            onClick={() => onMore(pages + 1)}
+          >
             Load more in {column.name}
           </Button>
         )}
       </Stack>
     </section>
   );
-}
-function MoreCards({
-  filters,
-  column,
-  offset,
-  card,
-}: {
-  filters: { id: string; status: BoardStatus; workflowId?: string };
-  column: string;
-  offset: number;
-  card: (item: Card) => React.ReactNode;
-}) {
-  const query = useQuery(
-    trpc.boards.get.queryOptions({
-      ...filters,
-      column,
-      offset,
-      limit: pageSize,
-    }),
-  );
-  if (query.error) return <ActionError message={errorMessage(query.error)} />;
-  if (!query.data) return <Loader size="xs" aria-label="Loading more cards" />;
-  return query.data.columns.find((item) => item.id === column)?.cards.map(card);
 }
 
 function BoardCard({

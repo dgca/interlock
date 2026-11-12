@@ -478,21 +478,26 @@ function RunRoute() {
       mode: returnMode,
       returnTo,
     });
-  // A request opened from its own inspector should keep the originating
-  // collection without nesting request and inspector URLs on every visit.
+  // Keep the source collection when coming back from a request. Each nested
+  // return path is validated and shorter than the URL that contains it.
   const requestOrigin = (() => {
     if (explicitReturn?.label !== 'Back to request')
       return explicitReturn?.path;
-    const url = new URL(explicitReturn.path, 'https://interlock.invalid');
-    if (url.pathname.startsWith('/boards/')) {
-      url.searchParams.delete('request');
-      return url.pathname + url.search + url.hash;
+    let original: ReturnType<typeof runReturnLocation> = explicitReturn;
+    while (original) {
+      if (
+        original.label === 'Back to runs' ||
+        original.label === 'Back to board'
+      )
+        return original.path;
+      const url = new URL(original.path, 'https://interlock.invalid');
+      if (url.pathname.startsWith('/boards/')) {
+        url.searchParams.delete('request');
+        return url.pathname + url.search + url.hash;
+      }
+      original = runReturnLocation(url.searchParams.get('returnTo'));
     }
-    const original = runReturnLocation(url.searchParams.get('returnTo'));
-    return original?.label === 'Back to runs' ||
-      original?.label === 'Back to board'
-      ? original.path
-      : '';
+    return '';
   })();
   return (
     <Suspense fallback={<RouteLoading label="Loading run…" />}>

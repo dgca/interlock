@@ -29,6 +29,51 @@ const address = (page: Page) => {
   return pathname + search;
 };
 
+const tags = { purpose: 'navigation' };
+const branches = ['Plan', 'Rollout'];
+
+function seedBoard(
+  app: Awaited<ReturnType<typeof openBrowserApp>>,
+  count: number,
+) {
+  const board = app.engine.boards.save({
+    name: 'Fixture board',
+    columns: [{ name: 'Review' }],
+    workflowIds: [],
+  });
+  const definition = parallelDefinition({ keys: branches });
+  for (const [index, branch] of branches.entries()) {
+    definition.nodes[2 + index] = nodeSchema.parse({
+      id: `r${index}`,
+      parallelId: 'parallel',
+      parallelBranchId: `r${index}`,
+      kind: 'input',
+      label: 'Review details',
+      boardColumnId: board.columns[0].id,
+      humanInput: {
+        question: `Review ${branch}?`,
+        answer: { kind: 'text' },
+      },
+    });
+  }
+  const workflow = app.engine.create('Fixture workflow', '', definition);
+  app.engine.publish(workflow.id);
+  app.engine.boards.assign({
+    workflowId: workflow.id,
+    boardId: board.id,
+    expectedBoardId: null,
+  });
+  for (let index = 0; index < count; index++) {
+    app.engine.startSummary(workflow.id, {}, undefined, 1, undefined, {
+      title: `Fixture run ${index + 1}`,
+      tags,
+    });
+  }
+  return { board, workflow };
+}
+
+const requestAt = (url: URL) => JSON.parse(url.searchParams.get('request')!);
+
 it.each([1440, 900, 390])(
   'opens exact run and request destinations and returns to their source at %dpx',
   async (width) => {
@@ -39,40 +84,7 @@ it.each([1440, 900, 390])(
     const page = await context.newPage();
     page.setDefaultTimeout(5000);
     try {
-      const board = app.engine.boards.save({
-        name: 'Fixture board',
-        columns: [{ name: 'Review' }],
-        workflowIds: [],
-      });
-      const definition = parallelDefinition();
-      for (const [index, label] of ['Plan', 'Rollout'].entries()) {
-        definition.nodes[2 + index] = nodeSchema.parse({
-          id: `r${index}`,
-          parallelId: 'parallel',
-          parallelBranchId: `r${index}`,
-          kind: 'input',
-          label,
-          boardColumnId: board.columns[0].id,
-          humanInput: {
-            question: `Review ${label}?`,
-            answer: { kind: 'text' },
-          },
-        });
-      }
-      const workflow = app.engine.create('Fixture workflow', '', definition);
-      app.engine.publish(workflow.id);
-      app.engine.boards.assign({
-        workflowId: workflow.id,
-        boardId: board.id,
-        expectedBoardId: null,
-      });
-      const tags = { purpose: 'navigation' };
-      for (let index = 0; index < 31; index++) {
-        app.engine.startSummary(workflow.id, {}, undefined, 1, undefined, {
-          title: `Fixture run ${index + 1}`,
-          tags,
-        });
-      }
+      const { board, workflow } = seedBoard(app, 31);
 
       await page.goto(
         `${app.url}${paths.board(board.id)}?workflow=${workflow.id}&status=attention`,
@@ -97,6 +109,42 @@ it.each([1440, 900, 390])(
         .getByRole('heading', { name: runTitle, exact: true })
         .waitFor();
       expect(new URL(inspector.url()).pathname).toBe(`/runs/${runId}`);
+      await inspector.getByRole('button', { name: 'Review 2 items' }).click();
+      const targetByBranch = new Map(
+        requests.map(({ target }) => [
+          app.engine.run(target.runId).parallelBranch!.key,
+          target,
+        ]),
+      );
+      for (const branch of branches) {
+        const item = inspector.getByRole('menuitem', {
+          name: `Review request · Review details · ${branch}`,
+          exact: true,
+        });
+        expect(
+          requestAt(new URL((await item.getAttribute('href'))!, app.url)),
+        ).toEqual(targetByBranch.get(branch));
+      }
+      const selected = targetByBranch.get(branches[0])!;
+      await inspector
+        .getByRole('menuitem', {
+          name: `Review request · Review details · ${branches[0]}`,
+        })
+        .click();
+      await inspector.getByRole('link', { name: 'Open run' }).click();
+      await inspector
+        .getByRole('link', { name: 'Review request', exact: true })
+        .first()
+        .click();
+      expect(requestAt(new URL(inspector.url()))).toEqual(selected);
+      const repeatUrl = address(inspector);
+      await inspector.getByRole('link', { name: 'Open run' }).click();
+      await inspector
+        .getByRole('link', { name: 'Review request', exact: true })
+        .first()
+        .click();
+      expect(address(inspector)).toBe(repeatUrl);
+      await inspector.getByRole('button', { name: 'Back to run' }).click();
       await inspector.getByRole('button', { name: 'Back to board' }).click();
       expect(address(inspector)).toBe(sourceBoard);
       await expect
@@ -114,20 +162,21 @@ it.each([1440, 900, 390])(
         .getByRole('link', { name: 'Review request' });
       const request = await openInNewTab(page, review);
       await request.getByRole('button', { name: 'Switch request' }).click();
-      expect(
-        JSON.parse(new URL(request.url()).searchParams.get('request')!),
-      ).toEqual(requests[0].target);
+      expect(requestAt(new URL(request.url()))).toEqual(requests[0].target);
       const next = await openInNewTab(
         request,
-        request.getByRole('menuitem', { name: requests[1].label }),
+        request.getByRole('menuitem', {
+          name: `${requests[1].label} · ${requests[1].target.executionId!.slice(0, 8)}`,
+          exact: true,
+        }),
       );
       const requestUrl = address(next);
       await next
-        .getByRole('heading', { name: `Review ${requests[1].label}?` })
+        .getByRole('heading', {
+          name: `Review ${app.engine.run(requests[1].target.runId).parallelBranch!.key}?`,
+        })
         .waitFor();
-      expect(
-        JSON.parse(new URL(next.url()).searchParams.get('request')!),
-      ).toEqual(requests[1].target);
+      expect(requestAt(new URL(next.url()))).toEqual(requests[1].target);
       await next.getByRole('link', { name: 'Open run' }).click();
       await next
         .getByRole('region', { name: 'Human input', exact: true })
@@ -180,3 +229,61 @@ it.each([1440, 900, 390])(
     }
   },
 );
+
+it('restores large Board depths sequentially and stops at a failed page', async () => {
+  const app = await openBrowserApp();
+  const page = await browser.newPage();
+  page.setDefaultTimeout(5000);
+  let releaseFirstPage!: () => void;
+  const firstPageHeld = new Promise<void>((resolve) => {
+    releaseFirstPage = resolve;
+  });
+  try {
+    const { board } = seedBoard(app, 61);
+    const offsets: number[] = [];
+    await page.route(
+      (url) =>
+        url.pathname.slice('/trpc/'.length).split(',').includes('boards.get'),
+      async (route) => {
+        const url = new URL(route.request().url());
+        const procedures = url.pathname.slice('/trpc/'.length).split(',');
+        const input = JSON.parse(url.searchParams.get('input')!) as Record<
+          string,
+          { column?: string; offset?: number; limit: number }
+        >;
+        const previousCount = offsets.length;
+        procedures.forEach((procedure, index) => {
+          const args = input[index];
+          if (procedure !== 'boards.get' || args.column !== board.columns[0].id)
+            return;
+          expect(args.limit).toBe(30);
+          offsets.push(args.offset!);
+        });
+        if (!previousCount && offsets.length) {
+          await firstPageHeld;
+          await route.abort('failed');
+        } else await route.continue();
+      },
+    );
+    const depth = new URLSearchParams({
+      [`page:${board.columns[0].id}`]: String(Number.MAX_SAFE_INTEGER),
+    });
+    const source = `${paths.board(board.id)}?${depth}`;
+    await page.goto(app.url + source);
+    const cards = page.getByRole('link', { name: /^Fixture run / });
+    await expect.poll(() => offsets).toEqual([30]);
+    expect(await cards.count()).toBe(30);
+    releaseFirstPage();
+    const retry = page.getByRole('button', { name: 'Retry page 2 in Review' });
+    await retry.waitFor();
+    expect(offsets).toEqual([30]);
+    await retry.click();
+    await expect.poll(() => cards.count()).toBe(61);
+    expect(offsets).toEqual([30, 30, 60]);
+    expect(address(page)).toBe(source);
+  } finally {
+    releaseFirstPage();
+    await page.close();
+    await app.close();
+  }
+});
