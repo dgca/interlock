@@ -180,6 +180,7 @@ let workflow: Workflow & { layoutRevision?: number };
 let layoutRevision: number;
 let layoutPositions: WorkflowPositions;
 const saved = vi.fn();
+const publicationChecked = vi.fn((_id: string, version: number) => version);
 const opened = vi.fn();
 const reportOpened = vi.fn();
 const onDirty = vi.fn();
@@ -212,6 +213,7 @@ const render = async (visible = true, deletingOutside = false) => {
           onReport: reportOpened,
           onRun: vi.fn(),
           onSaved: saved,
+          onPublicationChecked: publicationChecked,
           onDirty,
           act: runAction,
         })
@@ -648,10 +650,8 @@ it('checks a lost publication response without replacing a newer Raw draft', asy
     { id: workflow.id },
     expect.objectContaining({ signal: expect.anything() }),
   );
-  expect(saved).toHaveBeenLastCalledWith(
-    expect.objectContaining({ latestVersion: 1 }),
-    'read',
-  );
+  expect(publicationChecked).toHaveBeenLastCalledWith(workflow.id, 1);
+  expect(saved).not.toHaveBeenCalled();
   expect(rawEditor.props.value).toBe('{newer raw edit');
   expect(rpc.publish).toHaveBeenCalledTimes(1);
 });

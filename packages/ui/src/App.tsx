@@ -33,10 +33,8 @@ export type AppContext = {
   onDirty: (dirty: boolean) => void;
   onEditorGuard: (guard: EditorGuard) => void;
   editorNavigationBlocked: boolean;
-  onSaved: (
-    workflow: Workflow & { layoutRevision?: number },
-    source?: 'read',
-  ) => Workflow | void;
+  onSaved: (workflow: Workflow) => void;
+  onPublicationChecked: (workflowId: string, latestVersion: number) => number;
   onRun: (workflow: Workflow) => void;
   onConnect?: () => void;
 };
@@ -245,24 +243,10 @@ export function App() {
     onDirty: setEditorDirty,
     onEditorGuard,
     editorNavigationBlocked,
-    onSaved: (w, source) => {
-      const key = trpc.workflows.list.queryKey();
-      if (source === 'read') {
-        const cached = queryClient
-          .getQueryData(key)
-          ?.find((item) => item.id === w.id);
-        if (
-          cached &&
-          (cached.draftRevision > w.draftRevision ||
-            cached.latestVersion > w.latestVersion ||
-            (w.layoutRevision !== undefined &&
-              cached.layoutRevision > w.layoutRevision))
-        )
-          return cached;
-      }
+    onSaved: (w) => {
       // Cancellation is synchronous; earlier list reads cannot replace this acknowledgement.
       void queryClient.cancelQueries(trpc.workflows.list.queryFilter());
-      queryClient.setQueryData(key, (all = []) =>
+      queryClient.setQueryData(trpc.workflows.list.queryKey(), (all = []) =>
         all.some((old) => old.id === w.id)
           ? all.map((old) =>
               old.id === w.id
@@ -271,7 +255,43 @@ export function App() {
             )
           : [...all, { draftMatchesLatest: null, layoutRevision: 0, ...w }],
       );
-      return w;
+    },
+    onPublicationChecked: (workflowId, latestVersion) => {
+      const key = trpc.workflows.list.queryKey();
+      const cached = queryClient
+        .getQueryData(key)
+        ?.find((item) => item.id === workflowId);
+      if (!cached || cached.latestVersion >= latestVersion)
+        return cached?.latestVersion ?? latestVersion;
+
+      const mergeVersion = () =>
+        queryClient.setQueryData(key, (all) => {
+          if (
+            !all?.some(
+              (item) =>
+                item.id === workflowId && item.latestVersion < latestVersion,
+            )
+          )
+            return undefined;
+          return all.map((item) =>
+            item.id === workflowId
+              ? { ...item, latestVersion, draftMatchesLatest: null }
+              : item,
+          );
+        });
+      const pending =
+        queryClient.getQueryState(key)?.fetchStatus === 'fetching';
+      mergeVersion();
+      if (pending) {
+        // The pending snapshot may contain newer catalog data and an older version.
+        const filter = { queryKey: key, exact: true };
+        const options = { cancelRefetch: false };
+        void queryClient.refetchQueries(filter, options).then(() => {
+          mergeVersion();
+          return queryClient.refetchQueries(filter, options);
+        });
+      }
+      return latestVersion;
     },
     onRun: setRunDialog,
     onConnect: features.connectAgent ? () => setConnectDialog(true) : undefined,

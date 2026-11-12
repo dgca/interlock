@@ -13,9 +13,13 @@ afterAll(async () => {
   await browser?.close();
 });
 
-it.each([1440, 900, 390])(
-  'guards and reconciles a clean workflow publication at %dpx',
-  async (width) => {
+it.each([
+  [1440, 'settled metadata'],
+  [900, 'pending metadata'],
+  [390, 'a newer version'],
+] as const)(
+  'guards and reconciles a clean workflow publication at %dpx with %s',
+  async (width, scenario) => {
     const app = await openBrowserApp();
     const page = await browser.newPage({ viewport: { width, height: 900 } });
     page.setDefaultTimeout(5000);
@@ -31,6 +35,14 @@ it.each([1440, 900, 390])(
     const staleCheck = new Promise<void>((resolve) => {
       capturedCheck = resolve;
     });
+    let releaseCatalog!: () => void;
+    const holdCatalog = new Promise<void>((resolve) => {
+      releaseCatalog = resolve;
+    });
+    let capturedCatalog!: (ordinal: number) => void;
+    const pendingCatalog = new Promise<number>((resolve) => {
+      capturedCatalog = resolve;
+    });
     try {
       const workflow = app.engine.create(
         'Draft for review',
@@ -39,6 +51,26 @@ it.each([1440, 900, 390])(
       );
       const path = `/workflows/${workflow.id}`;
       let publications = 0;
+      let pauseCatalog = false;
+      let catalogReads = 0;
+      await page.route(
+        (url) =>
+          url.pathname.startsWith('/trpc/') &&
+          url.pathname
+            .slice('/trpc/'.length)
+            .split(',')
+            .includes('workflows.list'),
+        async (route) => {
+          const ordinal = ++catalogReads;
+          if (!pauseCatalog) return route.continue();
+          pauseCatalog = false;
+          const response = await route.fetch();
+          capturedCatalog(ordinal);
+          await holdCatalog;
+          await route.fulfill({ response });
+          await response.dispose();
+        },
+      );
       await page.route(
         (url) => url.pathname === '/trpc/workflows.publish',
         async (route) => {
@@ -98,21 +130,35 @@ it.each([1440, 900, 390])(
       failCheck = false;
       await check.click();
       await staleCheck;
-      app.engine.update(workflow.id, { name: 'Newer workflow' });
-      app.engine.publish(workflow.id);
+      const renamed = app.engine.update(workflow.id, {
+        name: 'Newer workflow',
+      });
+      expect(renamed.draftRevision).toBe(workflow.draftRevision);
+      expect(renamed.latestVersion).toBe(1);
+      if (scenario === 'a newer version') app.engine.publish(workflow.id);
+      pauseCatalog = scenario === 'pending metadata';
       await page.evaluate(() =>
         document.dispatchEvent(new Event('visibilitychange')),
       );
       const newerWorkflow = page.getByText('Newer workflow', { exact: true });
-      await newerWorkflow.waitFor();
+      const heldRead =
+        scenario === 'pending metadata' ? await pendingCatalog : undefined;
+      if (heldRead === undefined) await newerWorkflow.waitFor();
       releaseCheck();
-      await page.getByText('Published version v2 is available.').waitFor();
-      expect(await newerWorkflow.isVisible()).toBe(true);
+      const observedVersion = scenario === 'a newer version' ? 2 : 1;
+      await page
+        .getByText(`Published version v${observedVersion} is available.`)
+        .waitFor();
+      releaseCatalog();
+      await newerWorkflow.waitFor();
+      if (heldRead !== undefined)
+        await expect.poll(() => catalogReads).toBeGreaterThan(heldRead);
       expect(publications).toBe(1);
       expect(new URL(page.url()).pathname).toBe(path);
     } finally {
       releasePublish();
       releaseCheck();
+      releaseCatalog();
       await page.close();
       await app.close();
     }

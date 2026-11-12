@@ -13,7 +13,6 @@ import {
 } from '../../design-system';
 
 import { WorkflowPauseButton, PauseBanner } from '../pauses/PauseControls';
-import type { AppContext } from '../../App';
 import { isConfirmedWriteRejection } from '../../lib/isConfirmedWriteRejection';
 import type { Action } from '../../lib/useActionFeedback';
 import { useEditorDraft } from '../../lib/useEditorDraft';
@@ -159,6 +158,7 @@ export function WorkflowEditor({
   onBack,
   onRun,
   onSaved,
+  onPublicationChecked,
   act,
   onDirty,
   onDeleted = onBack,
@@ -174,7 +174,8 @@ export function WorkflowEditor({
   promptsRead?: WorkspaceRead;
   onBack: () => void;
   onRun: (workflow: Workflow) => void;
-  onSaved: AppContext['onSaved'];
+  onSaved: (w: Workflow) => void;
+  onPublicationChecked: (workflowId: string, latestVersion: number) => number;
   act: Action;
   onDirty: (dirty: boolean) => void;
   onDeleted?: () => void;
@@ -519,10 +520,9 @@ export function WorkflowEditor({
         throw new Error(
           'Could not read the current published version. Try again.',
         );
-      const cached = onSaved(current, 'read');
-      const latestVersion = Math.max(
+      const latestVersion = onPublicationChecked(
+        workflow.id,
         current.latestVersion,
-        cached?.latestVersion ?? 0,
       );
       setPublicationNotice(
         latestVersion > unconfirmedVersion
