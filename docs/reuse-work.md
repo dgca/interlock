@@ -13,6 +13,12 @@ The starter picker offers published procedures you can add to your library. The 
 
 Use a **Workflow** step to invoke a published procedure from another workflow. For example, several procedures can share a review workflow instead of maintaining separate copies of its steps. Choose whether the caller waits for its result or starts it independently.
 
+## Set up a board during import
+
+When an import includes board suggestions, open **Board setup** in the preview. Choose **Create suggested board** to review the proposed columns, or **Use existing board** to choose a destination column for each stage. **Skip board setup** keeps any existing local board membership and stage mappings.
+
+For CLI imports, use the [workflow import commands](cli.md#workflows) to preview suggestions and pass a setup file. The file contains a `requestId` and a `choices` array. Each choice identifies a `suggestionId` and includes `expectedBoards`, keyed by workflow ID with the current board ID or `null`. Use `action: "create"` to create the suggested board. For `action: "existing"`, also supply `boardId`, `expectedRevision`, and `stageColumns`, keyed first by workflow ID and then by stage ID.
+
 ## Share instructions
 
 Saved **Prompts** hold instructions that Agent steps can reuse. Keep shared review criteria in a saved prompt and describe the specific assignment on each step.
