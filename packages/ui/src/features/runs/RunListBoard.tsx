@@ -1,8 +1,12 @@
 import { Anchor, Badge, Button, Text } from '../../design-system';
 import { StatusBadge } from '../../components/StatusBadge/StatusBadge';
+import {
+  WorkspaceReadWarning,
+  type WorkspaceRead,
+} from '../../components/WorkspaceReads';
 import { ArrowUpRight } from 'lucide-react';
 import { Link } from 'react-router';
-import { useId, type ReactNode } from 'react';
+import { useId, type MouseEventHandler, type ReactNode } from 'react';
 import type { api } from '../../lib/api';
 import { ComparisonContext } from './ComparisonContext';
 import { RunTags } from './RunTags';
@@ -21,8 +25,8 @@ type RunItem = Page['items'][number];
 export type BoardPreview = {
   attention?: Page;
   completed?: Page;
-  attentionError?: string;
-  completedError?: string;
+  attentionRead: WorkspaceRead;
+  completedRead: WorkspaceRead;
 };
 
 function RunCard({
@@ -161,16 +165,14 @@ export function RunListBoard({
   runHref,
   returnTo,
   onTabChange,
-  retry,
   onClearFilters,
 }: {
   page: Page;
-  preview?: BoardPreview;
+  preview: BoardPreview;
   runHref: (id: string, executionId?: string) => string;
   returnTo: string;
   onTabChange: (tab: RunTab) => void;
-  retry: () => void;
-  onClearFilters?: () => void;
+  onClearFilters?: MouseEventHandler<HTMLButtonElement>;
 }) {
   // Keep every run in the bounded active preview visible. The bounded attention
   // preview also includes terminal runs still waiting for recovery confirmation.
@@ -179,13 +181,13 @@ export function RunListBoard({
   const activeIds = new Set(page.items.map((run) => run.id));
   const attention = [
     ...page.items.filter(needsAttention),
-    ...(preview?.attention?.items.filter(
+    ...(preview.attention?.items.filter(
       (run) => needsAttention(run) && !activeIds.has(run.id),
     ) ?? []),
   ];
   const running = page.items.filter((run) => !needsAttention(run));
   const completed =
-    preview?.completed?.items.filter((run) => run.status === 'completed') ?? [];
+    preview.completed?.items.filter((run) => run.status === 'completed') ?? [];
   const cards = (items: RunItem[]) =>
     items.length > 0 && (
       <ul className={classes.cards} role="list">
@@ -199,16 +201,6 @@ export function RunListBoard({
         ))}
       </ul>
     );
-  const previewError = (message: string) => (
-    <div role="alert">
-      <Text c="red" size="sm">
-        {message}
-      </Text>
-      <Button variant="ghost" onClick={retry}>
-        Retry preview
-      </Button>
-    </div>
-  );
   return (
     <div className={classes.board}>
       <BoardColumn title="Active runs" count={running.length} tone="running">
@@ -248,9 +240,12 @@ export function RunListBoard({
         tone="attention"
       >
         {cards(attention)}
-        {preview?.attentionError ? (
-          previewError(preview.attentionError)
-        ) : !preview?.attention ? (
+        <WorkspaceReadWarning
+          reads={[preview.attentionRead]}
+          inline
+          showDetails
+        />
+        {preview.attentionRead.error ? null : !preview.attention ? (
           <Text size="sm" c="dimmed" role="status">
             Loading attention preview…
           </Text>
@@ -279,13 +274,16 @@ export function RunListBoard({
       </BoardColumn>
       <BoardColumn
         title="Completed runs"
-        count={completed.length}
+        count={preview.completed ? completed.length : undefined}
         tone="completed"
       >
         {cards(completed)}
-        {preview?.completedError ? (
-          previewError(preview.completedError)
-        ) : !preview?.completed ? (
+        <WorkspaceReadWarning
+          reads={[preview.completedRead]}
+          inline
+          showDetails
+        />
+        {preview.completedRead.error ? null : !preview.completed ? (
           <Text size="sm" c="dimmed" role="status">
             Loading completed preview…
           </Text>

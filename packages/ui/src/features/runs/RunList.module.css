@@ -182,26 +182,6 @@
   font-size: 13px;
   font-weight: 500;
 }
-.empty {
-  min-height: 340px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  gap: 16px;
-  color: var(--muted);
-  text-align: center;
-}
-.empty h2 {
-  margin: 0;
-  font-size: 18px;
-  color: var(--text);
-}
-.empty p {
-  margin: 0;
-  font-size: 14px;
-  max-width: 65ch;
-}
 @media (max-width: 900px) {
   .board {
     grid-template-columns: minmax(0, 1fr);

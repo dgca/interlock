@@ -29,6 +29,10 @@ import {
   ListTableSkeleton,
   type ListTableLayout,
 } from '../../components/ListTable/ListTable';
+import {
+  WorkspaceReadWarning,
+  workspaceRead,
+} from '../../components/WorkspaceReads';
 import { api, errorMessage } from '../../lib/api';
 import { isConfirmedWriteRejection } from '../../lib/isConfirmedWriteRejection';
 import { useDraftDismissal } from '../../lib/useDraftDismissal';
@@ -96,7 +100,7 @@ export function AgentPresets({
     },
   });
   const page = pageQuery.data;
-  const error = pageQuery.error ? errorMessage(pageQuery.error) : '';
+  const read = workspaceRead('agent presets', pageQuery);
   const [editing, setEditing] = useState<SavedModelAlias | null>();
   const [opening, setOpening] = useState(false);
   const [notice, setNotice] = useState<{
@@ -221,18 +225,9 @@ export function AgentPresets({
           </Group>
         )}
         <ActionError message={loadError} />
-        {error && (
-          <div className={styles.error}>
-            <ActionError
-              message={page ? `Could not refresh presets. ${error}` : error}
-            />
-            <Button onClick={() => void pageQuery.refetch()}>
-              Retry loading presets
-            </Button>
-          </div>
-        )}
+        <WorkspaceReadWarning reads={[read]} inline showDetails />
         {!page ? (
-          !error && (
+          !read.error && (
             <ListTableSkeleton {...presetTable} label="Loading agent presets…">
               <span>—</span>
               <span>—</span>

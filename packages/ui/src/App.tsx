@@ -12,13 +12,12 @@ import type { Workflow, SavedPrompt } from '@interlock/core';
 import { Sidebar, type AttentionFailure } from './components/Sidebar/Sidebar';
 import { RunDialog } from './features/runs/RunDialog';
 import { ConnectDialog } from './components/ConnectDialog/ConnectDialog';
-import { errorMessage } from './lib/api';
 import { trpc, useQuery, useQueryClient, refreshQueries } from './lib/query';
 import { subscribeToEngineEvents } from './lib/engineEvents';
 import type { Action } from './lib/useActionFeedback';
 import { aiSettingsTab } from './features/executors/aiSettingsNavigation';
 import { DiscardChangesDialog } from './components/DiscardChangesDialog';
-import type { WorkspaceRead } from './components/WorkspaceReads';
+import { workspaceRead, type WorkspaceRead } from './components/WorkspaceReads';
 import { WorkflowLayoutNotice } from './features/workflows/WorkflowLayoutNotice';
 
 type EditorGuard = 'dirty' | 'saving' | undefined;
@@ -226,20 +225,8 @@ export function App() {
   const context: AppContext = {
     workflows,
     prompts,
-    workflowsRead: {
-      resource: 'workflows',
-      ready: workflowsQuery.data !== undefined,
-      error: workflowsQuery.error ? errorMessage(workflowsQuery.error) : '',
-      fetching: workflowsQuery.isFetching,
-      retry: () => void workflowsQuery.refetch({ cancelRefetch: false }),
-    },
-    promptsRead: {
-      resource: 'prompts',
-      ready: promptsQuery.data !== undefined,
-      error: promptsQuery.error ? errorMessage(promptsQuery.error) : '',
-      fetching: promptsQuery.isFetching,
-      retry: () => void promptsQuery.refetch({ cancelRefetch: false }),
-    },
+    workflowsRead: workspaceRead('workflows', workflowsQuery),
+    promptsRead: workspaceRead('prompts', promptsQuery),
     tick,
     act,
     onDirty: setEditorDirty,

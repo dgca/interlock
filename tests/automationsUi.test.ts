@@ -639,7 +639,7 @@ it("does not show another query's rows when a filter request fails and retries t
     nextOffset: null,
     counts: { all: 2, enabled: 1, disabled: 1, attention: 0 },
   });
-  await act(async () => button('Retry loading').click());
+  await act(async () => button('Retry automations').click());
   expect(rpc.list).toHaveBeenLastCalledWith(
     expect.objectContaining({ status: 'enabled' }),
   );
@@ -651,7 +651,9 @@ it('retains rows on a failed refresh of the same query', async () => {
   rpc.list.mockRejectedValueOnce(new Error('Refresh failed'));
   tick++;
   await render('/automations');
-  expect(document.body.textContent).toContain('Automations may be out of date');
+  expect(document.body.textContent).toContain(
+    'Could not refresh automations. Showing the last loaded data.',
+  );
   expect(document.body.textContent).toContain('Refresh failed');
   expect(document.body.textContent).toContain('Daily review');
 });

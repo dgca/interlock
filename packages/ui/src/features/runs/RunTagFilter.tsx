@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState, type RefObject } from 'react';
 import { SlidersHorizontal } from 'lucide-react';
 import {
   Anchor,
@@ -20,7 +20,12 @@ type RunTagFilterProps = {
   filterId: string;
 };
 
-export function RunTagFilter({ value, onChange, filterId }: RunTagFilterProps) {
+export function RunTagFilter({
+  value,
+  onChange,
+  filterId,
+  triggerRef,
+}: RunTagFilterProps & { triggerRef?: RefObject<HTMLButtonElement | null> }) {
   const titleId = useId();
   const source = JSON.stringify(value ?? {});
   const [draft, setDraft] = useState<{
@@ -57,6 +62,7 @@ export function RunTagFilter({ value, onChange, filterId }: RunTagFilterProps) {
     >
       <Popover.Target>
         <Button
+          ref={triggerRef}
           variant="secondary"
           leftSection={<SlidersHorizontal size={16} />}
           onClick={() =>
