@@ -140,6 +140,20 @@ function LegacyHarnessesRoute() {
   );
 }
 
+const IntegrationEditor = lazy(() =>
+  import('../features/executors/IntegrationEditor').then((m) => ({
+    default: m.IntegrationEditorRoute,
+  })),
+);
+
+function IntegrationEditorRoute() {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <IntegrationEditor />
+    </Suspense>
+  );
+}
+
 function HarnessesRoute() {
   const { onDirty } = useOutletContext<AppContext>();
   return (
@@ -608,6 +622,14 @@ export const routes: RouteObject[] = [
       { path: 'variables/:variableId', Component: VariableItemRoute },
       { path: 'report', Component: ReportRoute },
       { path: 'settings/ai', Component: HarnessesRoute },
+      {
+        path: 'settings/ai/integrations/-/new',
+        Component: IntegrationEditorRoute,
+      },
+      {
+        path: 'settings/ai/integrations/:integrationId',
+        Component: IntegrationEditorRoute,
+      },
       { path: 'settings/harnesses', Component: LegacyHarnessesRoute },
       { path: 'settings/diagnostics', Component: DiagnosticsRoute },
       {

@@ -11,7 +11,7 @@ import {
   EmptyState,
 } from '../../design-system';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { ArrowDown, ArrowUp, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import {
@@ -28,12 +28,16 @@ import {
   ListTableSkeleton,
 } from '../../components/ListTable/ListTable';
 import { api, errorMessage } from '../../lib/api';
+import { isConfirmedWriteRejection } from '../../lib/isConfirmedWriteRejection';
+import { useDraftDismissal } from '../../lib/useDraftDismissal';
+import { useEditorDraft } from '../../lib/useEditorDraft';
 import { trpc, useQuery, useQueryClient } from '../../lib/query';
 import { ModelSettings } from './ModelSettings';
 import { readModelAlias } from './modelAliasApi';
 
 import {
   harnessLabel,
+  harnessAvailability,
   isPrimaryHarness,
   type HarnessProfile as Profile,
 } from './harnessProfiles';
@@ -52,8 +56,8 @@ function presetHarnessLabel(
   permissions?: ExecutorPermissionMode,
 ) {
   const label = harnessLabel(profile);
-  if (!profile.enabled) return `${label} · disabled`;
-  if (profile.detection.status !== 'detected') return `${label} · unavailable`;
+  const availability = harnessAvailability(profile);
+  if (availability) return `${label} · ${availability}`;
   if (!supportsPresetPermissions(profile, permissions))
     return `${label} · cannot enforce permissions`;
   return label;
@@ -61,10 +65,8 @@ function presetHarnessLabel(
 
 export function AgentPresets({
   profiles,
-  onDirty,
 }: {
   profiles: Profile[] | undefined;
-  onDirty?: (dirty: boolean) => void;
 }) {
   const [offset, setOffset] = useState(0);
   const queryClient = useQueryClient();
@@ -84,26 +86,13 @@ export function AgentPresets({
   const error = pageQuery.error ? errorMessage(pageQuery.error) : '';
   const [editing, setEditing] = useState<SavedModelAlias | null>();
   const [opening, setOpening] = useState(false);
-  const [editorDirty, setEditorDirty] = useState(false);
-  const [editorBusy, setEditorBusy] = useState(false);
-  const [confirmClose, setConfirmClose] = useState(false);
-  const trackDirty = useCallback(
-    (dirty: boolean) => {
-      setEditorDirty(dirty);
-      onDirty?.(dirty);
-    },
-    [onDirty],
-  );
   const [notice, setNotice] = useState('');
   const [loadError, setLoadError] = useState('');
   const trigger = useRef<HTMLElement | null>(null);
   useEffect(() => {
     if (page && offset > 0 && offset >= page.total) setOffset(0);
   }, [page, offset]);
-  const close = () => {
-    setEditing(undefined);
-    setConfirmClose(false);
-  };
+  const close = () => setEditing(undefined);
   const open = async (id?: string) => {
     trigger.current = document.activeElement as HTMLElement | null;
     setNotice('');
@@ -125,11 +114,6 @@ export function AgentPresets({
     void queryClient.invalidateQueries(trpc.modelAliases.pathFilter());
     close();
   };
-  const dismiss = () => {
-    if (editorBusy) return;
-    if (editorDirty) setConfirmClose(true);
-    else close();
-  };
   return (
     <section
       id="model-aliases"
@@ -149,7 +133,7 @@ export function AgentPresets({
           <Button
             variant="primary"
             aria-label="New preset"
-            disabled={opening}
+            disabled={opening || editing !== undefined}
             onClick={() => void open()}
           >
             <Plus size={14} />
@@ -257,53 +241,22 @@ export function AgentPresets({
         )}
       </div>
       {editing !== undefined && (
-        <Modal
-          title={editing ? 'Edit preset' : 'New preset'}
-          size={670}
-          busy={editorBusy}
-          onClose={dismiss}
+        <PresetEditor
+          key={editing?.id ?? 'new'}
+          alias={editing}
+          profiles={profiles}
+          onClose={close}
           returnFocusTo={() => trigger.current}
-        >
-          <PresetEditor
-            key={editing?.id ?? 'new'}
-            alias={editing}
-            profiles={profiles}
-            onDirty={trackDirty}
-            onBusy={setEditorBusy}
-            onCancel={dismiss}
-            onReload={setEditing}
-            onSaved={(name, deleted) => {
-              changed();
-              setNotice(
-                deleted
-                  ? `Preset ${name} deleted. Existing runs keep their captured settings.`
-                  : `Preset ${name} saved.`,
-              );
-            }}
-          />
-        </Modal>
-      )}
-      {confirmClose && (
-        <Modal
-          title="Discard unsaved preset changes?"
-          onClose={() => setConfirmClose(false)}
-        >
-          <ModalBody>
-            Your changes to this preset have not been saved.
-          </ModalBody>
-          <ModalFooter>
-            <Button onClick={() => setConfirmClose(false)}>Keep editing</Button>
-            <Button
-              variant="danger"
-              onClick={() => {
-                setConfirmClose(false);
-                close();
-              }}
-            >
-              Discard changes
-            </Button>
-          </ModalFooter>
-        </Modal>
+          onReload={setEditing}
+          onSaved={(name, deleted) => {
+            changed();
+            setNotice(
+              deleted
+                ? `Preset ${name} deleted. Existing runs keep their captured settings.`
+                : `Preset ${name} saved.`,
+            );
+          }}
+        />
       )}
     </section>
   );
@@ -320,17 +273,15 @@ function draftChoices(alias: SavedModelAlias | null) {
 function PresetEditor({
   alias,
   profiles,
-  onDirty,
-  onBusy,
-  onCancel,
+  onClose,
+  returnFocusTo,
   onReload,
   onSaved,
 }: {
   alias: SavedModelAlias | null;
   profiles: Profile[] | undefined;
-  onDirty?: (dirty: boolean) => void;
-  onBusy?: (busy: boolean) => void;
-  onCancel: () => void;
+  onClose: () => void;
+  returnFocusTo: () => HTMLElement | null;
   onReload: (alias: SavedModelAlias) => void;
   onSaved: (name: string, deleted?: boolean) => void;
 }) {
@@ -338,10 +289,16 @@ function PresetEditor({
   const [description, setDescription] = useState(alias?.description ?? '');
   const [permissions, setPermissions] = useState(alias?.permissions);
   const [candidates, setCandidates] = useState(() => draftChoices(alias));
-  const [busy, setBusy] = useState(false);
-  const inFlight = useRef(false);
+  const [checking, setChecking] = useState(false);
+  const checkRequest = useRef<AbortController>(null);
+  const [unconfirmed, setUnconfirmed] = useState<{
+    action: 'create' | 'update' | 'delete';
+    name: string;
+  }>();
   const [error, setError] = useState('');
-  const [confirmation, setConfirmation] = useState<'delete' | 'reload'>();
+  const [readError, setReadError] = useState('');
+  const [newerSaved, setNewerSaved] = useState(false);
+  const [confirmation, setConfirmation] = useState(false);
   const nameInput = useRef<HTMLInputElement>(null);
   const current = {
     name,
@@ -358,6 +315,12 @@ function PresetEditor({
     candidates: alias?.candidates ?? [{ model: '' }],
   };
   const dirty = JSON.stringify(current) !== JSON.stringify(initial);
+  const { busy: saving, beginSave, finishSave } = useEditorDraft(dirty);
+  const busy = saving || checking;
+  const dismissal = useDraftDismissal(dirty, busy, onClose);
+  const conflict = Boolean(
+    alias && (newerSaved || error.startsWith('Model alias changed elsewhere.')),
+  );
   const baseline = useRef(alias);
   useEffect(() => {
     if (baseline.current !== alias) {
@@ -367,12 +330,11 @@ function PresetEditor({
       setPermissions(alias?.permissions);
       setCandidates(draftChoices(alias));
       setError('');
+      setReadError('');
+      setNewerSaved(false);
     }
   }, [alias]);
-  useEffect(() => onBusy?.(busy), [busy, onBusy]);
-  useEffect(() => () => onBusy?.(false), [onBusy]);
-  useEffect(() => onDirty?.(dirty), [dirty, onDirty]);
-  useEffect(() => () => onDirty?.(false), [onDirty]);
+  useEffect(() => () => checkRequest.current?.abort(), []);
   useEffect(() => {
     nameInput.current?.focus();
   }, []);
@@ -388,25 +350,101 @@ function PresetEditor({
       [next[index], next[index + offset]] = [next[index + offset], next[index]];
       return next;
     });
-  const run = async (operation: () => Promise<void>) => {
-    if (inFlight.current) return;
-    inFlight.current = true;
-    setBusy(true);
-    setError('');
+  const readSaved = async (checkingWrite: boolean) => {
+    if (checkRequest.current) return;
+    const target = alias?.id ?? unconfirmed?.name;
+    if (!target) return;
+    const request = new AbortController();
+    checkRequest.current = request;
+    setChecking(true);
+    setReadError('');
     try {
-      await operation();
-    } catch (error) {
-      setError(errorMessage(error));
+      const latest = await readModelAlias(target, request.signal);
+      if (request.signal.aborted) return;
+      if (checkingWrite && unconfirmed?.action === 'create') {
+        setUnconfirmed(undefined);
+        setError(
+          `A preset named “${latest.name}” is saved. Keep these edits under a different name or close this editor to open the saved preset.`,
+        );
+      } else if (checkingWrite && latest.revision === alias?.revision) {
+        setUnconfirmed(undefined);
+        setError('The saved preset is unchanged. Try the action again.');
+      } else if (checkingWrite) {
+        setUnconfirmed(undefined);
+        setConfirmation(false);
+        setNewerSaved(true);
+        setError('A newer preset revision is saved. Load latest to review it.');
+      } else if (alias && latest.revision > alias.revision) {
+        onReload(latest);
+      } else {
+        setReadError('Could not read the latest revision. Try again.');
+      }
+    } catch (reason) {
+      if (request.signal.aborted) return;
+      const message = errorMessage(reason);
+      if (
+        checkingWrite &&
+        isConfirmedWriteRejection(reason) &&
+        message.endsWith('does not exist.')
+      ) {
+        if (unconfirmed?.action === 'delete') {
+          onSaved(unconfirmed.name, true);
+        } else if (unconfirmed?.action === 'create') {
+          setUnconfirmed(undefined);
+          setError(
+            'No saved preset was found. Your edits are available to save again.',
+          );
+        } else {
+          setError('The saved preset no longer exists.');
+        }
+      } else {
+        setReadError(message);
+      }
     } finally {
-      inFlight.current = false;
-      setBusy(false);
+      if (!request.signal.aborted) {
+        checkRequest.current = null;
+        setChecking(false);
+      }
     }
   };
-  return (
+  const reload = useDraftDismissal(dirty, busy, () => void readSaved(false));
+
+  const run = async (
+    action: 'create' | 'update' | 'delete',
+    name: string,
+    operation: () => Promise<unknown>,
+  ) => {
+    if (unconfirmed || !beginSave()) return;
+    setError('');
+    setReadError('');
+    try {
+      await operation();
+      if (finishSave(true)) onSaved(name, action === 'delete');
+    } catch (reason) {
+      if (!finishSave(false)) return;
+      const message = errorMessage(reason);
+      if (
+        isConfirmedWriteRejection(reason) ||
+        message.startsWith('Model alias changed elsewhere.')
+      ) {
+        setError(message);
+        if (message.startsWith('Model alias changed elsewhere.'))
+          setConfirmation(false);
+      } else {
+        setUnconfirmed({ action, name });
+        setConfirmation(false);
+        setError(
+          'Interlock could not confirm the preset change. Check the saved preset before trying again.',
+        );
+      }
+    }
+  };
+  const form = (
     <form
       className={styles.editor}
       onSubmit={(event) => {
         event.preventDefault();
+        if (busy || conflict || unconfirmed || !dirty) return;
         const parsed = modelAliasNameSchema.safeParse(name);
         if (!parsed.success) {
           setError(
@@ -427,8 +465,8 @@ function PresetEditor({
           setError('Choose a harness for each new choice.');
           return;
         }
-        void run(async () => {
-          await api.modelAliases.mutate.mutate(
+        void run(alias ? 'update' : 'create', parsed.data, () =>
+          api.modelAliases.mutate.mutate(
             alias
               ? {
                   action: 'update',
@@ -439,9 +477,8 @@ function PresetEditor({
                   name: parsed.data,
                 }
               : { action: 'create', ...current, name: parsed.data },
-          );
-          onSaved(parsed.data);
-        });
+          ),
+        );
       }}
     >
       <ModalBody>
@@ -497,8 +534,8 @@ function PresetEditor({
         <div className={styles.candidateIntro}>
           <h3>Primary and fallbacks</h3>
           <p>
-            Interlock uses the first available choice that supports the required
-            permissions.
+            Interlock skips disabled and unavailable harnesses. It uses the
+            first available choice that supports the required permissions.
           </p>
         </div>
         {candidates.map((candidate, index) => {
@@ -631,9 +668,15 @@ function PresetEditor({
           Add fallback
         </Button>
         <ActionError message={error} />
-        {error && alias && (
-          <Button disabled={busy} onClick={() => setConfirmation('reload')}>
-            Reload saved preset
+        <ActionError message={readError} />
+        {unconfirmed && (
+          <Button loading={checking} onClick={() => void readSaved(true)}>
+            Check saved preset
+          </Button>
+        )}
+        {conflict && !unconfirmed && (
+          <Button loading={checking} onClick={reload.dismiss}>
+            Load latest
           </Button>
         )}
       </ModalBody>
@@ -643,8 +686,8 @@ function PresetEditor({
             <Button
               variant="ghost"
               aria-label="Delete preset"
-              disabled={busy}
-              onClick={() => setConfirmation('delete')}
+              disabled={busy || Boolean(unconfirmed) || conflict}
+              onClick={() => setConfirmation(true)}
             >
               <Trash2 size={14} />
               Delete preset
@@ -652,63 +695,69 @@ function PresetEditor({
           )
         }
       >
-        <Button disabled={busy} onClick={onCancel}>
+        <Button disabled={busy} onClick={dismissal.dismiss}>
           Cancel
         </Button>
-        <Button variant="primary" type="submit" disabled={busy || !dirty}>
+        <Button
+          variant="primary"
+          type="submit"
+          disabled={busy || !dirty || conflict || Boolean(unconfirmed)}
+        >
           {busy ? 'Saving…' : alias ? 'Save changes' : 'Create preset'}
         </Button>
       </ModalFooter>
+    </form>
+  );
+  return (
+    <>
+      <Modal
+        title={alias ? 'Edit preset' : 'New preset'}
+        size={670}
+        busy={busy}
+        covered={dismissal.covered || reload.covered || confirmation}
+        onClose={dismissal.dismiss}
+        returnFocusTo={returnFocusTo}
+      >
+        {form}
+      </Modal>
+      {dismissal.confirmation}
+      {reload.confirmation}
       {confirmation && alias && (
         <Modal
-          title={
-            confirmation === 'delete'
-              ? `Delete ${alias.name}?`
-              : 'Reload saved preset?'
-          }
-          busy={busy}
-          onClose={() => setConfirmation(undefined)}
+          title={`Delete ${alias.name}?`}
+          busy={saving}
+          onClose={() => setConfirmation(false)}
         >
           <ModalBody>
             <p>
-              {confirmation === 'delete'
-                ? 'New runs referencing this preset will be blocked until its requirement is configured again. Existing runs keep their captured configuration.'
-                : 'Discard these edits and load the current saved configuration.'}
+              New runs referencing this preset will be blocked until its
+              requirement is configured again. Existing runs keep their captured
+              configuration.
             </p>
             <ActionError message={error} />
           </ModalBody>
           <ModalFooter>
-            <Button disabled={busy} onClick={() => setConfirmation(undefined)}>
+            <Button disabled={saving} onClick={() => setConfirmation(false)}>
               Cancel
             </Button>
             <Button
-              variant={confirmation === 'delete' ? 'danger' : 'primary'}
-              disabled={busy}
+              variant="danger"
+              loading={saving}
               onClick={() =>
-                void run(async () => {
-                  if (confirmation === 'delete') {
-                    await api.modelAliases.mutate.mutate({
-                      action: 'delete',
-                      id: alias.id,
-                      expectedRevision: alias.revision,
-                    });
-                    onSaved(alias.name, true);
-                  } else {
-                    onReload(await readModelAlias(alias.id));
-                    setConfirmation(undefined);
-                  }
-                })
+                void run('delete', alias.name, () =>
+                  api.modelAliases.mutate.mutate({
+                    action: 'delete',
+                    id: alias.id,
+                    expectedRevision: alias.revision,
+                  }),
+                )
               }
             >
-              {busy
-                ? 'Working…'
-                : confirmation === 'delete'
-                  ? 'Delete preset'
-                  : 'Reload'}
+              Delete preset
             </Button>
           </ModalFooter>
         </Modal>
       )}
-    </form>
+    </>
   );
 }

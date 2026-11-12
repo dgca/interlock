@@ -406,27 +406,29 @@ Workflow pages have Editor and Runs sections. Automations is a separate workspac
 
 React Router owns browser navigation through a shared application layout and child routes in `packages/ui/src/routes`. The layout keeps the engine connection and live refresh active across route changes. URL builders live in `routes/paths.ts`.
 
-| Route                             | View                                                   |
-| --------------------------------- | ------------------------------------------------------ |
-| `/`                               | Redirects to `/workflows`, replacing the history entry |
-| `/workflows`                      | Workflow library                                       |
-| `/workflows/:workflowId`          | Workflow draft editor                                  |
-| `/prompts`                        | Saved prompt library                                   |
-| `/prompts/-/new`                  | New prompt editor                                      |
-| `/prompts/:promptId`              | Saved prompt editor                                    |
-| `/variables`                      | Variable metadata library                              |
-| `/variables/:variableId`          | Variable editor; `new` creates a variable              |
-| `/automations`                    | Global automation list with URL filters                |
-| `/automations/new`                | Automation type chooser and creation form              |
-| `/automations/:automationId`      | Activity and saved settings                            |
-| `/automations/:automationId/edit` | Schedule or workflow-handler event editor              |
-| `/runs`                           | Active runs                                            |
-| `/runs?tab=history`               | Run history                                            |
-| `/runs/:runId`                    | Run inspector, including child runs                    |
-| `/report`                         | Global workflow performance and cost report            |
-| `/workflows/:workflowId/report`   | Workflow-scoped performance and cost report            |
-| `/settings/ai`                    | Harnesses, Agent presets, and execution settings tabs  |
-| `/settings/diagnostics`           | System diagnostics and readiness check                 |
+| Route                                      | View                                                   |
+| ------------------------------------------ | ------------------------------------------------------ |
+| `/`                                        | Redirects to `/workflows`, replacing the history entry |
+| `/workflows`                               | Workflow library                                       |
+| `/workflows/:workflowId`                   | Workflow draft editor                                  |
+| `/prompts`                                 | Saved prompt library                                   |
+| `/prompts/-/new`                           | New prompt editor                                      |
+| `/prompts/:promptId`                       | Saved prompt editor                                    |
+| `/variables`                               | Variable metadata library                              |
+| `/variables/:variableId`                   | Variable editor; `new` creates a variable              |
+| `/automations`                             | Global automation list with URL filters                |
+| `/automations/new`                         | Automation type chooser and creation form              |
+| `/automations/:automationId`               | Activity and saved settings                            |
+| `/automations/:automationId/edit`          | Schedule or workflow-handler event editor              |
+| `/runs`                                    | Active runs                                            |
+| `/runs?tab=history`                        | Run history                                            |
+| `/runs/:runId`                             | Run inspector, including child runs                    |
+| `/report`                                  | Global workflow performance and cost report            |
+| `/workflows/:workflowId/report`            | Workflow-scoped performance and cost report            |
+| `/settings/ai`                             | Harnesses, Agent presets, and execution settings tabs  |
+| `/settings/ai/integrations/-/new`          | New custom integration editor                          |
+| `/settings/ai/integrations/:integrationId` | Saved custom integration editor                        |
+| `/settings/diagnostics`                    | System diagnostics and readiness check                 |
 
 Resource routes use stable, encoded IDs. Names and future folder or group membership do not determine a workflow's address. Folder and group pages can be added as sibling routes under the application layout without changing existing resource links. Query parameters represent view filters; hash fragments remain available for in-page anchors such as run output.
 

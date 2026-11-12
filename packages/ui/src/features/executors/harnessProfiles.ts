@@ -21,5 +21,14 @@ export function harnessLabel(profile: HarnessProfile) {
 }
 
 export function isAvailableHarness(profile: HarnessProfile) {
-  return profile.enabled && profile.detection.status === 'detected';
+  return harnessAvailability(profile) === undefined;
+}
+
+export function harnessAvailability(profile: HarnessProfile) {
+  if (!profile.enabled) return 'disabled';
+  if (profile.detection.status !== 'detected') return 'unavailable';
+}
+
+export function integrationReturnFocusId(profileId?: string) {
+  return profileId ? `harness-defaults-${profileId}` : 'add-integration';
 }

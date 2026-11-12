@@ -11,7 +11,7 @@ import {
 } from '../../design-system';
 
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
-import { useLocation } from 'react-router';
+import { Link, useLocation } from 'react-router';
 
 import {
   ChevronDown,
@@ -25,7 +25,7 @@ import { executorProfileSchema, type ExecutorProfile } from '@interlock/core';
 
 import { useBeforeUnloadWarning } from '../../lib/useBeforeUnloadWarning';
 import { api, errorMessage } from '../../lib/api';
-import { trpc, useQuery, useQueryClient } from '../../lib/query';
+import { trpc, useQuery } from '../../lib/query';
 
 import { ListTable, ListTableRow } from '../../components/ListTable/ListTable';
 import { HarnessRowsSkeleton, harnessColumns } from './HarnessListSkeleton';
@@ -33,9 +33,13 @@ import styles from './Harnesses.module.css';
 import { permissionOptions, permissionDescriptions } from './permissions';
 import { ModelSettings } from './ModelSettings';
 import { ExecutionSettings } from './ExecutionSettings';
-import { CustomProfileDialog } from './CustomProfileDialog';
+import { paths } from '../../routes/paths';
 import { AgentPresets } from './AgentPresets';
-import { harnessLabel, isPrimaryHarness } from './harnessProfiles';
+import {
+  harnessLabel,
+  integrationReturnFocusId,
+  isPrimaryHarness,
+} from './harnessProfiles';
 import { PageTabs } from '../../components/PageLayout/PageLayout';
 import { aiSettingsTab, aiSettingsTabs } from './aiSettingsNavigation';
 
@@ -47,12 +51,11 @@ const harnessSetup: Record<string, string> = {
 };
 type Profile = Awaited<ReturnType<typeof api.executors.profiles.query>>[number];
 
-const savedCustomProfileKey = (id: string) => ['savedCustomProfile', id];
-
 type DirtySetting = (id: string, dirty: boolean) => void;
 
 export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
   const location = useLocation();
+  const restoredFocus = useRef<string>(undefined);
   const activeTab = aiSettingsTab(location);
   const tabItems = aiSettingsTabs.map((tab) => {
     const search = new URLSearchParams(location.search);
@@ -75,16 +78,11 @@ export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
   useBeforeUnloadWarning(dirty);
   useEffect(() => onDirty?.(dirty), [dirty, onDirty]);
   useEffect(() => () => onDirty?.(false), [onDirty]);
-  const aliasDirty = useCallback(
-    (dirty: boolean) => trackDirty('aliases', dirty),
-    [trackDirty],
-  );
   const limitDirty = useCallback(
     (dirty: boolean) => trackDirty('limit', dirty),
     [trackDirty],
   );
   const request = useRef(0);
-  const queryClient = useQueryClient();
   const profilesQuery = useQuery(trpc.executors.profiles.queryOptions());
   const profiles = profilesQuery.data;
   const [checkError, setCheckError] = useState('');
@@ -92,14 +90,6 @@ export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
     checkError ||
     (profilesQuery.error ? errorMessage(profilesQuery.error) : '');
   const [checking, setChecking] = useState(false);
-
-  const [customModalProfile, setCustomModalProfile] =
-    useState<ExecutorProfile | null>();
-  useEffect(() => {
-    if (activeTab !== 'harnesses') setCustomModalProfile(undefined);
-  }, [activeTab]);
-  const addButton = useRef<HTMLButtonElement>(null);
-  const customTrigger = useRef<HTMLElement | null>(null);
 
   const refresh = async (check = false) => {
     const current = ++request.current;
@@ -123,6 +113,19 @@ export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
     });
     return () => cancelAnimationFrame(frame);
   }, [location]);
+  useEffect(() => {
+    const target = location.state?.focusHarnessControl;
+    if (typeof target !== 'string' || restoredFocus.current === location.key)
+      return;
+    const frame = requestAnimationFrame(() => {
+      const control = document.getElementById(target);
+      if (control) {
+        control.focus();
+        restoredFocus.current = location.key;
+      }
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [location, profiles]);
   return (
     <section className={`${workspacePage.page} ${styles.aiPage}`}>
       <PageHeader title="AI Settings" />
@@ -162,13 +165,10 @@ export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
                     Check installations
                   </Button>
                   <Button
-                    ref={addButton}
-                    aria-label="Add integration"
+                    id={integrationReturnFocusId()}
+                    component={Link}
+                    to={paths.integrationNew}
                     variant="primary"
-                    onClick={() => {
-                      customTrigger.current = addButton.current;
-                      setCustomModalProfile(null);
-                    }}
                   >
                     <Plus size={14} />
                     Add integration
@@ -201,18 +201,6 @@ export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
                       profile={p}
                       refresh={() => refresh()}
                       onDirty={trackDirty}
-                      onConfigureCustom={(prof) => {
-                        customTrigger.current =
-                          document.activeElement as HTMLElement;
-                        const saved = queryClient.getQueryData<ExecutorProfile>(
-                          savedCustomProfileKey(prof.id),
-                        );
-                        setCustomModalProfile(
-                          saved && saved.revision > prof.revision
-                            ? saved
-                            : prof,
-                        );
-                      }}
                     />
                   ))}
               </ListTable>
@@ -225,9 +213,7 @@ export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
             </div>
           </section>
         )}
-        {activeTab === 'model-aliases' && (
-          <AgentPresets profiles={profiles} onDirty={aliasDirty} />
-        )}
+        {activeTab === 'model-aliases' && <AgentPresets profiles={profiles} />}
         {activeTab === 'execution' && (
           <section
             id="execution-settings"
@@ -243,42 +229,6 @@ export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
           </section>
         )}
       </div>
-      {activeTab === 'harnesses' && customModalProfile !== undefined && (
-        <CustomProfileDialog
-          onClose={() => setCustomModalProfile(undefined)}
-          profile={customModalProfile}
-          returnFocusTo={() =>
-            customTrigger.current?.isConnected
-              ? customTrigger.current
-              : addButton.current
-          }
-          onSave={async (data) => {
-            const result = await api.executors.manage.mutate({
-              action: 'save',
-              profile: data,
-            });
-            const saved = executorProfileSchema.parse(result);
-            // Older reads must not replace the acknowledged configuration.
-            void queryClient.cancelQueries(
-              trpc.executors.profiles.queryFilter(),
-            );
-            queryClient.setQueryData(savedCustomProfileKey(saved.id), saved);
-            queryClient.setQueryData(
-              trpc.executors.profiles.queryKey(),
-              (profiles) =>
-                profiles?.map((profile) =>
-                  profile.id === saved.id &&
-                  profile.revision < saved.revision &&
-                  profile.detection.status === 'detected' &&
-                  profile.command === saved.command
-                    ? { ...saved, detection: profile.detection }
-                    : profile,
-                ),
-            );
-            void refresh();
-          }}
-        />
-      )}
     </section>
   );
 }
@@ -290,12 +240,10 @@ function ProfileRow({
   profile,
   refresh,
   onDirty,
-  onConfigureCustom,
 }: {
   profile: Profile;
   onDirty: DirtySetting;
   refresh: () => Promise<Profile[] | undefined>;
-  onConfigureCustom: (profile: ExecutorProfile) => void;
 }) {
   const editorId = useId();
   const row = useRef<HTMLElement>(null);
@@ -419,6 +367,7 @@ function ProfileRow({
         <span className={styles.configureControl}>
           <Button
             variant="ghost"
+            id={integrationReturnFocusId(profile.id)}
             aria-expanded={open}
             aria-controls={open ? editorId : undefined}
             aria-label={`${open ? 'Close defaults for' : 'Edit defaults for'} ${label}`}
@@ -509,7 +458,8 @@ function ProfileRow({
               mt="md"
               disabled={busy || changed}
               aria-haspopup="dialog"
-              onClick={() => onConfigureCustom(configuration(profile))}
+              component={Link}
+              to={paths.integration(profile.id)}
             >
               Edit integration
             </Button>

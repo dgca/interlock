@@ -972,12 +972,18 @@ it.each([
   },
 );
 
-it('discards a custom integration draft on confirmed tab navigation and keeps a failed edit available', async () => {
+it('guards integration routes and retains an acknowledged save when refreshing fails', async () => {
   await render('/settings/ai');
-  await ready(() => button('Add integration'));
-  await click('Add integration');
+  const openLink = async (href: string) => {
+    const find = () =>
+      document.querySelector<HTMLAnchorElement>(`a[href="${href}"]`);
+    await ready(() => expect(find()).not.toBeNull());
+    await act(async () => find()!.click());
+    await act(async () => vi.dynamicImportSettled());
+  };
+  await openLink(paths.integrationNew);
   await fill('Name', 'Unsaved integration');
-  await click('Cancel', formDialog());
+  await click('Cancel');
   await click('Keep editing');
   expect(field('Name').value).toBe('Unsaved integration');
   expect(warnsBeforeUnload()).toBe(true);
@@ -985,39 +991,33 @@ it('discards a custom integration draft on confirmed tab navigation and keeps a 
   expect(discardDialog()).toBeDefined();
   await click('Discard changes');
   expect(router.state.location.search).toBe('?tab=model-aliases');
-  expect(document.querySelector('[role="dialog"]')).toBeNull();
   expect(warnsBeforeUnload()).toBe(false);
-  await back();
-  await click('Add integration');
-  expect(field('Name').value).toBe('');
-  await click('Close dialog', formDialog());
 
+  await act(async () => router.navigate('/settings/ai?tab=harnesses'));
   await click('Edit defaults for Test integration');
-  await click('Edit integration');
+  await openLink(paths.integration(profile.id));
   await fill('Status command', 'local-status');
-  await act(async () => {
-    const command = field('Status command');
-    command.closest('details')!.open = true;
-    command.focus();
-  });
-  await escape();
-  expect(discardDialog()).toBeDefined();
-  await click('Keep editing');
-  await ready(() =>
-    expect(document.activeElement).toBe(field('Status command')),
-  );
   const failedSave = deferred<never>();
   rpc.saveIntegration.mockReturnValueOnce(failedSave.promise);
   await submitTwice(field('Name'));
   expect(rpc.saveIntegration).toHaveBeenCalledTimes(1);
   await back();
-  expect(router.state.location.pathname).toBe('/settings/ai');
+  expect(router.state.location.pathname).toBe(paths.integration(profile.id));
   expect(discardDialog()).toBeUndefined();
   await act(async () =>
-    failedSave.reject(new Error('Integration save failed')),
+    failedSave.reject(
+      TRPCClientError.from({
+        error: {
+          message: 'Integration save failed',
+          code: -32600,
+          data: { code: 'BAD_REQUEST' },
+        },
+      }),
+    ),
   );
   expect(document.body.textContent).toContain('Integration save failed');
   expect(field('Status command').value).toBe('local-status');
+
   const refresh = deferred<(typeof profile)[]>();
   const { detection, ...configuration } = profile;
   const saved = {
@@ -1029,26 +1029,81 @@ it('discards a custom integration draft on confirmed tab navigation and keeps a 
   await fill('Name', saved.name);
   rpc.saveIntegration.mockResolvedValue(saved);
   rpc.profiles.mockReturnValueOnce(refresh.promise);
-  await click('Save changes', formDialog());
-  expect(document.querySelector('[role="dialog"]')).toBeNull();
-  expect(router.state.location.pathname).toBe('/settings/ai');
+  await click('Save changes');
+  expect(router.state.location.pathname).toBe(paths.integration(profile.id));
   expect(warnsBeforeUnload()).toBe(false);
-  expect(rpc.profiles).toHaveBeenCalledTimes(2);
-
-  await click('Edit integration');
   expect(field('Name').value).toBe(saved.name);
+  await act(async () => refresh.reject(new Error('Profiles unavailable')));
   expect(field('Status command').value).toBe(saved.statusCommand);
+  expect(document.body.textContent).toContain('Profiles unavailable');
+  rpc.profiles.mockResolvedValue([{ ...saved, detection }]);
+  await click('Retry loading harnesses');
+  expect(rpc.saveIntegration).toHaveBeenCalledTimes(2);
+
   const latest = { ...saved, statusCommand: 'second-edit', revision: 6 };
   await fill('Status command', latest.statusCommand);
   rpc.saveIntegration.mockResolvedValueOnce(latest);
-  rpc.profiles.mockReturnValueOnce(refresh.promise);
-  await click('Save changes', formDialog());
+  await click('Save changes');
   expect(rpc.saveIntegration).toHaveBeenLastCalledWith(
     expect.objectContaining({
       profile: expect.objectContaining({ expectedRevision: saved.revision }),
     }),
   );
-  await act(async () => router.navigate('/boards'));
-  expect(router.state.location.pathname).toBe('/boards');
-  await act(async () => refresh.resolve([{ ...latest, detection }]));
+});
+
+it('keeps the integration draft through a conflict until Load latest is confirmed', async () => {
+  await render(paths.integration(profile.id));
+  await ready(() => field('Name'));
+  await fill('Status command', 'my-status');
+  rpc.saveIntegration.mockRejectedValueOnce(
+    new Error('Harness configuration changed. Reload before saving.'),
+  );
+  await click('Save changes');
+  rpc.profiles.mockResolvedValue([
+    {
+      ...profile,
+      statusCommand: 'remote-status',
+      revision: profile.revision + 1,
+    },
+  ]);
+  await click('Load latest');
+  await click('Keep editing');
+  expect(field('Status command').value).toBe('my-status');
+  await click('Load latest');
+  await click('Discard changes', discardDialog());
+  await ready(() =>
+    expect(field('Status command').value).toBe('remote-status'),
+  );
+});
+
+it('checks an uncertain integration creation by its original profile ID', async () => {
+  await render(paths.integrationNew);
+  await ready(() => field('Name'));
+  await fill('Name', 'New integration');
+  await fill('Turn command', 'fixture-command');
+  rpc.saveIntegration.mockRejectedValueOnce(
+    new TRPCClientError('Failed to fetch'),
+  );
+  await click('Create integration');
+  const attempted = rpc.saveIntegration.mock.calls[0][0].profile;
+  const saved = {
+    ...attempted,
+    revision: 1,
+    detection: { status: 'detected' },
+  };
+  rpc.profiles.mockResolvedValue([saved]);
+  await click('Check saved integration');
+  expect(document.body.textContent).toContain(
+    'A newer integration revision is saved',
+  );
+  expect(field('Turn command').value).toBe('fixture-command');
+  await click('Load latest');
+  await click('Discard changes', discardDialog());
+  await ready(() =>
+    expect(router.state.location.pathname).toBe(
+      paths.integration(attempted.id),
+    ),
+  );
+  expect(rpc.saveIntegration).toHaveBeenCalledTimes(1);
+  expect(field('Name').value).toBe('New integration');
 });

@@ -11,8 +11,11 @@ export async function readModelAliases(
   return result;
 }
 
-export async function readModelAlias(id: string) {
-  const result = await api.modelAliases.read.query({ action: 'inspect', id });
+export async function readModelAlias(id: string, signal?: AbortSignal) {
+  const result = await api.modelAliases.read.query(
+    { action: 'inspect', id },
+    { signal },
+  );
   if ('items' in result) throw new Error('Could not read the model alias.');
   return result;
 }

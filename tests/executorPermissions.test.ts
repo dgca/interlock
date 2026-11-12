@@ -344,7 +344,7 @@ it('loads saved Unlimited and explains it in workflow settings', async () => {
   expect(container.textContent).toContain('No shared assignment limit');
   expect(container.textContent).not.toContain('Up to null');
 });
-it('shows setup guidance for missing Pi and opens the custom integration form directly', async () => {
+it('shows setup guidance for missing Pi and links directly to the custom integration editor', async () => {
   rpc.profiles.mockResolvedValue([
     {
       ...harnessProfile(),
@@ -357,10 +357,10 @@ it('shows setup guidance for missing Pi and opens the custom integration form di
   await act(async () => root.render(h(DesignSystemProvider, {}, h(Harnesses))));
   expect(container.querySelector('a[href="https://pi.dev/"]')).not.toBeNull();
   expect(container.querySelector('[aria-label="Enable Pi"]')).toBeNull();
-  await act(async () => button('Add integration').click());
-  expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
-    'Add integration',
-  );
+  expect(
+    container.querySelector('a[href="/settings/ai/integrations/-/new"]')
+      ?.textContent,
+  ).toContain('Add integration');
   expect(rpc.manage).not.toHaveBeenCalled();
 });
 it('preserves open configuration edits across refresh and reloads only on explicit recovery', async () => {
