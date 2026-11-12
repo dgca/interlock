@@ -13,8 +13,9 @@ import {
 } from '../../design-system';
 
 import { WorkflowPauseButton, PauseBanner } from '../pauses/PauseControls';
+import { isConfirmedWriteRejection } from '../../lib/isConfirmedWriteRejection';
 import type { Action } from '../../lib/useActionFeedback';
-import { useBeforeUnloadWarning } from '../../lib/useBeforeUnloadWarning';
+import { useEditorDraft } from '../../lib/useEditorDraft';
 import { flushSync } from 'react-dom';
 import { WorkflowChildren } from './WorkflowChildren';
 import {
@@ -84,7 +85,7 @@ import navigationStyles from './CanvasNavigation.module.css';
 import { placeParallelMembers, tidyWorkflow } from '@interlock/core/layout';
 import { tidyWorkflowElk } from './workflowLayoutElk';
 import { TidyControl } from './TidyControl';
-import { api } from '../../lib/api';
+import { api, errorMessage } from '../../lib/api';
 import styles from './WorkflowEditor.module.css';
 import { withParallelReturns } from './parallelReturns';
 // Keep the workflow toolbar and lower canvas controls outside fitted node bounds.
@@ -157,6 +158,7 @@ export function WorkflowEditor({
   onBack,
   onRun,
   onSaved,
+  onPublicationChecked,
   act,
   onDirty,
   onDeleted = onBack,
@@ -173,6 +175,7 @@ export function WorkflowEditor({
   onBack: () => void;
   onRun: (workflow: Workflow) => void;
   onSaved: (w: Workflow) => void;
+  onPublicationChecked: (workflowId: string, latestVersion: number) => number;
   act: Action;
   onDirty: (dirty: boolean) => void;
   onDeleted?: () => void;
@@ -191,6 +194,11 @@ export function WorkflowEditor({
     revision: number;
     version: number;
   }>();
+  const [unconfirmedVersion, setUnconfirmedVersion] = useState<number>();
+  const [checkingPublication, setCheckingPublication] = useState(false);
+  const [publicationCheckError, setPublicationCheckError] = useState('');
+  const [publicationNotice, setPublicationNotice] = useState('');
+  const publicationCheck = useRef<AbortController>(null);
   const [navigationPending, setNavigationPending] = useState(false);
   const [pending, setPending] = useState<'save' | 'publish'>();
   const actionInFlight = useRef(false);
@@ -199,6 +207,7 @@ export function WorkflowEditor({
     mounted.current = true;
     return () => {
       mounted.current = false;
+      publicationCheck.current?.abort();
     };
   }, []);
   const editorRef = useRef<HTMLDivElement>(null);
@@ -458,24 +467,84 @@ export function WorkflowEditor({
   useEffect(() => {
     if (remoteChanged && !dirty && !editing && !pending) loadLatest();
   }, [remoteChanged, dirty, editing, pending, workflow, remoteSnapshot]);
-  const perform = (action: 'save' | 'publish', fn: () => Promise<Workflow>) => {
-    if (actionInFlight.current) return;
+  // The child workflow actions retain their existing draft navigation.
+  const { beginSave, finishSave } = useEditorDraft(
+    false,
+    dirty || layout.saving || Boolean(layout.error),
+  );
+  const perform = (
+    action: 'save' | 'publish',
+    fn: () => Promise<Workflow | undefined>,
+    onAcknowledged?: () => void,
+  ) => {
+    if (actionInFlight.current || !beginSave()) return;
     actionInFlight.current = true;
     setPending(action);
-    void act(fn, (w) =>
-      action === 'publish'
-        ? `Published “${w.name}” as v${w.latestVersion}.`
-        : 'Workflow draft saved.',
-    ).finally(() => {
-      actionInFlight.current = false;
-      setPending(undefined);
-    });
+    void (async () => {
+      let result: Workflow | undefined;
+      let active: boolean;
+      try {
+        result = await fn();
+      } catch (error) {
+        void act(async () => {
+          throw error;
+        });
+      } finally {
+        actionInFlight.current = false;
+        active = finishSave(false);
+        if (active) setPending(undefined);
+      }
+      if (!result || !active) return;
+      onAcknowledged?.();
+      void act(
+        async () => result,
+        action === 'publish'
+          ? `Published “${result.name}” as v${result.latestVersion}.`
+          : 'Workflow draft saved.',
+      );
+    })();
+  };
+  const checkPublication = async () => {
+    if (unconfirmedVersion === undefined || publicationCheck.current) return;
+    const request = new AbortController();
+    publicationCheck.current = request;
+    setCheckingPublication(true);
+    setPublicationCheckError('');
+    try {
+      const current = await api.workflows.get.query(
+        { id: workflow.id },
+        { signal: request.signal },
+      );
+      if (request.signal.aborted) return;
+      if (current.latestVersion < unconfirmedVersion)
+        throw new Error(
+          'Could not read the current published version. Try again.',
+        );
+      const latestVersion = onPublicationChecked(
+        workflow.id,
+        current.latestVersion,
+      );
+      setPublicationNotice(
+        latestVersion > unconfirmedVersion
+          ? `Published version v${latestVersion} is available.`
+          : 'No newer published version was found. Review the draft to publish again.',
+      );
+      setUnconfirmedVersion(undefined);
+      setReview(undefined);
+    } catch (error) {
+      if (!request.signal.aborted)
+        setPublicationCheckError(errorMessage(error));
+    } finally {
+      if (!request.signal.aborted) {
+        publicationCheck.current = null;
+        setCheckingPublication(false);
+      }
+    }
   };
   useEffect(() => {
     onDirty(dirty);
     return () => onDirty(false);
   }, [dirty, onDirty]);
-  useBeforeUnloadWarning(dirty || layout.saving || Boolean(layout.error));
   const historyBlocked = Boolean(
     editing ||
     deleting ||
@@ -705,12 +774,8 @@ export function WorkflowEditor({
         version: workflow.latestVersion,
         draftRevision: owner.draftRevision,
       });
-      if (!mounted.current) return workflow;
-      flushSync(() => {
-        onSaved(parent);
-        onDirty(false);
-      });
-      onOpenWorkflow?.(owner.id);
+      if (!mounted.current) return;
+      onSaved(parent);
       return workflow;
     } finally {
       setNavigationPending(false);
@@ -820,25 +885,41 @@ export function WorkflowEditor({
                 )}
                 <Button
                   className={styles.headerAction}
-                  aria-label="Review & publish"
-                  title="Review & publish"
-                  disabled={
-                    rawInvalid ||
-                    Boolean(rawResult?.publishError) ||
-                    (view === 'visual' && Boolean(graphError)) ||
-                    remoteChanged ||
-                    Boolean(pending)
+                  aria-label={
+                    unconfirmedVersion === undefined
+                      ? 'Review & publish'
+                      : 'Check published version'
                   }
-                  onClick={() =>
+                  title={
+                    unconfirmedVersion === undefined
+                      ? 'Review & publish'
+                      : 'Check published version'
+                  }
+                  disabled={
+                    Boolean(pending) ||
+                    (unconfirmedVersion === undefined &&
+                      (rawInvalid ||
+                        Boolean(rawResult?.publishError) ||
+                        (view === 'visual' && Boolean(graphError)) ||
+                        remoteChanged))
+                  }
+                  onClick={() => {
+                    setPublicationNotice('');
                     setReview({
                       draft: structuredClone(effectiveDraft),
                       revision: workflow.draftRevision,
                       version: workflow.latestVersion,
-                    })
-                  }
+                    });
+                  }}
                 >
                   <Upload />
-                  <span>{compactHeader ? 'Publish' : 'Review & publish'}</span>
+                  <span>
+                    {unconfirmedVersion !== undefined
+                      ? 'Check published version'
+                      : compactHeader
+                        ? 'Publish'
+                        : 'Review & publish'}
+                  </span>
                 </Button>
               </>
             )}
@@ -964,7 +1045,11 @@ export function WorkflowEditor({
                     dirty ? 'Save or discard child edits first' : undefined
                   }
                   onClick={() =>
-                    perform('save', () => useChildVersion(node.id))
+                    perform(
+                      'save',
+                      () => useChildVersion(node.id),
+                      () => onOpenWorkflow?.(owner.id),
+                    )
                   }
                 >
                   Use v{workflow.latestVersion} in {node.label}
@@ -1003,6 +1088,11 @@ export function WorkflowEditor({
         />
         {section === 'editor' && promptsRead && (
           <WorkspaceReadWarning reads={[promptsRead]} />
+        )}
+        {section === 'editor' && publicationNotice && (
+          <div role="status" className={styles.conflict}>
+            {publicationNotice}
+          </div>
         )}
         {remoteChanged && (dirty || editing) && !pending && (
           <div role="alert" className={styles.conflict}>
@@ -1389,6 +1479,15 @@ export function WorkflowEditor({
           latestVersion={workflow.latestVersion}
           draft={review.draft}
           pending={pending === 'publish'}
+          publicationCheck={
+            unconfirmedVersion === undefined
+              ? undefined
+              : {
+                  checking: checkingPublication,
+                  error: publicationCheckError,
+                  onCheck: () => void checkPublication(),
+                }
+          }
           editorChanged={
             remoteChanged ||
             workflow.draftRevision !== review.revision ||
@@ -1397,6 +1496,7 @@ export function WorkflowEditor({
           onClose={() => setReview(undefined)}
           onPublish={() => {
             if (
+              unconfirmedVersion !== undefined ||
               remoteChanged ||
               rawInvalid ||
               rawResult?.publishError ||
@@ -1412,9 +1512,17 @@ export function WorkflowEditor({
                   ? { ...current, revision: savedWorkflow.draftRevision }
                   : current,
               );
-              const published = await api.workflows.publish.mutate({
-                id: workflow.id,
-              });
+              let published: Workflow;
+              try {
+                published = await api.workflows.publish.mutate({
+                  id: workflow.id,
+                });
+              } catch (error) {
+                if (isConfirmedWriteRejection(error)) throw error;
+                if (mounted.current)
+                  setUnconfirmedVersion(savedWorkflow.latestVersion);
+                return;
+              }
               onSaved(published);
               setReview(undefined);
               return published;

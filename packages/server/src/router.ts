@@ -122,6 +122,9 @@ const t = initTRPC
         ...shape,
         data: {
           ...shape.data,
+          ...(error.cause instanceof InterlockError
+            ? { domainRejection: true as const }
+            : {}),
           ...(error.cause instanceof ResultRejection
             ? { resultCheck: error.cause.resultCheck }
             : {}),

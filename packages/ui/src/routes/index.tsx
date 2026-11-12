@@ -372,6 +372,7 @@ function WorkflowRoute() {
         act={context.act}
         onDirty={context.onDirty}
         onSaved={context.onSaved}
+        onPublicationChecked={context.onPublicationChecked}
         onRun={context.onRun}
         onBack={() =>
           void navigate(

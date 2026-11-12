@@ -6,7 +6,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Check, AlertCircle } from 'lucide-react';
 
 import { Outlet, useBlocker, useMatch, useNavigate } from 'react-router';
-import { paths } from './routes/paths';
+import { automationDraftKey, paths } from './routes/paths';
 import { useActionFeedback } from './lib/useActionFeedback';
 import type { Workflow, SavedPrompt } from '@interlock/core';
 import { Sidebar, type AttentionFailure } from './components/Sidebar/Sidebar';
@@ -33,9 +33,8 @@ export type AppContext = {
   onDirty: (dirty: boolean) => void;
   onEditorGuard: (guard: EditorGuard) => void;
   editorNavigationBlocked: boolean;
-  onScheduleDirty: (dirty: boolean) => void;
-  onSchedulePending: (pending: boolean) => void;
   onSaved: (workflow: Workflow) => void;
+  onPublicationChecked: (workflowId: string, latestVersion: number) => number;
   onRun: (workflow: Workflow) => void;
   onConnect?: () => void;
 };
@@ -112,19 +111,17 @@ export function App() {
     editorGuard.current = guard;
   }, []);
   const blockedWhileSaving = useRef(false);
-  const [scheduleDirty, setScheduleDirty] = useState(false);
-  const [schedulePending, setSchedulePending] = useState(false);
   const [connectDialog, setConnectDialog] = useState(false);
   const blocker = useBlocker(({ currentLocation, nextLocation }) => {
     const leavingEditor =
       currentLocation.pathname !== nextLocation.pathname ||
       (currentLocation.pathname === paths.harnesses &&
-        aiSettingsTab(currentLocation) !== aiSettingsTab(nextLocation));
+        aiSettingsTab(currentLocation) !== aiSettingsTab(nextLocation)) ||
+      (currentLocation.pathname === paths.automationNew &&
+        automationDraftKey(new URLSearchParams(currentLocation.search)) !==
+          automationDraftKey(new URLSearchParams(nextLocation.search)));
     const blocked =
-      (leavingEditor && (editorDirty || editorGuard.current !== undefined)) ||
-      ((scheduleDirty || schedulePending) &&
-        (currentLocation.pathname !== nextLocation.pathname ||
-          currentLocation.search !== nextLocation.search));
+      leavingEditor && (editorDirty || editorGuard.current !== undefined);
     if (blocked)
       blockedWhileSaving.current =
         leavingEditor && editorGuard.current === 'saving';
@@ -246,8 +243,6 @@ export function App() {
     onDirty: setEditorDirty,
     onEditorGuard,
     editorNavigationBlocked,
-    onScheduleDirty: setScheduleDirty,
-    onSchedulePending: setSchedulePending,
     onSaved: (w) => {
       // Cancellation is synchronous; earlier list reads cannot replace this acknowledgement.
       void queryClient.cancelQueries(trpc.workflows.list.queryFilter());
@@ -260,6 +255,43 @@ export function App() {
             )
           : [...all, { draftMatchesLatest: null, layoutRevision: 0, ...w }],
       );
+    },
+    onPublicationChecked: (workflowId, latestVersion) => {
+      const key = trpc.workflows.list.queryKey();
+      const cached = queryClient
+        .getQueryData(key)
+        ?.find((item) => item.id === workflowId);
+      if (!cached || cached.latestVersion >= latestVersion)
+        return cached?.latestVersion ?? latestVersion;
+
+      const mergeVersion = () =>
+        queryClient.setQueryData(key, (all) => {
+          if (
+            !all?.some(
+              (item) =>
+                item.id === workflowId && item.latestVersion < latestVersion,
+            )
+          )
+            return undefined;
+          return all.map((item) =>
+            item.id === workflowId
+              ? { ...item, latestVersion, draftMatchesLatest: null }
+              : item,
+          );
+        });
+      const pending =
+        queryClient.getQueryState(key)?.fetchStatus === 'fetching';
+      mergeVersion();
+      if (pending) {
+        // The pending snapshot may contain newer catalog data and an older version.
+        const filter = { queryKey: key, exact: true };
+        const options = { cancelRefetch: false };
+        void queryClient.refetchQueries(filter, options).then(() => {
+          mergeVersion();
+          return queryClient.refetchQueries(filter, options);
+        });
+      }
+      return latestVersion;
     },
     onRun: setRunDialog,
     onConnect: features.connectAgent ? () => setConnectDialog(true) : undefined,
@@ -309,10 +341,8 @@ export function App() {
         {blocker.state === 'blocked' && editorNavigationBlocked && (
           <DiscardChangesDialog
             onKeepEditing={blocker.reset}
-            discardDisabled={schedulePending}
             onDiscard={() => {
               setEditorDirty(false);
-              setScheduleDirty(false);
               blocker.proceed();
             }}
           />

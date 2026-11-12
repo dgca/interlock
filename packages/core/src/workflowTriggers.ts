@@ -372,3 +372,5 @@ export const scheduleManageInputSchema = z
   })
   .strict()
   .transform((value) => scheduleMutationSchema.parse(value));
+export const triggerRevisionConflict =
+  'Trigger revision conflict; retain edits and reload the current trigger before reconciling';

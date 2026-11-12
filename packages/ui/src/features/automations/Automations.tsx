@@ -32,7 +32,7 @@ import {
 } from 'lucide-react';
 import type { AppContext } from '../../App';
 import { PageTabs } from '../../components/PageLayout/PageLayout';
-import { paths } from '../../routes/paths';
+import { automationDraftKey, paths } from '../../routes/paths';
 import { errorMessage } from '../../lib/api';
 import { AutomationEditor } from './AutomationEditor';
 import { AutomationDetail } from './AutomationDetail';
@@ -71,7 +71,7 @@ export function Automations() {
   const editor = editing ? (
     <AutomationEditor key={automationId} id={automationId} />
   ) : creating && (kind === 'schedule' || kind === 'event') ? (
-    <AutomationEditor key={kind} kind={kind} />
+    <AutomationEditor key={automationDraftKey(search)} kind={kind} />
   ) : null;
   return (
     <WorkspaceReads

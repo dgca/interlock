@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { TRPCClientError } from '@interlock/client';
 import { act, createElement as h, StrictMode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -179,6 +180,7 @@ let workflow: Workflow & { layoutRevision?: number };
 let layoutRevision: number;
 let layoutPositions: WorkflowPositions;
 const saved = vi.fn();
+const publicationChecked = vi.fn((_id: string, version: number) => version);
 const opened = vi.fn();
 const reportOpened = vi.fn();
 const onDirty = vi.fn();
@@ -211,6 +213,7 @@ const render = async (visible = true, deletingOutside = false) => {
           onReport: reportOpened,
           onRun: vi.fn(),
           onSaved: saved,
+          onPublicationChecked: publicationChecked,
           onDirty,
           act: runAction,
         })
@@ -595,8 +598,18 @@ it('shows both values when node contract fields are added or removed', async () 
   expect(values[3]).toBe('Not set');
 });
 
+const publicationRejected = new TRPCClientError('Publish failed', {
+  result: {
+    error: {
+      code: -32600,
+      message: 'Publish failed',
+      data: { code: 'BAD_REQUEST' },
+    },
+  },
+});
+
 it('keeps the review open after a publication error', async () => {
-  rpc.publish.mockRejectedValueOnce(new Error('Publish failed'));
+  rpc.publish.mockRejectedValueOnce(publicationRejected);
   await render();
   await reviewPublish();
   expect(errors).toHaveLength(1);
@@ -609,7 +622,7 @@ it('can retry publication after saving local edits', async () => {
   await render();
   await click('Workflow settings');
   await click('Apply local edit');
-  rpc.publish.mockRejectedValueOnce(new Error('Publish failed'));
+  rpc.publish.mockRejectedValueOnce(publicationRejected);
   await reviewPublish();
   workflow = await rpc.update.mock.results[0].value;
   await render();
@@ -617,6 +630,30 @@ it('can retry publication after saving local edits', async () => {
   await click('Publish version');
   expect(rpc.update).toHaveBeenCalledTimes(1);
   expect(rpc.publish).toHaveBeenCalledTimes(2);
+});
+
+it('checks a lost publication response without replacing a newer Raw draft', async () => {
+  rpc.publish.mockRejectedValueOnce(new TRPCClientError('Failed to fetch'));
+  await render();
+  await reviewPublish();
+  expect(rpc.publish).toHaveBeenCalledTimes(1);
+  await click('Cancel');
+  await click('Raw');
+  await act(async () => rawEditor.props.onChange('{newer raw edit'));
+  await click('Check published version');
+  const check = [
+    ...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button'),
+  ].find((candidate) => candidate.textContent === 'Check published version')!;
+  rpc.get.mockResolvedValueOnce({ ...workflow, latestVersion: 1 });
+  await act(async () => check.click());
+  expect(rpc.get).toHaveBeenLastCalledWith(
+    { id: workflow.id },
+    expect.objectContaining({ signal: expect.anything() }),
+  );
+  expect(publicationChecked).toHaveBeenLastCalledWith(workflow.id, 1);
+  expect(saved).not.toHaveBeenCalled();
+  expect(rawEditor.props.value).toBe('{newer raw edit');
+  expect(rpc.publish).toHaveBeenCalledTimes(1);
 });
 
 it('blocks confirming a review after a newer version appears', async () => {

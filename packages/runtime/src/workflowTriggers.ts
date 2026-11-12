@@ -8,6 +8,7 @@ import {
   nextScheduleSlot,
   latestScheduleSlot,
   scheduleInput,
+  triggerRevisionConflict,
   SCHEDULE_LAG_THRESHOLD_MS,
   type ScheduleMutation,
   type ScheduleRead,
@@ -303,9 +304,7 @@ export class WorkflowTriggers {
       }
       let trigger = this.get(q.id);
       if (trigger.revision !== q.expectedRevision)
-        throw new InterlockError(
-          'Trigger revision conflict; retain edits and reload the current trigger before reconciling',
-        );
+        throw new InterlockError(triggerRevisionConflict);
       if (q.action === 'delete') {
         this.store.remove('workflowTriggers', trigger.id);
         this.store.deleteScheduleFires(trigger.id);

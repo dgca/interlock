@@ -15,6 +15,7 @@ import {
 import { useEffect, useRef, useState } from 'react';
 import {
   Link,
+  useLocation,
   useNavigate,
   useOutletContext,
   useSearchParams,
@@ -47,6 +48,10 @@ import classes from './Automations.module.css';
 export function AutomationDetail({ id }: { id: string }) {
   const { tick } = useOutletContext<AppContext>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const saved = location.state?.savedAutomation;
+  const acknowledgedName: string | undefined =
+    saved?.id === id ? saved.name : undefined;
   const [search] = useSearchParams();
   const view = search.get('view') === 'settings' ? 'settings' : 'activity';
   const offset = runOffset(search.get('offset'));
@@ -155,7 +160,7 @@ export function AutomationDetail({ id }: { id: string }) {
   return (
     <section className={workspacePage.page}>
       <PageHeader
-        title={trigger?.name ?? 'Automation'}
+        title={trigger?.name ?? acknowledgedName ?? 'Automation'}
         status={
           trigger
             ? [
@@ -167,7 +172,9 @@ export function AutomationDetail({ id }: { id: string }) {
               ]
                 .filter(Boolean)
                 .join(' · ')
-            : undefined
+            : acknowledgedName
+              ? 'Saved'
+              : undefined
         }
         onBack={() => void navigate(returnHref(search))}
         backLabel="Back to automations"
@@ -238,7 +245,7 @@ export function AutomationDetail({ id }: { id: string }) {
             color="red"
             mb="md"
             title={
-              data
+              data || acknowledgedName
                 ? 'Could not refresh automation'
                 : 'Could not load automation'
             }

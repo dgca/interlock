@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
-import { useNavigate, useOutletContext, useParams } from 'react-router';
+import { useEffect, useId, useRef, useState } from 'react';
+import { Link, useNavigate, useOutletContext, useParams } from 'react-router';
+import { isConfirmedWriteRejection } from '../../lib/isConfirmedWriteRejection';
 import { ArrowDown, ArrowUp, Plus, X } from 'lucide-react';
 import { boardSettingsRevisionConflict } from '@interlock/core';
 import {
@@ -16,7 +17,6 @@ import {
   workspacePage,
 } from '../../design-system';
 import type { AppContext } from '../../App';
-import { DiscardChangesDialog } from '../../components/DiscardChangesDialog';
 import { WorkspaceReadWarning } from '../../components/WorkspaceReads';
 import { api, errorMessage } from '../../lib/api';
 import {
@@ -26,6 +26,7 @@ import {
   useQueryClient,
 } from '../../lib/query';
 import { useEditorDraft } from '../../lib/useEditorDraft';
+import { useDraftDismissal } from '../../lib/useDraftDismissal';
 import { paths } from '../../routes/paths';
 import classes from './Boards.module.css';
 
@@ -60,18 +61,21 @@ export function BoardSettingsRoute() {
 }
 
 function BoardSettings({ initial }: { initial?: Settings }) {
+  const formId = useId();
   const [baseline, setBaseline] = useState(initial);
   const [name, setName] = useState(baseline?.name ?? '');
   const [columns, setColumns] = useState(() => draftColumns(baseline));
   const [selected, setSelected] = useState(baseline?.workflowIds ?? []);
   const [error, setError] = useState('');
   const [loadError, setLoadError] = useState('');
-  const [confirmLoad, setConfirmLoad] = useState(false);
+  const [unconfirmedCreation, setUnconfirmedCreation] = useState(false);
+  const [unconfirmedUpdate, setUnconfirmedUpdate] = useState(false);
   const [loadingLatest, setLoadingLatest] = useState(false);
   const latestRequest = useRef<AbortController>(null);
   useEffect(() => () => latestRequest.current?.abort(), []);
 
   const conflict = Boolean(baseline && error === boardSettingsRevisionConflict);
+  const needsReload = conflict || unconfirmedUpdate;
   const originalColumns = baseline?.columns ?? [];
   const originalWorkflows = new Set(baseline?.workflowIds);
   const dirty =
@@ -86,8 +90,7 @@ function BoardSettings({ initial }: { initial?: Settings }) {
     selected.some((id) => !originalWorkflows.has(id));
   const { busy: saving, beginSave, finishSave } = useEditorDraft(dirty);
   const busy = saving || loadingLatest;
-  const { workflows, workflowsRead, editorNavigationBlocked } =
-    useOutletContext<AppContext>();
+  const { workflows, workflowsRead } = useOutletContext<AppContext>();
   const boards = useQuery(trpc.boards.list.queryOptions());
   const client = useQueryClient();
   const navigate = useNavigate();
@@ -105,12 +108,25 @@ function BoardSettings({ initial }: { initial?: Settings }) {
     initial && (!baseline || initial.revision >= baseline.revision)
       ? initial.protectedColumnIds
       : baseline?.protectedColumnIds;
+  const canSave =
+    !busy &&
+    dirty &&
+    !needsReload &&
+    !unconfirmedCreation &&
+    name.trim() &&
+    (moves.length === 0 || boards.data);
+  const goBack = () => void navigate(returnTo);
+  const applySettings = (settings: Settings) => {
+    setName(settings.name);
+    setColumns(draftColumns(settings));
+    setSelected(settings.workflowIds);
+    setError('');
+  };
 
   const loadLatest = async () => {
     if (!baseline || latestRequest.current) return;
     const request = new AbortController();
     latestRequest.current = request;
-    setConfirmLoad(false);
     setLoadingLatest(true);
     setLoadError('');
     try {
@@ -123,7 +139,8 @@ function BoardSettings({ initial }: { initial?: Settings }) {
       const key = trpc.boards.settings.queryKey(input);
       const cached = client.getQueryData<Settings>(key);
       if (
-        latest.revision <= baseline.revision ||
+        latest.revision < baseline.revision ||
+        (!unconfirmedUpdate && latest.revision === baseline.revision) ||
         (cached && latest.revision < cached.revision)
       ) {
         setLoadError('Could not read the latest board settings. Try again.');
@@ -131,11 +148,15 @@ function BoardSettings({ initial }: { initial?: Settings }) {
       }
       void client.cancelQueries({ queryKey: key, exact: true });
       client.setQueryData(key, latest);
+      setUnconfirmedUpdate(false);
+      if (latest.revision === baseline.revision) {
+        setError(
+          'The saved board revision is unchanged. Your draft is ready to save again.',
+        );
+        return;
+      }
       setBaseline(latest);
-      setName(latest.name);
-      setColumns(draftColumns(latest));
-      setSelected(latest.workflowIds);
-      setError('');
+      applySettings(latest);
     } catch (error) {
       if (!request.signal.aborted)
         setLoadError(`Could not load board settings. ${errorMessage(error)}`);
@@ -146,6 +167,7 @@ function BoardSettings({ initial }: { initial?: Settings }) {
       }
     }
   };
+  const recovery = useDraftDismissal(dirty, busy, () => void loadLatest());
   const move = (index: number, offset: number) =>
     setColumns((current) => {
       const next = [...current];
@@ -156,14 +178,53 @@ function BoardSettings({ initial }: { initial?: Settings }) {
     <div className={workspacePage.page}>
       <PageHeader
         title={baseline ? 'Board settings' : 'New board'}
-        subtitle={initial?.name}
+        subtitle={baseline?.name}
+        status={
+          dirty
+            ? 'Unsaved changes'
+            : baseline
+              ? `Saved · Revision ${baseline.revision}`
+              : undefined
+        }
+        onBack={goBack}
+        backLabel={baseline ? 'Back to board' : 'Back to boards'}
+        busy={busy}
+        actions={
+          <>
+            <Button
+              disabled={busy || Boolean(baseline && !dirty && !needsReload)}
+              loading={loadingLatest}
+              onClick={() => {
+                if (needsReload) recovery.dismiss();
+                else if (baseline) applySettings(baseline);
+                else goBack();
+              }}
+            >
+              {needsReload
+                ? 'Load latest'
+                : baseline
+                  ? 'Discard changes'
+                  : 'Cancel'}
+            </Button>
+            <Button
+              variant="primary"
+              form={formId}
+              type="submit"
+              loading={saving}
+              disabled={!canSave}
+            >
+              {baseline ? 'Save changes' : 'Create board'}
+            </Button>
+          </>
+        }
       />
       <div className={classes.content}>
         <form
-          className={classes.form}
+          id={formId}
+          className={`${workspacePage.card} ${classes.form}`}
           onSubmit={async (event) => {
             event.preventDefault();
-            if (conflict || latestRequest.current || !beginSave()) return;
+            if (!canSave || latestRequest.current || !beginSave()) return;
             setError('');
             const expectedBoards = new Map(
               selectedWorkflows.map((workflow) => [
@@ -192,9 +253,36 @@ function BoardSettings({ initial }: { initial?: Settings }) {
                 exact: true,
               });
               void refreshQueries(client);
-              if (finishSave(true)) void navigate(paths.board(board.id));
+              if (finishSave(true))
+                void navigate(paths.board(board.id), {
+                  replace: !baseline,
+                  state: {
+                    savedBoard: {
+                      id: board.id,
+                      name: board.name,
+                      revision: board.revision,
+                    },
+                  },
+                });
             } catch (error) {
-              if (finishSave(false)) setError(errorMessage(error));
+              if (!finishSave(false)) return;
+              const message = errorMessage(error);
+              if (
+                message === boardSettingsRevisionConflict ||
+                isConfirmedWriteRejection(error)
+              ) {
+                setError(message);
+              } else if (baseline) {
+                setUnconfirmedUpdate(true);
+                setError(
+                  'Interlock could not confirm whether board settings were saved. Load latest to check the saved settings.',
+                );
+              } else {
+                setUnconfirmedCreation(true);
+                setError(
+                  'Interlock could not confirm whether the board was created. Check Boards before creating it again.',
+                );
+              }
             }
           }}
         >
@@ -320,48 +408,22 @@ function BoardSettings({ initial }: { initial?: Settings }) {
                   : error
               }
             />
-            {conflict && (
-              <div>
-                <ActionError message={loadError} />
-                <Button
-                  variant="secondary"
-                  loading={loadingLatest}
-                  onClick={() => {
-                    if (dirty) setConfirmLoad(true);
-                    else void loadLatest();
-                  }}
-                >
-                  Load latest
-                </Button>
-              </div>
-            )}
-            <Group justify="flex-end">
-              <Button disabled={busy} onClick={() => void navigate(returnTo)}>
-                Cancel
-              </Button>
+            {needsReload && <ActionError message={loadError} />}
+            {unconfirmedCreation && (
               <Button
-                variant="primary"
-                type="submit"
-                loading={saving}
-                disabled={
-                  loadingLatest ||
-                  conflict ||
-                  !name.trim() ||
-                  (moves.length > 0 && !boards.data)
-                }
+                component={Link}
+                to={paths.boards}
+                target="_blank"
+                rel="noreferrer"
+                variant="secondary"
               >
-                {baseline ? 'Save changes' : 'Create board'}
+                Check Boards in a new tab
               </Button>
-            </Group>
+            )}
           </Stack>
         </form>
       </div>
-      {confirmLoad && !editorNavigationBlocked && (
-        <DiscardChangesDialog
-          onKeepEditing={() => setConfirmLoad(false)}
-          onDiscard={() => void loadLatest()}
-        />
-      )}
+      {recovery.confirmation}
     </div>
   );
 }

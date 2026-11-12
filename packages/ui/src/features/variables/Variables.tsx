@@ -21,13 +21,20 @@ import {
 } from '../../design-system';
 
 import { useEffect, useId, useRef, useState } from 'react';
-import { Link, useNavigate, useOutletContext, useParams } from 'react-router';
-import { flushSync } from 'react-dom';
+import {
+  Link,
+  useLocation,
+  useNavigate,
+  useOutletContext,
+  useParams,
+} from 'react-router';
 
 import { ArrowRight, ChevronRight, Plus, Search, Trash2 } from 'lucide-react';
+import { isConfirmedWriteRejection } from '../../lib/isConfirmedWriteRejection';
 import type { AppContext } from '../../App';
 import {
   variableRequirementSchema,
+  variableRevisionConflict,
   type VariableBinding,
 } from '@interlock/core';
 import { api, errorMessage } from '../../lib/api';
@@ -37,7 +44,8 @@ import {
   useQueryClient,
   useRefreshOnTick,
 } from '../../lib/query';
-import { useBeforeUnloadWarning } from '../../lib/useBeforeUnloadWarning';
+import { useDraftDismissal } from '../../lib/useDraftDismissal';
+import { useEditorDraft } from '../../lib/useEditorDraft';
 
 import { paths } from '../../routes/paths';
 import layout from '../../components/PageLayout/PageLayout.module.css';
@@ -264,8 +272,12 @@ export function VariableRoute() {
 function VariableEditor({ id }: { id: string }) {
   const creating = id === 'new';
   const formId = useId();
-  const { act, onDirty, tick } = useOutletContext<AppContext>();
+  const { act, tick } = useOutletContext<AppContext>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const acknowledged = location.state?.savedVariable;
+  const acknowledgedName: string | undefined =
+    acknowledged?.id === id ? acknowledged.name : undefined;
   const queryClient = useQueryClient();
   const cached = queryClient.getQueryData(
     trpc.variables.read.queryKey({ action: 'inspect', id, offset: 0 }),
@@ -305,8 +317,10 @@ function VariableEditor({ id }: { id: string }) {
   const [configError, setConfigError] = useState('');
   const [valueRequired, setValueRequired] = useState(false);
   const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
-  const pending = useRef(false);
+  const [readError, setReadError] = useState('');
+  const [loadingLatest, setLoadingLatest] = useState(false);
+  const [unconfirmedWrite, setUnconfirmedWrite] = useState(false);
+  const latestRequest = useRef<AbortController>(null);
   const [refresh, setRefresh] = useState(0);
   const [offset, setOffset] = useState(0);
   const [deleting, setDeleting] = useState(false);
@@ -331,19 +345,40 @@ function VariableEditor({ id }: { id: string }) {
     config !== undefined &&
     (configDraft !== config.value || config.revision === null);
   const dirty = creating
-    ? !!(name || description || value)
+    ? Boolean(name || description || value || kind !== 'secret')
     : !!saved &&
       (name !== saved.name ||
         description !== saved.description ||
         replacingSecret ||
         configChanged);
-  useBeforeUnloadWarning(dirty);
+  const { busy: saving, beginSave, finishSave } = useEditorDraft(dirty);
+  const busy = saving || loadingLatest;
+  const conflict = error === variableRevisionConflict;
+  const needsReload = conflict || (!creating && unconfirmedWrite);
+  const readConfig = async (inspection: Inspection) => {
+    if (inspection.kind !== 'config' || inspection.availability === 'locked')
+      return undefined;
+    if (config?.revision === inspection.valueRevision) return config;
+    if (inspection.valueRevision === null) return { revision: null, value: '' };
+    const result = await queryClient.fetchQuery(
+      configReadOptions(id, inspection.valueRevision),
+    );
+    return { revision: inspection.valueRevision, value: result.value };
+  };
+  const applyInspection = (
+    inspection: Inspection,
+    nextConfig: typeof config,
+  ) => {
+    setSaved(inspection);
+    setConfig(nextConfig);
+    setConfigDraft(undefined);
+    setName(inspection.name);
+    setDescription(inspection.description);
+    setKind(inspection.kind);
+  };
+  useEffect(() => () => latestRequest.current?.abort(), []);
   useEffect(() => {
-    onDirty(dirty);
-    return () => onDirty(false);
-  }, [dirty, onDirty]);
-  useEffect(() => {
-    if (creating || dirty || busy) return;
+    if (creating || dirty || busy || needsReload) return;
     let active = true;
     void queryClient
       .fetchQuery(
@@ -352,41 +387,24 @@ function VariableEditor({ id }: { id: string }) {
       .then(async (r) => {
         if (!active || !('dependencies' in r)) return;
         let nextConfig: typeof config = undefined;
-        let readError = '';
-        if (r.kind === 'config' && r.availability !== 'locked') {
-          if (config?.revision === r.valueRevision) {
-            nextConfig = config;
-          } else if (r.valueRevision === null) {
-            nextConfig = { revision: null, value: '' };
-          } else {
-            try {
-              const result = await queryClient.fetchQuery(
-                configReadOptions(id, r.valueRevision),
-              );
-              if ('value' in result)
-                nextConfig = { revision: r.valueRevision, value: result.value };
-            } catch (e) {
-              readError = errorMessage(e);
-            }
-          }
+        let configFailure = '';
+        try {
+          nextConfig = await readConfig(r);
+        } catch (e) {
+          configFailure = errorMessage(e);
         }
         if (!active) return;
-        setSaved(r);
-        setConfig(nextConfig);
-        setConfigDraft(undefined);
-        setConfigError(readError);
-        setName(r.name);
-        setDescription(r.description);
-        setKind(r.kind);
-        setError('');
+        applyInspection(r, nextConfig);
+        setConfigError(configFailure);
+        setReadError('');
       })
       .catch((e) => {
-        if (active) setError(errorMessage(e));
+        if (active) setReadError(errorMessage(e));
       });
     return () => {
       active = false;
     };
-  }, [id, creating, dirty, busy, tick, refresh, offset, config]);
+  }, [id, creating, dirty, busy, needsReload, tick, refresh, offset, config]);
   useEffect(() => {
     if (replacingSecret) valueInput.current?.focus();
     else if (!busy && returnToValue.current) {
@@ -405,165 +423,239 @@ function VariableEditor({ id }: { id: string }) {
     }
     setError('');
   };
+  const loadLatest = async () => {
+    if (!saved || latestRequest.current) return;
+    const request = new AbortController();
+    latestRequest.current = request;
+    setLoadingLatest(true);
+    setReadError('');
+    try {
+      const input = { action: 'inspect' as const, id, offset };
+      const latest = await api.variables.read.query(input, {
+        signal: request.signal,
+      });
+      if (request.signal.aborted) return;
+      if (
+        !('dependencies' in latest) ||
+        latest.id !== saved.id ||
+        latest.revision < saved.revision ||
+        (!unconfirmedWrite && latest.revision === saved.revision)
+      )
+        throw new Error('Could not read the latest revision. Try again.');
+      const nextConfig = await readConfig(latest);
+      if (request.signal.aborted) return;
+      const key = trpc.variables.read.queryKey(input);
+      const cached = queryClient.getQueryData(key);
+      if (
+        cached &&
+        'dependencies' in cached &&
+        latest.revision < cached.revision
+      )
+        throw new Error('Could not read the latest revision. Try again.');
+      void queryClient.cancelQueries({ queryKey: key, exact: true });
+      queryClient.setQueryData(key, latest);
+      setUnconfirmedWrite(false);
+      if (latest.revision === saved.revision) {
+        setError(
+          'The saved variable revision is unchanged. Your draft is ready to save again.',
+        );
+        return;
+      }
+      clear();
+      setConfigError('');
+      applyInspection(latest, nextConfig);
+    } catch (error) {
+      if (!request.signal.aborted) setReadError(errorMessage(error));
+    } finally {
+      if (!request.signal.aborted) {
+        latestRequest.current = null;
+        setLoadingLatest(false);
+      }
+    }
+  };
+  const recovery = useDraftDismissal(dirty, busy, () => void loadLatest());
   const save = async () => {
-    if (pending.current) return;
+    if (busy || needsReload || unconfirmedWrite || !dirty || !name.trim())
+      return;
     if (replacingSecret && !value) {
       setValueRequired(true);
       valueInput.current?.focus();
       return;
     }
-    pending.current = true;
-    setBusy(true);
+    if (!beginSave()) return;
     setError('');
+    let result: Extract<
+      Awaited<ReturnType<typeof api.variables.manage.mutate>>,
+      { name: string }
+    >;
     try {
-      await act(
-        async () => {
-          const result = await api.variables.manage.mutate(
-            creating
-              ? {
-                  action: 'create',
-                  name,
-                  description,
-                  kind,
-                  ...(kind === 'config' || value ? { value } : {}),
-                }
-              : {
-                  action: 'update',
-                  id,
-                  expectedRevision: saved!.revision,
-                  name,
-                  description,
-                  ...(configChanged
-                    ? { value: configDraft }
-                    : replacingSecret
-                      ? { value }
-                      : {}),
-                },
-          );
-          await queryClient.cancelQueries(trpc.variables.read.pathFilter());
-          queryClient.setQueriesData<Read>(
-            trpc.variables.read.pathFilter(),
-            (current) =>
-              current &&
-              'dependencies' in current &&
-              'name' in result &&
-              current.id === result.id &&
-              current.revision <= result.revision
-                ? { ...current, ...result }
-                : current,
-          );
-          if (
-            'name' in result &&
-            result.kind === 'config' &&
-            result.valueRevision !== null
-          ) {
-            const savedValue = creating
-              ? value
-              : configChanged
-                ? configDraft
-                : undefined;
-            if (savedValue !== undefined)
-              queryClient.setQueryData<ConfigValue>(
-                configReadOptions(result.id, result.valueRevision).queryKey,
-                { id: result.id, value: savedValue },
-              );
-          }
-          void queryClient.invalidateQueries(trpc.variables.read.pathFilter());
-          // Clear the entered Secret replacement before refreshing the view.
-          returnToValue.current = replacingSecret;
-          setValue('');
-          setReplacingSecret(false);
-          setConfigDraft(undefined);
-          if ('name' in result) {
-            setName(result.name);
-            setDescription(result.description);
-          }
-          if (creating && 'name' in result) {
-            flushSync(() => onDirty(false));
-            void navigate(paths.variable(result.id));
-          } else {
-            if (saved && 'availability' in result) {
-              setSaved({ ...saved, ...result });
-              if (configChanged)
-                setConfig({
-                  revision: result.valueRevision,
-                  value: configDraft!,
-                });
+      const receipt = await api.variables.manage.mutate(
+        creating
+          ? {
+              action: 'create',
+              name,
+              description,
+              kind,
+              ...(kind === 'config' || value ? { value } : {}),
             }
-            setRefresh((n) => n + 1);
-          }
-        },
-        creating ? 'Variable created.' : 'Variable saved.',
-        setError,
+          : {
+              action: 'update',
+              id,
+              expectedRevision: saved!.revision,
+              name,
+              description,
+              ...(configChanged
+                ? { value: configDraft }
+                : replacingSecret
+                  ? { value }
+                  : {}),
+            },
       );
-    } finally {
-      pending.current = false;
-      setBusy(false);
+      if (!('name' in receipt))
+        throw new Error('The saved variable was not returned.');
+      result = receipt;
+    } catch (error) {
+      if (!finishSave(false)) return;
+      const message = errorMessage(error);
+      if (
+        message === variableRevisionConflict ||
+        isConfirmedWriteRejection(error)
+      ) {
+        setError(message);
+      } else {
+        setUnconfirmedWrite(true);
+        setError(
+          creating
+            ? 'Interlock could not confirm whether the variable was created. Check Variables before creating it again.'
+            : 'Interlock could not confirm whether the variable was saved. Load latest to check the saved revision.',
+        );
+      }
+      return;
     }
+    await act(async () => {
+      const active = finishSave(true);
+      if (active) {
+        // Clear write-only input before any related read is refreshed.
+        returnToValue.current = replacingSecret;
+        setValue('');
+        setReplacingSecret(false);
+        setValueRequired(false);
+        setConfigDraft(undefined);
+        setName(result.name);
+        setDescription(result.description);
+        if (saved) {
+          setSaved({ ...saved, ...result });
+          if (configChanged)
+            setConfig({
+              revision: result.valueRevision,
+              value: configDraft!,
+            });
+        }
+      }
+      const filter = trpc.variables.read.queryFilter({
+        action: 'inspect',
+        id: result.id,
+      });
+      void queryClient.cancelQueries(filter);
+      queryClient.setQueriesData<Read>(filter, (current) =>
+        current &&
+        'dependencies' in current &&
+        current.revision <= result.revision
+          ? { ...current, ...result }
+          : current,
+      );
+      if (result.kind === 'config' && result.valueRevision !== null) {
+        const savedValue = creating
+          ? value
+          : configChanged
+            ? configDraft
+            : undefined;
+        if (savedValue !== undefined)
+          queryClient.setQueryData<ConfigValue>(
+            configReadOptions(result.id, result.valueRevision).queryKey,
+            { id: result.id, value: savedValue },
+          );
+      }
+      if (active && creating)
+        void navigate(paths.variable(result.id), {
+          replace: true,
+          state: { savedVariable: { id: result.id, name: result.name } },
+        });
+    });
   };
   const change = async () => {
-    if (!saved || pending.current || (!rebind && !deleting)) return;
-    pending.current = true;
-    setBusy(true);
+    if (!saved || busy || (!rebind && !deleting) || !beginSave()) return;
     setError('');
-    try {
-      await act(
-        async () => {
-          if (rebind)
-            await api.variables.manage.mutate({
-              action: 'bind',
-              id: rebind.binding.id,
-              variableId: rebind.target,
-              kind: rebind.binding.kind,
-              expectedRevision: rebind.binding.revision,
-            });
-          else {
-            await api.variables.manage.mutate({
-              action: 'delete',
-              id,
-              expectedRevision: saved.revision,
-            });
-            for (const filter of [
-              trpc.variables.read.queryFilter({ action: 'inspect', id }),
-              trpc.variables.read.queryFilter({ action: 'config_value', id }),
-            ]) {
-              await queryClient.cancelQueries(filter);
-              queryClient.removeQueries(filter);
-            }
+    await act(
+      async () => {
+        if (rebind) {
+          await api.variables.manage.mutate({
+            action: 'bind',
+            id: rebind.binding.id,
+            variableId: rebind.target,
+            kind: rebind.binding.kind,
+            expectedRevision: rebind.binding.revision,
+          });
+        } else {
+          await api.variables.manage.mutate({
+            action: 'delete',
+            id,
+            expectedRevision: saved.revision,
+          });
+          for (const filter of [
+            trpc.variables.read.queryFilter({ action: 'inspect', id }),
+            trpc.variables.read.queryFilter({ action: 'config_value', id }),
+          ]) {
+            void queryClient.cancelQueries(filter);
+            queryClient.removeQueries(filter);
           }
-          void queryClient.invalidateQueries(trpc.variables.read.pathFilter());
-          setDeleting(false);
-          setRebind(undefined);
-          if (deleting) void navigate(paths.variables);
-          else setRefresh((n) => n + 1);
-        },
-        rebind ? 'Binding updated.' : 'Variable updated.',
-        setError,
-      );
-    } finally {
-      pending.current = false;
-      setBusy(false);
-    }
+        }
+        if (!finishSave(true)) return;
+        setDeleting(false);
+        setRebind(undefined);
+        if (deleting) void navigate(paths.variables);
+      },
+      rebind ? 'Binding updated.' : 'Variable updated.',
+      (message) => {
+        if (finishSave(false)) setError(message);
+      },
+    );
   };
   const discard = () => {
-    clear();
-    if (creating) {
-      flushSync(() => onDirty(false));
-      void navigate(paths.variables);
-    }
+    if (creating) void navigate(paths.variables);
+    else if (needsReload) recovery.dismiss();
+    else clear();
   };
   const header = (
     <PageHeader
-      title={creating ? 'New variable' : (saved?.name ?? 'Variable')}
-      status={saved ? (dirty ? 'Unsaved changes' : 'Saved') : undefined}
+      title={
+        creating
+          ? 'New variable'
+          : (saved?.name ?? acknowledgedName ?? 'Variable')
+      }
+      status={
+        dirty
+          ? 'Unsaved changes'
+          : saved || acknowledgedName
+            ? 'Saved'
+            : undefined
+      }
       onBack={() => void navigate(paths.variables)}
       backLabel="Back to variables"
       busy={busy}
       actions={
         (creating || saved) && (
           <>
-            <Button disabled={busy || (!creating && !dirty)} onClick={discard}>
-              {creating ? 'Cancel' : 'Discard changes'}
+            <Button
+              disabled={busy || (!creating && !dirty && !needsReload)}
+              loading={loadingLatest}
+              onClick={discard}
+            >
+              {needsReload
+                ? 'Load latest'
+                : creating
+                  ? 'Cancel'
+                  : 'Discard changes'}
             </Button>
             {!creating && saved && (
               <Button
@@ -571,7 +663,7 @@ function VariableEditor({ id }: { id: string }) {
                 ref={deleteTrigger}
                 aria-label="Delete variable"
                 leftSection={<Trash2 size={16} aria-hidden="true" />}
-                disabled={dirty || busy}
+                disabled={dirty || busy || needsReload}
                 onClick={() => setDeleting(true)}
               >
                 Delete
@@ -579,7 +671,14 @@ function VariableEditor({ id }: { id: string }) {
             )}
             <Button
               variant="primary"
-              disabled={busy || !dirty || !name.trim()}
+              disabled={
+                busy ||
+                !dirty ||
+                needsReload ||
+                unconfirmedWrite ||
+                !name.trim()
+              }
+              loading={saving && !deleting && !rebind}
               type="submit"
               form={formId}
             >
@@ -596,9 +695,16 @@ function VariableEditor({ id }: { id: string }) {
         {header}
         <div className={workspacePage.content}>
           <div className={workspacePage.formContent}>
-            {error ? (
-              <Alert color="red" title="Could not load variable">
-                {error}
+            {readError ? (
+              <Alert
+                color="red"
+                title={
+                  acknowledgedName
+                    ? 'Could not refresh variable'
+                    : 'Could not load variable'
+                }
+              >
+                {readError}
                 <Button
                   variant="ghost"
                   onClick={() => setRefresh((n) => n + 1)}
@@ -685,7 +791,7 @@ function VariableEditor({ id }: { id: string }) {
           onClick={() => {
             setValue('');
             setValueRequired(false);
-            setError('');
+            if (!needsReload) setError('');
             setReplacingSecret(false);
             requestAnimationFrame(() => replaceButton.current?.focus());
           }}
@@ -702,7 +808,48 @@ function VariableEditor({ id }: { id: string }) {
       <div className={workspacePage.content}>
         <div className={workspacePage.formContent}>
           {!deleting && !rebind && (
-            <ActionError message={error} className={styles.error} />
+            <ActionError
+              message={
+                conflict
+                  ? 'This variable changed elsewhere. Your edits are still here.'
+                  : error
+              }
+              className={styles.error}
+            />
+          )}
+          {creating && unconfirmedWrite && (
+            <Button
+              component={Link}
+              to={paths.variables}
+              target="_blank"
+              rel="noreferrer"
+              variant="secondary"
+              mb="md"
+            >
+              Check Variables in a new tab
+            </Button>
+          )}
+          {readError && (
+            <Alert
+              color="red"
+              mb="md"
+              title={
+                needsReload
+                  ? 'Could not load the latest variable'
+                  : 'Could not refresh variable'
+              }
+            >
+              {readError}
+              {!needsReload && (
+                <Button
+                  variant="ghost"
+                  disabled={dirty || busy}
+                  onClick={() => setRefresh((n) => n + 1)}
+                >
+                  Retry variable details
+                </Button>
+              )}
+            </Alert>
           )}
           <form
             id={formId}
@@ -962,6 +1109,7 @@ function VariableEditor({ id }: { id: string }) {
           </form>
         </div>
       </div>
+      {recovery.confirmation}
       {(deleting || rebind) && saved && (
         <Modal
           title={rebind ? 'Change portable binding' : 'Delete variable'}

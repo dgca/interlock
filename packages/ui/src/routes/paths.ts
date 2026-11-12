@@ -32,6 +32,10 @@ export function runOffset(value: string | null) {
   return Number.isSafeInteger(offset) && offset > 0 ? offset : 0;
 }
 
+export function automationDraftKey(search: URLSearchParams) {
+  return JSON.stringify([search.get('type'), search.get('workflow') || null]);
+}
+
 // Resource URLs use stable IDs, independent of names or future folder membership.
 export const paths = {
   boards: '/boards',

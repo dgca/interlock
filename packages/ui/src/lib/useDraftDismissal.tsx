@@ -21,7 +21,10 @@ export function useDraftDismissal(
     confirmation: confirming && !navigationBlocked && (
       <DiscardChangesDialog
         onKeepEditing={() => setConfirming(false)}
-        onDiscard={onClose}
+        onDiscard={() => {
+          setConfirming(false);
+          onClose();
+        }}
       />
     ),
   };

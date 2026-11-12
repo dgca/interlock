@@ -223,3 +223,5 @@ export function validateVariableReferences(definition: WorkflowDefinition) {
     }
   }
 }
+export const variableRevisionConflict =
+  'Variable changed elsewhere. Reload before saving. Your edits have not been saved.';

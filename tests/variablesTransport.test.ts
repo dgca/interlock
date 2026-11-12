@@ -8,6 +8,7 @@ import { Engine } from '@interlock/runtime';
 import { Store } from '@interlock/storage';
 import { createClient } from '@interlock/client';
 import { createApp } from '../packages/server/src/app';
+import { isConfirmedWriteRejection } from '../packages/ui/src/lib/isConfirmedWriteRejection';
 
 let discovery: unknown;
 it.each(['http', 'stdio'])(
@@ -164,6 +165,47 @@ it.each(['http', 'stdio'])(
         true,
       );
       const shared = createClient(url);
+      if (mode === 'http') {
+        const rejections = [
+          {
+            call: shared.variables.manage.mutate({
+              action: 'create',
+              name: 'api_token',
+              kind: 'secret',
+              value: token,
+            }),
+            message:
+              'A variable with that name already exists. Choose a different name.',
+          },
+          {
+            call: shared.boards.save.mutate({
+              name: 'Missing workflow',
+              columns: [],
+              workflowIds: ['missing'],
+            }),
+            message: 'A selected workflow no longer exists',
+          },
+          {
+            call: shared.workflows.publish.mutate({ id: 'missing' }),
+            message: 'Workflow not found',
+          },
+        ];
+        await Promise.all(
+          rejections.map(async ({ call, message }) => {
+            const error = await call.catch((reason: unknown) => reason);
+            expect(error).toMatchObject({
+              message,
+              data: {
+                code: 'INTERNAL_SERVER_ERROR',
+                httpStatus: 500,
+                domainRejection: true,
+              },
+            });
+            expect(isConfirmedWriteRejection(error)).toBe(true);
+            expect(JSON.stringify(error)).not.toContain(token);
+          }),
+        );
+      }
       try {
         await shared.variables.manage.mutate({
           action: 'create',
@@ -173,6 +215,7 @@ it.each(['http', 'stdio'])(
         });
         throw new Error('Expected safe validation failure');
       } catch (error) {
+        expect(isConfirmedWriteRejection(error)).toBe(true);
         expect(String(error)).not.toContain(token);
         expect(String(error)).toContain('Invalid variable change');
       }
