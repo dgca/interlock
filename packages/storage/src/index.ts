@@ -28,7 +28,11 @@ import {
 export type { ProjectionState } from './currentState.js';
 import { runSummaries } from './runSummaries.js';
 import { workflowCatalog, promptCatalog } from './catalogs.js';
-import { boardRuns, referencedBoardColumns } from './workflowBoards.js';
+import {
+  boardRuns,
+  referencedBoardColumns,
+  workflowBoardStageColumn,
+} from './workflowBoards.js';
 import { Transcripts } from './transcripts.js';
 import { runsForReport } from './report.js';
 export { runsForReport } from './report.js';
@@ -517,6 +521,9 @@ export class Store {
   }
   referencedBoardColumns(ids: string[]) {
     return referencedBoardColumns(this.db, ids);
+  }
+  workflowBoardStageColumn(workflowId: string, stageId: string) {
+    return workflowBoardStageColumn(this.db, workflowId, stageId);
   }
   boardRuns(
     board: WorkflowBoard,

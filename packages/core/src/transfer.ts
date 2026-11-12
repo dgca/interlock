@@ -6,6 +6,7 @@ import { savedPromptSchema, promptIds, samePromptContent } from './prompts.js';
 import { deletedVersionSchema } from './versionCleanup.js';
 import { variableRequirementSchema, variableReferences } from './variables.js';
 import { modelAliasRequirementSchema } from './modelAliases.js';
+import { boardSuggestionSchema, workflowStageId } from './workflowBoards.js';
 
 export const workflowBundleSchema = z
   .object({
@@ -21,6 +22,7 @@ export const workflowBundleSchema = z
       z.literal(8),
       z.literal(9),
       z.literal(10),
+      z.literal(11),
     ]),
     variables: z.array(variableRequirementSchema).max(4096).optional(),
     prompts: z.array(savedPromptSchema).optional(),
@@ -48,6 +50,7 @@ export const workflowBundleSchema = z
             name: z.string().trim().min(1).max(120),
             description: z.string(),
             ownerWorkflowId: z.string().nullable(),
+            boardSuggestion: boardSuggestionSchema.optional(),
             schedules: z
               .array(
                 z
@@ -89,6 +92,32 @@ export const workflowBundleSchema = z
       .min(1),
   })
   .superRefine((bundle, ctx) => {
+    for (const workflow of bundle.workflows) {
+      const nodes = [
+        workflow.draft,
+        ...workflow.versions.map((version) => version.definition),
+      ].flatMap((definition) => definition.nodes);
+      if (
+        bundle.formatVersion < 11 &&
+        (workflow.boardSuggestion || nodes.some((node) => node.stageId))
+      )
+        ctx.addIssue({
+          code: 'custom',
+          message: 'Portable board stages require bundle formatVersion 11',
+        });
+      if (workflow.boardSuggestion) {
+        const authored = new Set(nodes.map(workflowStageId));
+        if (
+          workflow.boardSuggestion.stages.some(
+            (stage) => !authored.has(stage.id),
+          )
+        )
+          ctx.addIssue({
+            code: 'custom',
+            message: 'Board suggestion references an unknown workflow stage',
+          });
+      }
+    }
     if (
       bundle.formatVersion < 10 &&
       bundle.modelAliases?.some((alias) => alias.reference)

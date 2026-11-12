@@ -6,6 +6,7 @@ import {
   blankDefinition,
   samePromptContent,
   withoutWorkflowPositions,
+  type BoardImportSetup,
   type PromptSnapshot,
 } from '@interlock/core';
 import {
@@ -20,9 +21,15 @@ import {
   type ImportDocument,
 } from '../../core/src/importDocument.js';
 import type { WorkflowBundle } from '../../core/src/transfer.js';
+import {
+  applyBoardImport,
+  previewBoardImport,
+  previewLegacyBoardImport,
+  withBoardImportReceipt,
+} from './boardImport.js';
 
 /** Validate each export independently, without changing the application database. */
-export function inspectImportDocument(data: unknown) {
+export function inspectImportDocument(data: unknown, destinationStore?: Store) {
   const document = parseImportDocument(data);
   const store = new Store(':memory:');
   const engine = new Engine(store, process.cwd());
@@ -71,6 +78,10 @@ export function inspectImportDocument(data: unknown) {
       const root = document.bundle.workflows.find(
         (w) => w.id === document.bundle.rootId,
       )!;
+      const boardSetup = previewBoardImport(
+        destinationStore ?? store,
+        document.bundle,
+      );
       return {
         document,
         name: root.name,
@@ -83,6 +94,9 @@ export function inspectImportDocument(data: unknown) {
           name: p.name,
         })),
         variables: document.bundle.variables ?? [],
+        ...(boardSetup.suggestions.length || boardSetup.unresolved.length
+          ? { boardSetup }
+          : {}),
       };
     }
     const w = document.workflow;
@@ -97,6 +111,7 @@ export function inspectImportDocument(data: unknown) {
         'Legacy file has dependencies. Export it as a portable bundle including its workflows and saved prompts.',
       );
     engine.create(w.name, w.description, w.definition, w.ownerWorkflowId);
+    const boardSetup = previewLegacyBoardImport(w.name, definition);
     return {
       document,
       name: w.name,
@@ -104,6 +119,7 @@ export function inspectImportDocument(data: unknown) {
       workflows: [],
       prompts: [],
       variables: [] as VariableRequirement[],
+      ...(boardSetup.unresolved.length ? { boardSetup } : {}),
     };
   } finally {
     engine.stop();
@@ -126,9 +142,11 @@ function combineBundles(
   >();
   const promptRevisions = new Map<string, PromptSnapshot>();
   let rootId = '';
+  let portableStages = false;
   for (const document of documents) {
     if (document.kind !== 'bundle') continue;
     rootId ||= document.bundle.rootId;
+    portableStages ||= document.bundle.formatVersion === 11;
     const pins = new Set(
       document.bundle.workflows.flatMap((workflow) =>
         workflow.versions.flatMap((version) =>
@@ -194,6 +212,16 @@ function combineBundles(
         throw new InterlockError(
           `Selected files conflict for workflow ${entry.id}`,
         );
+      if (entry.boardSuggestion) {
+        if (
+          previous.boardSuggestion &&
+          !isDeepStrictEqual(previous.boardSuggestion, entry.boardSuggestion)
+        )
+          throw new InterlockError(
+            `Selected files conflict for the board suggestion on workflow ${entry.id}`,
+          );
+        previous.boardSuggestion ??= structuredClone(entry.boardSuggestion);
+      }
       for (const schedule of entry.schedules ?? []) {
         const old = previous.schedules?.find((item) => item.id === schedule.id);
         if (old && !isDeepStrictEqual(old.config, schedule.config))
@@ -259,27 +287,27 @@ function combineBundles(
   return rootId
     ? {
         format: 'interlock-workflows',
-        formatVersion: [...modelAliases.values()].some(
-          (alias) => alias.reference,
-        )
-          ? 10
-          : promptRevisions.size
-            ? 9
-            : [...workflows.values()].some((w) => w.eventTriggers?.length)
-              ? 8
-              : modelAliases.size
-                ? 6
-                : [...workflows.values()].some((w) => w.schedules?.length)
-                  ? 5
-                  : variables.size
-                    ? 4
-                    : [...workflows.values()].some(
-                          (w) => w.deletedVersions?.length,
-                        )
-                      ? 3
-                      : prompts.size
-                        ? 2
-                        : 1,
+        formatVersion: portableStages
+          ? 11
+          : [...modelAliases.values()].some((alias) => alias.reference)
+            ? 10
+            : promptRevisions.size
+              ? 9
+              : [...workflows.values()].some((w) => w.eventTriggers?.length)
+                ? 8
+                : modelAliases.size
+                  ? 6
+                  : [...workflows.values()].some((w) => w.schedules?.length)
+                    ? 5
+                    : variables.size
+                      ? 4
+                      : [...workflows.values()].some(
+                            (w) => w.deletedVersions?.length,
+                          )
+                        ? 3
+                        : prompts.size
+                          ? 2
+                          : 1,
         rootId,
         ...(modelAliases.size
           ? { modelAliases: [...modelAliases.values()] }
@@ -299,12 +327,13 @@ export function importSelection(
   engine: Engine,
   data: unknown[],
   variableBindings?: VariableImportBindings,
+  boardSetup?: BoardImportSetup,
 ) {
   if (!data.length)
     throw new InterlockError('Select at least one workflow to import');
-  const documents = data.map((item) => inspectImportDocument(item).document);
-  const bundle = combineBundles(documents);
-  return engine.store.transaction(() => {
+  const apply = () => {
+    const documents = data.map((item) => inspectImportDocument(item).document);
+    const bundle = combineBundles(documents);
     let imported: WorkflowImportResult | undefined;
     if (bundle) {
       try {
@@ -337,12 +366,29 @@ export function importSelection(
       rootIds.push(created.id);
       changed.push(created.id);
     }
+    const setup = boardSetup
+      ? applyBoardImport(
+          engine.store,
+          bundle ? previewBoardImport(engine.store, bundle).suggestions : [],
+          boardSetup,
+        )
+      : undefined;
     return {
       rootIds,
       changed,
       ...(imported?.skippedVersions.length
         ? { skippedVersions: imported.skippedVersions }
         : {}),
+      ...(setup ? { boardSetup: setup } : {}),
     };
-  });
+  };
+  return engine.store.transaction(() =>
+    withBoardImportReceipt(
+      engine.store,
+      'selection',
+      boardSetup,
+      { data, variableBindings, boardSetup },
+      apply,
+    ),
+  );
 }
