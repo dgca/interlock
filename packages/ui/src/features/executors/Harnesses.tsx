@@ -457,7 +457,6 @@ function ProfileRow({
             <Button
               mt="md"
               disabled={busy || changed}
-              aria-haspopup="dialog"
               component={Link}
               to={paths.integration(profile.id)}
             >

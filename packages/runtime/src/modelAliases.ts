@@ -132,10 +132,12 @@ export class ModelAliases {
     if (q.action === 'list') {
       return this.list(q);
     }
-    const alias = this.get(q.id);
+    const alias = q.exactId
+      ? this.store.get<SavedModelAlias>('modelAliases', q.id)
+      : this.get(q.id);
     if (!alias) {
       throw new InterlockError(
-        this.requirement(q.id)
+        !q.exactId && this.requirement(q.id)
           ? `Model alias "${q.id}" is a known requirement but does not exist.`
           : `Model alias "${q.id}" does not exist.`,
       );
@@ -154,7 +156,9 @@ export class ModelAliases {
           q.permissions,
         );
       }
-      const existing = this.get(q.id);
+      const existing = q.exactId
+        ? this.store.get<SavedModelAlias>('modelAliases', q.id)
+        : this.get(q.id);
       if (!existing) {
         throw new InterlockError(`Model alias "${q.id}" does not exist.`);
       }

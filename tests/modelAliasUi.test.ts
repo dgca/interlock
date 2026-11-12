@@ -4,6 +4,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { UiTestProvider as DesignSystemProvider } from './uiTestProvider';
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import type { SavedModelAlias } from '@interlock/core';
+import { TRPCClientError } from '@interlock/client';
 import { AgentPresets } from '../packages/ui/src/features/executors/AgentPresets';
 import { ModelSettings } from '../packages/ui/src/features/executors/ModelSettings';
 
@@ -85,9 +86,16 @@ beforeEach(() => {
   rpc.read.mockImplementation(async (q) => {
     if (q.action === 'inspect') {
       const alias = records.find(
-        (alias) => alias.id === q.id || alias.name === q.id,
+        (alias) => alias.id === q.id || (!q.exactId && alias.name === q.id),
       );
-      if (!alias) throw new Error('Model alias does not exist.');
+      if (!alias)
+        throw TRPCClientError.from({
+          error: {
+            message: 'Model alias does not exist.',
+            code: -32603,
+            data: { domainRejection: true },
+          },
+        });
       return structuredClone(alias);
     }
     const filtered = records.filter(
@@ -323,9 +331,83 @@ it('confirms deletion with the current revision and explains future-run impact',
   expect(rpc.mutate).toHaveBeenCalledWith({
     action: 'delete',
     id: 'alias-reviewer',
+    exactId: true,
     expectedRevision: 4,
   });
   expect(container.textContent).toContain('No agent presets yet');
+});
+
+it.each(['update', 'delete'] as const)(
+  'keeps an acknowledged preset %s visible after a failed refresh',
+  async (action) => {
+    await renderSection();
+    await edit();
+    if (action === 'update') {
+      await fill(labelled('Name') as HTMLInputElement, 'new reviewer');
+    } else {
+      await click(button('Delete preset'));
+    }
+    rpc.read.mockRejectedValueOnce(new Error('Catalog unavailable'));
+    const scope =
+      action === 'delete'
+        ? [...document.querySelectorAll('[role="dialog"]')].at(-1)!
+        : document;
+    await click(
+      button(action === 'delete' ? 'Delete preset' : 'Save changes', scope),
+    );
+    expect(
+      container.querySelector('[aria-label="Edit preset reviewer"]'),
+    ).toBeNull();
+    if (action === 'update')
+      expect(
+        container.querySelector('[aria-label="Edit preset new reviewer"]'),
+      ).toBeTruthy();
+    else expect(container.textContent).toContain('Preset reviewer deleted.');
+    expect(container.textContent).toContain(
+      'Could not refresh presets. Catalog unavailable',
+    );
+    await click(button('Retry loading presets'));
+    expect(rpc.mutate).toHaveBeenCalledTimes(1);
+  },
+);
+
+it('opens a found preset after uncertain creation only after discarding the local draft', async () => {
+  await renderSection();
+  await click(button('New preset'));
+  await fill(labelled('Name') as HTMLInputElement, 'builder');
+  const harness = labelled('Harness') as HTMLSelectElement;
+  await act(async () => {
+    harness.value = 'codex';
+    harness.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  await click(labelled('Model'));
+  const model = [
+    ...document.querySelectorAll<HTMLElement>('[role="option"]'),
+  ].find((option) => option.textContent?.includes('Native Model'))!;
+  await click(model);
+  rpc.mutate.mockRejectedValueOnce(new Error('Failed to fetch'));
+  await click(button('Create preset'));
+  records.push({
+    ...fixture(),
+    id: 'alias-new',
+    name: 'builder',
+    description: 'Saved preset',
+  });
+  await click(button('Check saved preset'));
+  await click(button('Open saved preset'));
+  await click(button('Keep editing'));
+  expect((labelled('Name') as HTMLInputElement).value).toBe('builder');
+  await click(button('Open saved preset'));
+  await click(button('Discard changes'));
+  expect((labelled('Description') as HTMLTextAreaElement).value).toBe(
+    'Saved preset',
+  );
+  expect(rpc.read).toHaveBeenLastCalledWith({
+    action: 'inspect',
+    id: 'alias-new',
+    exactId: true,
+  });
+  expect(rpc.mutate).toHaveBeenCalledTimes(1);
 });
 
 it('pages bounded results and recovers from a list failure', async () => {

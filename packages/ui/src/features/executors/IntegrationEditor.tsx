@@ -353,6 +353,11 @@ function IntegrationEditor({
         permissions,
         model: profile?.model,
         effort: profile?.effort,
+        provider: profile?.provider,
+        tools: profile?.tools,
+        skills: profile?.skills,
+        continueOnMissingResult: profile?.continueOnMissingResult,
+        transientRetry: profile?.transientRetry,
         ...(concurrency === '' ? {} : { concurrency: Number(concurrency) }),
         ...(timeoutSeconds !== ''
           ? { timeoutSeconds: Number(timeoutSeconds) }

@@ -63,6 +63,13 @@ function presetHarnessLabel(
   return label;
 }
 
+function missingPreset(error: unknown) {
+  return (
+    isConfirmedWriteRejection(error) &&
+    errorMessage(error).endsWith('does not exist.')
+  );
+}
+
 export function AgentPresets({
   profiles,
 }: {
@@ -70,12 +77,13 @@ export function AgentPresets({
 }) {
   const [offset, setOffset] = useState(0);
   const queryClient = useQueryClient();
+  const pageOptions = trpc.modelAliases.read.queryOptions({
+    action: 'list',
+    offset,
+    limit: 10,
+  });
   const pageQuery = useQuery({
-    ...trpc.modelAliases.read.queryOptions({
-      action: 'list',
-      offset,
-      limit: 10,
-    }),
+    ...pageOptions,
     select: (result) => {
       if (!('items' in result))
         throw new Error('Could not read agent presets.');
@@ -103,16 +111,53 @@ export function AgentPresets({
     }
     setOpening(true);
     try {
-      setEditing(await readModelAlias(id));
+      setEditing(await readModelAlias(id, { exactId: true }));
     } catch (error) {
       setLoadError(errorMessage(error));
+      if (missingPreset(error))
+        void pageQuery.refetch({ cancelRefetch: false });
     } finally {
       setOpening(false);
     }
   };
-  const changed = () => {
-    void queryClient.invalidateQueries(trpc.modelAliases.pathFilter());
+  const changed = (result: SavedModelAlias | { id: string }, name: string) => {
+    const saved = 'revision' in result ? result : undefined;
+    if (page?.items.some((item) => item.id === result.id)) {
+      const key = pageOptions.queryKey;
+      void queryClient.cancelQueries({ queryKey: key, exact: true });
+      queryClient.setQueryData(key, (current) => {
+        if (
+          !current ||
+          !('items' in current) ||
+          !current.items.some((item) => item.id === result.id)
+        )
+          return undefined;
+        if (saved) {
+          return {
+            ...current,
+            items: current.items.map((item) =>
+              item.id === saved.id && item.revision <= saved.revision
+                ? saved
+                : item,
+            ),
+          };
+        }
+        const total = current.total - 1;
+        return {
+          ...current,
+          items: current.items.filter((item) => item.id !== result.id),
+          total,
+          truncated: current.offset + current.limit < total,
+        };
+      });
+    }
     close();
+    setNotice(
+      saved
+        ? `Preset ${saved.name} saved.`
+        : `Preset ${name} deleted. Existing runs keep their captured settings.`,
+    );
+    void queryClient.invalidateQueries(trpc.modelAliases.pathFilter());
   };
   return (
     <section
@@ -150,7 +195,9 @@ export function AgentPresets({
         <ActionError message={loadError} />
         {error && (
           <div className={styles.error}>
-            <ActionError message={error} />
+            <ActionError
+              message={page ? `Could not refresh presets. ${error}` : error}
+            />
             <Button onClick={() => void pageQuery.refetch()}>
               Retry loading presets
             </Button>
@@ -248,14 +295,7 @@ export function AgentPresets({
           onClose={close}
           returnFocusTo={() => trigger.current}
           onReload={setEditing}
-          onSaved={(name, deleted) => {
-            changed();
-            setNotice(
-              deleted
-                ? `Preset ${name} deleted. Existing runs keep their captured settings.`
-                : `Preset ${name} saved.`,
-            );
-          }}
+          onSaved={changed}
         />
       )}
     </section>
@@ -283,7 +323,7 @@ function PresetEditor({
   onClose: () => void;
   returnFocusTo: () => HTMLElement | null;
   onReload: (alias: SavedModelAlias) => void;
-  onSaved: (name: string, deleted?: boolean) => void;
+  onSaved: (result: SavedModelAlias | { id: string }, name: string) => void;
 }) {
   const [name, setName] = useState(alias?.name ?? '');
   const [description, setDescription] = useState(alias?.description ?? '');
@@ -298,6 +338,8 @@ function PresetEditor({
   const [error, setError] = useState('');
   const [readError, setReadError] = useState('');
   const [newerSaved, setNewerSaved] = useState(false);
+  const [missing, setMissing] = useState(false);
+  const [foundPresetId, setFoundPresetId] = useState<string>();
   const [confirmation, setConfirmation] = useState(false);
   const nameInput = useRef<HTMLInputElement>(null);
   const current = {
@@ -332,6 +374,8 @@ function PresetEditor({
       setError('');
       setReadError('');
       setNewerSaved(false);
+      setMissing(false);
+      setFoundPresetId(undefined);
     }
   }, [alias]);
   useEffect(() => () => checkRequest.current?.abort(), []);
@@ -352,19 +396,24 @@ function PresetEditor({
     });
   const readSaved = async (checkingWrite: boolean) => {
     if (checkRequest.current) return;
-    const target = alias?.id ?? unconfirmed?.name;
+    const target =
+      alias?.id ?? (checkingWrite ? unconfirmed?.name : foundPresetId);
     if (!target) return;
     const request = new AbortController();
     checkRequest.current = request;
     setChecking(true);
     setReadError('');
     try {
-      const latest = await readModelAlias(target, request.signal);
+      const latest = await readModelAlias(target, {
+        signal: request.signal,
+        exactId: Boolean(alias || !checkingWrite),
+      });
       if (request.signal.aborted) return;
       if (checkingWrite && unconfirmed?.action === 'create') {
         setUnconfirmed(undefined);
+        setFoundPresetId(latest.id);
         setError(
-          `A preset named “${latest.name}” is saved. Keep these edits under a different name or close this editor to open the saved preset.`,
+          `A preset named “${latest.name}” is saved. Open it or keep these edits under a different name.`,
         );
       } else if (checkingWrite && latest.revision === alias?.revision) {
         setUnconfirmed(undefined);
@@ -374,7 +423,7 @@ function PresetEditor({
         setConfirmation(false);
         setNewerSaved(true);
         setError('A newer preset revision is saved. Load latest to review it.');
-      } else if (alias && latest.revision > alias.revision) {
+      } else if (!alias || latest.revision > alias.revision) {
         onReload(latest);
       } else {
         setReadError('Could not read the latest revision. Try again.');
@@ -382,19 +431,18 @@ function PresetEditor({
     } catch (reason) {
       if (request.signal.aborted) return;
       const message = errorMessage(reason);
-      if (
-        checkingWrite &&
-        isConfirmedWriteRejection(reason) &&
-        message.endsWith('does not exist.')
-      ) {
-        if (unconfirmed?.action === 'delete') {
-          onSaved(unconfirmed.name, true);
-        } else if (unconfirmed?.action === 'create') {
+      if (missingPreset(reason)) {
+        if (checkingWrite && unconfirmed?.action === 'delete' && alias) {
+          onSaved({ id: alias.id }, unconfirmed.name);
+        } else if (checkingWrite && unconfirmed?.action === 'create') {
           setUnconfirmed(undefined);
           setError(
             'No saved preset was found. Your edits are available to save again.',
           );
         } else {
+          setUnconfirmed(undefined);
+          setFoundPresetId(undefined);
+          setMissing(Boolean(alias));
           setError('The saved preset no longer exists.');
         }
       } else {
@@ -412,14 +460,15 @@ function PresetEditor({
   const run = async (
     action: 'create' | 'update' | 'delete',
     name: string,
-    operation: () => Promise<unknown>,
+    operation: () => Promise<SavedModelAlias | { id: string }>,
   ) => {
-    if (unconfirmed || !beginSave()) return;
+    if (unconfirmed || missing || !beginSave()) return;
+    setFoundPresetId(undefined);
     setError('');
     setReadError('');
     try {
-      await operation();
-      if (finishSave(true)) onSaved(name, action === 'delete');
+      const result = await operation();
+      if (finishSave(true)) onSaved(result, name);
     } catch (reason) {
       if (!finishSave(false)) return;
       const message = errorMessage(reason);
@@ -428,7 +477,11 @@ function PresetEditor({
         message.startsWith('Model alias changed elsewhere.')
       ) {
         setError(message);
-        if (message.startsWith('Model alias changed elsewhere.'))
+        if (missingPreset(reason)) setMissing(true);
+        if (
+          missingPreset(reason) ||
+          message.startsWith('Model alias changed elsewhere.')
+        )
           setConfirmation(false);
       } else {
         setUnconfirmed({ action, name });
@@ -444,7 +497,7 @@ function PresetEditor({
       className={styles.editor}
       onSubmit={(event) => {
         event.preventDefault();
-        if (busy || conflict || unconfirmed || !dirty) return;
+        if (busy || conflict || unconfirmed || missing || !dirty) return;
         const parsed = modelAliasNameSchema.safeParse(name);
         if (!parsed.success) {
           setError(
@@ -471,6 +524,7 @@ function PresetEditor({
               ? {
                   action: 'update',
                   id: alias.id,
+                  exactId: true,
                   expectedRevision: alias.revision,
                   ...current,
                   permissions: permissions ?? null,
@@ -674,7 +728,12 @@ function PresetEditor({
             Check saved preset
           </Button>
         )}
-        {conflict && !unconfirmed && (
+        {foundPresetId && (
+          <Button loading={checking} onClick={reload.dismiss}>
+            Open saved preset
+          </Button>
+        )}
+        {conflict && !unconfirmed && !missing && (
           <Button loading={checking} onClick={reload.dismiss}>
             Load latest
           </Button>
@@ -686,7 +745,7 @@ function PresetEditor({
             <Button
               variant="ghost"
               aria-label="Delete preset"
-              disabled={busy || Boolean(unconfirmed) || conflict}
+              disabled={busy || Boolean(unconfirmed) || conflict || missing}
               onClick={() => setConfirmation(true)}
             >
               <Trash2 size={14} />
@@ -701,7 +760,9 @@ function PresetEditor({
         <Button
           variant="primary"
           type="submit"
-          disabled={busy || !dirty || conflict || Boolean(unconfirmed)}
+          disabled={
+            busy || !dirty || conflict || Boolean(unconfirmed) || missing
+          }
         >
           {busy ? 'Saving…' : alias ? 'Save changes' : 'Create preset'}
         </Button>
@@ -726,6 +787,7 @@ function PresetEditor({
         <Modal
           title={`Delete ${alias.name}?`}
           busy={saving}
+          covered={dismissal.covered || reload.covered}
           onClose={() => setConfirmation(false)}
         >
           <ModalBody>
@@ -748,6 +810,7 @@ function PresetEditor({
                   api.modelAliases.mutate.mutate({
                     action: 'delete',
                     id: alias.id,
+                    exactId: true,
                     expectedRevision: alias.revision,
                   }),
                 )

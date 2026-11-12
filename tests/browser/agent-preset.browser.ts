@@ -1,3 +1,4 @@
+import { createClient } from '@interlock/client';
 import { chromium, type Browser } from 'playwright';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import { openBrowserApp } from './app';
@@ -55,6 +56,25 @@ it.each([1440, 900, 390])(
         .poll(() => name.evaluate((node) => node === document.activeElement))
         .toBe(true);
 
+      await modal.getByRole('button', { name: 'Delete preset' }).click();
+      const deletion = page.getByRole('dialog', { name: 'Delete Reviewer?' });
+      const cancelDeletion = deletion.getByRole('button', { name: 'Cancel' });
+      await cancelDeletion.focus();
+      await page.goBack();
+      const keep = confirm.getByRole('button', { name: 'Keep editing' });
+      await expect
+        .poll(() => keep.evaluate((node) => node === document.activeElement))
+        .toBe(true);
+      await keep.click();
+      await expect
+        .poll(() =>
+          cancelDeletion.evaluate((node) => node === document.activeElement),
+        )
+        .toBe(true);
+      await cancelDeletion.click();
+      expect(await name.inputValue()).toBe('Local edit');
+      expect(writes).toBe(0);
+
       app.engine.modelAliases.mutate({
         action: 'update',
         id: alias.id,
@@ -93,3 +113,67 @@ it.each([1440, 900, 390])(
     }
   },
 );
+
+it('keeps unexposed configuration when renaming an API-created integration', async () => {
+  const app = await openBrowserApp();
+  const page = await browser.newPage({ viewport: { width: 390, height: 900 } });
+  page.setDefaultTimeout(5000);
+  try {
+    const client = createClient(app.url);
+    const preserved = {
+      provider: 'fixture-provider',
+      tools: ['fixture-tool'],
+      skills: ['fixture-skill'],
+      continueOnMissingResult: {
+        maxTurns: 2,
+        message: 'Return the configured result',
+      },
+      transientRetry: { maxRetries: 1, windowMs: 1000, initialBackoffMs: 0 },
+    };
+    await client.executors.manage.mutate({
+      action: 'save',
+      profile: {
+        id: 'custom-fixture',
+        name: 'Original integration',
+        harness: 'custom',
+        mode: 'direct',
+        transport: 'http',
+        turnUrl: 'http://127.0.0.1:1/fixture',
+        cwd: '/tmp',
+        expectedRevision: 0,
+        ...preserved,
+      },
+    });
+    await page.goto(`${app.url}/settings/ai`);
+    await page
+      .getByRole('button', { name: 'Edit defaults for Original integration' })
+      .click();
+    const link = page.getByRole('link', { name: 'Edit integration' });
+    expect(await link.getAttribute('aria-haspopup')).toBeNull();
+    await link.click();
+    expect(
+      await page
+        .getByRole('link', { name: 'AI Settings' })
+        .getAttribute('aria-current'),
+    ).toBe('page');
+    await page
+      .getByRole('textbox', { name: /^Name/ })
+      .fill('Renamed integration');
+    await page.getByText('Advanced settings', { exact: true }).click();
+    await page.getByRole('textbox', { name: 'Working directory' }).fill('');
+    await page.getByRole('button', { name: 'Save changes' }).click();
+    await page.getByRole('heading', { name: 'Renamed integration' }).waitFor();
+    const stored = (await client.executors.profiles.query()).find(
+      (profile) => profile.id === 'custom-fixture',
+    );
+    expect(stored).toMatchObject({
+      name: 'Renamed integration',
+      revision: 2,
+      ...preserved,
+    });
+    expect(stored).not.toHaveProperty('cwd');
+  } finally {
+    await page.close();
+    await app.close();
+  }
+});

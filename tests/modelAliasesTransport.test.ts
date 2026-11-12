@@ -48,6 +48,7 @@ it.each(['http', 'stdio'])(
       );
       expect(presetTool?.description).toContain('Agent presets');
       expect(JSON.stringify(presetTool?.inputSchema)).toContain('permissions');
+      expect(JSON.stringify(presetTool?.inputSchema)).toContain('exactId');
 
       const call = async (
         name: string,
@@ -211,13 +212,39 @@ it.each(['http', 'stdio'])(
       expect(existing.run.modelAliasCaptures[0].candidates[0].model).toBe(
         'claude-3-7-sonnet',
       );
-      await call('manage_model_aliases', {
+      const replacement = await call('manage_model_aliases', {
         request: {
           action: 'create',
           name: 'builder',
           candidates: [{ model: 'repaired-model' }],
         },
       });
+      await call(
+        'manage_model_aliases',
+        {
+          request: { action: 'inspect', id: alias.id, exactId: true },
+        },
+        true,
+      );
+      for (const action of ['update', 'delete']) {
+        await call(
+          'manage_model_aliases',
+          {
+            request: {
+              action,
+              id: alias.id,
+              exactId: true,
+              expectedRevision: 1,
+            },
+          },
+          true,
+        );
+      }
+      expect(
+        await call('manage_model_aliases', {
+          request: { action: 'inspect', id: alias.id },
+        }),
+      ).toEqual(replacement);
       const repaired = await call('start_run', {
         workflowId: identifiedWorkflow.id,
         input: {},
