@@ -522,6 +522,15 @@ export class Store {
   referencedBoardColumns(ids: string[]) {
     return referencedBoardColumns(this.db, ids);
   }
+  workflowBoardId(workflowId: string) {
+    const row = this.db
+      .prepare(
+        `SELECT json_extract(value, '$.boardId') AS boardId
+         FROM documents WHERE collection = 'workflows' AND id = ?`,
+      )
+      .get(workflowId);
+    return (row?.boardId as string | null | undefined) ?? null;
+  }
   workflowBoardStageColumn(workflowId: string, stageId: string) {
     return workflowBoardStageColumn(this.db, workflowId, stageId);
   }

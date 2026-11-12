@@ -141,7 +141,6 @@ export function previewBoardImport(
   const suggestions = new Map<string, SuggestedBoard>();
   const unresolved: UnresolvedStages[] = [];
   for (const workflow of bundle.workflows) {
-    const current = store.get<Workflow>('workflows', workflow.id);
     const suggestion = workflow.boardSuggestion;
     if (suggestion) {
       const { stages, ...board } = suggestion;
@@ -157,7 +156,7 @@ export function previewBoardImport(
       const member = {
         workflowId: workflow.id,
         name: workflow.name,
-        currentBoardId: current?.boardId ?? null,
+        currentBoardId: store.workflowBoardId(workflow.id),
         stages,
       };
       if (group) group.workflows.push(member);

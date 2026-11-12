@@ -336,9 +336,9 @@ export function importSelection(
 ) {
   if (!data.length)
     throw new InterlockError('Select at least one workflow to import');
+  const documents = data.map((item) => inspectImportDocument(item).document);
+  const bundle = combineBundles(documents);
   const apply = () => {
-    const documents = data.map((item) => inspectImportDocument(item).document);
-    const bundle = combineBundles(documents);
     let imported: WorkflowImportResult | undefined;
     if (bundle) {
       try {
