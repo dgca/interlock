@@ -3,6 +3,7 @@ import { TRPCClientError } from '@interlock/client';
 import { transferableAbortController } from 'node:util';
 import {
   boardSettingsRevisionConflict,
+  promptRevisionConflict,
   type SaveBoard,
   type WorkflowBoard,
 } from '@interlock/core';
@@ -12,12 +13,15 @@ import { createMemoryRouter, RouterProvider } from 'react-router';
 import { afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest';
 import { trpc, useQueryClient } from '../packages/ui/src/lib/query';
 import { routes } from '../packages/ui/src/routes';
+import { paths } from '../packages/ui/src/routes/paths';
 import { UiTestProvider } from './uiTestProvider';
 
 const rpc = vi.hoisted(() => ({
   saveBoard: vi.fn(),
   boardSettings: vi.fn(),
   createPrompt: vi.fn(),
+  getPrompt: vi.fn(),
+  updatePrompt: vi.fn(),
   listPrompts: vi.fn(),
   listWorkflows: vi.fn(),
   saveIntegration: vi.fn(),
@@ -38,8 +42,9 @@ vi.mock('../packages/ui/src/lib/api', async () => {
       workflows: { list: { query: rpc.listWorkflows } },
       prompts: {
         list: { query: rpc.listPrompts },
-        get: { query: async () => ({ usage: [] }) },
+        get: { query: rpc.getPrompt },
         create: { mutate: rpc.createPrompt },
+        update: { mutate: rpc.updatePrompt },
       },
       requests: { list: { query: emptyPage } },
       triggers: { attention: { query: emptyPage } },
@@ -112,6 +117,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   rpc.boardSettings.mockResolvedValue(board);
   rpc.listPrompts.mockResolvedValue([]);
+  rpc.getPrompt.mockResolvedValue({ ...prompt, usage: [] });
   rpc.listWorkflows.mockResolvedValue([]);
   rpc.profiles.mockResolvedValue([profile]);
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
@@ -478,34 +484,35 @@ it('keeps Board settings usable and retries only unavailable workflow choices', 
   expect(button('Save changes').disabled).toBe(false);
 });
 
-it('guards new prompt dismissal and Back, and opens the acknowledged prompt after a failed attempt', async () => {
-  await render('/prompts');
-  await ready(() => button('New prompt'));
-  await click('New prompt');
-  await escape();
-  expect(discardDialog()).toBeUndefined();
-  expect(document.querySelector('[role="dialog"]')).toBeNull();
+async function openNewPrompt() {
+  const link = () =>
+    document.querySelector<HTMLAnchorElement>(
+      `header a[href="${paths.promptNew}"]`,
+    );
+  await ready(() => expect(link()).toBeTruthy());
+  await act(async () => link()!.click());
+  await ready(() => expect(field('Instructions')).toBeTruthy());
+}
 
-  await click('New prompt');
+it('guards new prompt navigation and recovers an acknowledged creation after losing the response', async () => {
+  await render('/prompts');
+  await openNewPrompt();
+  await click('Back to prompts');
+  expect(discardDialog()).toBeUndefined();
+  expect(router.state.location.pathname).toBe(paths.prompts);
+
+  await openNewPrompt();
   await fill('Name', prompt.name);
   await fill('Instructions', prompt.content);
   expect(warnsBeforeUnload()).toBe(true);
   await act(async () => field('Instructions').focus());
   await escape();
+  expect(discardDialog()).toBeUndefined();
+  await click('Cancel');
   expect(discardDialog()).toBeDefined();
   await escape();
   expect(discardDialog()).toBeUndefined();
   await ready(() => expect(document.activeElement).toBe(field('Instructions')));
-  for (const dismiss of ['Close dialog', 'Cancel']) {
-    await click(dismiss, formDialog());
-    await ready(() =>
-      expect(document.activeElement).toBe(button('Keep editing')),
-    );
-    await click('Keep editing');
-    await ready(() =>
-      expect(document.activeElement).toBe(field('Instructions')),
-    );
-  }
   await back();
   expect(discardDialog()).toBeDefined();
   await click('Keep editing');
@@ -516,11 +523,11 @@ it('guards new prompt dismissal and Back, and opens the acknowledged prompt afte
   rpc.createPrompt.mockReturnValueOnce(failedSave.promise);
   await submitTwice(field('Name'));
   expect(rpc.createPrompt).toHaveBeenCalledTimes(1);
-  expect(button('Close dialog', formDialog()).disabled).toBe(true);
-  await escape();
+  expect(button('Back to prompts').disabled).toBe(true);
+  expect(button('Cancel').disabled).toBe(true);
   await back();
   expect(discardDialog()).toBeUndefined();
-  expect(router.state.location.pathname).toBe('/prompts');
+  expect(router.state.location.pathname).toBe(paths.promptNew);
   await act(async () => failedSave.reject(new Error('Prompt save failed')));
   expect(document.body.textContent).toContain(
     'could not confirm whether the prompt was saved',
@@ -534,20 +541,24 @@ it('guards new prompt dismissal and Back, and opens the acknowledged prompt afte
     requestId: expect.any(String),
   });
 
-  const refresh = deferred<never>();
   rpc.createPrompt.mockResolvedValue(prompt);
-  rpc.listPrompts.mockReturnValueOnce(refresh.promise);
+  rpc.getPrompt.mockRejectedValue(new Error('Prompt details unavailable'));
+  rpc.listPrompts.mockRejectedValue(new Error('Prompt catalog unavailable'));
   await click('Retry creation');
   expect(rpc.createPrompt.mock.calls[1][0]).toEqual(originalRequest);
   expect(router.state.location.pathname).toBe('/prompts/new');
   expect(warnsBeforeUnload()).toBe(false);
   await ready(() => expect(field('Instructions').value).toBe(prompt.content));
-  expect(rpc.listPrompts).toHaveBeenCalledTimes(2);
-  // The acknowledged prompt remains available after the background read fails.
-  await act(async () => refresh.reject(new Error('Prompt refresh failed')));
+  await ready(() => button('Retry prompt details'));
+  rpc.getPrompt.mockResolvedValue({ ...prompt, usage: [] });
+  await click('Retry prompt details');
+  await ready(() =>
+    expect(document.body.textContent).toContain('No workflows use this prompt'),
+  );
   expect(field('Instructions').value).toBe(prompt.content);
-  expect(document.body.textContent).toContain('Could not refresh prompts.');
-  expect(button('Retry prompts')).toBeDefined();
+  expect(rpc.createPrompt).toHaveBeenCalledTimes(2);
+  await back();
+  expect(router.state.location.pathname).toBe(paths.prompts);
 });
 
 it('allows correction after a confirmed prompt rejection', async () => {
@@ -565,8 +576,7 @@ it('allows correction after a confirmed prompt rejection', async () => {
     )
     .mockResolvedValue(prompt);
   await render('/prompts');
-  await ready(() => button('New prompt'));
-  await click('New prompt');
+  await openNewPrompt();
   await fill('Name', 'First name');
   await fill('Instructions', prompt.content);
   await click('Create prompt');
@@ -584,28 +594,67 @@ it('allows correction after a confirmed prompt rejection', async () => {
   );
 });
 
-it('keeps prompt creation successful when the unrelated workflow refresh fails', async () => {
+it('opens the create page and saves when neither catalog is available', async () => {
   rpc.listWorkflows.mockRejectedValue(
     new Error('Unrelated workflows read unavailable'),
   );
-  rpc.listPrompts.mockResolvedValueOnce([]).mockResolvedValue([prompt]);
+  rpc.listPrompts.mockRejectedValue(new Error('Prompt catalog unavailable'));
   rpc.createPrompt.mockResolvedValue(prompt);
-  await render('/prompts');
-  await ready(() => button('New prompt'));
-  await click('New prompt');
+  await render(paths.promptNew);
+  await ready(() => expect(field('Instructions')).toBeTruthy());
   await fill('Name', prompt.name);
   await fill('Instructions', prompt.content);
   await click('Create prompt');
   await ready(() => expect(field('Instructions').value).toBe(prompt.content));
   expect(router.state.location.pathname).toBe('/prompts/new');
   expect(rpc.listWorkflows).toHaveBeenCalledTimes(2);
-  expect(document.body.textContent).toContain('Prompt created.');
+  expect(document.body.textContent).toContain('Saved · Revision 1');
   expect(document.body.textContent).not.toContain(
     'Action completed, but the view could not refresh',
   );
   expect(document.body.textContent).not.toContain(
     'Unrelated workflows read unavailable',
   );
+  expect(
+    queryClient.getQueryData(trpc.prompts.list.queryKey()),
+  ).toBeUndefined();
+});
+
+it('guards an existing prompt save and loads a conflicting revision only after confirmation', async () => {
+  await render(paths.prompt(prompt.id));
+  await ready(() => expect(field('Instructions')).toBeTruthy());
+  await fill('Instructions', 'My unsaved edit');
+  const pending = deferred<never>();
+  rpc.updatePrompt.mockReturnValueOnce(pending.promise);
+  await submitTwice(field('Name'));
+  expect(rpc.updatePrompt).toHaveBeenCalledExactlyOnceWith({
+    id: prompt.id,
+    revision: prompt.revision,
+    name: prompt.name,
+    description: prompt.description,
+    content: 'My unsaved edit',
+  });
+  expect(warnsBeforeUnload()).toBe(true);
+  await back();
+  expect(discardDialog()).toBeUndefined();
+  expect(router.state.location.pathname).toBe(paths.prompt(prompt.id));
+  await act(async () => pending.reject(new Error(promptRevisionConflict)));
+  expect(field('Instructions').value).toBe('My unsaved edit');
+  const latest = {
+    ...prompt,
+    revision: 2,
+    content: 'Concurrent edit',
+    usage: [],
+  };
+  rpc.getPrompt.mockResolvedValue(latest);
+  await click('Load latest');
+  await click('Keep editing');
+  expect(field('Instructions').value).toBe('My unsaved edit');
+  await click('Load latest');
+  await click('Discard changes', discardDialog());
+  expect(field('Instructions').value).toBe(latest.content);
+  expect(warnsBeforeUnload()).toBe(false);
+  expect(rpc.updatePrompt).toHaveBeenCalledTimes(1);
 });
 
 it('discards a custom integration draft on confirmed tab navigation and keeps a failed edit available', async () => {

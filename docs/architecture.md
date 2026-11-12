@@ -412,6 +412,7 @@ React Router owns browser navigation through a shared application layout and chi
 | `/workflows`                      | Workflow library                                       |
 | `/workflows/:workflowId`          | Workflow draft editor                                  |
 | `/prompts`                        | Saved prompt library                                   |
+| `/prompts/-/new`                  | New prompt editor                                      |
 | `/prompts/:promptId`              | Saved prompt editor                                    |
 | `/variables`                      | Variable metadata library                              |
 | `/variables/:variableId`          | Variable editor; `new` creates a variable              |

@@ -31,7 +31,6 @@ vi.mock('../packages/ui/src/lib/api', async () => {
 let root: Root;
 let container: HTMLDivElement;
 const scrollIntoView = HTMLElement.prototype.scrollIntoView;
-const dirty = vi.fn();
 const prompt: SavedPrompt = {
   id: 'p1',
   name: 'Review',
@@ -71,7 +70,6 @@ beforeEach(() => {
     },
   );
   HTMLElement.prototype.scrollIntoView = vi.fn();
-  dirty.mockReset();
   container = document.createElement('div');
   document.body.append(container);
   root = createRoot(container);
@@ -255,9 +253,8 @@ async function render(value = prompt) {
           {},
           h(PromptEditor, {
             prompt: value,
+            usage: [],
             act: action,
-            onDirty: dirty,
-            tick: value.revision,
           }),
         ),
       ),
@@ -274,44 +271,38 @@ async function input(text: string) {
     area.dispatchEvent(new Event('input', { bubbles: true }));
   });
 }
-async function click(label: string) {
-  const button = [...container.querySelectorAll('button')].find(
+async function click(label: string, within: ParentNode = container) {
+  const button = [...within.querySelectorAll('button')].find(
     (b) => b.textContent === label,
   )!;
   expect(button).toBeTruthy();
   await act(async () => button.click());
 }
-it('preserves dirty text and its save revision across refresh and stale failure, then discards to latest', async () => {
+it('preserves dirty text across a refresh and confirms before loading the latest revision', async () => {
   await render();
   await input('My unsaved instructions');
-  expect(dirty).toHaveBeenLastCalledWith(true);
   const newer = { ...prompt, revision: 2, content: 'Changed elsewhere' };
   await render(newer);
   expect(container.querySelectorAll('textarea')[1].value).toBe(
     'My unsaved instructions',
   );
   expect(container.textContent).toContain('This prompt changed elsewhere');
-  queries.update.mockRejectedValue(
-    new Error('Prompt changed. Reload before saving.'),
+  const save = [...container.querySelectorAll('button')].find(
+    (button) => button.textContent === 'Save changes',
   );
-  await click('Save');
-  expect(queries.update).toHaveBeenCalledWith(
-    expect.objectContaining({
-      revision: 1,
-      content: 'My unsaved instructions',
-    }),
-  );
-  expect(container.querySelector('form [role="alert"]')?.textContent).toContain(
-    'Reload before saving',
-  );
+  expect(save?.disabled).toBe(true);
+  await click('Load latest');
+  await click('Keep editing', document);
   expect(container.querySelectorAll('textarea')[1].value).toBe(
     'My unsaved instructions',
   );
-  await click('Discard changes');
+  queries.get.mockResolvedValue({ ...newer, usage: [] });
+  await click('Load latest');
+  await click('Discard changes', document);
   expect(container.querySelectorAll('textarea')[1].value).toBe(
     'Changed elsewhere',
   );
-  expect(dirty).toHaveBeenLastCalledWith(false);
+  expect(queries.update).not.toHaveBeenCalled();
 });
 it('loads external revisions when clean and becomes clean after a successful save', async () => {
   await render();
@@ -325,11 +316,10 @@ it('loads external revisions when clean and becomes clean after a successful sav
     revision: 3,
     content: 'Saved edit',
   });
-  await click('Save');
+  await click('Save changes');
   expect(queries.update).toHaveBeenCalledWith(
     expect.objectContaining({ revision: 2, content: 'Saved edit' }),
   );
-  expect(dirty).toHaveBeenLastCalledWith(false);
   expect(container.textContent).toContain('Revision 3');
   await input('Another unsaved edit');
   await click('Discard changes');

@@ -56,13 +56,11 @@ export function Modal({
   );
   const [resolveFocus] = useState(() => () => returnFocusTo?.() ?? trigger);
   useEffect(() => {
-    const path = window.location.pathname;
     return () => {
       // The dialog unmounts immediately. Restore after its focus trap is gone.
       requestAnimationFrame(() => {
         const focusTarget = resolveFocus();
         if (
-          window.location.pathname === path &&
           document.activeElement === document.body &&
           focusTarget instanceof HTMLElement &&
           focusTarget.isConnected

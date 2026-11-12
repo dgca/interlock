@@ -4,11 +4,11 @@
 
 1. Open **Prompts** in the sidebar and select **New prompt**.
 2. Enter a name and Markdown instructions. Add a description if it helps you find the prompt.
-3. Select **Create prompt**. Use **Save** for subsequent edits, or **Discard changes** to return to the latest saved content.
+3. Select **Create prompt**. The page opens the saved prompt. Use **Save changes** for later edits, or **Discard changes** to return to saved content.
 
-If Interlock cannot confirm creation, the dialog keeps your submitted text available. Select **Retry creation** to recover the saved prompt or complete the original request. If you close the dialog, check the Prompts library before creating it again.
+If Interlock cannot confirm creation, the editor keeps your submitted text. Select **Retry creation** to recover the saved prompt or complete the original request. If you leave the page, check the Prompts library before creating it again.
 
-The editor lists workflows that reference the prompt, including drafts and published versions. Unsaved text receives navigation protection. If someone changes the prompt while you edit, saving fails and preserves your text. Discard your changes to load the latest revision before editing again.
+The editor lists workflows that reference the prompt, including drafts and published versions. It asks before you leave with unsaved edits. If someone changes the prompt while you edit, select **Load latest** and confirm before replacing your text with the latest revision. If a saved prompt's details fail to refresh, **Retry prompt details** repeats the read.
 
 ## Attach prompts to an Agent node
 

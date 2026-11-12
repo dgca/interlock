@@ -49,6 +49,7 @@ export const paths = {
   diagnostics: '/settings/diagnostics',
   harnesses: '/settings/ai',
   prompts: '/prompts',
+  promptNew: '/prompts/-/new',
   variables: '/variables',
   variable: (id: string) => `/variables/${encodeURIComponent(id)}`,
   prompt: (id: string) => `/prompts/${encodeURIComponent(id)}`,

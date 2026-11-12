@@ -1463,6 +1463,7 @@ export {
 export {
   promptContentSchema,
   promptCreateSchema,
+  promptRevisionConflict,
   savedPromptSchema,
   promptReadSchema,
   promptIds,
