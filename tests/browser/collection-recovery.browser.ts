@@ -1,5 +1,5 @@
 import { blankDefinition, nodeSchema } from '@interlock/core';
-import { chromium, type Browser } from 'playwright';
+import { chromium, type Browser, type Page } from 'playwright';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import { paths } from '../../packages/ui/src/routes/paths';
 import { openBrowserApp } from './app';
@@ -26,6 +26,13 @@ function heldRead() {
   return { started: defer(), release: defer() };
 }
 
+function manualRefreshOnly(page: Page) {
+  // Leave real DOM focus available while suspending event and polling refresh.
+  return page.addInitScript(() => {
+    Object.defineProperty(document, 'visibilityState', { get: () => 'hidden' });
+  });
+}
+
 it.each([1440, 900, 390])(
   'recovers Board collections without mixing query results at %dpx',
   async (width) => {
@@ -39,6 +46,7 @@ it.each([1440, 900, 390])(
     let listFailure: ReturnType<typeof heldRead> | undefined = initial;
     let completedFailure = true;
     try {
+      await manualRefreshOnly(page);
       const board = app.engine.boards.save({
         name: 'Operations',
         columns: [{ name: 'Review' }],
@@ -242,7 +250,9 @@ it('returns keyboard focus to Filter by tags after a Runs retry or filter reset'
   const delayed = heldRead();
   let unavailable = true;
   let holdRetry = false;
+  let filteredReads = 0;
   try {
+    await manualRefreshOnly(page);
     const tags = { purpose: 'fixture' };
     const list = paths.runs('active', 0, tags);
     await page.route(
@@ -264,6 +274,7 @@ it('returns keyboard focus to Filter by tags after a Runs retry or filter reset'
             input[index]?.tags?.purpose === tags.purpose,
         );
         if (!isFilteredRuns) return route.continue();
+        filteredReads++;
         if (unavailable) {
           await route.abort('failed');
           return;
@@ -290,16 +301,22 @@ it('returns keyboard focus to Filter by tags after a Runs retry or filter reset'
       await button.focus();
       await page.keyboard.press('Enter');
     };
-    const expectFocus = async (button: typeof retry) =>
-      expect(
-        await button.evaluate((element) => document.activeElement === element),
-      ).toBe(true);
+    const expectFocus = (button: typeof retry) =>
+      expect
+        .poll(
+          () =>
+            button.evaluate((element) => document.activeElement === element),
+          { timeout: 5000 },
+        )
+        .toBe(true);
 
     await page.goto(app.url + list);
     await retry.focus();
+    expect(filteredReads).toBe(1);
     unavailable = false;
     await page.keyboard.press('Enter');
     await clear.waitFor();
+    expect(filteredReads).toBe(2);
     await expectFocus(filter);
     await keyboardActivate(clear);
     await page.getByText('No active runs.', { exact: true }).waitFor();
@@ -313,12 +330,15 @@ it('returns keyboard focus to Filter by tags after a Runs retry or filter reset'
     expect(new URL(page.url()).searchParams.has('tags')).toBe(false);
 
     unavailable = true;
+    const priorReads = filteredReads;
     await page.goto(app.url + list);
     await retry.focus();
+    expect(filteredReads).toBe(priorReads + 1);
     holdRetry = true;
     unavailable = false;
     await page.keyboard.press('Enter');
     await delayed.started.promise;
+    expect(filteredReads).toBe(priorReads + 2);
     const history = page.getByRole('button', { name: 'History settings' });
     await history.focus();
     delayed.release.resolve();

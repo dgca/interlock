@@ -440,7 +440,9 @@ it('guards changes to the new automation draft and retains the acknowledged iden
   rpc.listWorkflows.mockResolvedValue([
     { id: 'workflow', name: 'Target', draft, latestVersion: 1 },
   ]);
-  rpc.workflowVersions.mockResolvedValue([{ version: 1, definition: draft }]);
+  rpc.workflowVersions.mockResolvedValue([
+    { workflowId: 'workflow', version: 1, definition: draft },
+  ]);
   rpc.inspectAutomation.mockRejectedValue(
     new Error('Automation read unavailable'),
   );
