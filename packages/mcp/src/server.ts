@@ -289,7 +289,7 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
   );
   tool(
     'manage_model_aliases',
-    'Manage Agent presets (model aliases): list, inspect, create, update, delete. Candidates are ordered. Permissions use the stricter preset/workflow mode; null on update inherits. Agent executorMode:"preset" resolves model as the alias ID; "harness" uses executor as profile ID and model literally. Workflow agentModelMode:"preset" or "literal" marks agentModel. Omit modes for legacy routing. Updates/deletes require expectedRevision. Bundles carry named requirements; runs pin revisions.',
+    'Manage Agent presets (model aliases): list, inspect, create, update, delete. Candidates are ordered. Permissions use the stricter preset/workflow mode; null on update inherits. Agent executorMode:"preset" resolves model as the alias ID; "harness" uses executor as profile ID and model literally. Workflow agentModelMode:"preset" or "literal" marks agentModel. Omit modes for legacy routing. Updates/deletes require expectedRevision. Use exactId:true with an inspected preset ID to prevent inspect/update/delete from resolving a replacement by name. Bundles carry named requirements; runs pin revisions.',
     z
       .object({
         request: z.union([modelAliasReadSchema, modelAliasMutationSchema]),

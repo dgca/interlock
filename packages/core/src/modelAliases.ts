@@ -89,6 +89,13 @@ export const modelAliasRequirementSchema = z
   })
   .strict();
 
+const exactModelAliasId = z
+  .boolean()
+  .optional()
+  .describe(
+    'Require this exact saved preset ID. Omit to resolve names and known requirements.',
+  );
+
 export const modelAliasReadSchema = z.discriminatedUnion('action', [
   z
     .object({
@@ -102,6 +109,7 @@ export const modelAliasReadSchema = z.discriminatedUnion('action', [
     .object({
       action: z.literal('inspect'),
       id: z.string().min(1).max(120),
+      exactId: exactModelAliasId,
     })
     .strict(),
 ]);
@@ -124,6 +132,7 @@ export const modelAliasMutationSchema = z.discriminatedUnion('action', [
     .object({
       action: z.literal('update'),
       id: z.string().min(1).max(120),
+      exactId: exactModelAliasId,
       expectedRevision: z.number().int().positive(),
       name: modelAliasNameSchema.optional(),
       description: z.string().max(2000).optional(),
@@ -140,6 +149,7 @@ export const modelAliasMutationSchema = z.discriminatedUnion('action', [
     .object({
       action: z.literal('delete'),
       id: z.string().min(1).max(120),
+      exactId: exactModelAliasId,
       expectedRevision: z.number().int().positive(),
     })
     .strict(),

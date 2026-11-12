@@ -1,7 +1,7 @@
 import { Button, TextInput } from '../../design-system';
 
 import { Plus, Trash2 } from 'lucide-react';
-import styles from './CustomProfileDialog.module.css';
+import styles from './IntegrationEditor.module.css';
 
 export interface KeyValueEditorProps {
   label: string;

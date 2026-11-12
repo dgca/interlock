@@ -92,6 +92,50 @@ it('rejects deleted alias names and IDs before creating runs while preserving ac
   ]);
 });
 
+it('keeps exact preset reads and writes on the original identity after recreation', () => {
+  const { engine } = setup();
+  const aliases = engine.modelAliases;
+  const original = aliases.mutate({
+    action: 'create',
+    name: 'reviewer',
+    candidates: [{ model: 'original-model' }],
+  });
+  aliases.mutate({
+    action: 'delete',
+    id: original.id,
+    expectedRevision: 1,
+    exactId: true,
+  });
+  const replacement = aliases.mutate({
+    action: 'create',
+    name: 'reviewer',
+    candidates: [{ model: 'replacement-model' }],
+  });
+  expect(replacement.id).not.toBe(original.id);
+  expect(aliases.read({ action: 'inspect', id: original.id })).toEqual(
+    replacement,
+  );
+  expect(() =>
+    aliases.read({ action: 'inspect', id: original.id, exactId: true }),
+  ).toThrow('does not exist');
+  for (const action of ['update', 'delete'] as const) {
+    expect(() =>
+      aliases.mutate({
+        action,
+        id: original.id,
+        exactId: true,
+        expectedRevision: 1,
+      }),
+    ).toThrow('does not exist');
+  }
+  expect(
+    aliases.read({ action: 'inspect', id: replacement.id, exactId: true }),
+  ).toEqual(replacement);
+  expect(
+    aliases.mutate({ action: 'update', id: original.id, expectedRevision: 1 }),
+  ).toMatchObject({ id: replacement.id, revision: 2 });
+});
+
 it('rejects unbound imported alias requirements until configured and captures only the repaired start', () => {
   const { engine } = setup();
   engine.modelAliases.mutate({

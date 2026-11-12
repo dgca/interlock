@@ -6,6 +6,7 @@ import { paths } from '../../routes/paths';
 import type { ExecutorPermissionMode } from '@interlock/core';
 import {
   harnessLabel,
+  harnessAvailability,
   isAvailableHarness,
   isPrimaryHarness,
 } from './harnessProfiles';
@@ -86,8 +87,9 @@ export function ExecutorSelect({
               )
               .map((p) => (
                 <option key={p.id} value={p.id}>
-                  {harnessLabel(p)}
-                  {!p.enabled ? ' · disabled' : ''}
+                  {[harnessLabel(p), harnessAvailability(p)]
+                    .filter(Boolean)
+                    .join(' · ')}
                 </option>
               ))}
             {value && !profiles?.some((p) => p.id === value) && (

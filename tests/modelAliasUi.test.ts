@@ -4,6 +4,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { UiTestProvider as DesignSystemProvider } from './uiTestProvider';
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import type { SavedModelAlias } from '@interlock/core';
+import { TRPCClientError } from '@interlock/client';
 import { AgentPresets } from '../packages/ui/src/features/executors/AgentPresets';
 import { ModelSettings } from '../packages/ui/src/features/executors/ModelSettings';
 
@@ -85,9 +86,16 @@ beforeEach(() => {
   rpc.read.mockImplementation(async (q) => {
     if (q.action === 'inspect') {
       const alias = records.find(
-        (alias) => alias.id === q.id || alias.name === q.id,
+        (alias) => alias.id === q.id || (!q.exactId && alias.name === q.id),
       );
-      if (!alias) throw new Error('Model alias does not exist.');
+      if (!alias)
+        throw TRPCClientError.from({
+          error: {
+            message: 'Model alias does not exist.',
+            code: -32603,
+            data: { domainRejection: true },
+          },
+        });
       return structuredClone(alias);
     }
     const filtered = records.filter(
@@ -133,18 +141,13 @@ async function settle() {
     await new Promise((resolve) => setTimeout(resolve, 20));
   });
 }
-async function renderSection(onDirty = vi.fn(), harnesses = profiles) {
+async function renderSection(harnesses = profiles) {
   await act(async () =>
     root.render(
-      h(
-        DesignSystemProvider,
-        {},
-        h(AgentPresets, { profiles: harnesses, onDirty }),
-      ),
+      h(DesignSystemProvider, {}, h(AgentPresets, { profiles: harnesses })),
     ),
   );
   await settle();
-  return onDirty;
 }
 function button(name: string, scope: ParentNode = document) {
   return [...scope.querySelectorAll<HTMLButtonElement>('button')].find(
@@ -185,13 +188,12 @@ async function edit() {
 }
 
 it('edits ordered candidates with the inspected revision and preserves effort/profile settings', async () => {
-  const onDirty = await renderSection();
+  await renderSection();
   await edit();
   await click(
     container.querySelector<HTMLElement>('[aria-label="Move choice 2 up"]')!,
   );
   await fill(labelled('Name') as HTMLInputElement, 'reviewer-next');
-  expect(onDirty).toHaveBeenLastCalledWith(true);
   await click(button('Save changes'));
   expect(rpc.mutate).toHaveBeenCalledWith(
     expect.objectContaining({
@@ -207,7 +209,6 @@ it('edits ordered candidates with the inspected revision and preserves effort/pr
   );
   expect(container.querySelector('form')).toBeNull();
   expect(container.textContent).toContain('Preset reviewer-next saved.');
-  expect(onDirty).toHaveBeenLastCalledWith(false);
 });
 
 it('creates an alias using a concrete model picker and cancels another draft without writes', async () => {
@@ -239,7 +240,7 @@ it('creates an alias using a concrete model picker and cancels another draft wit
 });
 
 it('labels unavailable harnesses in saved presets and keeps the choice editable', async () => {
-  await renderSection(vi.fn(), [
+  await renderSection([
     { ...profiles[0], detection: { status: 'unavailable' } },
   ]);
   expect(container.textContent).toContain('Codex · unavailable');
@@ -261,7 +262,7 @@ it('focuses alias editing and protects dirty Back navigation without losing cand
   await click(button('Cancel'));
   expect(
     document.querySelector(
-      '[role="dialog"][aria-label="Discard unsaved preset changes?"]',
+      '[role="dialog"][aria-label="Discard unsaved changes?"]',
     ),
   ).toBeTruthy();
   await click(button('Keep editing'));
@@ -282,10 +283,11 @@ it('keeps edits on conflicts and explicitly reloads the saved revision before an
   await click(button('Save changes'));
   expect((labelled('Name') as HTMLInputElement).value).toBe('unsaved');
   records[0] = { ...fixture(), revision: 5, description: 'Changed elsewhere' };
-  await click(button('Reload saved preset'));
-  await click(
-    button('Reload', [...document.querySelectorAll('[role="dialog"]')].at(-1)!),
-  );
+  await click(button('Load latest'));
+  await click(button('Keep editing'));
+  expect((labelled('Name') as HTMLInputElement).value).toBe('unsaved');
+  await click(button('Load latest'));
+  await click(button('Discard changes'));
   expect((labelled('Name') as HTMLInputElement).value).toBe('reviewer');
   await fill(labelled('Name') as HTMLInputElement, 'reviewer-reloaded');
   await click(button('Save changes'));
@@ -295,6 +297,25 @@ it('keeps edits on conflicts and explicitly reloads the saved revision before an
       description: 'Changed elsewhere',
     }),
   );
+});
+
+it('checks an uncertain preset save without discarding local input', async () => {
+  await renderSection();
+  await edit();
+  await fill(labelled('Name') as HTMLInputElement, 'local name');
+  rpc.mutate.mockRejectedValueOnce(new Error('Failed to fetch'));
+  await click(button('Save changes'));
+  records[0] = { ...fixture(), revision: 5, name: 'local name' };
+  await click(button('Check saved preset'));
+  expect(document.body.textContent).toContain(
+    'A newer preset revision is saved',
+  );
+  expect((labelled('Name') as HTMLInputElement).value).toBe('local name');
+  expect(button('Save changes').disabled).toBe(true);
+  await click(button('Load latest'));
+  await click(button('Discard changes'));
+  expect(rpc.mutate).toHaveBeenCalledTimes(1);
+  expect(button('Save changes').disabled).toBe(true);
 });
 
 it('confirms deletion with the current revision and explains future-run impact', async () => {
@@ -310,9 +331,123 @@ it('confirms deletion with the current revision and explains future-run impact',
   expect(rpc.mutate).toHaveBeenCalledWith({
     action: 'delete',
     id: 'alias-reviewer',
+    exactId: true,
     expectedRevision: 4,
   });
   expect(container.textContent).toContain('No agent presets yet');
+});
+
+it.each(['update', 'delete'] as const)(
+  'keeps an acknowledged preset %s visible after a failed refresh',
+  async (action) => {
+    await renderSection();
+    await edit();
+    if (action === 'update') {
+      await fill(labelled('Name') as HTMLInputElement, 'new reviewer');
+    } else {
+      await click(button('Delete preset'));
+    }
+    rpc.read.mockRejectedValueOnce(new Error('Catalog unavailable'));
+    const scope =
+      action === 'delete'
+        ? [...document.querySelectorAll('[role="dialog"]')].at(-1)!
+        : document;
+    await click(
+      button(action === 'delete' ? 'Delete preset' : 'Save changes', scope),
+    );
+    expect(
+      container.querySelector('[aria-label="Edit preset reviewer"]'),
+    ).toBeNull();
+    if (action === 'update')
+      expect(
+        container.querySelector('[aria-label="Edit preset new reviewer"]'),
+      ).toBeTruthy();
+    else expect(container.textContent).toContain('Preset reviewer deleted.');
+    expect(container.textContent).toContain(
+      'Could not refresh presets. Catalog unavailable',
+    );
+    await click(button('Retry loading presets'));
+    expect(rpc.mutate).toHaveBeenCalledTimes(1);
+  },
+);
+
+it('keeps the first saved preset actionable while the catalog cannot refresh', async () => {
+  records = [];
+  await renderSection();
+  await click(button('New preset'));
+  await fill(labelled('Name') as HTMLInputElement, 'first reviewer');
+  const harness = labelled('Harness') as HTMLSelectElement;
+  await act(async () => {
+    harness.value = 'codex';
+    harness.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  await click(labelled('Model'));
+  const model = [
+    ...document.querySelectorAll<HTMLElement>('[role="option"]'),
+  ].find((option) => option.textContent?.includes('Native Model'))!;
+  await click(model);
+  rpc.read.mockRejectedValueOnce(new Error('Catalog unavailable'));
+  await click(button('Create preset'));
+  expect(container.textContent).toContain('Preset first reviewer saved.');
+  expect(container.textContent).toContain(
+    'Could not refresh presets. Catalog unavailable',
+  );
+  expect(container.textContent).not.toContain('No agent presets yet');
+  expect(
+    container.querySelector('[aria-label="Edit preset first reviewer"]'),
+  ).toBeNull();
+
+  const reads = rpc.read.mock.calls.length;
+  await click(button('Open saved preset'));
+  expect((labelled('Name') as HTMLInputElement).value).toBe('first reviewer');
+  expect(rpc.read).toHaveBeenCalledTimes(reads);
+  await click(button('Cancel'));
+  expect(button('Open saved preset')).toBeTruthy();
+  await click(button('Retry loading presets'));
+  expect(
+    container.querySelector('[aria-label="Edit preset first reviewer"]'),
+  ).toBeTruthy();
+  expect(button('Open saved preset')).toBeUndefined();
+  expect(rpc.mutate).toHaveBeenCalledTimes(1);
+});
+
+it('opens a found preset after uncertain creation only after discarding the local draft', async () => {
+  await renderSection();
+  await click(button('New preset'));
+  await fill(labelled('Name') as HTMLInputElement, 'builder');
+  const harness = labelled('Harness') as HTMLSelectElement;
+  await act(async () => {
+    harness.value = 'codex';
+    harness.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  await click(labelled('Model'));
+  const model = [
+    ...document.querySelectorAll<HTMLElement>('[role="option"]'),
+  ].find((option) => option.textContent?.includes('Native Model'))!;
+  await click(model);
+  rpc.mutate.mockRejectedValueOnce(new Error('Failed to fetch'));
+  await click(button('Create preset'));
+  records.push({
+    ...fixture(),
+    id: 'alias-new',
+    name: 'builder',
+    description: 'Saved preset',
+  });
+  await click(button('Check saved preset'));
+  await click(button('Open saved preset'));
+  await click(button('Keep editing'));
+  expect((labelled('Name') as HTMLInputElement).value).toBe('builder');
+  await click(button('Open saved preset'));
+  await click(button('Discard changes'));
+  expect((labelled('Description') as HTMLTextAreaElement).value).toBe(
+    'Saved preset',
+  );
+  expect(rpc.read).toHaveBeenLastCalledWith({
+    action: 'inspect',
+    id: 'alias-new',
+    exactId: true,
+  });
+  expect(rpc.mutate).toHaveBeenCalledTimes(1);
 });
 
 it('pages bounded results and recovers from a list failure', async () => {

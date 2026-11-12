@@ -6,7 +6,7 @@ Interlock can launch installed Claude Code, Codex, and Pi harnesses, as well as 
 
 Open **AI Settings → Harnesses**. Interlock checks for `claude`, `codex`, and `pi` on the server's PATH and reads their versions. **Detected** means the version check passed. It does not verify authentication or model access. Install and authenticate the harness using its native setup. See [Claude Agent SDK authentication](https://platform.claude.com/docs/en/agent-sdk/overview), [Codex authentication](https://developers.openai.com/codex/auth/), and [Pi setup](https://pi.dev/).
 
-Each built-in harness and custom integration has one row. Choose **Edit defaults** to set its model, thinking effort, and permissions. Use **Advanced settings** for the executable path, working directory, and per-harness assignment limit. An omitted directory uses the server's working directory. Executable and directory overrides must be absolute paths. Use **Add integration** to configure a custom harness.
+Each built-in harness and custom integration has one row. Choose **Edit defaults** to set its model, thinking effort, and permissions. Use **Advanced settings** for the executable path, working directory, and per-harness assignment limit. An omitted directory uses the server's working directory. Executable and directory overrides must be absolute paths. Use **Add integration** to open the custom harness editor. To reopen an existing configuration, expand **Edit defaults** and choose **Edit integration**.
 
 Built-in harness IDs are `claude-code`, `codex`, and `pi`. Existing named configuration IDs still resolve in workflows and presets. The API and MCP can still inspect and update them. Local profiles and server settings can declare `allowedRoots`. An invalid or out-of-bounds directory leaves the assignment unclaimed with a `cwd_blocked` reason. A continuity group pins the directory when its session starts. Advanced profiles can declare tool and skill names for requirement matching. Interlock does not install or verify those capabilities.
 
@@ -91,6 +91,8 @@ Use a returned `older` value as `before`, or `newer` as `after`. Omit both for t
 Reuse a message's request ID with identical content and operator label to retrieve its existing receipt without another dispatch. Different content under that ID rejects. `pending` and `unknown` never authorize automatic resend. A missing receipt includes whether receipts for the ended attempt were pruned. Ended, interrupted, expired, cancelled, or replaced claims cannot receive a new message. Pending delivery also blocks history deletion until it settles.
 
 ## Custom harnesses
+
+Use **Create integration** for a new configuration and **Save changes** for an existing one. If a save conflicts with another edit, select **Load latest** and confirm before replacing your draft. If Interlock cannot confirm a save, **Check saved integration** reads its saved configuration before you retry.
 
 Interlock supports user-defined custom harnesses (`harness: "custom"`) to execute external agent CLI tools, standalone scripts, or desktop/hosted agent applications. Custom profiles support two execution modes:
 
@@ -345,7 +347,7 @@ Existing model aliases appear as presets. Their saved identities, candidate orde
 
 To author a preset selection in JSON, set `executorMode: "preset"` and put the preset ID in `model`. Omit `executor`. Set workflow `agentModelMode: "preset"` with the preset ID in `agentModel` for inheriting nodes. Use `agentModelMode: "literal"` for a concrete workflow model ID. Definitions with no mode retain their legacy routing and accept preset names and IDs. An explicit node effort override wins for preset mode; otherwise use candidate effort, applicable workflow effort, and harness effort in that order. Null asks for the native default.
 
-- Manage presets through the existing `manage_model_aliases` MCP tool and model alias API. Choices remain `{ model, effort?, profileId? }`. The optional preset `permissions` field applies to all choices. Set it to null on update to restore inheritance. Updates and deletions require `expectedRevision`.
+- Manage presets through the existing `manage_model_aliases` MCP tool and model alias API. Choices remain `{ model, effort?, profileId? }`. The optional preset `permissions` field applies to all choices. Set it to null on update to restore inheritance. Updates and deletions require `expectedRevision`. Set `exactId: true` with the saved preset ID to prevent inspection, update, or deletion from following a replacement by name.
 - Runs capture the preset revision, choices, and permission override at startup. Editing or deleting a preset does not change those captures. A missing requirement used by an Agent or a preset with no configured candidate blocks a new start. Interlock checks candidate installations before creating work and fails the node if none pass. An unused workflow preset does not block explicitly configured nodes.
 - Selections in Executor use stable IDs. Renaming a preset keeps those selections working. Update existing references by name after a rename.
 - Bundles keep named requirements and stable references in `modelAliases`. They exclude local candidates, permission overrides, and profile details. The destination must configure the corresponding local preset.

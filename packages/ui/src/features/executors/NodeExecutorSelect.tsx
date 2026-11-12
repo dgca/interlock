@@ -17,6 +17,7 @@ import { trpc, useQuery } from '../../lib/query';
 import { paths } from '../../routes/paths';
 import {
   harnessLabel,
+  harnessAvailability,
   isAvailableHarness,
   isPrimaryHarness,
 } from './harnessProfiles';
@@ -193,6 +194,7 @@ export function NodeExecutorSelect({
   let value = connected;
   let savedLabel: string | undefined;
   let unavailable = false;
+  let availabilityLabel = 'unavailable';
   if (node.executor === null || connectedThroughLegacyAlias) {
     value = connected;
   } else if (
@@ -224,6 +226,9 @@ export function NodeExecutorSelect({
     if (!selectedHarness) {
       value = 'saved';
       savedLabel = savedHarness ? harnessLabel(savedHarness) : node.executor;
+      if (savedHarness)
+        availabilityLabel =
+          harnessAvailability(savedHarness) ?? availabilityLabel;
       unavailable = true;
     }
   } else if (activeDefaultProfile) {
@@ -254,7 +259,9 @@ export function NodeExecutorSelect({
       ? [
           {
             value: 'saved',
-            label: unavailable ? `${savedLabel} · unavailable` : savedLabel,
+            label: unavailable
+              ? `${savedLabel} · ${availabilityLabel}`
+              : savedLabel,
             disabled: true,
           },
         ]
