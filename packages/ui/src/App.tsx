@@ -218,7 +218,9 @@ export function App() {
     setTick((t) => t + 1);
   });
   const openRun = (id: string) => {
-    void navigate(paths.run(id, workflowMatch?.params.workflowId));
+    void navigate(
+      paths.run(id, { workflowId: workflowMatch?.params.workflowId }),
+    );
     setRunDialog(undefined);
   };
   const context: AppContext = {

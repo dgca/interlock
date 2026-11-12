@@ -15,9 +15,10 @@ import { formatDuration } from '../workflows/DurationInput';
 import { PauseBanner } from '../pauses/PauseControls';
 
 import {
-  nodeKindLabel,
   runDisplayTitle,
   type NodeExecution,
+  type RequestTarget,
+  type WorkRequest,
   type Run,
   type RunStatus,
 } from '@interlock/core';
@@ -35,6 +36,7 @@ import {
   RotateCcw,
   Square,
   Download,
+  MoreHorizontal,
 } from 'lucide-react';
 
 import { api, download, errorMessage } from '../../lib/api';
@@ -56,6 +58,8 @@ import { RunVersionDialog } from './RunVersionDialog';
 import { RunCancellationDialog } from './RunCancellationDialog';
 import { runProjectionLabels } from './runProjectionText';
 import { RunTags } from './RunTags';
+import { nodeTypeLabel } from '../workflows/nodePresentation';
+import { requestActionLabel } from './runAttention';
 const stallLabels = {
   unclaimedStallMs: 'Unclaimed stall',
   claimedIdleStallMs: 'Claimed idle stall',
@@ -63,6 +67,17 @@ const stallLabels = {
   runStallMs: 'Run transition stall',
 };
 type RunReturn = { executionId: string; label: string };
+
+function managedReviewLabel(work: WorkRequest) {
+  const state = work.managedExecution?.state;
+  return requestActionLabel(
+    state === 'needs_model'
+      ? 'model'
+      : state === 'interrupted'
+        ? 'recovery'
+        : 'question',
+  );
+}
 
 function TimelineStep({
   step,
@@ -100,7 +115,8 @@ function TimelineStep({
       <div className={styles.stepContent}>
         <strong>{step.label}</strong>
         <small>
-          {nodeKindLabel(step.kind)} · v{step.version ?? owner.version} ·{' '}
+          {nodeTypeLabel(step.kind, Boolean(step.humanInput))} · v
+          {step.version ?? owner.version} ·{' '}
           {new Date(step.startedAt).toLocaleTimeString()}
         </small>
       </div>
@@ -120,6 +136,7 @@ export function RunInspector({
   onConnect,
   initialExecutionId,
   returnLabel,
+  requestHref,
 }: {
   id: string;
   tick: number;
@@ -127,6 +144,7 @@ export function RunInspector({
   onOpen: (id: string, executionId?: string, returnTo?: RunReturn) => void;
   initialExecutionId?: string;
   returnLabel?: string;
+  requestHref?: (target: RequestTarget, executionId: string) => string;
   act: Action;
   onConnect?: () => void;
 }) {
@@ -138,6 +156,7 @@ export function RunInspector({
   const [retryRequested, setRetryRequested] = useState(false);
   const [retryError, setRetryError] = useState('');
   const [versionDialog, setVersionDialog] = useState(false);
+  const runActions = useRef<HTMLButtonElement>(null);
   const [cancellationDialog, setCancellationDialog] = useState(false);
   const [returnMenuFocus, setReturnMenuFocus] = useState(true);
   const queryClient = useQueryClient();
@@ -301,6 +320,25 @@ export function RunInspector({
     (w) =>
       needsManagedAttention(w) && !detachedBoundary(w.runId, run.id, runIndex),
   );
+  const humanRequests = [run, ...descendants].flatMap((owner) =>
+    detachedBoundary(owner.id, run.id, runIndex)
+      ? []
+      : owner.executions.flatMap((execution) =>
+          execution.status === 'waiting' &&
+          execution.humanInput &&
+          !execution.externalInput?.acceptedAt
+            ? [{ runId: owner.id, execution }]
+            : [],
+        ),
+  );
+  const humanReviewHref = (ownerId: string, executionId: string) => {
+    const target = { kind: 'human', runId: ownerId, executionId } as const;
+    return (
+      requestHref?.(target, executionId) ??
+      paths.request(target, paths.run(run.id, { executionId }))
+    );
+  };
+  const reviewCount = attention.length + humanRequests.length;
   const independent = descendants.filter(
     (r) =>
       r.parentMode === 'detached' &&
@@ -308,9 +346,8 @@ export function RunInspector({
   );
   const requestedOwner =
     !selected && initialExecutionId
-      ? [run, ...children.filter((child) => child.parallelBranch)].find(
-          (candidate) =>
-            candidate.executions.some((e) => e.id === initialExecutionId),
+      ? [run, ...descendants].find((candidate) =>
+          candidate.executions.some((e) => e.id === initialExecutionId),
         )
       : undefined;
   const requestedExecution = requestedOwner?.executions.find(
@@ -350,7 +387,14 @@ export function RunInspector({
       ? runProgress(run, definition, descendants, allWork, parallelVisit).nodes
       : progress.nodes;
   const nodeProgress = nodeId ? graphProgress[nodeId] : undefined;
-  const projection = runProjectionLabels(run);
+  const projection = runProjectionLabels(
+    run,
+    humanRequests.length &&
+      run.waiting?.kind === 'human_request' &&
+      !attention.length
+      ? 'Human input needed'
+      : undefined,
+  );
   const attentionStatus =
     attention.length && ['queued', 'running', 'waiting'].includes(run.status)
       ? progress.status
@@ -504,7 +548,12 @@ export function RunInspector({
       : (nodeProgress?.state ?? execution?.status);
   const stepStatus =
     stepState === 'pending' ? 'not_started' : (stepState ?? 'not_started');
-  const kind = nodeKindLabel(execution?.kind ?? node?.kind ?? 'entry');
+  const kind = nodeTypeLabel(
+    execution?.kind ?? node?.kind ?? 'entry',
+    Boolean(
+      execution?.humanInput ?? (node?.kind === 'input' && node.humanInput),
+    ),
+  );
   const kindLabel = kind[0].toUpperCase() + kind.slice(1);
   const stepTitle = execution?.label ?? node?.label ?? 'Workflow input';
   const stepData = (execution || !nodeId) && (
@@ -574,21 +623,6 @@ export function RunInspector({
         }
         actions={
           <div className={styles.headerActions}>
-            {!run.parallelBranch && (
-              <Button onClick={() => setVersionDialog(true)}>
-                Run version
-              </Button>
-            )}
-            {run.chain?.previousRunId && (
-              <Button onClick={() => onOpen(run.chain!.previousRunId!)}>
-                Previous run
-              </Button>
-            )}
-            {run.chain?.nextRunId && (
-              <Button onClick={() => onOpen(run.chain!.nextRunId!)}>
-                Next run
-              </Button>
-            )}
             {data.chain &&
               !data.chain.cancelledAt &&
               ['queued', 'running', 'waiting', 'failed'].includes(
@@ -606,21 +640,6 @@ export function RunInspector({
                   Stop chain
                 </Button>
               )}
-            {data.counterpartRunId && (
-              <Button onClick={() => onOpen(data.counterpartRunId!)}>
-                {run.comparison?.side === 'baseline'
-                  ? 'Candidate run'
-                  : 'Baseline run'}
-                <ArrowUpRight />
-              </Button>
-            )}
-            {run.parentRunId && !returnLabel && !parallelParent && (
-              <Button
-                onClick={() => onOpen(run.parentRunId!, run.parentExecutionId)}
-              >
-                {run.parentMode === 'detached' ? 'Started by' : 'Parent run'}
-              </Button>
-            )}
             {run.status === 'failed' &&
               definition &&
               !data.handledFailure &&
@@ -648,10 +667,62 @@ export function RunInspector({
                 Cancel run tree
               </Button>
             )}
-            <Button onClick={() => download(`run-${id}.json`, data)}>
-              <Download />
-              Export run
-            </Button>
+            <Menu
+              position="bottom-end"
+              withinPortal
+              returnFocus={!versionDialog}
+            >
+              <Menu.Target>
+                <Button
+                  ref={runActions}
+                  variant="secondary"
+                  leftSection={<MoreHorizontal size={16} aria-hidden="true" />}
+                >
+                  Run actions
+                </Button>
+              </Menu.Target>
+              <Menu.Dropdown>
+                {!run.parallelBranch && (
+                  <Menu.Item onClick={() => setVersionDialog(true)}>
+                    Run version
+                  </Menu.Item>
+                )}
+                {run.chain?.previousRunId && (
+                  <Menu.Item onClick={() => onOpen(run.chain!.previousRunId!)}>
+                    Previous run
+                  </Menu.Item>
+                )}
+                {run.chain?.nextRunId && (
+                  <Menu.Item onClick={() => onOpen(run.chain!.nextRunId!)}>
+                    Next run
+                  </Menu.Item>
+                )}
+                {data.counterpartRunId && (
+                  <Menu.Item onClick={() => onOpen(data.counterpartRunId!)}>
+                    {run.comparison?.side === 'baseline'
+                      ? 'Candidate run'
+                      : 'Baseline run'}
+                  </Menu.Item>
+                )}
+                {run.parentRunId && !returnLabel && !parallelParent && (
+                  <Menu.Item
+                    onClick={() =>
+                      onOpen(run.parentRunId!, run.parentExecutionId)
+                    }
+                  >
+                    {run.parentMode === 'detached'
+                      ? 'Started by'
+                      : 'Parent run'}
+                  </Menu.Item>
+                )}
+                <Menu.Item
+                  leftSection={<Download size={16} />}
+                  onClick={() => download(`run-${id}.json`, data)}
+                >
+                  Export run
+                </Menu.Item>
+              </Menu.Dropdown>
+            </Menu>
           </div>
         }
       />
@@ -668,6 +739,7 @@ export function RunInspector({
           workflowId={run.workflowId}
           active={['queued', 'running', 'waiting'].includes(run.status)}
           onClose={() => setVersionDialog(false)}
+          returnFocusTo={() => runActions.current}
           onChanged={refresh}
         />
       )}
@@ -702,16 +774,28 @@ export function RunInspector({
         )}
         {progress.detail && <span>{progress.detail}</span>}
         {retryRequested && <span>Retry requested.</span>}
-        {attention.length > 0 && (
+        {reviewCount > 0 && (
           <div className={styles.attentionActions}>
-            {attention.length === 1 ? (
-              <Button onClick={() => reviewWork(attention[0])}>
-                {attention[0].managedExecution?.state === 'needs_model'
-                  ? 'Choose a model'
-                  : attention[0].managedExecution?.state === 'interrupted'
-                    ? 'Review recovery'
-                    : 'Review request'}
-              </Button>
+            {reviewCount === 1 ? (
+              attention.length ? (
+                <Button
+                  variant="primary"
+                  onClick={() => reviewWork(attention[0])}
+                >
+                  {managedReviewLabel(attention[0])}
+                </Button>
+              ) : (
+                <Button
+                  variant="primary"
+                  component={Link}
+                  to={humanReviewHref(
+                    humanRequests[0].runId,
+                    humanRequests[0].execution.id,
+                  )}
+                >
+                  {requestActionLabel('human')}
+                </Button>
+              )
             ) : (
               <Menu
                 position="bottom-end"
@@ -720,21 +804,32 @@ export function RunInspector({
                 onOpen={() => setReturnMenuFocus(true)}
               >
                 <Menu.Target>
-                  <Button>Review {attention.length} steps</Button>
+                  <Button variant="primary">Review {reviewCount} items</Button>
                 </Menu.Target>
                 <Menu.Dropdown>
                   <ScrollArea.Autosize mah={280}>
-                    {attention.map((w) => (
-                      <Menu.Item key={w.id} onClick={() => reviewWork(w)}>
-                        {w.label}
-                        {assignmentScope(w)
-                          ? ` · ${assignmentScope(w)}`
-                          : ''} ·{' '}
-                        {w.managedExecution?.state === 'needs_model'
-                          ? 'Model needed'
-                          : w.managedExecution?.state === 'interrupted'
-                            ? 'Recovery'
-                            : 'Response needed'}
+                    {attention.map((work) => {
+                      const scope = assignmentScope(work);
+                      return (
+                        <Menu.Item
+                          key={work.id}
+                          onClick={() => reviewWork(work)}
+                        >
+                          {managedReviewLabel(work)} · {work.label}
+                          {scope ? ` · ${scope}` : ''}
+                        </Menu.Item>
+                      );
+                    })}
+                    {humanRequests.map(({ runId, execution }) => (
+                      <Menu.Item
+                        key={execution.id}
+                        component={Link}
+                        to={humanReviewHref(runId, execution.id)}
+                      >
+                        {requestActionLabel('human')} · {execution.label}
+                        {runId !== run.id
+                          ? ` · ${runIndex.get(runId)?.workflowName ?? runId.slice(0, 8)}`
+                          : ''}
                       </Menu.Item>
                     ))}
                   </ScrollArea.Autosize>
@@ -994,23 +1089,11 @@ export function RunInspector({
                 <p>{execution.humanInput.question}</p>
                 <Button
                   component={Link}
-                  to={paths.request({
-                    kind: 'human',
-                    runId: owner.id,
-                    executionId: execution.id,
-                  })}
-                  state={{
-                    returnTo: paths.run(
-                      run.id,
-                      undefined,
-                      'attention',
-                      execution.id,
-                    ),
-                  }}
+                  to={humanReviewHref(owner.id, execution.id)}
                 >
                   {execution.externalInput?.acceptedAt
                     ? 'View answer and evidence'
-                    : 'View request'}
+                    : requestActionLabel('human')}
                 </Button>
               </section>
             )}

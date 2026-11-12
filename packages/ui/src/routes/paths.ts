@@ -36,14 +36,52 @@ export function automationDraftKey(search: URLSearchParams) {
   return JSON.stringify([search.get('type'), search.get('workflow') || null]);
 }
 
+// Only return to in-app run, request, or Board views. Parse before navigation
+// because the destination can be supplied by a copied or edited URL.
+export function runReturnLocation(value: string | null | undefined) {
+  if (
+    typeof value !== 'string' ||
+    !value.startsWith('/') ||
+    value.startsWith('//')
+  )
+    return;
+  try {
+    const origin = 'https://interlock.invalid';
+    const url = new URL(value, origin);
+    if (url.origin !== origin) return;
+    const { pathname, search, searchParams, hash } = url;
+    const path = pathname + search + hash;
+    if (pathname === '/runs') return { path, label: 'Back to runs' };
+    if (pathname === '/runs/request') return { path, label: 'Back to request' };
+    if (/^\/runs\/[^/]+$/.test(pathname)) return { path, label: 'Back to run' };
+    if (pathname !== '/boards/new' && /^\/boards\/[^/]+$/.test(pathname))
+      return {
+        path,
+        label: searchParams.has('request')
+          ? 'Back to request'
+          : 'Back to board',
+      };
+    if (
+      /^\/workflows\/[^/]+$/.test(pathname) &&
+      searchParams.get('view') === 'runs'
+    )
+      return { path, label: 'Back to runs' };
+  } catch {
+    return;
+  }
+}
+
 // Resource URLs use stable IDs, independent of names or future folder membership.
 export const paths = {
   boards: '/boards',
   boardNew: '/boards/new',
   board: (id: string) => `/boards/${encodeURIComponent(id)}`,
   boardSettings: (id: string) => `/boards/${encodeURIComponent(id)}/settings`,
-  request: (target: RequestTarget) =>
-    `/runs/request?${new URLSearchParams({ request: JSON.stringify(target) })}`,
+  request: (target: RequestTarget, returnTo?: string) => {
+    const query = new URLSearchParams({ request: JSON.stringify(target) });
+    if (returnTo) query.set('returnTo', returnTo);
+    return `/runs/request?${query}`;
+  },
   automations: '/automations',
   automationNew: '/automations/new',
   automation: (id: string) => `/automations/${encodeURIComponent(id)}`,
@@ -87,18 +125,30 @@ export const paths = {
   },
   run: (
     id: string,
-    workflowId?: string,
-    tab: RunTab = 'active',
-    executionId?: string,
-    offset = 0,
-    tags?: Record<string, string>,
-    mode?: RunMode,
+    {
+      workflowId,
+      tab,
+      executionId,
+      offset = 0,
+      tags,
+      mode,
+      returnTo,
+    }: {
+      workflowId?: string;
+      tab?: RunTab;
+      executionId?: string;
+      offset?: number;
+      tags?: Record<string, string>;
+      mode?: RunMode;
+      returnTo?: string;
+    } = {},
   ) => {
     const query = new URLSearchParams();
     if (mode) query.set('mode', mode);
     if (workflowId) query.set('workflow', workflowId);
-    if (workflowId || tab !== 'active') query.set('tab', tab);
+    if (workflowId || tab) query.set('tab', tab ?? 'active');
     if (executionId) query.set('execution', executionId);
+    if (returnTo) query.set('returnTo', returnTo);
     if (offset > 0) query.set('offset', String(offset));
     if (tags && Object.keys(tags).length)
       query.set('tags', JSON.stringify(tags));

@@ -36,7 +36,7 @@ Version inspection returns the current policy and revision, the latest compatibi
 
 ### Operate through CLI, MCP, and API
 
-The inspector's **Run version** dialog shows the policy, **Preview move**, blockers, and **Apply version N**. New-run controls also offer **Version policy**.
+In the inspector, open **Run actions → Run version** to see the policy, **Preview move**, blockers, and **Apply version N**. New-run controls also offer **Version policy**.
 
 CLI uses one JSON request with an `action`:
 

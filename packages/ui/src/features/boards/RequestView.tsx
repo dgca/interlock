@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router';
-import { ArrowLeft, ArrowUpRight, Copy, FileText } from 'lucide-react';
+import {
+  ArrowLeft,
+  ArrowUpRight,
+  ChevronDown,
+  Copy,
+  FileText,
+} from 'lucide-react';
 import { useQueries } from '@tanstack/react-query';
 import {
   requestKey,
@@ -19,6 +25,8 @@ import {
   Group,
   Loader,
   NativeSelect,
+  Menu,
+  ScrollArea,
   PageHeader,
   Stack,
   Text,
@@ -32,7 +40,7 @@ import {
   useQuery,
   useQueryClient,
 } from '../../lib/query';
-import { paths } from '../../routes/paths';
+import { paths, runReturnLocation } from '../../routes/paths';
 import { ManagedRequestControls } from '../executors/ManagedExecutionPanel';
 import { ModelPicker } from '../executors/ModelPicker';
 import { ExternalTaskLink } from '../../components/ExternalTaskLink';
@@ -66,6 +74,7 @@ export function GlobalRequestRoute() {
   const target = parseRequestTarget(search.get('request'));
   const { state } = useLocation();
   const navigate = useNavigate();
+  const returnTo = runReturnLocation(search.get('returnTo') ?? state?.returnTo);
   if (!target)
     return (
       <div className={classes.content}>
@@ -75,11 +84,9 @@ export function GlobalRequestRoute() {
   return (
     <RequestView
       target={target}
-      backLabel="Back to Runs"
-      onBack={() => void navigate(state?.returnTo ?? paths.runs('attention'))}
-      onSelect={(next) =>
-        void navigate(paths.request(next), { replace: true, state })
-      }
+      backLabel={returnTo?.label ?? 'Back to runs'}
+      onBack={() => void navigate(returnTo?.path ?? paths.runs('attention'))}
+      requestHref={(next) => paths.request(next, returnTo?.path)}
     />
   );
 }
@@ -88,12 +95,12 @@ export function RequestView({
   target,
   backLabel,
   onBack,
-  onSelect,
+  requestHref,
 }: {
   target: RequestTarget;
   backLabel: string;
   onBack: () => void;
-  onSelect: (target: RequestTarget) => void;
+  requestHref: (target: RequestTarget) => string;
 }) {
   const query = useQuery(trpc.requests.get.queryOptions(target));
   const detail = query.data;
@@ -102,12 +109,12 @@ export function RequestView({
   useEffect(() => {
     if (detail) heading.current?.focus({ preventScroll: true });
   }, [key, Boolean(detail)]);
-  const runLink = paths.run(
-    target.runId,
-    undefined,
-    'attention',
-    target.executionId,
-  );
+  const location = useLocation();
+  const runLink = paths.run(target.runId, {
+    tab: 'attention',
+    executionId: target.executionId,
+    returnTo: location.pathname + location.search,
+  });
   return (
     <div className={workspacePage.page}>
       <PageHeader
@@ -123,11 +130,7 @@ export function RequestView({
           )
         }
         actions={
-          <Button
-            component={Link}
-            to={runLink}
-            state={{ returnLabel: 'Back to request' }}
-          >
+          <Button component={Link} to={runLink}>
             <ArrowUpRight size={16} /> Open run
           </Button>
         }
@@ -142,7 +145,7 @@ export function RequestView({
               <RequestSelector
                 key={detail.card.id}
                 detail={detail}
-                onSelect={onSelect}
+                requestHref={requestHref}
               />
             )}
           </Group>
@@ -181,7 +184,7 @@ export function RequestView({
                 key={key}
                 detail={detail}
                 reload={query.refetch}
-                onSelect={onSelect}
+                requestHref={requestHref}
               />
             </Stack>
           )}
@@ -193,10 +196,10 @@ export function RequestView({
 
 function RequestSelector({
   detail,
-  onSelect,
+  requestHref,
 }: {
   detail: Detail;
-  onSelect: (target: RequestTarget) => void;
+  requestHref: (target: RequestTarget) => string;
 }) {
   const [pages, setPages] = useState(1);
   const results = useQueries({
@@ -222,21 +225,39 @@ function RequestSelector({
       since: '',
     });
   if (choices.size < 2) return null;
+  const labelCounts = new Map<string, number>();
+  for (const { label } of choices.values())
+    labelCounts.set(label, (labelCounts.get(label) ?? 0) + 1);
   return (
     <Group gap="xs">
-      <NativeSelect
-        aria-label="Request"
-        value={selected}
-        w={240}
-        data={[...choices].map(([value, item]) => ({
-          value,
-          label: item.label,
-        }))}
-        onChange={(event) => {
-          const next = choices.get(event.currentTarget.value);
-          if (next) onSelect(next.target);
-        }}
-      />
+      <Menu position="bottom-end" withinPortal>
+        <Menu.Target>
+          <Button
+            variant="secondary"
+            rightSection={<ChevronDown size={16} aria-hidden="true" />}
+          >
+            Switch request
+          </Button>
+        </Menu.Target>
+        <Menu.Dropdown>
+          <ScrollArea.Autosize mah={280}>
+            {[...choices].map(([key, item]) => (
+              <Menu.Item
+                key={key}
+                component={Link}
+                to={requestHref(item.target)}
+                aria-current={key === selected ? 'page' : undefined}
+                replace
+                preventScrollReset
+              >
+                {item.label}
+                {(labelCounts.get(item.label) ?? 0) > 1 &&
+                  ` · ${('requestId' in item.target ? item.target.requestId : (item.target.executionId ?? item.target.runId)).slice(0, 8)}`}
+              </Menu.Item>
+            ))}
+          </ScrollArea.Autosize>
+        </Menu.Dropdown>
+      </Menu>
       {results.at(-1)?.data?.nextOffset != null && (
         <Button variant="ghost" onClick={() => setPages((count) => count + 1)}>
           More requests
@@ -268,15 +289,19 @@ function ReviewText({ children }: { children: string }) {
 function RequestAnswer({
   detail,
   reload,
-  onSelect,
+  requestHref,
 }: {
   detail: Detail;
   reload: () => Promise<{ isError: boolean; data?: Detail }>;
-  onSelect: (target: RequestTarget) => void;
+  requestHref: (target: RequestTarget) => string;
 }) {
   const queryClient = useQueryClient();
   const siblings = useQuery(
-    trpc.requests.list.queryOptions({ runId: detail.card.id }),
+    trpc.requests.list.queryOptions({
+      runId: detail.card.id,
+      offset: 0,
+      limit: pageSize,
+    }),
   );
   const currentKey = requestKey(detail.target);
   const next = siblings.data?.items.find(
@@ -406,7 +431,12 @@ function RequestAnswer({
       )}
       {receipt && (detail.replacement || next) && (
         <Group justify="flex-end">
-          <Button onClick={() => onSelect(detail.replacement ?? next!.target)}>
+          <Button
+            component={Link}
+            to={requestHref(detail.replacement ?? next!.target)}
+            replace
+            preventScrollReset
+          >
             {detail.replacement
               ? 'Open current request'
               : `Open ${next!.label}`}

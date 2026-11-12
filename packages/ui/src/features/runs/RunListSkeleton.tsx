@@ -26,7 +26,7 @@ export function RunListSkeleton({ embedded = false }: { embedded?: boolean }) {
       <Placeholder h={40} w={130} />
     </>
   );
-  const actions = <Placeholder h={40} w={110} />;
+  const actions = <Placeholder h={40} w={150} />;
   return (
     <section className={workspacePage.page} aria-busy="true">
       {!embedded && (
@@ -109,7 +109,6 @@ export function RunRowsSkeleton() {
       <span>
         <Placeholder h={12} w={20} />
       </span>
-      <Placeholder h={14} w={8} />
     </ListTableSkeleton>
   );
 }

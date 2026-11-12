@@ -15,7 +15,7 @@ import {
   type RouteObject,
 } from 'react-router';
 import { App, type AppContext } from '../App';
-import { paths, runOffset, runTagFilter } from './paths';
+import { paths, runOffset, runTagFilter, runReturnLocation } from './paths';
 import { runMode, type RunMode } from '../features/runs/runListConfig';
 import { flushSync } from 'react-dom';
 import { lazy, Suspense } from 'react';
@@ -344,7 +344,6 @@ function WorkflowRoute() {
   const { workflowId } = useParams();
   const context = useOutletContext<AppContext>();
   const navigate = useNavigate();
-  const location = useLocation();
   const { search, setSearch, page } = useRunPage();
   const workflow = context.workflows.find((w) => w.id === workflowId);
   const redirectToSchedules = search.get('view') === 'schedules';
@@ -422,24 +421,6 @@ function WorkflowRoute() {
               act={context.act}
               workflows={context.workflows}
               workflowId={workflow.id}
-              onRequest={(target) =>
-                void navigate(paths.request(target), {
-                  state: { returnTo: location.pathname + location.search },
-                })
-              }
-              onOpen={(id, executionId) =>
-                void navigate(
-                  paths.run(
-                    id,
-                    workflow.id,
-                    page.tab,
-                    executionId,
-                    page.offset,
-                    page.tags,
-                    page.mode,
-                  ),
-                )
-              }
             />
           </Suspense>
         }
@@ -459,35 +440,10 @@ function WorkflowRoute() {
 
 function RunsRoute() {
   const { tick, act, workflows } = useOutletContext<AppContext>();
-  const navigate = useNavigate();
-  const location = useLocation();
   const { page } = useRunPage();
   return (
     <Suspense fallback={<RunListSkeleton />}>
-      <RunList
-        {...page}
-        tick={tick}
-        act={act}
-        workflows={workflows}
-        onRequest={(target) =>
-          void navigate(paths.request(target), {
-            state: { returnTo: location.pathname + location.search },
-          })
-        }
-        onOpen={(id, executionId) =>
-          void navigate(
-            paths.run(
-              id,
-              undefined,
-              page.tab,
-              executionId,
-              page.offset,
-              page.tags,
-              page.mode,
-            ),
-          )
-        }
-      />
+      <RunList {...page} tick={tick} act={act} workflows={workflows} />
     </Suspense>
   );
 }
@@ -497,9 +453,10 @@ function RunRoute() {
   const { tick, act, onConnect } = useOutletContext<AppContext>();
   const navigate = useNavigate();
   const location = useLocation();
-  const returnLabel = (location.state as { returnLabel?: string } | null)
-    ?.returnLabel;
   const [search] = useSearchParams();
+  const explicitReturn = runReturnLocation(search.get('returnTo'));
+  const historyReturn = location.state?.returnLabel as string | undefined;
+  const returnLabel = historyReturn ?? explicitReturn?.label;
   const workflowId = search.get('workflow') || undefined;
   const returnTab = parseRunTab(search.get('tab'));
   const returnMode = search.has('mode')
@@ -507,8 +464,36 @@ function RunRoute() {
     : undefined;
   const offset = runOffset(search.get('offset'));
   const tags = runTagFilter(search.get('tags'));
-  const runPath = (id: string, executionId?: string) =>
-    paths.run(id, workflowId, returnTab, executionId, offset, tags, returnMode);
+  const runPath = (
+    id: string,
+    executionId?: string,
+    returnTo = explicitReturn?.path,
+  ) =>
+    paths.run(id, {
+      workflowId,
+      tab: search.has('tab') ? returnTab : undefined,
+      executionId,
+      offset,
+      tags,
+      mode: returnMode,
+      returnTo,
+    });
+  // A request opened from its own inspector should keep the originating
+  // collection without nesting request and inspector URLs on every visit.
+  const requestOrigin = (() => {
+    if (explicitReturn?.label !== 'Back to request')
+      return explicitReturn?.path;
+    const url = new URL(explicitReturn.path, 'https://interlock.invalid');
+    if (url.pathname.startsWith('/boards/')) {
+      url.searchParams.delete('request');
+      return url.pathname + url.search + url.hash;
+    }
+    const original = runReturnLocation(url.searchParams.get('returnTo'));
+    return original?.label === 'Back to runs' ||
+      original?.label === 'Back to board'
+      ? original.path
+      : '';
+  })();
   return (
     <Suspense fallback={<RouteLoading label="Loading run…" />}>
       <RunInspector
@@ -519,6 +504,9 @@ function RunRoute() {
         onConnect={onConnect}
         initialExecutionId={search.get('execution') ?? undefined}
         returnLabel={returnLabel}
+        requestHref={(target, executionId) =>
+          paths.request(target, runPath(runId!, executionId, requestOrigin))
+        }
         onOpen={async (id, executionId, source) => {
           if (source)
             await navigate(runPath(runId!, source.executionId), {
@@ -526,19 +514,30 @@ function RunRoute() {
               state: location.state,
               preventScrollReset: true,
             });
-          await navigate(runPath(id, executionId), {
-            state: source
-              ? { returnLabel: `Back to ${source.label}` }
-              : undefined,
-          });
+          await navigate(
+            runPath(
+              id,
+              executionId,
+              source ? runPath(runId!, source.executionId) : undefined,
+            ),
+            {
+              state: source
+                ? { returnLabel: `Back to ${source.label}` }
+                : undefined,
+            },
+          );
         }}
         onBack={(status) => {
-          if (returnLabel) {
+          if (historyReturn) {
             void navigate(-1);
             return;
           }
+          if (explicitReturn) {
+            void navigate(explicitReturn.path);
+            return;
+          }
           const tab =
-            returnMode !== undefined || returnTab === 'attention'
+            returnMode !== undefined || search.has('tab')
               ? returnTab
               : status === 'queued' ||
                   status === 'running' ||

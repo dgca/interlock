@@ -3,7 +3,7 @@ import type { RunProjection, RunWaiting } from '@interlock/core';
 const labels: Record<RunWaiting['kind'], string> = {
   claim_queue: 'Waiting for an agent',
   managed_launch: 'Waiting for managed launch',
-  human_request: 'Person needed',
+  human_request: 'Waiting for your response',
   input_node: 'Waiting for external input',
   hold: 'On hold',
   pause: 'Paused',

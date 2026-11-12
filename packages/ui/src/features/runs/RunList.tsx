@@ -1,5 +1,6 @@
 import {
   Alert,
+  Anchor,
   Button,
   Group,
   Menu,
@@ -18,21 +19,28 @@ import { AutomationAlerts } from '../automations/AutomationAlerts';
 
 import { RunBoardSkeleton, RunRowsSkeleton } from './RunListSkeleton';
 import classes from './RunList.module.css';
-import { attentionText, waitReasonText, type RunTab } from './runAttention';
+import {
+  attentionText,
+  waitReasonText,
+  runReviewLink,
+  type RunTab,
+} from './runAttention';
 import { runProjectionText } from './runProjectionText';
 
 import { useId, useRef, useState } from 'react';
+import { Link } from 'react-router';
+import { paths } from '../../routes/paths';
 import { trpc, useQuery, useRefreshOnTick } from '../../lib/query';
 import { HistoryCleanupDialog } from './HistoryCleanupDialog';
 import { RetentionSettingsDialog } from './RetentionSettings';
 import type { Action } from '../../lib/useActionFeedback';
-import { ChevronDown, ChevronRight, Activity } from 'lucide-react';
+import { ChevronDown, Activity } from 'lucide-react';
 import { ComparisonContext } from './ComparisonContext';
 import { errorMessage } from '../../lib/api';
 import { RunListBoard, type BoardPreview } from './RunListBoard';
 import { RunTags } from './RunTags';
 import { RunTagFilter, AppliedRunTagFilters } from './RunTagFilter';
-import { runDisplayTitle, type RequestTarget } from '@interlock/core';
+import { runDisplayTitle } from '@interlock/core';
 
 const pageSize = 100;
 
@@ -40,8 +48,6 @@ export function RunList({
   tick,
   offset,
   onOffsetChange,
-  onOpen,
-  onRequest,
   tab,
   onTabChange,
   workflowId,
@@ -59,8 +65,6 @@ export function RunList({
   onOffsetChange: (offset: number) => void;
   tab: RunTab;
   onTabChange: (tab: RunTab) => void;
-  onOpen: (id: string, executionId?: string) => void;
-  onRequest?: (target: RequestTarget) => void;
   workflowId?: string;
   act?: Action;
   workflows: { id: string; name: string }[];
@@ -90,6 +94,18 @@ export function RunList({
     setLocalMode('list');
     onTabChange(next);
   };
+  const returnTo = workflowId
+    ? paths.workflowRuns(workflowId, tab, offset, selectedTags, selectedMode)
+    : paths.runs(tab, offset, selectedTags, selectedMode);
+  const runHref = (id: string, executionId?: string) =>
+    paths.run(id, {
+      workflowId,
+      tab,
+      executionId,
+      offset,
+      tags: selectedTags,
+      mode: selectedMode,
+    });
   const queryTab = selectedMode === 'overview' ? 'active' : tab;
   const queryOffset = selectedMode === 'overview' ? 0 : offset;
   const [cleanup, setCleanup] = useState(false);
@@ -162,7 +178,7 @@ export function RunList({
           variant="secondary"
           rightSection={<ChevronDown size={16} aria-hidden="true" />}
         >
-          History
+          History settings
         </Button>
       </Menu.Target>
       <Menu.Dropdown>
@@ -233,8 +249,8 @@ export function RunList({
         <RunListBoard
           page={page}
           preview={preview}
-          onOpen={onOpen}
-          onRequest={onRequest}
+          runHref={runHref}
+          returnTo={returnTo}
           onTabChange={showListTab}
           retry={() => {
             void attention.refetch();
@@ -248,20 +264,19 @@ export function RunList({
         <ListTable columns={runColumns}>
           {page.items.map((r) => {
             const started = new Date(r.createdAt);
+            const review = runReviewLink(r, runHref, returnTo);
             return (
-              <ListTableRow
-                className={`run-row ${classes.row}`}
-                key={r.id}
-                onClick={() => {
-                  const entry = r.attention;
-                  if (r.request && onRequest) onRequest(r.request);
-                  else if (entry)
-                    onOpen(entry.target.runId, entry.target.executionId);
-                  else onOpen(r.id);
-                }}
-              >
+              <ListTableRow className={`run-row ${classes.row}`} key={r.id}>
                 <span className={classes.identity}>
-                  <strong>{runDisplayTitle(r)}</strong>
+                  <strong>
+                    <Anchor
+                      component={Link}
+                      to={runHref(r.id)}
+                      underline="hover"
+                    >
+                      {runDisplayTitle(r)}
+                    </Anchor>
+                  </strong>
                   {(r.title || r.externalTask?.title) && (
                     <small>{r.workflowName}</small>
                   )}
@@ -301,6 +316,11 @@ export function RunList({
                         {attentionText(r.attention)}
                       </small>
                     )}
+                  {review && (
+                    <Anchor component={Link} to={review.href} size="sm">
+                      {review.label}
+                    </Anchor>
+                  )}
                 </span>
                 <span className={classes.started}>
                   <time dateTime={r.createdAt}>
@@ -320,7 +340,6 @@ export function RunList({
                   </small>
                 </span>
                 <span className={classes.steps}>{r.executionCount}</span>
-                <ChevronRight size={16} />
               </ListTableRow>
             );
           })}

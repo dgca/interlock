@@ -69,30 +69,8 @@
   font-weight: 600;
   font-size: 15px;
 }
-.card:has(.cardAction:hover) {
-  background: var(--surface-hover);
-  outline: 1px solid var(--input-border);
-}
-.card .cardAction {
-  position: static;
-  font-weight: 600;
-}
-.cardAction::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: 12px;
-}
-.cardAction:focus-visible {
-  outline: none;
-}
-.cardAction:focus-visible::after {
-  outline: 2px solid var(--field-focus);
-  outline-offset: 2px;
-}
-.card a:not(.cardAction) {
-  position: relative;
-  z-index: 1;
+.card h3 a {
+  font: inherit;
 }
 .card a {
   display: inline-flex;

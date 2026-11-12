@@ -1,4 +1,10 @@
-import type { RunAttention, RunSummary } from '@interlock/core';
+import type {
+  RequestTarget,
+  RunAttention,
+  RunAttentionReason,
+  RunSummary,
+} from '@interlock/core';
+import { paths } from '../../routes/paths';
 export type RunTab = 'active' | 'attention' | 'history';
 export const runTab = (value: string | null): RunTab =>
   value === 'history' || value === 'attention' ? value : 'active';
@@ -27,3 +33,40 @@ export const waitReasonText: Record<
   timer: 'Waiting for a timer',
   child: 'Waiting for a child run',
 };
+
+export function requestActionLabel(
+  kind: RequestTarget['kind'] | RunAttentionReason | undefined,
+) {
+  switch (kind) {
+    case 'model':
+      return 'Choose a model';
+    case 'recovery':
+    case 'resource':
+    case 'script':
+      return 'Review recovery';
+    case 'stalled':
+      return 'Resolve stall';
+    default:
+      return 'Review request';
+  }
+}
+
+export function runReviewLink(
+  run: { request?: RequestTarget; attention?: RunAttention },
+  runHref: (id: string, executionId?: string) => string,
+  returnTo: string,
+) {
+  if (run.request)
+    return {
+      href: paths.request(run.request, returnTo),
+      label: requestActionLabel(run.request.kind),
+    };
+  if (run.attention)
+    return {
+      href: runHref(
+        run.attention.target.runId,
+        run.attention.target.executionId,
+      ),
+      label: requestActionLabel(run.attention.reasons[0]),
+    };
+}

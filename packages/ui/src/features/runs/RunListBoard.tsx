@@ -1,14 +1,20 @@
-import { Badge, Button, Text } from '../../design-system';
+import { Anchor, Badge, Button, Text } from '../../design-system';
 import { StatusBadge } from '../../components/StatusBadge/StatusBadge';
 import { ArrowUpRight } from 'lucide-react';
+import { Link } from 'react-router';
 import { useId, type ReactNode } from 'react';
 import type { api } from '../../lib/api';
 import { ComparisonContext } from './ComparisonContext';
 import { RunTags } from './RunTags';
-import { attentionText, waitReasonText, type RunTab } from './runAttention';
+import {
+  attentionText,
+  waitReasonText,
+  runReviewLink,
+  type RunTab,
+} from './runAttention';
 import { runProjectionText } from './runProjectionText';
 import classes from './RunList.module.css';
-import { runDisplayTitle, type RequestTarget } from '@interlock/core';
+import { runDisplayTitle } from '@interlock/core';
 
 type Page = Awaited<ReturnType<typeof api.runs.summaries.query>>;
 type RunItem = Page['items'][number];
@@ -21,14 +27,15 @@ export type BoardPreview = {
 
 function RunCard({
   run,
-  onOpen,
-  onRequest,
+  runHref,
+  returnTo,
 }: {
   run: RunItem;
-  onOpen: (id: string, executionId?: string) => void;
-  onRequest?: (target: RequestTarget) => void;
+  runHref: (id: string, executionId?: string) => string;
+  returnTo: string;
 }) {
   const attention = run.attention;
+  const review = runReviewLink(run, runHref, returnTo);
   const reason = run.actor
     ? runProjectionText(
         run,
@@ -38,17 +45,9 @@ function RunCard({
       ? waitReasonText[run.waitReason]
       : undefined;
   return (
-    <button
-      type="button"
+    <article
       className={`run-row ${classes.runCard}`}
-      data-attention={!!attention || undefined}
-      onClick={() =>
-        run.request && onRequest
-          ? onRequest(run.request)
-          : attention
-            ? onOpen(attention.target.runId, attention.target.executionId)
-            : onOpen(run.id)
-      }
+      data-attention={!!review || undefined}
     >
       <span className={classes.cardBody}>
         <span className={classes.cardMetadata}>
@@ -57,7 +56,11 @@ function RunCard({
           </span>
           <span>v{run.version}</span>
         </span>
-        <strong className={classes.cardTitle}>{runDisplayTitle(run)}</strong>
+        <strong className={classes.cardTitle}>
+          <Anchor component={Link} to={runHref(run.id)} underline="hover">
+            {runDisplayTitle(run)}
+          </Anchor>
+        </strong>
         {(run.title || run.externalTask?.title) && (
           <span className={classes.cardNote}>{run.workflowName}</span>
         )}
@@ -110,15 +113,17 @@ function RunCard({
           </time>
         </span>
       </span>
-      <span className={classes.cardAction}>
-        {attention
-          ? attention.reasons.includes('recovery')
-            ? 'Review recovery'
-            : 'Review request'
-          : 'Open run'}
-        <ArrowUpRight size={16} aria-hidden="true" />
-      </span>
-    </button>
+      {review && (
+        <Anchor
+          component={Link}
+          to={review.href}
+          className={classes.cardAction}
+        >
+          {review.label}
+          <ArrowUpRight size={16} aria-hidden="true" />
+        </Anchor>
+      )}
+    </article>
   );
 }
 
@@ -153,35 +158,37 @@ function BoardColumn({
 export function RunListBoard({
   page,
   preview,
-  onOpen,
-  onRequest,
+  runHref,
+  returnTo,
   onTabChange,
   retry,
   onClearFilters,
 }: {
   page: Page;
   preview?: BoardPreview;
-  onOpen: (id: string, executionId?: string) => void;
-  onRequest?: (target: RequestTarget) => void;
+  runHref: (id: string, executionId?: string) => string;
+  returnTo: string;
   onTabChange: (tab: RunTab) => void;
   retry: () => void;
   onClearFilters?: () => void;
 }) {
   // Keep every run in the bounded active preview visible. The bounded attention
   // preview also includes terminal runs still waiting for recovery confirmation.
+  const needsAttention = (run: RunItem) =>
+    Boolean(run.request || run.attention);
   const activeIds = new Set(page.items.map((run) => run.id));
   const attention = [
-    ...page.items.filter((run) => run.attention),
+    ...page.items.filter(needsAttention),
     ...(preview?.attention?.items.filter(
-      (run) => run.attention && !activeIds.has(run.id),
+      (run) => needsAttention(run) && !activeIds.has(run.id),
     ) ?? []),
   ];
-  const running = page.items.filter((run) => !run.attention);
+  const running = page.items.filter((run) => !needsAttention(run));
   const completed =
     preview?.completed?.items.filter((run) => run.status === 'completed') ?? [];
   const cards = (items: RunItem[]) =>
     items.map((run) => (
-      <RunCard key={run.id} run={run} onOpen={onOpen} onRequest={onRequest} />
+      <RunCard key={run.id} run={run} runHref={runHref} returnTo={returnTo} />
     ));
   const previewError = (message: string) => (
     <div role="alert">
