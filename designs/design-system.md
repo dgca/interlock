@@ -1,6 +1,6 @@
 # Interlock v2 Pen design system
 
-The design system is in the `Interlock / Design system` section, `r93lT`, of [the Pen file](../interlock-design-directions.pen). It contains 57 cataloged UI masters across 12 component and inventory boards, alongside the existing approved overview and logo.
+The design system is in the `Interlock / Design system` section, `r93lT`, of [the Pen file](../interlock.pen). It contains 57 cataloged UI masters across 12 component and inventory boards, alongside the existing approved overview and logo.
 
 The initial UI source pass covered all 93 TSX files, 43 stylesheets, and the shared theme. [The source manifest](ui-source-inventory.json) is refreshed during implementation as module paths and file counts change. The [70-family inventory](component-inventory.md) distinguishes shared components, Mantine controls, repeated compositions, feature-specific editors, and v2 candidates. Visual controls now have a single application import point in `packages/ui/src/design-system`; context-specific compositions remain in `components`.
 

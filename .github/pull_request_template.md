@@ -19,4 +19,7 @@ Explain any added discovery text or response volume and why it earns its context
 
 ## Validation
 
-<!-- Summarize checks and results. Note relevant checks not run and why, plus any remaining gaps. Include screenshots for visual changes when useful. -->
+<!-- Summarize checks and results. Note relevant checks not run and why, plus any remaining gaps. Include screenshots for visual changes when useful.
+For UI interactions, name the matching screens reviewed and shared behavior reused; explain intentional differences.
+For inspection/history/collection reads, describe retrieval scope and validation with unrelated retained history.
+-->

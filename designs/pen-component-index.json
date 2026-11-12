@@ -1,6 +1,6 @@
 {
   "penRoot": "r93lT",
-  "penFile": "../interlock-design-directions.pen",
+  "penFile": "../interlock.pen",
   "boards": {
     "foundations": "aS9ja",
     "actions": "yI89a",

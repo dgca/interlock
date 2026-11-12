@@ -1,2 +1,0 @@
-$ node scripts/test-package.mjs
-Packed global and npx installs passed: CLI, UI assets, HTTP and stdio MCP, assignments across restart, JavaScript execution, supervised background recovery without replay, persistence, and reviewed history cleanup.

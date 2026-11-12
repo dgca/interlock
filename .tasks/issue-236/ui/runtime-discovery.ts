@@ -1,3 +1,0 @@
-import {Client} from '@modelcontextprotocol/sdk/client/index.js';
-import {StreamableHTTPClientTransport} from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-const client=new Client({name:'schedule-proof',version:'1'});await client.connect(new StreamableHTTPClientTransport(new URL('http://127.0.0.1:5197/mcp')));const discovery=await client.listTools();console.log(JSON.stringify({toolCount:discovery.tools.length,discoveryBytes:Buffer.byteLength(JSON.stringify(discovery)),instructionBytes:Buffer.byteLength(client.getInstructions()??''),scheduleTools:discovery.tools.filter(t=>t.name.includes('workflow_triggers')).map(t=>({name:t.name,inputSchema:t.inputSchema})),transport:'HTTP; matching stdio discovery asserted by transport.test.ts'},null,2));await client.close();

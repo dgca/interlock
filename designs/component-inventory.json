@@ -1403,7 +1403,7 @@
     }
   ],
   "penRoot": "r93lT",
-  "penFile": "../interlock-design-directions.pen",
+  "penFile": "../interlock.pen",
   "sourceAudit": {
     "tsxFiles": 93,
     "stylesheetFiles": 43

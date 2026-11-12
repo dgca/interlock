@@ -120,7 +120,7 @@ components:
 
 **Approved target design.** This document records the user-approved desktop Pen mockups. It does not describe the current shipped CSS or claim that the redesign is implemented.
 
-The canonical visual reference is [interlock-design-directions.pen](../../interlock-design-directions.pen). The `Interlock / Design system` section `r93lT` contains the approved overview `yqQ5c`, reusable component boards, and source-backed inventory boards. Application references are Runs `YsC4K`, workflow editor `pJq1n`, schedule form `DBUrn`, and harness form `a5Faf`.
+The canonical visual reference is [interlock.pen](../../interlock.pen). The `Interlock / Design system` section `r93lT` contains the approved overview `yqQ5c`, reusable component boards, and source-backed inventory boards. Application references are Runs `YsC4K`, workflow editor `pJq1n`, schedule form `DBUrn`, and harness form `a5Faf`.
 
 The [Pen library guide](../../designs/design-system.md), [master index](../../designs/pen-component-index.json), and [component inventory](../../designs/component-inventory.md) record reuse and coverage. Screen-derived treatments are the baseline. Newly drawn interaction states and patterns are labeled proposals; their presence in the library does not make them approved or implemented.
 

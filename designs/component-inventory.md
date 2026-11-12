@@ -2,7 +2,7 @@
 
 The initial inventory reviewed all 93 TSX files and 43 stylesheets under `packages/ui/src`, plus the shared theme. Source ownership links and [the source manifest](ui-source-inventory.json) are refreshed during implementation as modules move or appear. JSX/import analysis was followed by owner and composition review. This is not a runtime interaction or accessibility audit.
 
-The [Pen file](../interlock-design-directions.pen) is the visual target. The application uses the Grid design-system foundation and migrated screen compositions. Reusable Pen masters do not imply new React wrappers. Import visual controls through `packages/ui/src/design-system`, re-export Mantine controls where their existing interfaces fit, and preserve shared behavior and feature-specific editors. Context-independent components belong in the design system; application compositions remain in `components`.
+The [Pen file](../interlock.pen) is the visual target. The application uses the Grid design-system foundation and migrated screen compositions. Reusable Pen masters do not imply new React wrappers. Import visual controls through `packages/ui/src/design-system`, re-export Mantine controls where their existing interfaces fit, and preserve shared behavior and feature-specific editors. Context-independent components belong in the design system; application compositions remain in `components`.
 
 ## Coverage and decisions
 
