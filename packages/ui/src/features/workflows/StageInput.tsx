@@ -6,17 +6,24 @@ import {
 } from '../../design-system';
 import { ChevronDown, X } from 'lucide-react';
 import { useState } from 'react';
-import type { WorkflowBoard, WorkflowNode } from '@interlock/core';
+import {
+  workflowStageColumn,
+  workflowStageId,
+  type WorkflowBoard,
+  type WorkflowNode,
+} from '@interlock/core';
 
 export function StageInput({
   node,
   board,
   previousBoard,
+  boardStageColumns,
   onChange,
 }: {
   node: WorkflowNode;
   board?: WorkflowBoard;
   previousBoard?: WorkflowBoard;
+  boardStageColumns?: Record<string, string | null>;
   onChange: (
     stage: string | undefined,
     boardColumnId: string | undefined,
@@ -27,10 +34,18 @@ export function StageInput({
   });
   const [typing, setTyping] = useState(false);
   const hasColumns = Boolean(board?.columns.length);
-  const bound = previousBoard?.columns.find(
-    (column) => column.id === node.boardColumnId,
+  const stageId = workflowStageId(node);
+  const mapped = Boolean(
+    stageId && Object.hasOwn(boardStageColumns ?? {}, stageId),
   );
-  const value = bound?.name ?? node.stage ?? '';
+  const columnId = workflowStageColumn(node, boardStageColumns);
+  const bound = (mapped ? board : previousBoard)?.columns.find(
+    (column) => column.id === columnId,
+  );
+  const value = mapped
+    ? (node.stage ?? bound?.name ?? '')
+    : (bound?.name ?? node.stage ?? '');
+  const canClear = Boolean(value || stageId);
   const columns = typing
     ? board?.columns.filter((column) =>
         column.name
@@ -38,11 +53,16 @@ export function StageInput({
           .includes(value.trim().toLocaleLowerCase()),
       )
     : board?.columns;
-  const description = bound
-    ? `${previousBoard?.name} board column`
-    : board
-      ? `Choose a ${board.name} column or type a custom stage.`
-      : 'Optional stage label for run summaries.';
+  const description =
+    mapped && bound && board
+      ? `Maps to ${bound.name} on ${board.name}.`
+      : bound
+        ? `${previousBoard?.name} board column`
+        : node.stageId || mapped
+          ? 'Portable stage without a local board column.'
+          : board
+            ? `Choose a ${board.name} column or type a custom stage.`
+            : 'Optional stage label for run summaries.';
   return (
     <Combobox
       store={combobox}
@@ -65,9 +85,7 @@ export function StageInput({
           mb="md"
           description={description}
           value={value}
-          rightSectionPointerEvents={
-            value || node.boardColumnId ? 'all' : 'none'
-          }
+          rightSectionPointerEvents={canClear ? 'all' : 'none'}
           maxLength={200}
           onFocus={() => {
             setTyping(false);
@@ -88,7 +106,7 @@ export function StageInput({
             combobox.resetSelectedOption();
           }}
           rightSection={
-            value || node.boardColumnId ? (
+            canClear ? (
               <ActionIcon
                 variant="subtle"
                 aria-label="Clear stage"
@@ -113,7 +131,7 @@ export function StageInput({
               <Combobox.Option
                 key={column.id}
                 value={column.id}
-                active={column.id === node.boardColumnId}
+                active={column.id === columnId}
               >
                 {column.name}
               </Combobox.Option>

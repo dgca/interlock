@@ -474,3 +474,107 @@ it('blocks unresolved GitHub requirements and invalid provisioning names without
     'Fix 1 local variable name to enable import.',
   );
 });
+
+const boardSetupPreview = (workflowId: string, name: string) => ({
+  suggestions: [
+    {
+      id: 'source-board',
+      name: 'Delivery',
+      columns: [{ id: 'source-review', name: 'Review' }],
+      workflows: [
+        {
+          workflowId,
+          name,
+          currentBoardId: null,
+          stages: [{ id: 'review', name: 'Review', columnId: 'source-review' }],
+        },
+      ],
+    },
+  ],
+  boards: [],
+  unresolved: [],
+});
+
+async function select(label: string, value: string) {
+  const select = [...document.querySelectorAll('label')].find(
+    (el) => el.textContent === label,
+  )?.control as HTMLSelectElement | undefined;
+  if (!select) throw new Error(`Missing select: ${label}`);
+  await act(async () => {
+    select.value = value;
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+}
+
+it('applies a starter board choice with the same key on retry', async () => {
+  await render([
+    { ...catalog[0], boardSetup: boardSetupPreview('sdlc', 'SDLC workflow') },
+  ]);
+  calls.add.mockRejectedValueOnce(new Error('Connection lost'));
+  await select('Board action', 'create');
+  expect(document.body.textContent).toContain('Columns in order Review');
+  await click('Add to library');
+  await click('Add to library');
+  const first = calls.add.mock.calls[0][0];
+  expect(first.boardSetup).toEqual({
+    requestId: first.requestId,
+    choices: [
+      {
+        action: 'create',
+        suggestionId: 'source-board',
+        expectedBoards: { sdlc: null },
+      },
+    ],
+  });
+  expect(calls.add.mock.calls[1][0]).toEqual(first);
+  expect(imported).toHaveBeenCalledWith(['starter']);
+});
+
+it('submits the selected existing-board revision and explicit mapping for a pasted bundle', async () => {
+  const bundle = { format: 'interlock-workflows', rootId: 'bundle' };
+  calls.preview.mockResolvedValue({
+    name: 'Imported workflow',
+    description: '',
+    workflows: [],
+    prompts: [],
+    published: true,
+    boardSetup: {
+      ...boardSetupPreview('bundle', 'Imported workflow'),
+      boards: [
+        {
+          id: 'destination',
+          name: 'Local delivery',
+          revision: 4,
+          columns: [
+            { id: 'local-review', name: 'Review' },
+            { id: 'local-verify', name: 'Verify' },
+          ],
+        },
+      ],
+    },
+  });
+  await click('Paste JSON');
+  await text(JSON.stringify(bundle), true);
+  await click('Preview workflow');
+  await select('Board action', 'existing');
+  expect(button('Import workflow').disabled).toBe(true);
+  await select('Existing board', 'destination');
+  await select('Review', 'local-verify');
+  await click('Import workflow');
+  expect(calls.bundle).toHaveBeenCalledWith({
+    bundle,
+    boardSetup: {
+      requestId: expect.any(String),
+      choices: [
+        {
+          action: 'existing',
+          suggestionId: 'source-board',
+          expectedBoards: { bundle: null },
+          boardId: 'destination',
+          expectedRevision: 4,
+          stageColumns: { bundle: { review: 'local-verify' } },
+        },
+      ],
+    },
+  });
+});

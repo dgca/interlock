@@ -1574,6 +1574,7 @@ export function WorkflowEditor({
           workflows={workflows}
           workflowId={workflow.id}
           workflowBoardId={workflow.boardId}
+          boardStageColumns={workflow.boardStageColumns}
           onBoardSaved={onSaved}
           canExport={true}
           returnFocusTo={() => {

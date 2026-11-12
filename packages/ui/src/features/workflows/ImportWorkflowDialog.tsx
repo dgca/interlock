@@ -19,9 +19,16 @@ import { BookOpen, Braces, FileJson, FolderGit2, Upload } from 'lucide-react';
 import { api, errorMessage } from '../../lib/api';
 import type { Action } from '../../lib/useActionFeedback';
 import { importWorkflowJson } from './importWorkflowJson';
+import {
+  BoardImportEditor,
+  boardImportChoices,
+  mergeBoardImportPreviews,
+  type BoardImportDrafts,
+} from './BoardImportEditor';
 import styles from './ImportWorkflowDialog.module.css';
 import { VariableImportBindingsEditor } from '../variables/VariableImportBindings';
 import {
+  boardSettingsRevisionConflict,
   variableImportBindingsSchema,
   type VariableImportBindings,
 } from '@interlock/core';
@@ -38,7 +45,9 @@ type LocalDocument = {
   text: string;
   filename?: string;
   preview: DocumentPreview;
+  generation: number;
 };
+const emptyBoardDrafts: BoardImportDrafts = new Map();
 function Details({
   item,
   filename,
@@ -109,8 +118,14 @@ export function ImportWorkflowDialog({
   const [errors, setErrors] = useState<Partial<Record<Source, string>>>({});
   const [loading, setLoading] = useState<Partial<Record<Source, boolean>>>({});
   const [busy, setBusy] = useState(false);
+  const [refreshingBoard, setRefreshingBoard] = useState(false);
+  const controlsDisabled = busy || refreshingBoard;
   const [variableBindings, setVariableBindings] =
     useState<VariableImportBindings>({});
+  const [boardDraftState, setBoardDraftState] = useState<{
+    scope: string;
+    drafts: BoardImportDrafts;
+  }>();
   const mounted = useRef(true),
     importing = useRef(false),
     githubGeneration = useRef(0),
@@ -195,7 +210,10 @@ export function ImportWorkflowDialog({
       }
       const preview = await api.workflows.previewImport.query({ document });
       if (mounted.current && generation === documentGeneration.current[kind])
-        setDocuments((d) => ({ ...d, [kind]: { text, filename, preview } }));
+        setDocuments((d) => ({
+          ...d,
+          [kind]: { text, filename, preview, generation },
+        }));
     } catch (e) {
       if (generation === documentGeneration.current[kind])
         error(kind, errorMessage(e));
@@ -228,6 +246,37 @@ export function ImportWorkflowDialog({
   const starter = catalog?.find((s) => s.id === selectedStarter);
   const local =
     source === 'file' || source === 'paste' ? documents[source] : undefined;
+  const boardScope = JSON.stringify([
+    source,
+    source === 'starters'
+      ? [selectedStarter, copy]
+      : source === 'github'
+        ? [githubGeneration.current, ...selected.toSorted()]
+        : local?.generation,
+  ]);
+  const boardDrafts =
+    boardDraftState?.scope === boardScope
+      ? boardDraftState.drafts
+      : emptyBoardDrafts;
+  const boardPreview = mergeBoardImportPreviews(
+    source === 'github'
+      ? (github?.items
+          .filter((item) => item.valid && selected.includes(item.file))
+          .map((item) => (item.valid ? item.boardSetup : undefined)) ?? [])
+      : source === 'starters'
+        ? [starter?.existing && !copy ? undefined : starter?.boardSetup]
+        : [local?.preview.boardSetup],
+  );
+  const destinationBoards =
+    (source === 'github'
+      ? github?.boards
+      : source === 'starters'
+        ? starter?.boardSetup?.boards
+        : local?.preview.boardSetup?.boards) ?? [];
+  const boardChoices = boardImportChoices(
+    boardPreview.suggestions,
+    boardDrafts,
+  );
   const requiredVariables = [
     ...new Map(
       (source === 'github'
@@ -263,7 +312,7 @@ export function ImportWorkflowDialog({
     onImported?.([...new Set(ids)]);
   };
   const add = async () => {
-    if (importing.current) return;
+    if (importing.current || refreshingBoard) return;
     if (unresolvedVariables) {
       error(
         source,
@@ -271,10 +320,25 @@ export function ImportWorkflowDialog({
       );
       return;
     }
+    if (!boardChoices) {
+      error(source, 'Complete board setup or choose Skip board setup.');
+      return;
+    }
     if (source === 'starters' && starter?.existing && !copy) {
       finish([starter.existing.id]);
       return;
     }
+    const identity = JSON.stringify([
+      boardScope,
+      boardChoices,
+      source === 'github' ? selected : undefined,
+      selectedBindings,
+    ]);
+    if (request.current.identity !== identity)
+      request.current = { identity, id: crypto.randomUUID() };
+    const boardSetup = boardChoices.length
+      ? { requestId: request.current.id, choices: boardChoices }
+      : undefined;
     importing.current = true;
     setBusy(true);
     error(source);
@@ -282,31 +346,38 @@ export function ImportWorkflowDialog({
       await act(async () => {
         try {
           if (source === 'starters' && starter) {
-            const identity = `${starter.id}:${copy}`;
-            if (request.current.identity !== identity)
-              request.current = { identity, id: crypto.randomUUID() };
             const result = await api.workflows.importStarter.mutate({
               starterId: starter.id,
               requestId: request.current.id,
               copy,
+              ...(boardSetup ? { boardSetup } : {}),
             });
             finish([result.workflow.id]);
           } else if (source === 'github' && github && selected.length) {
             const result = await api.workflows.importGithub.mutate({
               source: github.source,
               files: selected,
+              ...(boardSetup ? { boardSetup } : {}),
               ...(requiredVariables.length
                 ? { variableBindings: selectedBindings }
                 : {}),
             });
             finish(result.rootIds);
           } else if (local)
-            finish([await importWorkflowJson(local.text, selectedBindings)]);
+            finish([
+              await importWorkflowJson(
+                local.text,
+                selectedBindings,
+                boardSetup,
+              ),
+            ]);
         } catch (e) {
           const detail = errorMessage(e);
           const message =
             source === 'github' && !detail.startsWith('Nothing imported:')
-              ? `The import result could not be confirmed. Inspect the library before retrying. ${detail}`
+              ? boardSetup
+                ? `The import result could not be confirmed. Retry without changing the import choices to recover the result. ${detail}`
+                : `The import result could not be confirmed. Inspect the library before retrying. ${detail}`
               : detail;
           error(source, message);
           throw new Error(message);
@@ -335,7 +406,9 @@ export function ImportWorkflowDialog({
               : 'Import workflow';
   const disabled =
     busy ||
+    refreshingBoard ||
     loading[source] ||
+    !boardChoices ||
     (unresolvedVariables > 0 &&
       (source === 'github' ? !needsDiscovery : !!local)) ||
     (source === 'starters'
@@ -373,9 +446,9 @@ export function ImportWorkflowDialog({
       }
       size={920}
       height={740}
-      busy={busy}
+      busy={controlsDisabled}
       onClose={() => {
-        if (!importing.current) onClose();
+        if (!importing.current && !refreshingBoard) onClose();
       }}
     >
       <ModalBody flush>
@@ -387,7 +460,7 @@ export function ImportWorkflowDialog({
                   key={s.id}
                   type="button"
                   aria-current={source === s.id ? 'page' : undefined}
-                  disabled={busy}
+                  disabled={controlsDisabled}
                   onClick={() => changeSource(s.id as Source)}
                 >
                   <s.icon size={17} />
@@ -436,7 +509,7 @@ export function ImportWorkflowDialog({
                           key={s.id}
                         >
                           <Radio
-                            disabled={busy}
+                            disabled={controlsDisabled}
                             value={s.id}
                             label={s.name}
                             description={s.description}
@@ -465,7 +538,7 @@ export function ImportWorkflowDialog({
                               : ' · Draft'}
                         </p>
                         <Checkbox
-                          disabled={busy}
+                          disabled={controlsDisabled}
                           label="Add another copy"
                           checked={copy}
                           onChange={(e) => setCopy(e.currentTarget.checked)}
@@ -486,14 +559,15 @@ export function ImportWorkflowDialog({
                 <form
                   onSubmit={(e) => {
                     e.preventDefault();
-                    if (url.trim() && !busy && !loading.github) void discover();
+                    if (url.trim() && !controlsDisabled && !loading.github)
+                      void discover();
                   }}
                 >
                   <TextInput
                     label="Public GitHub folder URL"
                     placeholder="https://github.com/owner/repo/tree/branch/folder"
                     value={url}
-                    disabled={busy}
+                    disabled={controlsDisabled}
                     onChange={(e) => {
                       githubGeneration.current++;
                       setUrl(e.currentTarget.value);
@@ -516,7 +590,7 @@ export function ImportWorkflowDialog({
                       <h3>Choose workflows</h3>
                       <Button
                         variant="ghost"
-                        disabled={busy || loading.github}
+                        disabled={controlsDisabled || loading.github}
                         onClick={() => void discover()}
                       >
                         Reload folder
@@ -532,7 +606,7 @@ export function ImportWorkflowDialog({
                         {item.valid ? (
                           <>
                             <Checkbox
-                              disabled={busy}
+                              disabled={controlsDisabled}
                               label={item.name}
                               checked={selected.includes(item.file)}
                               onChange={(e) => {
@@ -585,13 +659,14 @@ export function ImportWorkflowDialog({
                     onDragOver={(e) => e.preventDefault()}
                     onDrop={(e) => {
                       e.preventDefault();
-                      if (!busy) void readFile(e.dataTransfer.files[0]);
+                      if (!controlsDisabled)
+                        void readFile(e.dataTransfer.files[0]);
                     }}
                   >
                     <FileJson size={26} />
                     <p>Drop a workflow JSON file here</p>
                     <Button
-                      disabled={busy}
+                      disabled={controlsDisabled}
                       onClick={() => file.current?.click()}
                     >
                       Browse files
@@ -603,7 +678,7 @@ export function ImportWorkflowDialog({
                     label="Workflow JSON"
                     description="A workflow definition or a portable bundle with its dependencies."
                     value={json}
-                    disabled={busy}
+                    disabled={controlsDisabled}
                     rows={13}
                     spellCheck={false}
                     className={styles.json}
@@ -621,7 +696,7 @@ export function ImportWorkflowDialog({
                       <h3>Review import</h3>
                       <Button
                         variant="ghost"
-                        disabled={busy}
+                        disabled={controlsDisabled}
                         onClick={() =>
                           source === 'file'
                             ? file.current?.click()
@@ -653,11 +728,29 @@ export function ImportWorkflowDialog({
                 )}
               </>
             )}
+            {(boardPreview.suggestions.length > 0 ||
+              boardPreview.unresolved.length > 0) && (
+              <BoardImportEditor
+                key={boardScope}
+                {...boardPreview}
+                boards={destinationBoards}
+                drafts={boardDrafts}
+                onChange={(drafts) =>
+                  setBoardDraftState({ scope: boardScope, drafts })
+                }
+                onRefreshing={setRefreshingBoard}
+                boardConflict={
+                  errors[source]?.includes(boardSettingsRevisionConflict) ??
+                  false
+                }
+                disabled={controlsDisabled}
+              />
+            )}
             <VariableImportBindingsEditor
               requirements={requiredVariables}
               choices={variableBindings}
               onChange={setVariableBindings}
-              disabled={busy}
+              disabled={controlsDisabled}
             />
             {errors[source] && (
               <p role="alert" className={styles.error}>
@@ -674,21 +767,23 @@ export function ImportWorkflowDialog({
             aria-live="polite"
             aria-atomic="true"
           >
-            {invalidProvisionNames
-              ? `Fix ${invalidProvisionNames} local variable name${invalidProvisionNames === 1 ? '' : 's'} to enable import.`
-              : unresolvedVariables
-                ? `Choose how to provide ${unresolvedVariables} required variable${unresolvedVariables === 1 ? '' : 's'} to enable import.`
-                : source === 'starters' &&
-                    starter &&
-                    (!starter.existing || copy)
-                  ? 'Adds a published copy. Nothing runs automatically.'
-                  : source === 'github' && selected.length
-                    ? `${selected.length} selected. Included dependencies come with them.`
-                    : ''}
+            {!boardChoices
+              ? 'Complete board setup or choose Skip board setup.'
+              : invalidProvisionNames
+                ? `Fix ${invalidProvisionNames} local variable name${invalidProvisionNames === 1 ? '' : 's'} to enable import.`
+                : unresolvedVariables
+                  ? `Choose how to provide ${unresolvedVariables} required variable${unresolvedVariables === 1 ? '' : 's'} to enable import.`
+                  : source === 'starters' &&
+                      starter &&
+                      (!starter.existing || copy)
+                    ? 'Adds a published copy. Nothing runs automatically.'
+                    : source === 'github' && selected.length
+                      ? `${selected.length} selected. Included dependencies come with them.`
+                      : ''}
           </p>
         }
       >
-        <Button disabled={busy} onClick={onClose}>
+        <Button disabled={controlsDisabled} onClick={onClose}>
           Cancel
         </Button>
         <Button
