@@ -225,7 +225,7 @@ it.each([1440, 900, 390])(
         const table = page.getByRole('table', { name: 'Runs' });
         await table.getByRole('rowheader').filter({ has: runLink }).waitFor();
         expect(await table.getByRole('columnheader').allTextContents()).toEqual(
-          ['Workflow', 'Status', 'Started', 'Steps'],
+          ['Run', 'Status', 'Started', 'Steps'],
         );
         await runLink.focus();
         await page.keyboard.press('Tab');

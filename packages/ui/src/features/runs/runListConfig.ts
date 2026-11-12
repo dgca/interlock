@@ -16,7 +16,7 @@ export const runViews: { value: RunTab; label: string }[] = [
 export const runTable: ListTableLayout = {
   minWidth: 466,
   columns: [
-    { label: 'Workflow', width: '33%', compactWidth: '31%' },
+    { label: 'Run', width: '33%', compactWidth: '31%' },
     { label: 'Status', width: '36%', compactWidth: '36%' },
     { label: 'Started' },
     { label: 'Steps', width: '64px', compactWidth: '50px' },
