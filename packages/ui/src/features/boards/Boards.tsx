@@ -386,6 +386,13 @@ function StageColumn({
       setMountedDepth(Math.max(2, visiblePages));
     else if (ready && depth < visiblePages) setMountedDepth(depth + 1);
   }, [depth, mountedDepth, ready, visiblePages]);
+  const cardPages = [
+    column.cards,
+    ...extraPages.map(
+      (page) =>
+        page.data?.columns.find((item) => item.id === column.id)?.cards ?? [],
+    ),
+  ];
   const card = (item: Card) => (
     <BoardCard
       key={item.id}
@@ -404,27 +411,30 @@ function StageColumn({
         </Badge>
       </Group>
       <Stack gap="xs">
-        {column.cards.map(card)}
-        {extraPages.map((page, index) => (
-          <Fragment key={index}>
-            {page.data?.columns
-              .find((item) => item.id === column.id)
-              ?.cards.map(card)}
-            {page.error ? (
-              <Stack gap="xs">
-                <ActionError message={errorMessage(page.error)} />
-                <Button
-                  variant="secondary"
-                  onClick={() => void page.refetch({ cancelRefetch: false })}
-                >
-                  Retry page {index + 2} in {column.name}
-                </Button>
-              </Stack>
-            ) : (
-              !page.data && <Loader size="xs" aria-label="Loading more cards" />
-            )}
-          </Fragment>
-        ))}
+        {cardPages.some((page) => page.length) && (
+          <ul className={classes.cards} role="list">
+            {cardPages.map((page, index) => (
+              <Fragment key={index}>{page.map(card)}</Fragment>
+            ))}
+          </ul>
+        )}
+        {extraPages.map((page, index) =>
+          page.error ? (
+            <Stack gap="xs" key={index}>
+              <ActionError message={errorMessage(page.error)} />
+              <Button
+                variant="secondary"
+                onClick={() => void page.refetch({ cancelRefetch: false })}
+              >
+                Retry page {index + 2} in {column.name}
+              </Button>
+            </Stack>
+          ) : (
+            !page.data && (
+              <Loader key={index} size="xs" aria-label="Loading more cards" />
+            )
+          ),
+        )}
         {pages * pageSize < column.total && (
           <Button
             variant="ghost"
@@ -466,7 +476,7 @@ function BoardCard({
   const requestSearch = card.request ? new URLSearchParams(search) : undefined;
   requestSearch?.set('request', JSON.stringify(card.request));
   return (
-    <article className={classes.card}>
+    <li className={classes.card}>
       <h3>
         <Anchor component={Link} to={runLink} underline="hover">
           {title}
@@ -511,6 +521,6 @@ function BoardCard({
         )}
         <ExternalTaskLink task={card.externalTask} withArrow />
       </Group>
-    </article>
+    </li>
   );
 }

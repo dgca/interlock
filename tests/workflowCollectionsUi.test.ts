@@ -116,20 +116,20 @@ it('keeps child workflows out of library results and switches archive scope whil
   expect(
     [...container.querySelectorAll('header button')].at(-1)?.textContent,
   ).toContain('New workflow');
-  expect(container.querySelectorAll('article')).toHaveLength(1);
+  expect(container.querySelectorAll('ul[role=list] > li')).toHaveLength(1);
   expect(container.textContent).toContain('Parent workflow');
   expect(container.textContent).not.toContain('Active helper');
   await search('Search workflows', 'Archived');
   expect(container.textContent).toContain('No matching workflows');
   await act(async () => button('Archived 1').click());
-  expect(container.querySelector('article')?.textContent).toContain(
+  expect(container.querySelector('ul[role=list] > li')?.textContent).toContain(
     'Archived parent',
   );
   const input = await search('Search workflows', 'not-found');
   await act(async () => button('Clear search').click());
   expect(input.value).toBe('');
   expect(document.activeElement).toBe(input);
-  expect(container.querySelector('article')?.textContent).toContain(
+  expect(container.querySelector('ul[role=list] > li')?.textContent).toContain(
     'Archived parent',
   );
 });
@@ -167,7 +167,7 @@ it('scopes child cards to their owner and preserves disabled navigation', async 
     disabled: false,
   };
   await render(h(WorkflowChildren, props));
-  expect(container.querySelectorAll('article')).toHaveLength(2);
+  expect(container.querySelectorAll('ul[role=list] > li')).toHaveLength(2);
   expect(container.textContent).not.toContain('Other helper');
   const remove = container.querySelector<HTMLButtonElement>(
     'button[aria-label="Delete Active helper"]',

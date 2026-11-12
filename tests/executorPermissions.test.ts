@@ -841,16 +841,21 @@ it('shows canonical built-ins and one row per custom integration without losing 
   );
   const names = () =>
     [
-      ...container.querySelectorAll('#harnesses > div > section[aria-label]'),
-    ].map((section) => section.getAttribute('aria-label'));
+      ...container.querySelectorAll('#harnesses tbody th[scope="row"] strong'),
+    ].map((heading) => heading.textContent);
   expect(names()).toEqual(['Codex', 'Team service', 'Pi']);
-  const codex = container.querySelector<HTMLElement>(
-    'section[aria-label="Codex"]',
+  const editDefaults = container.querySelector<HTMLButtonElement>(
+    'button[aria-label="Edit defaults for Codex"]',
   )!;
-  await act(async () =>
-    codex.querySelector<HTMLButtonElement>('button[aria-expanded]')!.click(),
-  );
-  const draft = codex.querySelector<HTMLInputElement>(
+  await act(async () => editDefaults.click());
+  const editor = document.getElementById(
+    editDefaults.getAttribute('aria-controls')!,
+  )!;
+  const editorCell = editor.closest('td')!;
+  const codexHeader = editDefaults.closest('tr')!.querySelector('th')!;
+  expect(editorCell.getAttribute('headers')).toBe(codexHeader.id);
+  expect(editorCell.colSpan).toBe(4);
+  const draft = editor.querySelector<HTMLInputElement>(
     'input[placeholder="Use Interlock’s working directory"]',
   )!;
   await act(async () => setInput(draft, '/unsaved'));

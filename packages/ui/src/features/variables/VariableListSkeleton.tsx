@@ -11,35 +11,31 @@ import { useNavigate } from 'react-router';
 
 import {
   ListTableSkeleton,
-  type ListTableColumn,
+  type ListTableLayout,
 } from '../../components/ListTable/ListTable';
 
 import { paths } from '../../routes/paths';
-import styles from './Variables.module.css';
 
-export const variableColumns: readonly ListTableColumn[] = [
-  { label: 'Name', width: 'minmax(0, 1fr)' },
-  { label: 'Kind', width: '90px', compactWidth: '75px' },
-  { label: 'Status', width: '130px', compactWidth: '110px' },
-  { label: 'Updated', width: '110px', compactWidth: '95px' },
-  { label: '', width: '16px' },
-];
+export const variableTable: ListTableLayout = {
+  minWidth: 326,
+  columns: [
+    { label: 'Name' },
+    { label: 'Kind', width: '90px', compactWidth: '66px' },
+    { label: 'Status', width: '130px', compactWidth: '72px' },
+    { label: 'Updated', width: '110px', compactWidth: '78px' },
+  ],
+};
 
 export function VariableRowsSkeleton() {
   return (
-    <ListTableSkeleton
-      columns={variableColumns}
-      label="Loading variables…"
-      rowClassName={styles.listRow}
-    >
+    <ListTableSkeleton {...variableTable} label="Loading variables…">
       <Stack gap={7}>
         <Placeholder h={12} w="55%" />
         <Placeholder h={9} w="80%" />
       </Stack>
       <Placeholder h={18} w={46} />
       <Placeholder h={10} w={70} />
-      <Placeholder className={styles.updated} h={10} w={70} />
-      <span />
+      <Placeholder h={10} w={70} />
     </ListTableSkeleton>
   );
 }

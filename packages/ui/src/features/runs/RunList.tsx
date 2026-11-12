@@ -14,7 +14,7 @@ import {
 } from '../../design-system';
 
 import { ListTable, ListTableRow } from '../../components/ListTable/ListTable';
-import { runColumns, runViews, type RunMode } from './runListConfig';
+import { runTable, runViews, type RunMode } from './runListConfig';
 import { AutomationAlerts } from '../automations/AutomationAlerts';
 
 import { RunBoardSkeleton, RunRowsSkeleton } from './RunListSkeleton';
@@ -261,12 +261,12 @@ export function RunList({
           }
         />
       ) : page.items.length ? (
-        <ListTable columns={runColumns}>
+        <ListTable {...runTable} label="Runs">
           {page.items.map((r) => {
             const started = new Date(r.createdAt);
             const review = runReviewLink(r, runHref, returnTo);
             return (
-              <ListTableRow className={`run-row ${classes.row}`} key={r.id}>
+              <ListTableRow className="run-row" key={r.id}>
                 <span className={classes.identity}>
                   <strong>
                     <Anchor

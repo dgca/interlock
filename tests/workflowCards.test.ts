@@ -4,7 +4,10 @@ import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { DesignSystemProvider } from '../packages/ui/src/design-system';
-import { WorkflowCard } from '../packages/ui/src/components/WorkflowCards/WorkflowCards';
+import {
+  WorkflowCard,
+  WorkflowGrid,
+} from '../packages/ui/src/components/WorkflowCards/WorkflowCards';
 
 let root: Root, container: HTMLDivElement, overflow: number;
 let fonts: EventTarget & { ready: Promise<void> };
@@ -80,13 +83,17 @@ async function render(description?: string, disabled = false) {
         h(
           MemoryRouter,
           {},
-          h(WorkflowCard, {
-            name: 'Mission briefing',
-            description,
-            metadata: '3 nodes',
-            onOpen: openWorkflow,
-            disabled,
-          }),
+          h(
+            WorkflowGrid,
+            null,
+            h(WorkflowCard, {
+              name: 'Mission briefing',
+              description,
+              metadata: '3 nodes',
+              onOpen: openWorkflow,
+              disabled,
+            }),
+          ),
         ),
       ),
     ),

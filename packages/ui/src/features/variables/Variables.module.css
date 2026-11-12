@@ -3,9 +3,6 @@
   gap: 7px;
   min-width: 0;
 }
-.rowKind {
-  justify-self: start;
-}
 .ready,
 .updated {
   color: var(--text-secondary);
@@ -81,24 +78,4 @@
   font-size: 13px;
   color: var(--text-secondary);
   line-height: 24px;
-}
-
-@media (max-width: 900px) {
-  .listRow > .identity {
-    grid-column: 1;
-    grid-row: 1;
-  }
-  .listRow > .rowKind {
-    grid-column: 2;
-    grid-row: 1;
-  }
-  .listRow > .status,
-  .listRow > .ready {
-    grid-column: 1;
-    grid-row: 2;
-  }
-  .listRow > .updated {
-    grid-column: 2;
-    grid-row: 2;
-  }
 }

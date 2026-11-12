@@ -71,7 +71,7 @@ export function WorkflowCard({
   }, [description, expanded]);
 
   return (
-    <article
+    <li
       className={classes.card}
       data-highlighted={highlighted || undefined}
       data-disabled={disabled || undefined}
@@ -140,12 +140,16 @@ export function WorkflowCard({
         {status}
         <ChevronRight size={16} aria-hidden="true" />
       </div>
-    </article>
+    </li>
   );
 }
 
 export function WorkflowGrid({ children }: { children: ReactNode }) {
-  return <div className={classes.grid}>{children}</div>;
+  return (
+    <ul className={classes.grid} role="list">
+      {children}
+    </ul>
+  );
 }
 
 export function WorkflowCardsSkeleton() {
@@ -153,7 +157,7 @@ export function WorkflowCardsSkeleton() {
     <LoadingSkeleton label="Loading workflows…">
       <WorkflowGrid>
         {[1, 2, 3].map((row) => (
-          <div className={classes.card} key={row}>
+          <li className={classes.card} key={row}>
             <div className={classes.top}>
               <Placeholder h={35} w={35} />
             </div>
@@ -165,7 +169,7 @@ export function WorkflowCardsSkeleton() {
               <Placeholder h={10} w={110} />
               <Placeholder h={18} w={60} />
             </div>
-          </div>
+          </li>
         ))}
       </WorkflowGrid>
     </LoadingSkeleton>

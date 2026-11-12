@@ -8,26 +8,25 @@ import {
 
 import {
   ListTableSkeleton,
-  type ListTableColumn,
+  type ListTableLayout,
 } from '../../components/ListTable/ListTable';
 
 import styles from './Harnesses.module.css';
 import { useLocation } from 'react-router';
 import { aiSettingsTab, aiSettingsTabs } from './aiSettingsNavigation';
 
-export const harnessColumns: readonly ListTableColumn[] = [
-  { label: 'Harness', width: 'minmax(0, 1fr)' },
-  { label: 'Connection', width: '140px', compactWidth: '110px' },
-  { label: 'Managed execution', width: '155px', compactWidth: '115px' },
-  { label: '', width: '145px', compactWidth: '130px' },
-];
+export const harnessTable: ListTableLayout = {
+  minWidth: 440,
+  columns: [
+    { label: 'Harness' },
+    { label: 'Connection', width: '140px', compactWidth: '86px' },
+    { label: 'Managed execution', width: '155px', compactWidth: '109px' },
+    { label: 'Actions', width: '145px', compactWidth: '131px' },
+  ],
+};
 export function HarnessRowsSkeleton() {
   return (
-    <ListTableSkeleton
-      columns={harnessColumns}
-      label="Loading harnesses…"
-      rowClassName={styles.rowHeading}
-    >
+    <ListTableSkeleton {...harnessTable} label="Loading harnesses…">
       <Stack gap={7}>
         <Placeholder h={12} w="55%" />
         <Placeholder h={9} w="80%" />
