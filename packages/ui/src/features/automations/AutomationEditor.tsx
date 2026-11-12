@@ -106,6 +106,17 @@ function defaultInput(schema: Record<string, unknown>): Json {
           : null;
 }
 
+function defaultTimingDrafts() {
+  return {
+    interval: { type: 'interval' as const, intervalMs: 300000 },
+    cron: {
+      type: 'cron' as const,
+      expression: '0 9 * * 1-5',
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    },
+  };
+}
+
 export function AutomationEditor({
   id,
   kind = 'schedule',
@@ -131,6 +142,7 @@ export function AutomationEditor({
   const [readError, setReadError] = useState('');
   const [readAttempt, setReadAttempt] = useState(0);
   const [unconfirmedCreation, setUnconfirmedCreation] = useState(false);
+  const [unconfirmedUpdate, setUnconfirmedUpdate] = useState(false);
   const [issues, setIssues] = useState<Record<string, string>>({});
   const [inputValid, setInputValid] = useState(true);
   const [version, setVersion] = useState<WorkflowVersion>();
@@ -141,14 +153,7 @@ export function AutomationEditor({
   const [previewError, setPreviewError] = useState('');
   const previousWorkflow = useRef('');
   const formId = useId();
-  const timingDrafts = useRef({
-    interval: { type: 'interval' as const, intervalMs: 300000 },
-    cron: {
-      type: 'cron' as const,
-      expression: '0 9 * * 1-5',
-      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-    },
-  });
+  const timingDrafts = useRef(defaultTimingDrafts());
   const initialNewState = useRef({
     config: initialConfig(kind),
     workflowId: search.get('workflow') ?? '',
@@ -164,6 +169,7 @@ export function AutomationEditor({
   const { busy: saving, beginSave, finishSave } = useEditorDraft(dirty);
   const busy = saving || loading;
   const conflict = Boolean(id && error === triggerRevisionConflict);
+  const needsReload = conflict || unconfirmedUpdate;
   const reloadSettings = () => {
     setLoading(true);
     setReadError('');
@@ -187,7 +193,9 @@ export function AutomationEditor({
           });
           const cached = queryClient.getQueryData(key);
           if (
-            (revision !== undefined && trigger.revision <= revision) ||
+            (revision !== undefined &&
+              (trigger.revision < revision ||
+                (!unconfirmedUpdate && trigger.revision === revision))) ||
             trigger.revision < (cached?.trigger.revision ?? 0)
           ) {
             setReadError(
@@ -197,7 +205,15 @@ export function AutomationEditor({
           }
           void queryClient.cancelQueries({ queryKey: key, exact: true });
           queryClient.setQueryData(key, inspection);
+          setUnconfirmedUpdate(false);
+          if (trigger.revision === revision) {
+            setError(
+              'The saved automation revision is unchanged. Your draft is ready to save again.',
+            );
+            return;
+          }
           const next = triggerConfig(trigger) as AutomationConfig;
+          timingDrafts.current = defaultTimingDrafts();
           setConfig(next);
           setWorkflowId(trigger.workflowId);
           setRevision(trigger.revision);
@@ -290,14 +306,14 @@ export function AutomationEditor({
   const patch = (changes: Partial<AutomationConfig>) => {
     setConfig((current) => ({ ...current, ...changes }) as AutomationConfig);
     setIssues({});
-    if (!conflict && !unconfirmedCreation) setError('');
+    if (!needsReload && !unconfirmedCreation) setError('');
   };
   const back = id ? itemHref(id, search) : returnHref(search);
   const schema = version?.definition.inputSchema ?? workflow?.draft.inputSchema;
   const save = async () => {
     if (
       busy ||
-      conflict ||
+      needsReload ||
       unconfirmedCreation ||
       (id && (!baseline || !dirty))
     )
@@ -395,18 +411,24 @@ export function AutomationEditor({
           replace: !id,
           state: { savedAutomation: { id: saved.id, name: saved.name } },
         });
-    } catch (e) {
+    } catch (error) {
       if (!finishSave(false)) return;
+      const message = errorMessage(error);
       if (
-        !id &&
-        !(e instanceof TRPCClientError && e.data?.code === 'BAD_REQUEST')
+        message === triggerRevisionConflict ||
+        (error instanceof TRPCClientError && error.data?.code === 'BAD_REQUEST')
       ) {
+        setError(message);
+      } else if (id) {
+        setUnconfirmedUpdate(true);
+        setError(
+          'Interlock could not confirm whether the automation was saved. Load latest to check the saved settings.',
+        );
+      } else {
         setUnconfirmedCreation(true);
         setError(
           'Interlock could not confirm whether the automation was created. Check Automations before creating it again.',
         );
-      } else {
-        setError(errorMessage(e));
       }
     }
   };
@@ -450,10 +472,12 @@ export function AutomationEditor({
             <Button
               variant="secondary"
               disabled={busy}
-              loading={conflict && loading}
-              onClick={conflict ? recovery.dismiss : () => void navigate(back)}
+              loading={needsReload && loading}
+              onClick={
+                needsReload ? recovery.dismiss : () => void navigate(back)
+              }
             >
-              {conflict
+              {needsReload
                 ? 'Load latest'
                 : id && dirty
                   ? 'Discard changes'
@@ -466,7 +490,7 @@ export function AutomationEditor({
               loading={saving}
               disabled={
                 busy ||
-                conflict ||
+                needsReload ||
                 unconfirmedCreation ||
                 (!!id && (!baseline || !dirty))
               }
@@ -798,7 +822,7 @@ export function AutomationEditor({
                     typeof config.input === 'object' &&
                     !Array.isArray(config.input) ? (
                     <SchemaInput
-                      key={`${workflowId}:${version?.version ?? 'draft'}`}
+                      key={`${workflowId}:${version?.version ?? 'draft'}:${revision ?? 'new'}`}
                       schema={schema}
                       value={config.input}
                       onChange={(input) => patch({ input })}
@@ -809,6 +833,7 @@ export function AutomationEditor({
                     />
                   ) : workflowId ? (
                     <JsonEditor
+                      key={revision}
                       label="Workflow input"
                       value={config.input}
                       onChange={(input) => patch({ input })}
@@ -846,7 +871,7 @@ export function AutomationEditor({
                       : error
                   }
                 />
-                {conflict && <ActionError message={readError} />}
+                {needsReload && <ActionError message={readError} />}
                 {unconfirmedCreation && (
                   <Button
                     component={Link}

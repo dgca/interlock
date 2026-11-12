@@ -399,12 +399,45 @@ it('preserves advanced configuration and rejects revision conflicts without disc
   await act(async () => button('Load latest').click());
   await act(async () => button('Keep editing').click());
   expect(field('Name').value).toBe('Local edit');
+  await act(async () =>
+    document.querySelector<HTMLInputElement>('input[value=cron]')!.click(),
+  );
+  await fill(field('Cron expression'), '0 6 * * *');
+  await act(async () =>
+    document.querySelector<HTMLInputElement>('input[value=interval]')!.click(),
+  );
+  const options = () =>
+    document.querySelector<HTMLTextAreaElement>(
+      'textarea[aria-label=options]',
+    )!;
+  await fill(options(), '{invalid');
   rpc.inspect.mockResolvedValue(
     inspection({ ...saved, revision: 5, name: 'Remote edit' } as any),
   );
   await act(async () => button('Load latest').click());
   await act(async () => button('Discard changes').click());
   expect(field('Name').value).toBe('Remote edit');
+  expect(options().value).toBe('{}');
+  await act(async () =>
+    document.querySelector<HTMLInputElement>('input[value=cron]')!.click(),
+  );
+  expect(field('Cron expression').value).toBe('0 9 * * 1-5');
+});
+
+it('checks the saved revision before retrying an uncertain automation update', async () => {
+  rpc.manage.mockRejectedValueOnce(new TRPCClientError('Failed to fetch'));
+  await render('/automations/t/edit');
+  await fill(field('Name'), 'Retained edit');
+  await submit();
+  await submit();
+  expect(rpc.manage).toHaveBeenCalledTimes(1);
+  expect(document.body.textContent).toContain(
+    'could not confirm whether the automation was saved',
+  );
+  await act(async () => button('Load latest').click());
+  await act(async () => button('Discard changes').click());
+  expect(field('Name').value).toBe('Retained edit');
+  expect(button('Save changes').disabled).toBe(false);
 });
 it('shows load failure with retry rather than an editable blank configuration', async () => {
   rpc.inspect.mockRejectedValueOnce(new Error('Connection lost'));

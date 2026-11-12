@@ -100,6 +100,8 @@ Share lifecycle behavior across editors while keeping validation and persistence
 
 Workflow **Save draft** and **Publish version** block navigation while a write is pending. Draft text remains editable where the editor allows it, including in Raw. Draft persistence and publication keep their separate validation steps.
 
+If Interlock cannot confirm publication, **Check published version** reads the current workflow before another publication. An observed newer version leaves any local draft edits intact.
+
 Dialogs restore focus on dismissal when the trigger remains available. Global notifications sit below dialogs. A failed workspace refresh marks cached data as possibly out of date and offers a retry.
 
 ## Modal layout

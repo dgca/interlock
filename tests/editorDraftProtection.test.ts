@@ -289,6 +289,12 @@ function warnsBeforeUnload() {
   return !window.dispatchEvent(new Event('beforeunload', { cancelable: true }));
 }
 
+function confirmedRejection(message: string) {
+  return new TRPCClientError(message, {
+    result: { error: { code: -32600, message, data: { code: 'BAD_REQUEST' } } },
+  });
+}
+
 function deferred<T>() {
   let resolve!: (value: T) => void;
   let reject!: (error: Error) => void;
@@ -340,7 +346,9 @@ it('guards Board column edits and holds navigation during a retryable save', asy
   expect(router.state.location.pathname).toBe('/boards/board/settings');
   expect(discardDialog()).toBeUndefined();
 
-  await act(async () => failedSave.reject(new Error('Board save failed')));
+  await act(async () =>
+    failedSave.reject(confirmedRejection('Board save failed')),
+  );
   expect(document.body.textContent).toContain('Board save failed');
   expect(field('Board name').value).toBe('Local board');
   expect(discardDialog()).toBeUndefined();
@@ -409,6 +417,23 @@ it('keeps an unacknowledged Board creation draft available without submitting it
   );
 });
 
+it('checks Board settings before retrying an uncertain update', async () => {
+  rpc.saveBoard.mockRejectedValueOnce(new TRPCClientError('Failed to fetch'));
+  await render(paths.boardSettings(board.id));
+  await ready(() => field('Board name'));
+  await fill('Board name', 'Retained board edit');
+  await click('Save changes');
+  await submitTwice(field('Board name'));
+  expect(rpc.saveBoard).toHaveBeenCalledTimes(1);
+  expect(document.body.textContent).toContain(
+    'could not confirm whether board settings were saved',
+  );
+  await click('Load latest');
+  await click('Discard changes', discardDialog());
+  expect(field('Board name').value).toBe('Retained board edit');
+  expect(button('Save changes').disabled).toBe(false);
+});
+
 it('guards changes to the new automation draft and retains the acknowledged identity after a failed detail read', async () => {
   const draft = blankDefinition();
   rpc.listWorkflows.mockResolvedValue([
@@ -460,63 +485,85 @@ it('guards changes to the new automation draft and retains the acknowledged iden
   );
 });
 
-it('retains an entered Secret through a conflict and clears it before refreshing an acknowledged save', async () => {
-  await render(paths.variable(variable.id));
-  await ready(() => button('Replace value'));
-  await click('Replace value');
-  await fill('New secret value', 'first-synthetic-secret');
-  rpc.saveVariable.mockRejectedValueOnce(new Error(variableRevisionConflict));
-  await click('Save changes');
-  expect(field('New secret value').value).toBe('first-synthetic-secret');
-  await click('Load latest');
-  await click('Keep editing');
-  expect(field('New secret value').value).toBe('first-synthetic-secret');
-  rpc.readVariable.mockRejectedValueOnce(new Error('Recovery unavailable'));
-  await click('Load latest');
-  await click('Discard changes', discardDialog());
-  expect(field('New secret value').value).toBe('first-synthetic-secret');
-  expect(document.body.textContent).toContain('Recovery unavailable');
-  const latest = { ...variable, revision: 2, description: 'Saved elsewhere' };
-  rpc.readVariable.mockResolvedValue(inspectVariable(latest));
-  await click('Load latest');
-  await click('Discard changes', discardDialog());
-  expect(field('Description').value).toBe('Saved elsewhere');
-  expect(warnsBeforeUnload()).toBe(false);
+it.each([
+  ['a conflict', new Error(variableRevisionConflict)],
+  ['an uncertain response', new TRPCClientError('Failed to fetch')],
+])(
+  'retains an entered Secret through %s and clears it on confirmed recovery',
+  async (_label, failure) => {
+    await render(paths.variable(variable.id));
+    await ready(() => button('Replace value'));
+    await click('Replace value');
+    await fill('New secret value', 'first-synthetic-secret');
+    rpc.saveVariable.mockRejectedValueOnce(failure);
+    await click('Save changes');
+    expect(field('New secret value').value).toBe('first-synthetic-secret');
+    await click('Load latest');
+    await click('Keep editing');
+    expect(field('New secret value').value).toBe('first-synthetic-secret');
+    rpc.readVariable.mockRejectedValueOnce(new Error('Recovery unavailable'));
+    await click('Load latest');
+    await click('Discard changes', discardDialog());
+    expect(field('New secret value').value).toBe('first-synthetic-secret');
+    expect(document.body.textContent).toContain('Recovery unavailable');
+    const latest = { ...variable, revision: 2, description: 'Saved elsewhere' };
+    rpc.readVariable.mockResolvedValue(inspectVariable(latest));
+    await click('Load latest');
+    await click('Discard changes', discardDialog());
+    expect(field('Description').value).toBe('Saved elsewhere');
+    expect(warnsBeforeUnload()).toBe(false);
 
-  await click('Replace value');
-  await fill('New secret value', 'replacement-synthetic-secret');
-  const pending = deferred<typeof variable>();
-  rpc.saveVariable.mockReturnValueOnce(pending.promise);
+    await click('Replace value');
+    await fill('New secret value', 'replacement-synthetic-secret');
+    const pending = deferred<typeof variable>();
+    rpc.saveVariable.mockReturnValueOnce(pending.promise);
+    await submitTwice(field('Name'));
+    expect(rpc.saveVariable).toHaveBeenCalledTimes(2);
+    expect(rpc.saveVariable.mock.calls[1][0]).toMatchObject({
+      action: 'update',
+      expectedRevision: 2,
+      value: 'replacement-synthetic-secret',
+    });
+    await back();
+    expect(discardDialog()).toBeUndefined();
+    expect(router.state.location.pathname).toBe(paths.variable(variable.id));
+    rpc.readVariable.mockRejectedValue(new Error('Refresh unavailable'));
+    await act(async () =>
+      pending.resolve({ ...latest, revision: 3, valueRevision: 2 }),
+    );
+    await ready(() => button('Retry variable details'));
+    expect(warnsBeforeUnload()).toBe(false);
+    expect(document.body.textContent).not.toContain(
+      'replacement-synthetic-secret',
+    );
+    expect(
+      JSON.stringify(
+        queryClient.getQueriesData(trpc.variables.read.pathFilter()),
+      ),
+    ).not.toContain('replacement-synthetic-secret');
+    expect(
+      rpc.readVariable.mock.calls.every(
+        ([input]) => input.action !== 'config_value',
+      ),
+    ).toBe(true);
+    expect(document.activeElement).toBe(button('Replace value'));
+  },
+);
+
+it('keeps an uncertain Variable creation draft available for a catalog check', async () => {
+  rpc.saveVariable.mockRejectedValueOnce(
+    new TRPCClientError('Failed to fetch'),
+  );
+  await render(paths.variable('new'));
+  await ready(() => field('Name'));
+  await fill('Name', 'test_credential');
+  await click('Create');
   await submitTwice(field('Name'));
-  expect(rpc.saveVariable).toHaveBeenCalledTimes(2);
-  expect(rpc.saveVariable.mock.calls[1][0]).toMatchObject({
-    action: 'update',
-    expectedRevision: 2,
-    value: 'replacement-synthetic-secret',
-  });
-  await back();
-  expect(discardDialog()).toBeUndefined();
-  expect(router.state.location.pathname).toBe(paths.variable(variable.id));
-  rpc.readVariable.mockRejectedValue(new Error('Refresh unavailable'));
-  await act(async () =>
-    pending.resolve({ ...latest, revision: 3, valueRevision: 2 }),
+  expect(rpc.saveVariable).toHaveBeenCalledTimes(1);
+  expect(field('Name').value).toBe('test_credential');
+  expect(document.querySelector('a[target="_blank"]')?.textContent).toContain(
+    'Check Variables',
   );
-  await ready(() => button('Retry variable details'));
-  expect(warnsBeforeUnload()).toBe(false);
-  expect(document.body.textContent).not.toContain(
-    'replacement-synthetic-secret',
-  );
-  expect(
-    JSON.stringify(
-      queryClient.getQueriesData(trpc.variables.read.pathFilter()),
-    ),
-  ).not.toContain('replacement-synthetic-secret');
-  expect(
-    rpc.readVariable.mock.calls.every(
-      ([input]) => input.action !== 'config_value',
-    ),
-  ).toBe(true);
-  expect(document.activeElement).toBe(button('Replace value'));
 });
 
 it('keeps a Board conflict draft through background refresh and failed recovery, then saves the latest revision', async () => {
@@ -624,7 +671,7 @@ it('retains the Board draft and its ordinary retry for a separate workflow membe
   await ready(() => field('Board name'));
   const message =
     'The board for Shared workflow changed. Review the selection and try again.';
-  rpc.saveBoard.mockRejectedValue(new Error(message));
+  rpc.saveBoard.mockRejectedValue(confirmedRejection(message));
   await fill('Board name', 'My local board');
   await click('Save changes');
   expect(document.body.textContent).toContain(message);

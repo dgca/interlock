@@ -1,4 +1,4 @@
-import { blankDefinition } from '@interlock/core';
+import { blankDefinition, nodeSchema } from '@interlock/core';
 import { chromium, type Browser } from 'playwright';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import { openBrowserApp } from './app';
@@ -14,7 +14,7 @@ afterAll(async () => {
 });
 
 it.each([1440, 900, 390])(
-  'guards a clean workflow publication at %dpx',
+  'guards and reconciles a clean workflow publication at %dpx',
   async (width) => {
     const app = await openBrowserApp();
     const page = await browser.newPage({ viewport: { width, height: 900 } });
@@ -30,12 +30,26 @@ it.each([1440, 900, 390])(
         blankDefinition(),
       );
       const path = `/workflows/${workflow.id}`;
+      let publications = 0;
       await page.route(
         (url) => url.pathname === '/trpc/workflows.publish',
         async (route) => {
+          publications++;
           await hold;
-          await route.continue();
+          const response = await route.fetch();
+          await response.dispose();
+          await route.abort('failed');
         },
+      );
+      let failCheck = true;
+      await page.route(
+        (url) =>
+          url.pathname.startsWith('/trpc/') &&
+          url.pathname
+            .slice('/trpc/'.length)
+            .split(',')
+            .includes('workflows.get'),
+        (route) => (failCheck ? route.abort('failed') : route.continue()),
       );
       await page.goto(`${app.url}/workflows`);
       await page.locator(`a[href="${path}"]`).click();
@@ -57,7 +71,19 @@ it.each([1440, 900, 390])(
           .isVisible(),
       ).toBe(false);
       releasePublish();
-      await page.getByText('Published “Draft for review” as v1.').waitFor();
+      const review = page.getByRole('dialog', { name: 'Review publication' });
+      const check = review.getByRole('button', {
+        name: 'Check published version',
+      });
+      await check.waitFor();
+      expect(app.engine.workflow(workflow.id).latestVersion).toBe(1);
+      await check.click();
+      await review.getByRole('alert').waitFor();
+      expect(publications).toBe(1);
+      failCheck = false;
+      await check.click();
+      await page.getByText('Published version v1 is available.').waitFor();
+      expect(publications).toBe(1);
       expect(new URL(page.url()).pathname).toBe(path);
     } finally {
       releasePublish();
@@ -66,3 +92,48 @@ it.each([1440, 900, 390])(
     }
   },
 );
+
+it('opens the parent after acknowledging a selected child version', async () => {
+  const app = await openBrowserApp();
+  const page = await browser.newPage({
+    viewport: { width: 1440, height: 900 },
+  });
+  page.setDefaultTimeout(5000);
+  try {
+    const parent = app.engine.create('Parent', '', blankDefinition());
+    const child = app.engine.create(
+      'Owned child',
+      '',
+      blankDefinition(),
+      parent.id,
+    );
+    app.engine.publish(child.id);
+    const childNode = nodeSchema.parse({
+      id: 'agent',
+      kind: 'workflow',
+      label: 'Run child',
+      workflowId: child.id,
+      version: null,
+    });
+    const parentDraft = {
+      ...parent.draft,
+      nodes: parent.draft.nodes.map((node) =>
+        node.id === childNode.id ? childNode : node,
+      ),
+    };
+    app.engine.update(parent.id, {
+      draft: parentDraft,
+      draftRevision: parent.draftRevision,
+    });
+    await page.goto(`${app.url}/workflows/${child.id}`);
+    await page.getByRole('button', { name: 'Use v1 in Run child' }).click();
+    await page.waitForURL(`${app.url}/workflows/${parent.id}`);
+    const selected = app.engine
+      .workflow(parent.id)
+      .draft.nodes.find((node) => node.id === childNode.id);
+    expect(selected).toMatchObject({ version: 1, workflowId: child.id });
+  } finally {
+    await page.close();
+    await app.close();
+  }
+});

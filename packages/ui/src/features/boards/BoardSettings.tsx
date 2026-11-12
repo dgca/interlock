@@ -69,11 +69,13 @@ function BoardSettings({ initial }: { initial?: Settings }) {
   const [error, setError] = useState('');
   const [loadError, setLoadError] = useState('');
   const [unconfirmedCreation, setUnconfirmedCreation] = useState(false);
+  const [unconfirmedUpdate, setUnconfirmedUpdate] = useState(false);
   const [loadingLatest, setLoadingLatest] = useState(false);
   const latestRequest = useRef<AbortController>(null);
   useEffect(() => () => latestRequest.current?.abort(), []);
 
   const conflict = Boolean(baseline && error === boardSettingsRevisionConflict);
+  const needsReload = conflict || unconfirmedUpdate;
   const originalColumns = baseline?.columns ?? [];
   const originalWorkflows = new Set(baseline?.workflowIds);
   const dirty =
@@ -109,7 +111,7 @@ function BoardSettings({ initial }: { initial?: Settings }) {
   const canSave =
     !busy &&
     dirty &&
-    !conflict &&
+    !needsReload &&
     !unconfirmedCreation &&
     name.trim() &&
     (moves.length === 0 || boards.data);
@@ -137,7 +139,8 @@ function BoardSettings({ initial }: { initial?: Settings }) {
       const key = trpc.boards.settings.queryKey(input);
       const cached = client.getQueryData<Settings>(key);
       if (
-        latest.revision <= baseline.revision ||
+        latest.revision < baseline.revision ||
+        (!unconfirmedUpdate && latest.revision === baseline.revision) ||
         (cached && latest.revision < cached.revision)
       ) {
         setLoadError('Could not read the latest board settings. Try again.');
@@ -145,6 +148,13 @@ function BoardSettings({ initial }: { initial?: Settings }) {
       }
       void client.cancelQueries({ queryKey: key, exact: true });
       client.setQueryData(key, latest);
+      setUnconfirmedUpdate(false);
+      if (latest.revision === baseline.revision) {
+        setError(
+          'The saved board revision is unchanged. Your draft is ready to save again.',
+        );
+        return;
+      }
       setBaseline(latest);
       applySettings(latest);
     } catch (error) {
@@ -182,15 +192,15 @@ function BoardSettings({ initial }: { initial?: Settings }) {
         actions={
           <>
             <Button
-              disabled={busy || Boolean(baseline && !dirty && !conflict)}
+              disabled={busy || Boolean(baseline && !dirty && !needsReload)}
               loading={loadingLatest}
               onClick={() => {
-                if (conflict) recovery.dismiss();
+                if (needsReload) recovery.dismiss();
                 else if (baseline) applySettings(baseline);
                 else goBack();
               }}
             >
-              {conflict
+              {needsReload
                 ? 'Load latest'
                 : baseline
                   ? 'Discard changes'
@@ -256,19 +266,23 @@ function BoardSettings({ initial }: { initial?: Settings }) {
                 });
             } catch (error) {
               if (!finishSave(false)) return;
+              const message = errorMessage(error);
               if (
-                !baseline &&
-                !(
-                  error instanceof TRPCClientError &&
-                  error.data?.code === 'BAD_REQUEST'
-                )
+                message === boardSettingsRevisionConflict ||
+                (error instanceof TRPCClientError &&
+                  error.data?.code === 'BAD_REQUEST')
               ) {
+                setError(message);
+              } else if (baseline) {
+                setUnconfirmedUpdate(true);
+                setError(
+                  'Interlock could not confirm whether board settings were saved. Load latest to check the saved settings.',
+                );
+              } else {
                 setUnconfirmedCreation(true);
                 setError(
                   'Interlock could not confirm whether the board was created. Check Boards before creating it again.',
                 );
-              } else {
-                setError(errorMessage(error));
               }
             }
           }}
@@ -395,7 +409,7 @@ function BoardSettings({ initial }: { initial?: Settings }) {
                   : error
               }
             />
-            {conflict && <ActionError message={loadError} />}
+            {needsReload && <ActionError message={loadError} />}
             {unconfirmedCreation && (
               <Button
                 component={Link}

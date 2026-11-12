@@ -85,6 +85,11 @@ If another client saves first, your draft and any entered Secret replacement sta
 in the editor. Choose **Load latest** and confirm to replace the draft with the
 current saved revision. If the read fails, your draft stays available.
 
+If Interlock cannot confirm an update, use **Load latest** to check the saved
+revision. The editor keeps any entered Secret until you confirm and a newer
+revision loads. If Interlock cannot confirm creation, check **Variables** before
+starting another draft.
+
 ## Import workflows that require variables
 
 Use a format-4 or later portable bundle for variable references. Exports contain safe

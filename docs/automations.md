@@ -30,6 +30,8 @@ Set **Run title** to give each run started by the automation a title in Boards a
 
 If another client saves first, choose **Load latest** and confirm before replacing your edits. To leave the editor, select **Back to automation** and confirm that you want to discard your draft.
 
+If Interlock cannot confirm an update, use **Load latest** to check the saved automation revision.
+
 Use the **Enabled** switch in the detail header to change the saved setting. Turning it off opens a confirmation; cancelling or a rejected save preserves the previous setting. Disabling stops future starts and preserves active and queued runs. The switch is unavailable while saving. An enabled automation can still be automatically paused. Its pause warning offers **Resume automation**, which clears its automatic pause and failure count. Named library or workflow pause holds remain in force. Choose **Delete** in the detail header to remove the automation and its visible activity history while preserving existing runs and durable start/event receipts.
 
 Use **Automations** in the sidebar and filter by workflow when needed. Old workflow trigger links redirect to the global list or the exact saved automation.

@@ -81,6 +81,7 @@ export function PublishReviewDialog({
   latestVersion,
   draft,
   pending,
+  publicationCheck,
   editorChanged,
   onClose,
   onPublish,
@@ -89,6 +90,7 @@ export function PublishReviewDialog({
   latestVersion: number;
   draft: WorkflowDefinition;
   pending: boolean;
+  publicationCheck?: { checking: boolean; error: string; onCheck: () => void };
   editorChanged: boolean;
   onClose: () => void;
   onPublish: () => void;
@@ -96,7 +98,9 @@ export function PublishReviewDialog({
   const [versions, setVersions] = useState<WorkflowVersion[]>();
   const [error, setError] = useState('');
   const [request, setRequest] = useState(0);
+  const unconfirmed = Boolean(publicationCheck);
   useEffect(() => {
+    if (unconfirmed) return;
     let active = true;
     setVersions(undefined);
     setError('');
@@ -111,7 +115,7 @@ export function PublishReviewDialog({
     return () => {
       active = false;
     };
-  }, [workflowId, latestVersion, request]);
+  }, [workflowId, latestVersion, request, unconfirmed]);
 
   const baseline = versions?.at(-1);
   const stale = Boolean(versions && (baseline?.version ?? 0) !== latestVersion);
@@ -123,73 +127,101 @@ export function PublishReviewDialog({
   const count = diff
     ? diff.nodes.length + diff.routes.length + diff.workflow.length
     : 0;
+  const busy = pending || Boolean(publicationCheck?.checking);
 
   return (
     <Modal
       title="Review publication"
       size={780}
-      busy={pending}
-      onClose={() => !pending && onClose()}
+      busy={busy}
+      onClose={() => !busy && onClose()}
     >
       <ModalBody>
         <div className={styles.body}>
-          <p className={styles.baseline}>
-            {latestVersion
-              ? `Draft compared with published v${latestVersion}`
-              : 'First publication · no published version yet'}
-          </p>
-          {!versions && !error && (
-            <LoadingSkeleton label="Loading published version…" />
-          )}
-          {error && (
-            <div role="alert" className={styles.error}>
-              Could not load published versions: {error}
-              <Button onClick={() => setRequest((value) => value + 1)}>
-                Retry
-              </Button>
-            </div>
-          )}
-          {(stale || editorChanged) && (
-            <p role="alert" className={styles.error}>
-              This workflow changed since the review opened. Close it and review
-              the current draft before publishing.
-            </p>
-          )}
-          {diff && (
+          {publicationCheck ? (
             <>
-              <div className={styles.counts} aria-label="Change summary">
-                <span>{changeCount(diff.nodes.length, 'node')}</span>
-                <span>{changeCount(diff.routes.length, 'route')}</span>
-                <span>{changeCount(diff.workflow.length, 'workflow')}</span>
-              </div>
-              {count === 0 && (
-                <p className={styles.empty}>
-                  No definition changes. Publishing still creates a new version.
+              <p role="status">
+                Interlock could not confirm publication. Check the saved version
+                before publishing again.
+              </p>
+              {publicationCheck.error && (
+                <p role="alert" className={styles.error}>
+                  {publicationCheck.error}
                 </p>
               )}
-              <div>
-                <ChangeGroup title="Nodes" items={diff.nodes} />
-                <ChangeGroup title="Routes" items={diff.routes} />
-                <ChangeGroup
-                  title="Workflow contracts and settings"
-                  items={diff.workflow}
-                />
-              </div>
+            </>
+          ) : (
+            <>
+              <p className={styles.baseline}>
+                {latestVersion
+                  ? `Draft compared with published v${latestVersion}`
+                  : 'First publication · no published version yet'}
+              </p>
+              {!versions && !error && (
+                <LoadingSkeleton label="Loading published version…" />
+              )}
+              {error && (
+                <div role="alert" className={styles.error}>
+                  Could not load published versions: {error}
+                  <Button onClick={() => setRequest((value) => value + 1)}>
+                    Retry
+                  </Button>
+                </div>
+              )}
+              {(stale || editorChanged) && (
+                <p role="alert" className={styles.error}>
+                  This workflow changed since the review opened. Close it and
+                  review the current draft before publishing.
+                </p>
+              )}
+              {diff && (
+                <>
+                  <div className={styles.counts} aria-label="Change summary">
+                    <span>{changeCount(diff.nodes.length, 'node')}</span>
+                    <span>{changeCount(diff.routes.length, 'route')}</span>
+                    <span>{changeCount(diff.workflow.length, 'workflow')}</span>
+                  </div>
+                  {count === 0 && (
+                    <p className={styles.empty}>
+                      No definition changes. Publishing still creates a new
+                      version.
+                    </p>
+                  )}
+                  <div>
+                    <ChangeGroup title="Nodes" items={diff.nodes} />
+                    <ChangeGroup title="Routes" items={diff.routes} />
+                    <ChangeGroup
+                      title="Workflow contracts and settings"
+                      items={diff.workflow}
+                    />
+                  </div>
+                </>
+              )}
             </>
           )}
         </div>
       </ModalBody>
       <ModalFooter>
-        <Button variant="ghost" disabled={pending} onClick={onClose}>
+        <Button variant="ghost" disabled={busy} onClick={onClose}>
           Cancel
         </Button>
-        <Button
-          variant="primary"
-          disabled={!diff || pending}
-          onClick={onPublish}
-        >
-          {pending ? 'Publishing…' : 'Publish version'}
-        </Button>
+        {publicationCheck ? (
+          <Button
+            variant="primary"
+            loading={publicationCheck.checking}
+            onClick={publicationCheck.onCheck}
+          >
+            Check published version
+          </Button>
+        ) : (
+          <Button
+            variant="primary"
+            disabled={!diff || pending}
+            onClick={onPublish}
+          >
+            {pending ? 'Publishing…' : 'Publish version'}
+          </Button>
+        )}
       </ModalFooter>
     </Modal>
   );
