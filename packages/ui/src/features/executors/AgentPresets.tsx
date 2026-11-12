@@ -9,6 +9,7 @@ import {
   ModalFooter,
   ActionError,
   EmptyState,
+  Group,
 } from '../../design-system';
 
 import { useEffect, useRef, useState } from 'react';
@@ -94,7 +95,14 @@ export function AgentPresets({
   const error = pageQuery.error ? errorMessage(pageQuery.error) : '';
   const [editing, setEditing] = useState<SavedModelAlias | null>();
   const [opening, setOpening] = useState(false);
-  const [notice, setNotice] = useState('');
+  const [notice, setNotice] = useState<{
+    message: string;
+    saved?: SavedModelAlias;
+  }>();
+  const savedOutsidePage =
+    notice?.saved && !page?.items.some((item) => item.id === notice.saved?.id)
+      ? notice.saved
+      : undefined;
   const [loadError, setLoadError] = useState('');
   const trigger = useRef<HTMLElement | null>(null);
   useEffect(() => {
@@ -103,7 +111,7 @@ export function AgentPresets({
   const close = () => setEditing(undefined);
   const open = async (id?: string) => {
     trigger.current = document.activeElement as HTMLElement | null;
-    setNotice('');
+    if (!savedOutsidePage) setNotice(undefined);
     setLoadError('');
     if (!id) {
       setEditing(null);
@@ -152,11 +160,12 @@ export function AgentPresets({
       });
     }
     close();
-    setNotice(
-      saved
+    setNotice({
+      saved,
+      message: saved
         ? `Preset ${saved.name} saved.`
         : `Preset ${name} deleted. Existing runs keep their captured settings.`,
-    );
+    });
     void queryClient.invalidateQueries(trpc.modelAliases.pathFilter());
   };
   return (
@@ -188,9 +197,24 @@ export function AgentPresets({
       </div>
       <div>
         {notice && (
-          <p role="status" className={styles.notice}>
-            {notice}
-          </p>
+          <Group gap="xs">
+            <p role="status" className={styles.notice}>
+              {notice.message}
+            </p>
+            {savedOutsidePage && (
+              <Button
+                variant="ghost"
+                disabled={opening || editing !== undefined}
+                onClick={(event) => {
+                  trigger.current = event.currentTarget;
+                  setLoadError('');
+                  setEditing(savedOutsidePage);
+                }}
+              >
+                Open saved preset
+              </Button>
+            )}
+          </Group>
         )}
         <ActionError message={loadError} />
         {error && (
@@ -283,9 +307,9 @@ export function AgentPresets({
               </Button>
             </div>
           </>
-        ) : (
+        ) : !savedOutsidePage ? (
           <EmptyState title="No agent presets yet" />
-        )}
+        ) : null}
       </div>
       {editing !== undefined && (
         <PresetEditor

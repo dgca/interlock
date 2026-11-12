@@ -148,6 +148,17 @@ it('keeps unexposed configuration when renaming an API-created integration', asy
     await page
       .getByRole('button', { name: 'Edit defaults for Original integration' })
       .click();
+    const defaults = page.getByRole('combobox', {
+      name: 'Default permissions',
+    });
+    await defaults.selectOption('read-only');
+    expect(
+      await page.getByRole('button', { name: 'Edit integration' }).isDisabled(),
+    ).toBe(true);
+    expect(
+      await page.getByRole('link', { name: 'Edit integration' }).count(),
+    ).toBe(0);
+    await defaults.selectOption('standard');
     const link = page.getByRole('link', { name: 'Edit integration' });
     expect(await link.getAttribute('aria-haspopup')).toBeNull();
     await link.click();

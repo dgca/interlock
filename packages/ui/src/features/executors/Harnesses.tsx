@@ -454,14 +454,19 @@ function ProfileRow({
             </p>
           )}
           {draft.harness === 'custom' ? (
-            <Button
-              mt="md"
-              disabled={busy || changed}
-              component={Link}
-              to={paths.integration(profile.id)}
-            >
-              Edit integration
-            </Button>
+            busy || changed ? (
+              <Button mt="md" disabled>
+                Edit integration
+              </Button>
+            ) : (
+              <Button
+                mt="md"
+                component={Link}
+                to={paths.integration(profile.id)}
+              >
+                Edit integration
+              </Button>
+            )
           ) : (
             <details className={styles.advanced}>
               <summary>Advanced settings</summary>

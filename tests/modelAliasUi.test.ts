@@ -371,6 +371,46 @@ it.each(['update', 'delete'] as const)(
   },
 );
 
+it('keeps the first saved preset actionable while the catalog cannot refresh', async () => {
+  records = [];
+  await renderSection();
+  await click(button('New preset'));
+  await fill(labelled('Name') as HTMLInputElement, 'first reviewer');
+  const harness = labelled('Harness') as HTMLSelectElement;
+  await act(async () => {
+    harness.value = 'codex';
+    harness.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  await click(labelled('Model'));
+  const model = [
+    ...document.querySelectorAll<HTMLElement>('[role="option"]'),
+  ].find((option) => option.textContent?.includes('Native Model'))!;
+  await click(model);
+  rpc.read.mockRejectedValueOnce(new Error('Catalog unavailable'));
+  await click(button('Create preset'));
+  expect(container.textContent).toContain('Preset first reviewer saved.');
+  expect(container.textContent).toContain(
+    'Could not refresh presets. Catalog unavailable',
+  );
+  expect(container.textContent).not.toContain('No agent presets yet');
+  expect(
+    container.querySelector('[aria-label="Edit preset first reviewer"]'),
+  ).toBeNull();
+
+  const reads = rpc.read.mock.calls.length;
+  await click(button('Open saved preset'));
+  expect((labelled('Name') as HTMLInputElement).value).toBe('first reviewer');
+  expect(rpc.read).toHaveBeenCalledTimes(reads);
+  await click(button('Cancel'));
+  expect(button('Open saved preset')).toBeTruthy();
+  await click(button('Retry loading presets'));
+  expect(
+    container.querySelector('[aria-label="Edit preset first reviewer"]'),
+  ).toBeTruthy();
+  expect(button('Open saved preset')).toBeUndefined();
+  expect(rpc.mutate).toHaveBeenCalledTimes(1);
+});
+
 it('opens a found preset after uncertain creation only after discarding the local draft', async () => {
   await renderSection();
   await click(button('New preset'));
