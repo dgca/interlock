@@ -1,5 +1,17 @@
 # @type_of/interlock
 
+## 0.2.16
+
+### Patch Changes
+
+- c514d9a: Open Workflows, Prompts, and Automations when a sidebar attention count is unavailable. Retry failed counts from the sidebar and failed page reads from the affected page.
+- 9f75261: Protect unsaved Board settings, new prompts, and custom integrations from accidental dismissal or navigation. Failed saves keep your edits available for retry.
+- 527cad7: Preserve your Board settings draft when a concurrent save conflicts. Choose **Load latest** to review the current settings after confirming that you want to replace your edits.
+- 378e2e8: Retry prompt creation safely after a lost response. The new prompt dialog reuses its request ID, and MCP clients can supply one to recover the saved prompt.
+- 6e02710: Open run inspection without reading unrelated retained runs, assignments, or events. Full inspection still includes descendant runs and token-free assignments.
+- d74a9f3: Add Workflow Boards with shared stage columns, run titles, and individual attention requests. Author durable Human input steps, review captured evidence, and answer through the browser or MCP.
+- 9bd092a: Set defaults once per harness, choose a harness directly in Agent nodes, and create optional Agent presets with ordered fallbacks. Existing named configurations and model alias references remain usable.
+
 ## 0.2.15
 
 ### Patch Changes
