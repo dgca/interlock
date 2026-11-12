@@ -29,7 +29,7 @@ import {
   runReviewLink,
   type RunTab,
 } from './runAttention';
-import { runProjectionText } from './runProjectionText';
+import { runDisplayStatus, runProjectionText } from './runProjectionText';
 
 import { useId, useRef, useState, type MouseEventHandler } from 'react';
 import { Link } from 'react-router';
@@ -252,6 +252,7 @@ export function RunList({
           {page.items.map((r) => {
             const started = new Date(r.createdAt);
             const review = runReviewLink(r, runHref, returnTo);
+            const status = runDisplayStatus(r);
             return (
               <ListTableRow className="run-row" key={r.id}>
                 <span className={classes.identity}>
@@ -280,8 +281,8 @@ export function RunList({
                   )}
                 </span>
                 <span className={classes.status}>
-                  <span className={classes.state} data-status={r.status}>
-                    {r.status}
+                  <span className={classes.state} data-status={status}>
+                    {status}
                   </span>
                   {r.actor ? (
                     <small className={classes.reason}>

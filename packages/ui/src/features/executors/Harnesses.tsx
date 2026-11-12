@@ -11,7 +11,14 @@ import {
   workspacePage,
 } from '../../design-system';
 
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from 'react';
 import { Link, useLocation } from 'react-router';
 
 import {
@@ -24,9 +31,10 @@ import {
 } from 'lucide-react';
 import { executorProfileSchema, type ExecutorProfile } from '@interlock/core';
 
-import { useBeforeUnloadWarning } from '../../lib/useBeforeUnloadWarning';
+import { useDraftDismissal } from '../../lib/useDraftDismissal';
+import { useEditorDraft } from '../../lib/useEditorDraft';
 import { api, errorMessage } from '../../lib/api';
-import { trpc, useQuery } from '../../lib/query';
+import { trpc, useQuery, useQueryClient } from '../../lib/query';
 
 import { ListTable, ListTableRow } from '../../components/ListTable/ListTable';
 import {
@@ -80,7 +88,7 @@ export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
     });
   }, []);
   const dirty = dirtySettings.size > 0;
-  useBeforeUnloadWarning(dirty);
+  const { busy: saving, beginSave, finishSave } = useEditorDraft(dirty);
   useEffect(() => onDirty?.(dirty), [dirty, onDirty]);
   useEffect(() => () => onDirty?.(false), [onDirty]);
   const limitDirty = useCallback(
@@ -88,6 +96,7 @@ export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
     [trackDirty],
   );
   const request = useRef(0);
+  const queryClient = useQueryClient();
   const profilesQuery = useQuery(trpc.executors.profiles.queryOptions());
   const profiles = profilesQuery.data;
   const harnesses = profiles?.filter(isPrimaryHarness).sort(
@@ -110,12 +119,39 @@ export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
     try {
       if (check)
         await api.executors.manage.mutate({ action: 'list', refresh: true });
-      const result = await profilesQuery.refetch();
+      const result = await profilesQuery.refetch({ cancelRefetch: false });
       return result.isSuccess ? result.data : undefined;
     } catch (e) {
       if (request.current === current) setCheckError(errorMessage(e));
     } finally {
       if (request.current === current) setChecking(false);
+    }
+  };
+  const saveProfile = async (value: ExecutorProfile) => {
+    if (!beginSave()) return;
+    try {
+      const { revision, ...fields } = executorProfileSchema.parse(value);
+      const saved = executorProfileSchema.parse(
+        await api.executors.manage.mutate({
+          action: 'save',
+          profile: { ...fields, expectedRevision: revision },
+        }),
+      );
+      // The row still owns its draft. Other rows can also have unsaved edits.
+      if (!finishSave(false)) return;
+      const filter = trpc.executors.profiles.queryFilter();
+      void queryClient.cancelQueries(filter);
+      queryClient.setQueryData(trpc.executors.profiles.queryKey(), (profiles) =>
+        profiles?.map((profile) =>
+          profile.id === saved.id && profile.revision < saved.revision
+            ? { ...saved, detection: profile.detection }
+            : profile,
+        ),
+      );
+      void profilesQuery.refetch({ cancelRefetch: false });
+      return saved;
+    } catch (reason) {
+      if (finishSave(false)) throw reason;
     }
   };
   useEffect(() => {
@@ -192,7 +228,9 @@ export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
                   <ProfileRow
                     key={p.id}
                     profile={p}
-                    refresh={() => refresh()}
+                    refresh={refresh}
+                    saveProfile={saveProfile}
+                    saving={saving}
                     onDirty={trackDirty}
                   />
                 ))}
@@ -242,11 +280,15 @@ function configuration(profile: Profile): ExecutorProfile {
 function ProfileRow({
   profile,
   refresh,
+  saveProfile,
+  saving,
   onDirty,
 }: {
   profile: Profile;
   onDirty: DirtySetting;
   refresh: () => Promise<Profile[] | undefined>;
+  saveProfile: (value: ExecutorProfile) => Promise<ExecutorProfile | undefined>;
+  saving: boolean;
 }) {
   const editorId = useId();
   const headerId = `${editorId}-harness`;
@@ -257,8 +299,10 @@ function ProfileRow({
     [baseline, setBaseline] = useState<ExecutorProfile>(() =>
       configuration(profile),
     ),
-    [busy, setBusy] = useState(false),
+    [writing, setWriting] = useState(false),
+    [reloading, setReloading] = useState(false),
     [error, setError] = useState('');
+  const busy = writing || reloading || saving;
   useEffect(() => {
     if (wasOpen.current && !open) defaultsTrigger.current?.focus();
     wasOpen.current = open;
@@ -276,14 +320,14 @@ function ProfileRow({
   const dirtyId = 'profile:' + profile.id;
   useEffect(() => onDirty(dirtyId, dirty), [onDirty, dirtyId, dirty]);
   useEffect(() => () => onDirty(dirtyId, false), [onDirty, dirtyId]);
-  const cancel = () => {
+  const dismissal = useDraftDismissal(dirty, busy, () => {
     setDraft(configuration(profile));
     setBaseline(configuration(profile));
     setOpen(false);
     setError('');
-  };
+  });
   const reload = async () => {
-    setBusy(true);
+    setReloading(true);
     try {
       const latest = await refresh();
       const current = latest?.find((p) => p.id === profile.id);
@@ -293,25 +337,38 @@ function ProfileRow({
         setError('');
       }
     } finally {
-      setBusy(false);
+      setReloading(false);
     }
   };
+  const reloadDismissal = useDraftDismissal(dirty, busy, () => void reload());
+  const onEditorKeyDown = (event: KeyboardEvent) => {
+    const target = event.target;
+    if (
+      event.key !== 'Escape' ||
+      event.defaultPrevented ||
+      !(target instanceof HTMLElement) ||
+      !event.currentTarget.contains(target) ||
+      target.closest('[aria-haspopup][aria-expanded="true"]')
+    )
+      return;
+    event.preventDefault();
+    dismissal.dismiss();
+  };
   const save = async (value: ExecutorProfile) => {
-    setBusy(true);
+    if (busy) return;
+    setWriting(true);
     setError('');
     try {
-      const parsed = executorProfileSchema.parse(value),
-        { revision, ...fields } = parsed;
-      await api.executors.manage.mutate({
-        action: 'save',
-        profile: { ...fields, expectedRevision: revision },
-      });
-      await refresh();
-      setOpen(false);
+      const saved = await saveProfile(value);
+      if (saved) {
+        setDraft(saved);
+        setBaseline(saved);
+        setOpen(false);
+      }
     } catch (e) {
       setError(errorMessage(e));
     } finally {
-      setBusy(false);
+      setWriting(false);
     }
   };
   const label = harnessLabel(profile);
@@ -374,8 +431,9 @@ function ProfileRow({
             aria-controls={open ? editorId : undefined}
             aria-label={`${open ? 'Close defaults for' : 'Edit defaults for'} ${label}`}
             disabled={busy}
+            onKeyDown={open ? onEditorKeyDown : undefined}
             onClick={() => {
-              if (open) cancel();
+              if (open) dismissal.dismiss();
               else {
                 setDraft(configuration(profile));
                 setError('');
@@ -411,9 +469,10 @@ function ProfileRow({
                 id={editorId}
                 aria-label={`${label} defaults`}
                 className={styles.configuration}
+                onKeyDown={onEditorKeyDown}
                 onSubmit={(e) => {
                   e.preventDefault();
-                  void save(draft);
+                  if (changed) void save(draft);
                 }}
               >
                 <div className={styles.defaultsFields}>
@@ -577,14 +636,14 @@ function ProfileRow({
                     <Button
                       variant="ghost"
                       disabled={busy}
-                      onClick={() => void reload()}
+                      onClick={reloadDismissal.dismiss}
                     >
-                      Reload defaults
+                      {reloading ? 'Reloading…' : 'Reload defaults'}
                     </Button>
                   </div>
                 )}
                 <div className={styles.formActions}>
-                  <Button disabled={busy} onClick={cancel}>
+                  <Button disabled={busy} onClick={dismissal.dismiss}>
                     Cancel
                   </Button>
                   <Button
@@ -592,7 +651,7 @@ function ProfileRow({
                     variant="primary"
                     disabled={busy || !changed}
                   >
-                    {busy ? 'Saving…' : 'Save defaults'}
+                    {writing ? 'Saving…' : 'Save defaults'}
                   </Button>
                 </div>
               </form>
@@ -600,6 +659,8 @@ function ProfileRow({
           </div>
         </ListTableRow>
       )}
+      {dismissal.confirmation}
+      {reloadDismissal.confirmation}
     </>
   );
 }

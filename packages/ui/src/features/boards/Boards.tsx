@@ -37,7 +37,10 @@ import { paths, runOffset } from '../../routes/paths';
 import { requestActionLabel } from '../runs/runAttention';
 import type { api } from '../../lib/api';
 import { trpc, useQuery } from '../../lib/query';
-import { runProjectionLabels } from '../runs/runProjectionText';
+import {
+  runDisplayStatus,
+  runProjectionLabels,
+} from '../runs/runProjectionText';
 import { parseRequestTarget, RequestView } from './RequestView';
 import { BoardRowsSkeleton, BoardColumnsSkeleton } from './BoardSkeleton';
 import classes from './Boards.module.css';
@@ -508,11 +511,13 @@ function BoardCard({
     card.status === 'failed' ||
     card.status === 'completed' ||
     card.status === 'cancelled';
+  const projection = runProjectionLabels(card);
   const reason =
     card.requestSummary ||
     (card.status === 'failed' ? card.error?.split('\n')[0] : undefined) ||
     card.waiting?.detail.message ||
-    runProjectionLabels(card).waiting ||
+    projection.waiting ||
+    projection.activity ||
     (!terminal ? card.activity : undefined);
   const boardUrl = paths.board(boardId) + (search.size ? `?${search}` : '');
   const runLink = paths.run(card.runId, { returnTo: boardUrl });
@@ -531,7 +536,7 @@ function BoardCard({
         </Text>
       )}
       <Group gap="xs" mt={5}>
-        {terminal && <StatusBadge status={card.status} />}
+        <StatusBadge status={runDisplayStatus(card)} />
         {!!card.attentionCount && (
           <Badge color="yellow" variant="light">
             Needs attention · {card.attentionCount}

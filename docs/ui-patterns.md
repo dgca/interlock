@@ -69,7 +69,9 @@ The selected step appears beside the graph on wide screens and before the graph 
 
 Narrow run inspection scrolls as one page so a long handoff or action header does not leave the graph and details in a small trapped pane. Wide inspection retains separate overview and detail scrolling. Shared headers keep room for their title and wrap actions when needed; icon-only Back actions use the standard 40px action control.
 
-An agent waiting for a human response is **Waiting for your response**, even while its ownership claim remains active. Interrupted managed work is **Recovery needed**. These are presentation labels; they do not change execution or claim state.
+Runs List, Overview, Boards, and the inspector derive the displayed status from the shared run projection. Claimed Agent work shows **Running** when it can proceed. Unclaimed work, holds, and Human input show **Waiting** with their own reasons. An agent waiting for a human response is **Waiting for your response**, even while its ownership claim remains active. Interrupted managed work is **Recovery needed**. These labels are for display only.
+
+When every node in a published graph has the default origin position, the run inspector uses Tidy to display the graph. The layout is local to the inspector view.
 
 ## Approval requests
 

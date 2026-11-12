@@ -16,7 +16,7 @@ import {
   runReviewLink,
   type RunTab,
 } from './runAttention';
-import { runProjectionText } from './runProjectionText';
+import { runDisplayStatus, runProjectionText } from './runProjectionText';
 import classes from './RunList.module.css';
 import { runDisplayTitle } from '@interlock/core';
 
@@ -69,20 +69,12 @@ function RunCard({
           <span className={classes.cardNote}>{run.workflowName}</span>
         )}
         <span className={classes.cardStatuses}>
-          {attention ? (
-            attention.reasons.map((reason) => (
-              <Badge
-                key={reason}
-                component="span"
-                color="yellow"
-                variant="light"
-              >
-                {attentionText({ ...attention, reasons: [reason] })}
-              </Badge>
-            ))
-          ) : (
-            <StatusBadge status={run.status} />
-          )}
+          <StatusBadge status={runDisplayStatus(run)} />
+          {attention?.reasons.map((reason) => (
+            <Badge key={reason} component="span" color="yellow" variant="light">
+              {attentionText({ ...attention, reasons: [reason] })}
+            </Badge>
+          ))}
         </span>
         {reason && <span className={classes.cardReason}>{reason}</span>}
         <ComparisonContext comparison={run.comparison} />

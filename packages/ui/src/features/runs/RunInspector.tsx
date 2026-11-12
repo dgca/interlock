@@ -62,7 +62,7 @@ import { ComparisonContext } from './ComparisonContext';
 import { RunUsage } from './RunUsage';
 import { RunVersionDialog } from './RunVersionDialog';
 import { RunCancellationDialog } from './RunCancellationDialog';
-import { runProjectionLabels } from './runProjectionText';
+import { runDisplayStatus, runProjectionLabels } from './runProjectionText';
 import { RunTags } from './RunTags';
 import { nodeTypeLabel } from '../workflows/nodePresentation';
 import { requestActionLabel } from './runAttention';
@@ -365,14 +365,7 @@ export function RunInspector({
       ? runProgress(run, definition, descendants, allWork, parallelVisit).nodes
       : progress.nodes;
   const nodeProgress = nodeId ? graphProgress[nodeId] : undefined;
-  const projection = runProjectionLabels(
-    run,
-    humanRequests.length &&
-      run.waiting?.kind === 'human_request' &&
-      !attention.length
-      ? 'Human input needed'
-      : undefined,
-  );
+  const projection = runProjectionLabels(run);
   const attentionStatus =
     attention.length && ['queued', 'running', 'waiting'].includes(run.status)
       ? progress.status
@@ -381,7 +374,7 @@ export function RunInspector({
     ? 'Continued as new'
     : run.waiting?.kind === 'human_request' && attentionStatus
       ? attentionStatus
-      : (projection.waiting ?? progress.status);
+      : (projection.waiting ?? projection.activity ?? progress.status);
   const summaryContext = [
     projection.stage,
     progress.nodeLabel !== projection.stage ? progress.nodeLabel : null,
@@ -608,13 +601,7 @@ export function RunInspector({
             )}
             <span>Version {run.version}</span>
             <ExternalTaskLink task={run.externalTask} />
-            <StatusBadge
-              status={
-                run.status === 'queued'
-                  ? 'queued'
-                  : (progress.runStates[run.id] ?? run.status)
-              }
-            />
+            <StatusBadge status={runDisplayStatus(run)} />
             <ComparisonContext comparison={run.comparison} />
           </div>
         }
