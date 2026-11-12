@@ -17,6 +17,7 @@ export function Modal({
   height,
   backLabel,
   busy = false,
+  covered = false,
   size = 550,
   returnFocusTo,
 }: {
@@ -26,6 +27,7 @@ export function Modal({
   height?: number;
   backLabel?: string;
   busy?: boolean;
+  covered?: boolean;
   size?: ComponentProps<typeof MantineModal>['size'];
   returnFocusTo?: () => HTMLElement | null;
 }) {
@@ -75,12 +77,14 @@ export function Modal({
         ref: dismissButton,
         'aria-label': backLabel ?? 'Close dialog',
         title: backLabel,
-        disabled: busy,
+        disabled: busy || covered,
         icon: backLabel ? (
           <ArrowLeft size={18} aria-hidden="true" />
         ) : undefined,
       }}
-      closeOnEscape={!busy}
+      inert={covered}
+      trapFocus={!covered}
+      closeOnEscape={!busy && !covered}
       closeOnClickOutside={false}
     >
       {children}

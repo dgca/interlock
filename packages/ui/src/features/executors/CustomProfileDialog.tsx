@@ -15,153 +15,106 @@ import { useState, useEffect, useId, useRef } from 'react';
 import { ChevronRight, Plus, Trash2 } from 'lucide-react';
 import type { ExecutorProfile, ExecutorProfileUpdate } from '@interlock/core';
 
+import { useDraftDismissal } from '../../lib/useDraftDismissal';
+import { useEditorDraft } from '../../lib/useEditorDraft';
 import { KeyValueEditor } from './KeyValueEditor';
 import { permissionOptions } from './permissions';
 import styles from './CustomProfileDialog.module.css';
 
-export interface CustomProfileDialogProps {
-  opened: boolean;
-  onClose: () => void;
-  profile: ExecutorProfile | null;
-  initialName?: string;
-  onSave: (data: ExecutorProfileUpdate) => Promise<void>;
-  isNew?: boolean;
-  returnFocusTo?: () => HTMLElement | null;
+function profileDraft(profile: ExecutorProfile | null) {
+  return {
+    name: profile?.name ?? '',
+    mode: profile?.mode ?? 'direct',
+    transport: profile?.transport ?? 'subprocess',
+    concurrency: profile?.concurrency ?? ('' as const),
+    timeoutSeconds: profile?.timeoutSeconds ?? ('' as const),
+    permissions: profile?.permissions ?? 'standard',
+    env: profile?.env ?? {},
+    headers: profile?.headers ?? {},
+    turnCommand: profile?.turnCommand ?? profile?.command ?? '',
+    turnUrl: profile?.turnUrl ?? '',
+    launchCommand: profile?.launchCommand ?? '',
+    launchUrl: profile?.launchUrl ?? '',
+    statusCommand: profile?.statusCommand ?? '',
+    statusUrl: profile?.statusUrl ?? '',
+    messageCommand: profile?.messageCommand ?? '',
+    messageUrl: profile?.messageUrl ?? '',
+    stopCommand: profile?.stopCommand ?? '',
+    stopUrl: profile?.stopUrl ?? '',
+    archiveCommand: profile?.archiveCommand ?? '',
+    archiveUrl: profile?.archiveUrl ?? '',
+    cwd: profile?.cwd ?? '',
+    allowedRoots: profile?.allowedRoots ?? [],
+    sessionNameTemplate: profile?.sessionNameTemplate ?? '',
+    resumeCommandTemplate: profile?.resumeCommandTemplate ?? '',
+    deepLinkTemplate: profile?.deepLinkTemplate ?? '',
+  };
 }
 
+type ProfileDraft = ReturnType<typeof profileDraft>;
+
 export function CustomProfileDialog({
-  opened,
   onClose,
   profile,
-  initialName = '',
   onSave,
-  isNew = false,
   returnFocusTo,
-}: CustomProfileDialogProps) {
+}: {
+  onClose: () => void;
+  profile: ExecutorProfile | null;
+  onSave: (data: ExecutorProfileUpdate) => Promise<void>;
+  returnFocusTo?: () => HTMLElement | null;
+}) {
   const formId = useId();
-  const [name, setName] = useState('');
-  const [id, setId] = useState('');
-  const [mode, setMode] = useState<'direct' | 'launcher'>('direct');
-  const [transport, setTransport] = useState<'subprocess' | 'http'>(
-    'subprocess',
+  const [id] = useState(
+    () => profile?.id ?? `custom-${crypto.randomUUID().slice(0, 8)}`,
   );
-  const [concurrency, setConcurrency] = useState<number | ''>('');
-  const [timeoutSeconds, setTimeoutSeconds] = useState<number | ''>('');
-  const [permissions, setPermissions] = useState<
-    'standard' | 'read-only' | 'full-access'
-  >('standard');
-  const [env, setEnv] = useState<Record<string, string>>({});
-  const [headers, setHeaders] = useState<Record<string, string>>({});
-
-  // Direct turn fields
-  const [turnCommand, setTurnCommand] = useState('');
-  const [turnUrl, setTurnUrl] = useState('');
-
-  // Launcher fields
-  const [launchCommand, setLaunchCommand] = useState('');
-  const [launchUrl, setLaunchUrl] = useState('');
-  const [statusCommand, setStatusCommand] = useState('');
-  const [statusUrl, setStatusUrl] = useState('');
-  const [messageCommand, setMessageCommand] = useState('');
-  const [messageUrl, setMessageUrl] = useState('');
-  const [stopCommand, setStopCommand] = useState('');
-  const [stopUrl, setStopUrl] = useState('');
-  const [archiveCommand, setArchiveCommand] = useState('');
-  const [archiveUrl, setArchiveUrl] = useState('');
-
-  // Containment & CWD
-  const [cwd, setCwd] = useState('');
-  const [allowedRoots, setAllowedRoots] = useState<string[]>([]);
-
-  // Session visibility templates
-  const [sessionNameTemplate, setSessionNameTemplate] = useState('');
-  const [resumeCommandTemplate, setResumeCommandTemplate] = useState('');
-  const [deepLinkTemplate, setDeepLinkTemplate] = useState('');
+  const isNew = !profile;
+  const [baseline] = useState(() => profileDraft(profile));
+  const [draft, setDraft] = useState(baseline);
+  const update = <K extends keyof ProfileDraft>(
+    key: K,
+    value: ProfileDraft[K],
+  ) => setDraft((current) => ({ ...current, [key]: value }));
+  const {
+    name,
+    mode,
+    transport,
+    concurrency,
+    timeoutSeconds,
+    permissions,
+    env,
+    headers,
+    turnCommand,
+    turnUrl,
+    launchCommand,
+    launchUrl,
+    statusCommand,
+    statusUrl,
+    messageCommand,
+    messageUrl,
+    stopCommand,
+    stopUrl,
+    archiveCommand,
+    archiveUrl,
+    cwd,
+    allowedRoots,
+    sessionNameTemplate,
+    resumeCommandTemplate,
+    deepLinkTemplate,
+  } = draft;
+  const dirty = JSON.stringify(draft) !== JSON.stringify(baseline);
+  const { busy, beginSave, finishSave } = useEditorDraft(dirty);
+  const { dismiss, covered, confirmation } = useDraftDismissal(
+    dirty,
+    busy,
+    onClose,
+  );
 
   const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
   const errorRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (error) errorRef.current?.scrollIntoView({ block: 'nearest' });
   }, [error]);
-
-  useEffect(() => {
-    if (opened) {
-      setError('');
-      if (profile) {
-        setName(profile.name);
-        setId(profile.id);
-        setMode(profile.mode ?? 'direct');
-        setTransport(profile.transport ?? 'subprocess');
-        setConcurrency(profile.concurrency ?? '');
-        setTimeoutSeconds(profile.timeoutSeconds ?? '');
-        setPermissions(profile.permissions);
-        setEnv(profile.env ?? {});
-        setHeaders(profile.headers ?? {});
-        setTurnCommand(profile.turnCommand ?? profile.command ?? '');
-        setTurnUrl(profile.turnUrl ?? '');
-        setLaunchCommand(profile.launchCommand ?? '');
-        setLaunchUrl(profile.launchUrl ?? '');
-        setStatusCommand(profile.statusCommand ?? '');
-        setStatusUrl(profile.statusUrl ?? '');
-        setMessageCommand(profile.messageCommand ?? '');
-        setMessageUrl(profile.messageUrl ?? '');
-        setStopCommand(profile.stopCommand ?? '');
-        setStopUrl(profile.stopUrl ?? '');
-        setArchiveCommand(profile.archiveCommand ?? '');
-        setArchiveUrl(profile.archiveUrl ?? '');
-        setCwd(profile.cwd ?? '');
-        setAllowedRoots(profile.allowedRoots ?? []);
-        setSessionNameTemplate(profile.sessionNameTemplate ?? '');
-        setResumeCommandTemplate(profile.resumeCommandTemplate ?? '');
-        setDeepLinkTemplate(profile.deepLinkTemplate ?? '');
-      } else {
-        const generatedId = `custom-${crypto.randomUUID().slice(0, 8)}`;
-        setName(initialName);
-        setId(generatedId);
-        setMode('direct');
-        setTransport('subprocess');
-        setConcurrency('');
-        setTimeoutSeconds('');
-        setPermissions('standard');
-        setEnv({});
-        setHeaders({});
-        setTurnCommand('');
-        setTurnUrl('');
-        setLaunchCommand('');
-        setLaunchUrl('');
-        setStatusCommand('');
-        setStatusUrl('');
-        setMessageCommand('');
-        setMessageUrl('');
-        setStopCommand('');
-        setStopUrl('');
-        setArchiveCommand('');
-        setArchiveUrl('');
-        setCwd('');
-        setAllowedRoots([]);
-        setSessionNameTemplate('');
-        setResumeCommandTemplate('');
-        setDeepLinkTemplate('');
-      }
-    }
-  }, [opened, profile, initialName]);
-
-  const handleAddRoot = () => {
-    setAllowedRoots((prev) => [...prev, '']);
-  };
-
-  const handleRootChange = (index: number, val: string) => {
-    setAllowedRoots((prev) => {
-      const next = [...prev];
-      next[index] = val;
-      return next;
-    });
-  };
-
-  const handleRemoveRoot = (index: number) => {
-    setAllowedRoots((prev) => prev.filter((_, i) => i !== index));
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -208,7 +161,7 @@ export function CustomProfileDialog({
       }
     }
 
-    setBusy(true);
+    if (!beginSave()) return;
     try {
       const payload: ExecutorProfileUpdate = {
         id,
@@ -261,58 +214,57 @@ export function CustomProfileDialog({
       };
 
       await onSave(payload);
-      onClose();
+      if (finishSave(true)) onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setBusy(false);
+      if (finishSave(false))
+        setError(err instanceof Error ? err.message : String(err));
     }
   };
 
-  if (!opened) return null;
   const direct = mode === 'direct';
   const http = transport === 'http';
   const invocation = direct ? 'Turn' : 'Launch';
-  const [endpoint, setEndpoint] = direct
+  const endpoint = direct
     ? http
-      ? [turnUrl, setTurnUrl]
-      : [turnCommand, setTurnCommand]
+      ? 'turnUrl'
+      : 'turnCommand'
     : http
-      ? [launchUrl, setLaunchUrl]
-      : [launchCommand, setLaunchCommand];
+      ? 'launchUrl'
+      : 'launchCommand';
   const hooks = [
     {
       label: 'Status',
       description:
         'Reports whether the session is working, idle, needs attention, or ended.',
-      command: [statusCommand, setStatusCommand],
-      url: [statusUrl, setStatusUrl],
+      command: 'statusCommand',
+      url: 'statusUrl',
     },
     {
       label: 'Message',
       description:
         'Delivers questions, answers, and nudges to the running session.',
-      command: [messageCommand, setMessageCommand],
-      url: [messageUrl, setMessageUrl],
+      command: 'messageCommand',
+      url: 'messageUrl',
     },
     {
       label: 'Stop',
       description: 'Runs when execution is stopped or cancelled.',
-      command: [stopCommand, setStopCommand],
-      url: [stopUrl, setStopUrl],
+      command: 'stopCommand',
+      url: 'stopUrl',
     },
     {
       label: 'Archive',
       description: 'Runs after the session’s final assignment completes.',
-      command: [archiveCommand, setArchiveCommand],
-      url: [archiveUrl, setArchiveUrl],
+      command: 'archiveCommand',
+      url: 'archiveUrl',
     },
   ] as const;
   const descriptionOrder = ['label', 'input', 'description', 'error'] as const;
-  return (
+  const dialog = (
     <Modal
-      onClose={onClose}
+      onClose={dismiss}
       busy={busy}
+      covered={covered}
       returnFocusTo={returnFocusTo}
       title={isNew ? 'Add integration' : 'Edit integration'}
       size={670}
@@ -331,7 +283,7 @@ export function CustomProfileDialog({
               required
               maxLength={120}
               value={name}
-              onChange={(e) => setName(e.currentTarget.value)}
+              onChange={(e) => update('name', e.currentTarget.value)}
               placeholder="e.g. Team review service"
             />
             <div className={styles.gridTwo}>
@@ -344,7 +296,9 @@ export function CustomProfileDialog({
                 }
                 inputWrapperOrder={[...descriptionOrder]}
                 value={mode}
-                onChange={(e) => setMode(e.currentTarget.value as typeof mode)}
+                onChange={(e) =>
+                  update('mode', e.currentTarget.value as typeof mode)
+                }
                 data={[
                   { label: 'Direct turn', value: 'direct' },
                   { label: 'Delegated launcher', value: 'launcher' },
@@ -354,7 +308,7 @@ export function CustomProfileDialog({
                 label="Transport"
                 value={transport}
                 onChange={(e) =>
-                  setTransport(e.currentTarget.value as typeof transport)
+                  update('transport', e.currentTarget.value as typeof transport)
                 }
                 data={[
                   { label: 'Subprocess', value: 'subprocess' },
@@ -366,8 +320,8 @@ export function CustomProfileDialog({
               label={`${invocation} ${http ? 'URL' : 'command'}`}
               required
               className={styles.monoInput}
-              value={endpoint}
-              onChange={(e) => setEndpoint(e.currentTarget.value)}
+              value={draft[endpoint]}
+              onChange={(e) => update(endpoint, e.currentTarget.value)}
               inputWrapperOrder={[...descriptionOrder]}
               description={
                 direct
@@ -393,7 +347,10 @@ export function CustomProfileDialog({
                 inputWrapperOrder={[...descriptionOrder]}
                 value={permissions}
                 onChange={(e) =>
-                  setPermissions(e.currentTarget.value as typeof permissions)
+                  update(
+                    'permissions',
+                    e.currentTarget.value as typeof permissions,
+                  )
                 }
                 data={permissionOptions}
               />
@@ -411,7 +368,7 @@ export function CustomProfileDialog({
                       addLabel="Add header"
                       hideLabel
                       values={headers}
-                      onChange={setHeaders}
+                      onChange={(value) => update('headers', value)}
                       keyPlaceholder="Authorization"
                       valuePlaceholder="Bearer token"
                     />
@@ -425,14 +382,14 @@ export function CustomProfileDialog({
                   </summary>
                   <div className={styles.disclosureBody}>
                     {hooks.map((hook) => {
-                      const [value, setValue] = http ? hook.url : hook.command;
+                      const field = http ? hook.url : hook.command;
                       return (
                         <TextInput
                           key={hook.label}
                           label={`${hook.label} ${http ? 'URL' : 'command'}`}
                           className={styles.monoInput}
-                          value={value}
-                          onChange={(e) => setValue(e.currentTarget.value)}
+                          value={draft[field]}
+                          onChange={(e) => update(field, e.currentTarget.value)}
                           inputWrapperOrder={[...descriptionOrder]}
                           description={hook.description}
                         />
@@ -456,7 +413,7 @@ export function CustomProfileDialog({
                       allowDecimal={false}
                       value={concurrency}
                       onChange={(value) =>
-                        setConcurrency(value === '' ? '' : Number(value))
+                        update('concurrency', value === '' ? '' : Number(value))
                       }
                     />
                     <NumberInput
@@ -464,7 +421,10 @@ export function CustomProfileDialog({
                       min={1}
                       value={timeoutSeconds}
                       onChange={(value) =>
-                        setTimeoutSeconds(value === '' ? '' : Number(value))
+                        update(
+                          'timeoutSeconds',
+                          value === '' ? '' : Number(value),
+                        )
                       }
                       placeholder="Optional"
                     />
@@ -473,13 +433,13 @@ export function CustomProfileDialog({
                     label="Environment variables"
                     addLabel="Add variable"
                     values={env}
-                    onChange={setEnv}
+                    onChange={(value) => update('env', value)}
                   />
                   <TextInput
                     label="Working directory"
                     className={styles.monoInput}
                     value={cwd}
-                    onChange={(e) => setCwd(e.currentTarget.value)}
+                    onChange={(e) => update('cwd', e.currentTarget.value)}
                     placeholder="Use Interlock’s working directory"
                     description="Enter an absolute path."
                     inputWrapperOrder={[...descriptionOrder]}
@@ -490,7 +450,9 @@ export function CustomProfileDialog({
                       <Button
                         variant="ghost"
                         leftSection={<Plus size={14} />}
-                        onClick={handleAddRoot}
+                        onClick={() =>
+                          update('allowedRoots', [...allowedRoots, ''])
+                        }
                       >
                         Add root
                       </Button>
@@ -507,12 +469,26 @@ export function CustomProfileDialog({
                             placeholder="/path/to/projects"
                             value={root}
                             onChange={(e) =>
-                              handleRootChange(index, e.currentTarget.value)
+                              update(
+                                'allowedRoots',
+                                allowedRoots.map((root, position) =>
+                                  position === index
+                                    ? e.currentTarget.value
+                                    : root,
+                                ),
+                              )
                             }
                           />
                           <ActionIcon
                             type="button"
-                            onClick={() => handleRemoveRoot(index)}
+                            onClick={() =>
+                              update(
+                                'allowedRoots',
+                                allowedRoots.filter(
+                                  (_, position) => position !== index,
+                                ),
+                              )
+                            }
                             aria-label={`Remove root ${index + 1}`}
                           >
                             <Trash2 size={16} />
@@ -527,7 +503,7 @@ export function CustomProfileDialog({
                     placeholder="{{node.label}}"
                     value={sessionNameTemplate}
                     onChange={(e) =>
-                      setSessionNameTemplate(e.currentTarget.value)
+                      update('sessionNameTemplate', e.currentTarget.value)
                     }
                   />
                   <TextInput
@@ -536,7 +512,7 @@ export function CustomProfileDialog({
                     placeholder="my-tool resume {{sessionId}}"
                     value={resumeCommandTemplate}
                     onChange={(e) =>
-                      setResumeCommandTemplate(e.currentTarget.value)
+                      update('resumeCommandTemplate', e.currentTarget.value)
                     }
                   />
                   <TextInput
@@ -544,7 +520,9 @@ export function CustomProfileDialog({
                     className={styles.monoInput}
                     placeholder="https://app.example.com/sessions/{{sessionId}}"
                     value={deepLinkTemplate}
-                    onChange={(e) => setDeepLinkTemplate(e.currentTarget.value)}
+                    onChange={(e) =>
+                      update('deepLinkTemplate', e.currentTarget.value)
+                    }
                   />
                   <TextInput
                     label="Integration ID"
@@ -560,13 +538,19 @@ export function CustomProfileDialog({
         </form>
       </ModalBody>
       <ModalFooter>
-        <Button variant="secondary" onClick={onClose} disabled={busy}>
+        <Button variant="secondary" onClick={dismiss} disabled={busy}>
           Cancel
         </Button>
         <Button variant="primary" type="submit" form={formId} disabled={busy}>
-          {isNew ? 'Add integration' : 'Save changes'}
+          {busy ? 'Saving…' : isNew ? 'Add integration' : 'Save changes'}
         </Button>
       </ModalFooter>
     </Modal>
+  );
+  return (
+    <>
+      {dialog}
+      {confirmation}
+    </>
   );
 }

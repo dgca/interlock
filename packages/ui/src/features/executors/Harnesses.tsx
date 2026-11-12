@@ -90,9 +90,11 @@ export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
     (profilesQuery.error ? errorMessage(profilesQuery.error) : '');
   const [checking, setChecking] = useState(false);
 
-  const [customModalOpen, setCustomModalOpen] = useState(false);
   const [customModalProfile, setCustomModalProfile] =
-    useState<ExecutorProfile | null>(null);
+    useState<ExecutorProfile | null>();
+  useEffect(() => {
+    if (activeTab !== 'harnesses') setCustomModalProfile(undefined);
+  }, [activeTab]);
   const addButton = useRef<HTMLButtonElement>(null);
   const customTrigger = useRef<HTMLElement | null>(null);
 
@@ -163,7 +165,6 @@ export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
                     onClick={() => {
                       customTrigger.current = addButton.current;
                       setCustomModalProfile(null);
-                      setCustomModalOpen(true);
                     }}
                   >
                     <Plus size={14} />
@@ -201,7 +202,6 @@ export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
                         customTrigger.current =
                           document.activeElement as HTMLElement;
                         setCustomModalProfile(prof);
-                        setCustomModalOpen(true);
                       }}
                     />
                   ))}
@@ -233,25 +233,24 @@ export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
           </section>
         )}
       </div>
-      <CustomProfileDialog
-        opened={customModalOpen}
-        onClose={() => setCustomModalOpen(false)}
-        profile={customModalProfile}
-        initialName={customModalProfile?.name ?? ''}
-        isNew={!customModalProfile}
-        returnFocusTo={() =>
-          customTrigger.current?.isConnected
-            ? customTrigger.current
-            : addButton.current
-        }
-        onSave={async (data) => {
-          await api.executors.manage.mutate({
-            action: 'save',
-            profile: data,
-          });
-          await refresh();
-        }}
-      />
+      {activeTab === 'harnesses' && customModalProfile !== undefined && (
+        <CustomProfileDialog
+          onClose={() => setCustomModalProfile(undefined)}
+          profile={customModalProfile}
+          returnFocusTo={() =>
+            customTrigger.current?.isConnected
+              ? customTrigger.current
+              : addButton.current
+          }
+          onSave={async (data) => {
+            await api.executors.manage.mutate({
+              action: 'save',
+              profile: data,
+            });
+            await refresh();
+          }}
+        />
+      )}
     </section>
   );
 }
