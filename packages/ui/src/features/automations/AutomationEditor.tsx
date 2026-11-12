@@ -18,12 +18,7 @@ import {
 
 import { useEffect, useId, useRef, useState } from 'react';
 import { isConfirmedWriteRejection } from '../../lib/isConfirmedWriteRejection';
-import {
-  Link,
-  useNavigate,
-  useOutletContext,
-  useSearchParams,
-} from 'react-router';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 
 import {
   assertContract,
@@ -34,15 +29,15 @@ import {
   triggerRevisionConflict,
   type Json,
   type WorkflowVersion,
+  type WorkflowCatalogEntry,
 } from '@interlock/core';
-import type { AppContext } from '../../App';
 
 import { SchemaInput } from '../../components/SchemaInput/SchemaInput';
 
 import { useDraftDismissal } from '../../lib/useDraftDismissal';
 import { useEditorDraft } from '../../lib/useEditorDraft';
 import { api, errorMessage } from '../../lib/api';
-import { trpc, useQueryClient } from '../../lib/query';
+import { trpc, useQuery, useQueryClient } from '../../lib/query';
 import { paths } from '../../routes/paths';
 import {
   eventLabels,
@@ -120,11 +115,12 @@ function defaultTimingDrafts() {
 export function AutomationEditor({
   id,
   kind = 'schedule',
+  workflows,
 }: {
   id?: string;
   kind?: 'schedule' | 'event';
+  workflows: WorkflowCatalogEntry[];
 }) {
-  const { workflows } = useOutletContext<AppContext>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [search] = useSearchParams();
@@ -309,7 +305,20 @@ export function AutomationEditor({
     if (!needsReload && !unconfirmedCreation) setError('');
   };
   const back = id ? itemHref(id, search) : returnHref(search);
-  const schema = version?.definition.inputSchema ?? workflow?.draft.inputSchema;
+  const fallback = useQuery(
+    trpc.workflows.get.queryOptions(
+      { id: workflowId },
+      {
+        enabled: Boolean(
+          workflow && (!workflow.latestVersion || (!version && contractError)),
+        ),
+      },
+    ),
+  );
+  const schema =
+    (version?.workflowId === workflowId
+      ? version.definition.inputSchema
+      : undefined) ?? fallback.data?.draft.inputSchema;
   const save = async () => {
     if (
       busy ||

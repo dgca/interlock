@@ -48,11 +48,11 @@ vi.mock('../packages/ui/src/lib/api', async () => {
         save: { mutate: rpc.saveBoard },
       },
       workflows: {
-        list: { query: rpc.listWorkflows },
+        catalog: { query: rpc.listWorkflows },
         versions: { query: rpc.workflowVersions },
       },
       prompts: {
-        list: { query: rpc.listPrompts },
+        catalog: { query: rpc.listPrompts },
         get: { query: rpc.getPrompt },
         create: { mutate: rpc.createPrompt },
         update: { mutate: rpc.updatePrompt },
@@ -353,9 +353,7 @@ it('guards Board column edits and holds navigation during a retryable save', asy
   expect(field('Board name').value).toBe('Local board');
   expect(discardDialog()).toBeUndefined();
   const retry = deferred<typeof board>();
-  const refresh = deferred<[]>();
   rpc.saveBoard.mockReturnValueOnce(retry.promise);
-  rpc.listWorkflows.mockReturnValueOnce(refresh.promise);
   rpc.readBoard.mockRejectedValue(new Error('Board read unavailable'));
   await click('Save changes');
   await back();
@@ -370,7 +368,11 @@ it('guards Board column edits and holds navigation during a retryable save', asy
     'Saved',
   );
   await ready(() => expect(warnsBeforeUnload()).toBe(false));
-  expect(rpc.listWorkflows).toHaveBeenCalledTimes(2);
+  expect(rpc.listWorkflows.mock.calls.map(([scope]) => scope)).toEqual([
+    undefined,
+    undefined,
+    { boardId: board.id },
+  ]);
   const settingsRead = deferred<typeof board>();
   rpc.boardSettings.mockReturnValueOnce(settingsRead.promise);
   await act(async () => router.navigate('/boards/board/settings'));
@@ -382,7 +384,6 @@ it('guards Board column edits and holds navigation during a retryable save', asy
     settingsRead.resolve({ ...board, name: 'Local board', revision: 4 }),
   );
   expect(field('Board name').value).toBe('Local board');
-  await act(async () => refresh.resolve([]));
 });
 
 it('leaves a clean new Board freely and abandons its draft only after confirmation', async () => {
@@ -694,14 +695,14 @@ it('keeps Board settings usable and retries only unavailable workflow choices', 
   await click('Retry workflows');
   expect(rpc.listWorkflows).toHaveBeenCalledTimes(2);
   expect(rpc.boardSettings).toHaveBeenCalledTimes(1);
-  expect(rpc.listPrompts).toHaveBeenCalledTimes(1);
+  expect(rpc.listPrompts).not.toHaveBeenCalled();
   expect(document.body.textContent).not.toContain('Could not load workflows.');
 
   rpc.listWorkflows.mockRejectedValue(
     new Error('Workflow refresh unavailable'),
   );
   await act(async () =>
-    queryClient.refetchQueries(trpc.workflows.list.queryFilter()),
+    queryClient.refetchQueries(trpc.workflows.catalog.queryFilter()),
   );
   expect(document.body.textContent).toContain('Could not refresh workflows.');
   expect(button('Retry workflows')).toBeDefined();
@@ -819,7 +820,7 @@ it('allows correction after a confirmed prompt rejection', async () => {
   );
 });
 
-it('opens the create page and saves when neither catalog is available', async () => {
+it('creates a prompt without reading either catalog', async () => {
   rpc.listWorkflows.mockRejectedValue(
     new Error('Unrelated workflows read unavailable'),
   );
@@ -832,7 +833,8 @@ it('opens the create page and saves when neither catalog is available', async ()
   await click('Create prompt');
   await ready(() => expect(field('Instructions').value).toBe(prompt.content));
   expect(router.state.location.pathname).toBe('/prompts/new');
-  expect(rpc.listWorkflows).toHaveBeenCalledTimes(2);
+  expect(rpc.listWorkflows).not.toHaveBeenCalled();
+  expect(rpc.listPrompts).not.toHaveBeenCalled();
   expect(document.body.textContent).toContain('Saved · Revision 1');
   expect(document.body.textContent).not.toContain(
     'Action completed, but the view could not refresh',
@@ -841,13 +843,11 @@ it('opens the create page and saves when neither catalog is available', async ()
     'Unrelated workflows read unavailable',
   );
   expect(
-    queryClient.getQueryData(trpc.prompts.list.queryKey()),
+    queryClient.getQueryData(trpc.prompts.catalog.queryKey()),
   ).toBeUndefined();
 });
 
 it('guards an existing prompt save and loads a conflicting revision only after confirmation', async () => {
-  const catalog = deferred<(typeof prompt)[]>();
-  rpc.listPrompts.mockReturnValueOnce(catalog.promise);
   await render(paths.prompt(prompt.id));
   await ready(() => expect(field('Instructions')).toBeTruthy());
   await fill('Instructions', 'My unsaved edit');
@@ -894,11 +894,9 @@ it('guards an existing prompt save and loads a conflicting revision only after c
   expect(document.body.textContent).toContain('Saved · Revision 2');
   expect(warnsBeforeUnload()).toBe(false);
   expect(rpc.updatePrompt).toHaveBeenCalledTimes(1);
-  const catalogKey = trpc.prompts.list.queryKey();
-  expect(queryClient.getQueryState(catalogKey)?.fetchStatus).toBe('fetching');
-  await act(async () => catalog.resolve([prompt]));
-  expect(queryClient.getQueryData(catalogKey)).toEqual([prompt]);
-  expect(rpc.listPrompts).toHaveBeenCalledTimes(1);
+  const catalogKey = trpc.prompts.catalog.queryKey();
+  expect(queryClient.getQueryData(catalogKey)).toBeUndefined();
+  expect(rpc.listPrompts).not.toHaveBeenCalled();
 });
 
 it('checks an uncertain update by ID and retains edits made after the attempted save', async () => {

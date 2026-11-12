@@ -5,6 +5,7 @@ import { UiTestProvider as DesignSystemProvider } from './uiTestProvider';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import {
   blankDefinition,
+  workflowCatalogEntry,
   STARTED_RUN_SCHEMA,
   type Workflow,
   type WorkflowNode,
@@ -101,23 +102,25 @@ async function render(
           description: '',
           definition,
           node,
-          workflows: ['child', 'other-child'].map(
-            (id) =>
-              ({
-                id,
-                name: 'Child',
-                description: '',
-                archived: false,
-                latestVersion: 2,
-                draftRevision: 1,
-                createdAt: '2026-11-09T00:00:00.000Z',
-                updatedAt: '2026-11-09T00:00:00.000Z',
-                draft: {
-                  ...blankDefinition(),
-                  outputSchema: { type: 'boolean' },
-                },
-              }) satisfies Workflow,
-          ),
+          workflows: ['child', 'other-child']
+            .map(
+              (id) =>
+                ({
+                  id,
+                  name: 'Child',
+                  description: '',
+                  archived: false,
+                  latestVersion: 2,
+                  draftRevision: 1,
+                  createdAt: '2026-11-09T00:00:00.000Z',
+                  updatedAt: '2026-11-09T00:00:00.000Z',
+                  draft: {
+                    ...blankDefinition(),
+                    outputSchema: { type: 'boolean' },
+                  },
+                }) satisfies Workflow,
+            )
+            .map(workflowCatalogEntry),
           onClose: vi.fn(),
           onApply,
         }),

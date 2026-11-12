@@ -22,7 +22,7 @@ import styles from './WorkflowEditor.module.css';
 import { parallelEndHandle } from './parallelReturns';
 
 type Options = {
-  workflows?: Workflow[];
+  workflows?: Pick<Workflow, 'id' | 'name' | 'ownerWorkflowId'>[];
   onOpenWorkflow?: (id: string) => void;
   collapsed?: Set<string>;
   selected?: string | Set<string>;

@@ -36,7 +36,11 @@ vi.mock('../packages/ui/src/lib/api', async () => {
         preview: { query: rpc.preview },
         manage: { mutate: rpc.manage },
       },
-      workflows: { versions: { query: rpc.versions } },
+      workflows: {
+        catalog: { query: async () => [workflow] },
+        versions: { query: rpc.versions },
+        get: { query: async () => workflow },
+      },
     }),
     errorMessage: (e: Error) => e.message,
   };
@@ -108,18 +112,7 @@ function Layout() {
     'div',
     {},
     h('output', { 'data-location': true }, location.pathname + location.search),
-    h(Outlet, {
-      context: {
-        workflowsRead: {
-          resource: 'workflows',
-          ready: true,
-          error: '',
-          fetching: false,
-          retry: vi.fn(),
-        },
-        workflows: [workflow],
-      },
-    }),
+    h(Outlet, {}),
   );
 }
 beforeEach(() => {

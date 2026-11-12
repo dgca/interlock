@@ -54,7 +54,7 @@ export function RunList({
   onTabChange,
   workflowId,
   act,
-  workflows,
+  workflowName,
   tags,
   onTagsChange,
   mode,
@@ -68,7 +68,7 @@ export function RunList({
   onTabChange: (tab: RunTab) => void;
   workflowId?: string;
   act?: Action;
-  workflows: { id: string; name: string }[];
+  workflowName?: string;
   tags?: Record<string, string>;
   onTagsChange?: (tags?: Record<string, string>) => void;
 }) {
@@ -471,10 +471,7 @@ export function RunList({
       {cleanup && act && (
         <HistoryCleanupDialog
           workflowId={workflowId}
-          workflows={workflows.map((workflow) => ({
-            value: workflow.id,
-            label: workflow.name,
-          }))}
+          workflowName={workflowName}
           act={act}
           returnFocusTo={() => historyTrigger.current}
           onClose={() => setCleanup(false)}

@@ -8,7 +8,7 @@ import { Check, AlertCircle } from 'lucide-react';
 import { Outlet, useBlocker, useMatch, useNavigate } from 'react-router';
 import { automationDraftKey, paths } from './routes/paths';
 import { useActionFeedback } from './lib/useActionFeedback';
-import type { Workflow, SavedPrompt } from '@interlock/core';
+import { workflowCatalogEntry, type Workflow } from '@interlock/core';
 import { TRPCClientError } from '@interlock/client';
 import { Sidebar, type AttentionFailure } from './components/Sidebar/Sidebar';
 import { RunDialog } from './features/runs/RunDialog';
@@ -18,7 +18,6 @@ import { subscribeToEngineEvents } from './lib/engineEvents';
 import type { Action } from './lib/useActionFeedback';
 import { aiSettingsTab } from './features/executors/aiSettingsNavigation';
 import { DiscardChangesDialog } from './components/DiscardChangesDialog';
-import { workspaceRead, type WorkspaceRead } from './components/WorkspaceReads';
 import { WorkflowLayoutNotice } from './features/workflows/WorkflowLayoutNotice';
 
 function isRetryableReadFailure(error: unknown) {
@@ -43,15 +42,16 @@ function isRetryableReadFailure(error: unknown) {
 type EditorGuard = 'dirty' | 'saving' | undefined;
 
 export type AppContext = {
-  workflows: Workflow[];
-  prompts: SavedPrompt[];
-  workflowsRead: WorkspaceRead;
-  promptsRead: WorkspaceRead;
   act: Action;
   onDirty: (dirty: boolean) => void;
   onEditorGuard: (guard: EditorGuard) => void;
   editorNavigationBlocked: boolean;
-  onSaved: (workflow: Workflow) => void;
+  onSaved: (
+    workflow: Workflow & {
+      layoutRevision?: number;
+      draftMatchesLatest?: boolean | null;
+    },
+  ) => void;
   onPublicationChecked: (workflowId: string, latestVersion: number) => number;
   onRun: (workflow: Workflow) => void;
   onConnect?: () => void;
@@ -89,8 +89,6 @@ export function App() {
                   ? 'runs'
                   : 'workflows';
   const queryClient = useQueryClient();
-  const workflowsQuery = useQuery(trpc.workflows.list.queryOptions());
-  const promptsQuery = useQuery(trpc.prompts.list.queryOptions());
   const attentionQuery = useQuery(
     trpc.requests.list.queryOptions({ limit: 1 }),
   );
@@ -101,8 +99,6 @@ export function App() {
     ...trpc.connection.queryOptions(),
     meta: { engineRefresh: false },
   });
-  const workflows = workflowsQuery.data ?? [];
-  const prompts = promptsQuery.data ?? [];
   const attentionCount =
     attentionQuery.data && scheduleQuery.data
       ? attentionQuery.data.total + scheduleQuery.data.total
@@ -244,63 +240,68 @@ export function App() {
     setRunDialog(undefined);
   };
   const context: AppContext = {
-    workflows,
-    prompts,
-    workflowsRead: workspaceRead('workflows', workflowsQuery),
-    promptsRead: workspaceRead('prompts', promptsQuery),
     act,
     onDirty: setEditorDirty,
     onEditorGuard,
     editorNavigationBlocked,
-    onSaved: (w) => {
-      // Cancellation is synchronous; earlier list reads cannot replace this acknowledgement.
-      void queryClient.cancelQueries(trpc.workflows.list.queryFilter());
-      queryClient.setQueryData(trpc.workflows.list.queryKey(), (all = []) =>
-        all.some((old) => old.id === w.id)
-          ? all.map((old) =>
-              old.id === w.id
-                ? { ...old, draftMatchesLatest: null, ...w, boardId: w.boardId }
-                : old,
-            )
-          : [...all, { draftMatchesLatest: null, layoutRevision: 0, ...w }],
+    onSaved: (workflow) => {
+      const detailKey = trpc.workflows.get.queryKey({ id: workflow.id });
+      const current = queryClient.getQueryData(detailKey);
+      // A membership receipt has no layout overlay. Keep the observed draft.
+      const saved =
+        workflow.layoutRevision === undefined && current
+          ? { ...current, boardId: workflow.boardId }
+          : current &&
+              (current.draftRevision > workflow.draftRevision ||
+                current.latestVersion > workflow.latestVersion)
+            ? current
+            : {
+                ...workflow,
+                layoutRevision: workflow.layoutRevision ?? 0,
+                draftMatchesLatest: workflow.draftMatchesLatest ?? null,
+              };
+      void queryClient.cancelQueries({ queryKey: detailKey, exact: true });
+      queryClient.setQueryData(detailKey, saved);
+
+      const catalogKey = trpc.workflows.catalog.queryKey();
+      const catalog = queryClient.getQueryData(catalogKey);
+      if (!catalog) return;
+      void queryClient.cancelQueries({ queryKey: catalogKey, exact: true });
+      const entry = workflowCatalogEntry(saved);
+      queryClient.setQueryData(
+        catalogKey,
+        catalog.some((item) => item.id === saved.id)
+          ? catalog.map((item) => (item.id === saved.id ? entry : item))
+          : [...catalog, entry],
       );
     },
     onPublicationChecked: (workflowId, latestVersion) => {
-      const key = trpc.workflows.list.queryKey();
-      const cached = queryClient
-        .getQueryData(key)
-        ?.find((item) => item.id === workflowId);
-      if (!cached || cached.latestVersion >= latestVersion)
-        return cached?.latestVersion ?? latestVersion;
-
-      const mergeVersion = () =>
-        queryClient.setQueryData(key, (all) => {
-          if (
-            !all?.some(
-              (item) =>
-                item.id === workflowId && item.latestVersion < latestVersion,
-            )
-          )
-            return undefined;
-          return all.map((item) =>
-            item.id === workflowId
-              ? { ...item, latestVersion, draftMatchesLatest: null }
-              : item,
-          );
+      const key = trpc.workflows.get.queryKey({ id: workflowId });
+      const cached = queryClient.getQueryData(key);
+      const acknowledged = Math.max(cached?.latestVersion ?? 0, latestVersion);
+      if (cached && cached.latestVersion < acknowledged) {
+        const exact = { queryKey: key, exact: true };
+        const pending =
+          queryClient.getQueryState(key)?.fetchStatus === 'fetching';
+        // The independent check has settled. A read started earlier can carry an older version.
+        if (pending) void queryClient.cancelQueries(exact);
+        queryClient.setQueryData(key, {
+          ...cached,
+          latestVersion: acknowledged,
+          draftMatchesLatest: null,
         });
-      const pending =
-        queryClient.getQueryState(key)?.fetchStatus === 'fetching';
-      mergeVersion();
-      if (pending) {
-        // The pending snapshot may contain newer catalog data and an older version.
-        const filter = { queryKey: key, exact: true };
-        const options = { cancelRefetch: false };
-        void queryClient.refetchQueries(filter, options).then(() => {
-          mergeVersion();
-          return queryClient.refetchQueries(filter, options);
-        });
+        if (pending)
+          void queryClient.refetchQueries(exact, { cancelRefetch: false });
       }
-      return latestVersion;
+      const catalogKey = trpc.workflows.catalog.queryKey();
+      queryClient.setQueryData(catalogKey, (catalog) =>
+        catalog?.map((entry) =>
+          entry.id === workflowId && entry.latestVersion < acknowledged
+            ? { ...entry, latestVersion: acknowledged }
+            : entry,
+        ),
+      );
+      return acknowledged;
     },
     onRun: setRunDialog,
     onConnect: features.connectAgent ? () => setConnectDialog(true) : undefined,

@@ -8,7 +8,11 @@ import { createBrowserRouter, RouterProvider } from 'react-router';
 import { afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest';
 import { WorkspaceReadWarning } from '../packages/ui/src/components/WorkspaceReads';
 import { routes } from '../packages/ui/src/routes';
-import { blankDefinition, type Workflow } from '@interlock/core';
+import {
+  blankDefinition,
+  workflowCatalogEntry,
+  type Workflow,
+} from '@interlock/core';
 import { trpc, useQueryClient } from '../packages/ui/src/lib/query';
 
 let libraryClient: ReturnType<typeof useQueryClient>;
@@ -22,6 +26,7 @@ beforeAll(async () => {
 
 const queries = vi.hoisted(() => ({
   workflows: vi.fn(),
+  workflow: vi.fn(),
   createWorkflow: vi.fn(),
   cloneWorkflow: vi.fn(),
   realLibrary: false,
@@ -74,7 +79,13 @@ vi.mock('../packages/ui/src/lib/api', async () => {
       },
       connection: { query: queries.connection },
       workflows: {
-        list: { query: queries.workflows },
+        catalog: {
+          query: async (input?: unknown) =>
+            (await queries.workflows(input)).map((workflow: Workflow) =>
+              workflow.draft ? workflowCatalogEntry(workflow) : workflow,
+            ),
+        },
+        get: { query: queries.workflow },
         create: { mutate: queries.createWorkflow },
         clone: { mutate: queries.cloneWorkflow },
       },
@@ -84,7 +95,7 @@ vi.mock('../packages/ui/src/lib/api', async () => {
       },
       requests: { list: { query: queries.requestCount } },
       prompts: {
-        list: { query: queries.prompts },
+        catalog: { query: queries.prompts },
         get: { query: queries.prompt },
       },
     }),
@@ -113,7 +124,7 @@ vi.mock(
             {
               onClick: () =>
                 void client.refetchQueries({
-                  queryKey: trpc.workflows.list.queryKey(),
+                  queryKey: trpc.workflows.catalog.queryKey(),
                 }),
             },
             'Refresh library',
@@ -143,7 +154,7 @@ vi.mock('../packages/ui/src/features/workflows/WorkflowEditor', () => ({
     onSectionChange,
     runsView,
     onDeleted,
-    promptsRead,
+    workflowsRead,
   }: any) => {
     useEffect(() => () => onDirty(false), [onDirty]);
     return h(
@@ -159,8 +170,8 @@ vi.mock('../packages/ui/src/features/workflows/WorkflowEditor', () => ({
       h('button', { onClick: onDeleted }, 'Confirm deletion'),
       section === 'runs' ? runsView : null,
       section === 'children' ? 'Child workflows content' : null,
-      section === 'editor' && promptsRead
-        ? h(WorkspaceReadWarning, { reads: [promptsRead] })
+      section === 'editor' && workflowsRead
+        ? h(WorkspaceReadWarning, { reads: [workflowsRead] })
         : null,
       h('button', { onClick: () => onDirty(true) }, 'Edit draft'),
       h('button', { onClick: () => onDirty(false) }, 'Save draft'),
@@ -211,6 +222,24 @@ vi.mock('../packages/ui/src/components/ConnectDialog/ConnectDialog', () => ({
 let root: Root;
 let container: HTMLDivElement;
 let router: ReturnType<typeof createBrowserRouter>;
+
+function mockWorkflowDetails(items: (Partial<Workflow> & { id: string })[]) {
+  queries.workflow.mockReset().mockImplementation(async ({ id }) => {
+    const item = items.find((workflow) => workflow.id === id);
+    if (!item) throw new Error('Workflow not found');
+    return {
+      name: id,
+      description: '',
+      archived: false,
+      draft: blankDefinition(),
+      draftRevision: 1,
+      latestVersion: 0,
+      layoutRevision: 0,
+      draftMatchesLatest: null,
+      ...item,
+    };
+  });
+}
 
 beforeEach(() => {
   vi.stubGlobal(
@@ -277,7 +306,9 @@ beforeEach(() => {
       },
     ],
   });
-  queries.workflows.mockResolvedValue([{ id: 'w1' }, { id: 'a b%?' }]);
+  const workflows = [{ id: 'w1' }, { id: 'a b%?' }];
+  queries.workflows.mockReset().mockResolvedValue(workflows);
+  mockWorkflowDetails(workflows);
   queries.summaries.mockImplementation(async ({ tab }) => {
     const [attention] = await queries.attention();
     const run = {
@@ -467,10 +498,10 @@ it('returns from an invoked workflow to the exact step that opened it', async ()
 });
 
 it('keeps a deep link while data loads and shows missing resources without redirecting', async () => {
-  let resolve!: (value: unknown[]) => void;
-  queries.workflows.mockReturnValue(
-    new Promise((done) => {
-      resolve = done;
+  let reject!: (value: Error) => void;
+  queries.workflow.mockReturnValue(
+    new Promise((_, fail) => {
+      reject = fail;
     }),
   );
   await mount('/workflows/missing');
@@ -504,7 +535,7 @@ it('keeps a deep link while data loads and shows missing resources without redir
       label,
     );
   }
-  await act(async () => resolve([]));
+  await act(async () => reject(new Error('Workflow not found')));
   expect(container.textContent).toContain('Workflow not found');
   expect(window.location.pathname).toBe('/workflows/missing');
   await act(async () => {
@@ -514,7 +545,7 @@ it('keeps a deep link while data loads and shows missing resources without redir
 });
 
 it('distinguishes a failed initial load from a missing workflow', async () => {
-  queries.workflows.mockRejectedValue(new Error('Engine unavailable'));
+  queries.workflow.mockRejectedValue(new Error('Engine unavailable'));
   await mount('/workflows/w1');
   expect(container.textContent).toContain('Engine unavailable');
   expect(container.textContent).not.toContain('Workflow not found');
@@ -547,7 +578,7 @@ it('opens a cold workflow editor while one sidebar count fails and the other is 
   expect(queries.requestCount).toHaveBeenCalledTimes(2);
   expect(queries.automationCount).toHaveBeenCalledTimes(1);
   expect(queries.workflows).toHaveBeenCalledTimes(1);
-  expect(queries.prompts).toHaveBeenCalledTimes(1);
+  expect(queries.prompts).not.toHaveBeenCalled();
   expect(runsLink?.getAttribute('aria-label')).toBe(
     'Runs, loading attention count',
   );
@@ -557,24 +588,17 @@ it('opens a cold workflow editor while one sidebar count fails and the other is 
   );
 });
 
-it('opens the workflow library without prompts and offers a local prompts retry in the editor', async () => {
+it('opens the workflow library and exact draft without observing the prompt catalog', async () => {
   queries.prompts.mockRejectedValue(new Error('Prompt library unavailable'));
   await mount('/workflows');
   expect(container.textContent).toContain('Open workflow');
-  expect(container.textContent).not.toContain('Prompt library unavailable');
+  expect(queries.workflow).not.toHaveBeenCalled();
   await click('Open workflow');
   expect(container.textContent).toContain('Editor w1');
-  expect(container.textContent).toContain('Could not load prompts.');
-  expect(container.textContent).not.toContain('Workflow not found');
+  expect(container.textContent).not.toContain('Prompt library unavailable');
   expect(container.textContent).toContain('Local engine connected');
-  queries.prompts.mockResolvedValue([]);
-  await click('Retry prompts');
-  expect(container.textContent).toContain('Editor w1');
-  expect(container.textContent).not.toContain('Could not load prompts.');
-  expect(queries.prompts).toHaveBeenCalledTimes(2);
-  expect(queries.workflows).toHaveBeenCalledTimes(1);
-  expect(queries.requestCount).toHaveBeenCalledTimes(1);
-  expect(queries.automationCount).toHaveBeenCalledTimes(1);
+  expect(queries.workflow).toHaveBeenCalledWith({ id: 'w1' });
+  expect(queries.prompts).not.toHaveBeenCalled();
 });
 
 it.each([
@@ -592,19 +616,19 @@ it.each([
     await mount(`/workflows/w1?view=${section}`);
     expect(container.textContent).toContain('Editor w1');
     expect(container.textContent).not.toContain('Prompt library unavailable');
-    if (section === 'runs')
+    if (section === 'runs') {
       expect(queries.summaries).toHaveBeenCalledWith(
         expect.objectContaining({ workflowId: 'w1' }),
       );
-    else expect(container.textContent).toContain('Child workflows content');
+      expect(queries.workflows).not.toHaveBeenCalled();
+    } else expect(container.textContent).toContain('Child workflows content');
 
     const editor = container.querySelector('main section');
     await click('Edit draft');
     await click('Workflow editor');
     expect(container.querySelector('main section')).toBe(editor);
     expect(container.textContent).toContain('Editor w1');
-    if (status === 'failed')
-      expect(container.textContent).toContain('Could not load prompts.');
+    expect(queries.prompts).not.toHaveBeenCalled();
 
     await click('Prompts');
     expect(document.body.textContent).toContain('Discard unsaved changes?');
@@ -714,7 +738,7 @@ it('reports an automation detail read failure independently of workflow data', a
   expect(container.textContent).not.toContain('Workflow library unavailable');
   await click('Reload automation');
   expect(queries.automationInspect).toHaveBeenCalledTimes(2);
-  expect(queries.workflows).toHaveBeenCalledTimes(1);
+  expect(queries.workflows).not.toHaveBeenCalled();
   expect(queries.requestCount).toHaveBeenCalledTimes(1);
   expect(queries.automationCount).toHaveBeenCalledTimes(1);
 });
@@ -822,10 +846,12 @@ it('allows workflow section changes with unsaved edits but still guards leaving 
 });
 
 it('opens an owned child by direct URL and returns to its owner through the navigation guard', async () => {
-  queries.workflows.mockResolvedValue([
+  const workflows = [
     { id: 'parent', name: 'Parent' },
     { id: 'child', name: 'Child', ownerWorkflowId: 'parent' },
-  ]);
+  ];
+  queries.workflows.mockResolvedValue(workflows);
+  mockWorkflowDetails(workflows);
   await mount('/workflows/child');
   expect(container.textContent).toContain('Editor child');
   await click('Edit draft');
@@ -1033,9 +1059,9 @@ it('keeps healthy stream polling when an active read is permanently rejected', a
   const reads = queries.prompt.mock.calls.length;
   await click('Retry');
   expect(queries.prompt).toHaveBeenCalledTimes(reads + 1);
-  expect(queries.workflows).toHaveBeenCalledTimes(1);
+  expect(queries.workflows).not.toHaveBeenCalled();
   await act(async () => vi.advanceTimersByTimeAsync(5_000));
-  expect(queries.workflows).toHaveBeenCalledTimes(1);
+  expect(queries.workflows).not.toHaveBeenCalled();
   expect(queries.connection).not.toHaveBeenCalled();
 });
 
@@ -1300,6 +1326,7 @@ it.each([
     };
     const created = { ...original, id: 'new-workflow', name: 'New workflow' };
     queries.workflows.mockResolvedValue([original]);
+    mockWorkflowDetails([original, created]);
     queries.createWorkflow.mockResolvedValue(created);
     queries.cloneWorkflow.mockResolvedValue(created);
     await mount('/workflows');
@@ -1313,15 +1340,17 @@ it.each([
           }),
       );
       await act(async () => {
-        void libraryClient.refetchQueries(trpc.workflows.list.queryFilter());
+        void libraryClient.refetchQueries(trpc.workflows.catalog.queryFilter());
       });
       // Another acknowledged write during that read must also survive cancellation.
-      libraryClient.setQueryData(trpc.workflows.list.queryKey(), (all = []) =>
-        all.map((workflow) =>
-          workflow.id === original.id
-            ? { ...workflow, description: 'Newer acknowledged description' }
-            : workflow,
-        ),
+      libraryClient.setQueryData(
+        trpc.workflows.catalog.queryKey(),
+        (all = []) =>
+          all.map((workflow) =>
+            workflow.id === original.id
+              ? { ...workflow, description: 'Newer acknowledged description' }
+              : workflow,
+          ),
       );
     }
     queries.workflows.mockImplementation(
@@ -1361,7 +1390,7 @@ it.each([
         expect(container.textContent).toContain('Editor new-workflow');
         expect(
           libraryClient
-            .getQueryData(trpc.workflows.list.queryKey())
+            .getQueryData(trpc.workflows.catalog.queryKey())
             ?.find((workflow) => workflow.id === original.id)?.description,
         ).toBe('Newer acknowledged description');
       }

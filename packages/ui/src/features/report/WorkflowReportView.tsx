@@ -61,7 +61,11 @@ export function WorkflowReportView({
   const [timePreset, setTimePreset] = useState<TimePreset>('7d');
   const [tags, setTags] = useState<Record<string, string>>();
   const tagFilterId = useId();
-  const workflowsQuery = useQuery(trpc.workflows.list.queryOptions());
+  const workflowsQuery = useQuery(
+    trpc.workflows.catalog.queryOptions(
+      initialWorkflowId ? { id: initialWorkflowId } : undefined,
+    ),
+  );
   const workflowsList = (workflowsQuery.data ?? []).map((workflow) => ({
     value: workflow.id,
     label: workflow.name || workflow.id,

@@ -9,26 +9,25 @@ import {
 
 import { useState } from 'react';
 import { ArrowUp, ArrowDown, X } from 'lucide-react';
-import type { SavedPrompt, WorkflowNode } from '@interlock/core';
+import type { WorkflowNode } from '@interlock/core';
 import {
   WorkspaceReadWarning,
-  type WorkspaceRead,
+  workspaceRead,
 } from '../../components/WorkspaceReads';
+import { trpc, useQuery } from '../../lib/query';
 import styles from './Prompts.module.css';
 
 export function PromptPicker({
   node,
-  prompts,
-  promptsRead,
   onChange,
 }: {
   node: Extract<WorkflowNode, { kind: 'agent' }>;
-  prompts: SavedPrompt[];
-  promptsRead?: WorkspaceRead;
   onChange: (ids: string[]) => void;
 }) {
   const [search, setSearch] = useState('');
-  if (promptsRead && !promptsRead.ready)
+  const query = useQuery(trpc.prompts.catalog.queryOptions());
+  const promptsRead = workspaceRead('prompts', query);
+  if (!query.data)
     return (
       <Stack gap="xs" mb="md">
         <Text size="sm" fw={500}>
@@ -42,6 +41,7 @@ export function PromptPicker({
       </Stack>
     );
 
+  const prompts = query.data;
   const ids = node.promptIds ?? [];
   const selected = ids.map((id) => prompts.find((p) => p.id === id));
   const move = (index: number, offset: number) => {
@@ -72,7 +72,7 @@ export function PromptPicker({
           setSearch('');
         }}
       />
-      {promptsRead && <WorkspaceReadWarning reads={[promptsRead]} inline />}
+      <WorkspaceReadWarning reads={[promptsRead]} inline />
       {ids.map((id, i) => (
         <div key={id} className={styles.selection}>
           <Group justify="space-between" wrap="nowrap">
@@ -105,12 +105,7 @@ export function PromptPicker({
               </ActionIcon>
             </Group>
           </Group>
-          {selected[i] && (
-            <details>
-              <summary>View instructions</summary>
-              <p className="assignment-prompt">{selected[i]!.content}</p>
-            </details>
-          )}
+          {selected[i] && <PromptInstructions id={id} />}
           {!selected[i] && (
             <Text c="red" size="xs">
               Select an available prompt or remove this reference before
@@ -120,5 +115,30 @@ export function PromptPicker({
         </div>
       ))}
     </Stack>
+  );
+}
+
+function PromptInstructions({ id }: { id: string }) {
+  const [open, setOpen] = useState(false);
+  const query = useQuery(
+    trpc.prompts.instructions.queryOptions({ id }, { enabled: open }),
+  );
+  return (
+    <details onToggle={(event) => setOpen(event.currentTarget.open)}>
+      <summary>View instructions</summary>
+      {open && (
+        <>
+          <WorkspaceReadWarning
+            reads={[workspaceRead('instructions', query)]}
+            inline
+          />
+          {query.data ? (
+            <p className="assignment-prompt">{query.data.content}</p>
+          ) : !query.error ? (
+            <Loader size="sm" aria-label="Loading instructions" />
+          ) : null}
+        </>
+      )}
+    </details>
   );
 }

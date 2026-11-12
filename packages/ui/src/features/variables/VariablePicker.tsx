@@ -2,7 +2,8 @@ import { LoadingSkeleton, Select, Stack, Text } from '../../design-system';
 
 import { useEffect, useRef, useState } from 'react';
 
-import { api, errorMessage } from '../../lib/api';
+import { errorMessage } from '../../lib/api';
+import { trpc, useQuery } from '../../lib/query';
 import { paths } from '../../routes/paths';
 import type { SavedVariable } from '@interlock/core';
 import styles from './VariablePicker.module.css';
@@ -22,7 +23,6 @@ export function VariablePicker({
   label = 'Variable',
   kind,
   autoFocus,
-  refreshKey = 0,
   showManagement = true,
   required = false,
 }: {
@@ -31,7 +31,6 @@ export function VariablePicker({
   label?: string;
   kind?: 'secret' | 'config';
   autoFocus?: boolean;
-  refreshKey?: number;
   showManagement?: boolean;
   required?: boolean;
 }) {
@@ -42,78 +41,42 @@ export function VariablePicker({
     input.current?.setCustomValidity(required && !value ? selectionError : '');
   }, [required, value]);
   const [search, setSearch] = useState('');
-  const [items, setItems] = useState<VariableSummary[]>([]);
-  // An imported reference can resolve to a different local ID. Keep the lookup
-  // key with its metadata instead of comparing the resolved ID to the reference.
-  const [selection, setSelection] = useState<{
-    referenceId: string;
-    variable?: VariableSummary;
-    error?: string;
-  }>();
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  useEffect(() => {
+    if (search === debouncedSearch) return;
+    const timer = setTimeout(() => setDebouncedSearch(search), 150);
+    return () => clearTimeout(timer);
+  }, [search, debouncedSearch]);
+
+  const list = useQuery({
+    ...trpc.variables.read.queryOptions({ action: 'list', search, limit: 100 }),
+    enabled: search === debouncedSearch,
+    select: (page) => {
+      if (!('items' in page)) throw new Error('Could not read variables.');
+      return page;
+    },
+  });
+  const detail = useQuery({
+    ...trpc.variables.read.queryOptions({
+      action: 'inspect',
+      id: value,
+      limit: 1,
+    }),
+    enabled: Boolean(value),
+    select: (variable) => {
+      if (!('dependencies' in variable))
+        throw new Error('Could not read the selected variable.');
+      return variable;
+    },
+  });
+  const items = list.data?.items ?? [];
+  // A selected option can keep its label while its exact reference read settles.
+  const [selection, setSelection] = useState<VariableSummary>();
   const selected =
-    selection?.referenceId === value ? selection.variable : undefined;
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [total, setTotal] = useState(0);
-  const [focusRefresh, setFocusRefresh] = useState(0);
-  useEffect(() => {
-    const refresh = () => setFocusRefresh((key) => key + 1);
-    const refreshWhenVisible = () => {
-      if (document.visibilityState === 'visible') refresh();
-    };
-    window.addEventListener('focus', refresh);
-    document.addEventListener('visibilitychange', refreshWhenVisible);
-    return () => {
-      window.removeEventListener('focus', refresh);
-      document.removeEventListener('visibilitychange', refreshWhenVisible);
-    };
-  }, []);
-  useEffect(() => {
-    let active = true;
-    setLoading(true);
-    const timer = setTimeout(() => {
-      void api.variables.read
-        .query({ action: 'list', search, limit: 100 })
-        .then((result) => {
-          if (!active || !('items' in result)) return;
-          setItems(result.items);
-          setTotal(result.total);
-          setError('');
-        })
-        .catch((e) => {
-          if (active) setError(errorMessage(e));
-        })
-        .finally(() => {
-          if (active) setLoading(false);
-        });
-    }, 150);
-    return () => {
-      active = false;
-      clearTimeout(timer);
-    };
-  }, [search, refreshKey, focusRefresh]);
-  useEffect(() => {
-    let active = true;
-    if (value)
-      void api.variables.read
-        .query({ action: 'inspect', id: value, limit: 1 })
-        .then((r) => {
-          if (active && 'dependencies' in r)
-            setSelection({ referenceId: value, variable: r });
-        })
-        .catch((e) => {
-          if (active)
-            setSelection((previous) => ({
-              referenceId: value,
-              variable:
-                previous?.referenceId === value ? previous.variable : undefined,
-              error: errorMessage(e),
-            }));
-        });
-    return () => {
-      active = false;
-    };
-  }, [value, refreshKey, focusRefresh]);
+    detail.data ??
+    (selection?.id === value ? selection : undefined) ??
+    items.find((item) => item.id === value);
+  const error = list.error ?? detail.error;
   const metadataFor = (id: string) =>
     items.find((item) => item.id === id) ??
     (id === value ? selected : undefined);
@@ -124,12 +87,14 @@ export function VariablePicker({
       label: optionLabel(v),
       description: v.description,
     }));
-  if (value && !options.some((o) => o.value === value))
+  const selectedOutsideResults =
+    Boolean(value) && !options.some((option) => option.value === value);
+  if (selectedOutsideResults)
     options.unshift({
       value,
       label: selected
         ? optionLabel(selected)
-        : selection?.referenceId === value && selection.error
+        : detail.error
           ? 'Variable unavailable'
           : 'Selected variable',
       description: selected?.description ?? '',
@@ -149,6 +114,7 @@ export function VariablePicker({
         allowDeselect={false}
         autoFocus={autoFocus}
         defaultDropdownOpened={autoFocus}
+        aria-busy={list.isFetching || undefined}
         label={label}
         searchable
         clearable
@@ -163,7 +129,7 @@ export function VariablePicker({
         onSearchChange={(term) => setSearch(term === selectedLabel ? '' : term)}
         onChange={(v) => {
           const variable = v ? metadataFor(v) : undefined;
-          if (v && variable) setSelection({ referenceId: v, variable });
+          if (v && variable) setSelection(variable);
           onChange(v ?? '', v ? variable : undefined);
           setSearch('');
         }}
@@ -173,6 +139,7 @@ export function VariablePicker({
           return options.filter(
             (option) =>
               'value' in option &&
+              (!term || !selectedOutsideResults || option.value !== value) &&
               `${option.label} ${metadataFor(option.value)?.description ?? ''}`
                 .toLowerCase()
                 .includes(term),
@@ -193,17 +160,17 @@ export function VariablePicker({
         }}
         placeholder="Select a variable"
         nothingFoundMessage={
-          loading ? (
+          list.isPending ? (
             <LoadingSkeleton label="Loading variables…" />
+          ) : list.error ? (
+            'Could not load variables'
           ) : (
             'No matching variables'
           )
         }
         error={
           (required && !value && selectionInvalid ? selectionError : '') ||
-          error ||
-          (selection?.referenceId === value && selection.error) ||
-          undefined
+          (error ? errorMessage(error) : undefined)
         }
       />
       {selected && selected.availability !== 'ready' && (
@@ -212,7 +179,7 @@ export function VariablePicker({
           Update it in Variables before starting a run.
         </Text>
       )}
-      {total > 100 && (
+      {list.data?.truncated && (
         <Text size="xs" c="dimmed">
           Showing 100 results. Refine your search.
         </Text>

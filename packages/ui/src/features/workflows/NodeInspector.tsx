@@ -37,7 +37,7 @@ import {
   stallFields,
   type StallPolicy,
   type WorkflowDefinition,
-  type Workflow,
+  type WorkflowCatalogEntry,
   type WorkflowBoard,
   type WorkflowNode,
   type FetchNode,
@@ -54,7 +54,10 @@ import { WorkflowModeEditor } from './WorkflowModeEditor';
 
 import { ContractEditor } from '../../components/ContractEditor/ContractEditor';
 import { ScriptCode } from './ScriptCode';
-import type { WorkspaceRead } from '../../components/WorkspaceReads';
+import {
+  WorkspaceReadWarning,
+  type WorkspaceRead,
+} from '../../components/WorkspaceReads';
 import { PromptPicker } from '../prompts/PromptPicker';
 import styles from './NodeInspector.module.css';
 
@@ -115,8 +118,7 @@ function NodeStallOverrides({
 export function NodeInspector({
   node,
   workflows,
-  prompts = [],
-  promptsRead,
+  workflowsRead,
   workflowId,
   hideWorkflowTarget = false,
   creating = false,
@@ -134,9 +136,8 @@ export function NodeInspector({
   section?: NodeSectionName;
   onSectionChange?: (section: NodeSectionName) => void;
   node: WorkflowNode;
-  workflows: Workflow[];
-  prompts?: import('@interlock/core').SavedPrompt[];
-  promptsRead?: WorkspaceRead;
+  workflows: WorkflowCatalogEntry[];
+  workflowsRead?: WorkspaceRead;
   workflowId?: string;
   hideWorkflowTarget?: boolean;
   creating?: boolean;
@@ -315,8 +316,6 @@ export function NodeInspector({
             <NodeSection name="work">
               <PromptPicker
                 node={node}
-                prompts={prompts}
-                promptsRead={promptsRead}
                 onChange={(promptIds) =>
                   patch({ promptIds: promptIds.length ? promptIds : undefined })
                 }
@@ -634,6 +633,7 @@ export function NodeInspector({
             <NativeSelect
               mb="md"
               label="Referenced workflow"
+              disabled={workflowsRead && !workflowsRead.ready}
               value={node.workflowId}
               onChange={(e) =>
                 patch({
@@ -668,6 +668,9 @@ export function NodeInspector({
               ))}
             </NativeSelect>
 
+            {workflowsRead && (
+              <WorkspaceReadWarning reads={[workflowsRead]} inline />
+            )}
             <TextInput
               mb="md"
               label="Pinned version"

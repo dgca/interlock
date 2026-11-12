@@ -8,7 +8,7 @@ import type { Workflow } from '@interlock/core';
 
 import { api } from '../../lib/api';
 import type { Action } from '../../lib/useActionFeedback';
-import { useQueryClient } from '../../lib/query';
+import { trpc, useQueryClient } from '../../lib/query';
 import { forgetWorkflowLayout } from './useWorkflowLayout';
 
 export function DeleteWorkflowDialog({
@@ -40,6 +40,14 @@ export function DeleteWorkflowDialog({
         async () => {
           await api.workflows.delete.mutate({ id: workflow.id });
           forgetWorkflowLayout(queryClient, workflow.id);
+          queryClient.removeQueries(
+            trpc.workflows.get.queryFilter({ id: workflow.id }),
+          );
+          const catalog = trpc.workflows.catalog.queryKey();
+          void queryClient.cancelQueries({ queryKey: catalog, exact: true });
+          queryClient.setQueryData(catalog, (items) =>
+            items?.filter((item) => item.id !== workflow.id),
+          );
           onDeleted();
         },
         'Workflow permanently deleted.',

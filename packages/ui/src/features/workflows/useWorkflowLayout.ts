@@ -222,13 +222,10 @@ class LayoutSession {
         layoutRevision: this.state.revision,
       };
     };
-    for (const filter of [
-      trpc.workflows.list.pathFilter(),
-      trpc.workflows.get.pathFilter(),
-    ])
-      this.client.setQueriesData(filter, (value: unknown) =>
-        Array.isArray(value) ? value.map(patch) : patch(value),
-      );
+    this.client.setQueriesData(
+      trpc.workflows.get.queryFilter({ id: this.id }),
+      patch,
+    );
   }
 
   flush = (): Promise<void> => {

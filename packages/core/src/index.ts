@@ -701,6 +701,14 @@ export interface Workflow {
   createdAt: string;
   updatedAt: string;
 }
+export {
+  workflowCatalogQuerySchema,
+  workflowCatalogEntry,
+  promptCatalogEntry,
+  type WorkflowCatalogQuery,
+  type WorkflowCatalogEntry,
+  type PromptCatalogEntry,
+} from './catalogs.js';
 export interface WorkflowVersion {
   workflowId: string;
   version: number;

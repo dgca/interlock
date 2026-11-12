@@ -23,6 +23,7 @@ import {
   outgoingPorts,
   parallelBranchPort,
   type Workflow,
+  type WorkflowCatalogEntry,
   type WorkflowDefinition,
   type WorkflowNode,
 } from '@interlock/core';
@@ -62,8 +63,7 @@ export function SettingsDialog({
   description,
   definition,
   workflows,
-  prompts = [],
-  promptsRead,
+  workflowsRead,
   onClose,
   onApply,
   onBoardSaved,
@@ -71,10 +71,12 @@ export function SettingsDialog({
   onCreateChild,
   onOpenWorkflow,
   workflowId,
+  workflowBoardId,
   canExport = true,
   returnFocusTo,
 }: Settings & {
   workflowId?: string;
+  workflowBoardId?: string;
   canExport?: boolean;
   returnFocusTo?: () => HTMLElement | null;
   onCreateChild?: (
@@ -87,9 +89,8 @@ export function SettingsDialog({
   creating?: boolean;
   parentBatchId?: string;
   parentParallel?: { parallelId: string; parallelBranchId: string };
-  workflows: Workflow[];
-  prompts?: import('@interlock/core').SavedPrompt[];
-  promptsRead?: WorkspaceRead;
+  workflows: WorkflowCatalogEntry[];
+  workflowsRead?: WorkspaceRead;
   onClose: () => void;
   onApply: (settings: Settings) => void;
   onBoardSaved?: (workflow: Workflow) => void;
@@ -98,8 +99,7 @@ export function SettingsDialog({
   const [settings, setSettings] = useState(() =>
     structuredClone({ name, description, definition }),
   );
-  const workflow = workflows.find((item) => item.id === workflowId);
-  const [originalBoardId] = useState(workflow?.boardId ?? null);
+  const [originalBoardId] = useState(workflowBoardId ?? null);
   const [boardId, setBoardId] = useState(originalBoardId);
   const [boards, setBoards] =
     useState<Awaited<ReturnType<typeof api.boards.list.query>>>();
@@ -117,7 +117,7 @@ export function SettingsDialog({
     };
   }, [workflowId]);
   const assignedBoard = boards?.find(
-    (board) => board.id === (node || creating ? workflow?.boardId : boardId),
+    (board) => board.id === (node || creating ? workflowBoardId : boardId),
   );
   const parallelGroup =
     parentParallel &&
@@ -157,7 +157,10 @@ export function SettingsDialog({
   const chooseType = (kind: string) => {
     if (!kind) return;
     if (nodeDraft && nodeType) variants.current[nodeType] = nodeDraft;
-    const reference = workflowTargets(workflows, workflowId)[0];
+    const reference =
+      !workflowsRead || workflowsRead.ready
+        ? workflowTargets(workflows, workflowId)[0]
+        : undefined;
     setNodeDraft(
       variants.current[kind] ??
         nodeSchema.parse({
@@ -479,8 +482,7 @@ export function SettingsDialog({
                   <NodeInspector
                     section={nodeSection}
                     onSectionChange={setNodeSection}
-                    prompts={prompts}
-                    promptsRead={promptsRead}
+                    workflowsRead={workflowsRead}
                     node={nodeDraft}
                     creating={creating}
                     workflowId={workflowId}

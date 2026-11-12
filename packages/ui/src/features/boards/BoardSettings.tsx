@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { Link, useNavigate, useOutletContext, useParams } from 'react-router';
+import { Link, useNavigate, useParams } from 'react-router';
 import { isConfirmedWriteRejection } from '../../lib/isConfirmedWriteRejection';
 import { ArrowDown, ArrowUp, Plus, X } from 'lucide-react';
 import { boardSettingsRevisionConflict } from '@interlock/core';
@@ -16,8 +16,10 @@ import {
   TextInput,
   workspacePage,
 } from '../../design-system';
-import type { AppContext } from '../../App';
-import { WorkspaceReadWarning } from '../../components/WorkspaceReads';
+import {
+  WorkspaceReadWarning,
+  workspaceRead,
+} from '../../components/WorkspaceReads';
 import { api, errorMessage } from '../../lib/api';
 import {
   refreshQueries,
@@ -90,7 +92,9 @@ function BoardSettings({ initial }: { initial?: Settings }) {
     selected.some((id) => !originalWorkflows.has(id));
   const { busy: saving, beginSave, finishSave } = useEditorDraft(dirty);
   const busy = saving || loadingLatest;
-  const { workflows, workflowsRead } = useOutletContext<AppContext>();
+  const catalog = useQuery(trpc.workflows.catalog.queryOptions());
+  const workflows = catalog.data ?? [];
+  const workflowsRead = workspaceRead('workflows', catalog);
   const boards = useQuery(trpc.boards.list.queryOptions());
   const client = useQueryClient();
   const navigate = useNavigate();
