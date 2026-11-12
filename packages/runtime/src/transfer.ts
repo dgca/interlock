@@ -759,7 +759,7 @@ export function importWorkflows(
     const boardSetup = options.boardSetup
       ? applyBoardImport(
           store,
-          previewBoardImport(store, bundle).suggestions,
+          previewBoardImport(store, bundle, false).suggestions,
           options.boardSetup,
         )
       : undefined;

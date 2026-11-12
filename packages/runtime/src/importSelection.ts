@@ -29,7 +29,11 @@ import {
 } from './boardImport.js';
 
 /** Validate each export independently, without changing the application database. */
-export function inspectImportDocument(data: unknown, destinationStore?: Store) {
+export function inspectImportDocument(
+  data: unknown,
+  destinationStore?: Store,
+  includeBoardCatalog = true,
+) {
   const document = parseImportDocument(data);
   const store = new Store(':memory:');
   const engine = new Engine(store, process.cwd());
@@ -81,6 +85,7 @@ export function inspectImportDocument(data: unknown, destinationStore?: Store) {
       const boardSetup = previewBoardImport(
         destinationStore ?? store,
         document.bundle,
+        includeBoardCatalog,
       );
       return {
         document,
@@ -369,7 +374,9 @@ export function importSelection(
     const setup = boardSetup
       ? applyBoardImport(
           engine.store,
-          bundle ? previewBoardImport(engine.store, bundle).suggestions : [],
+          bundle
+            ? previewBoardImport(engine.store, bundle, false).suggestions
+            : [],
           boardSetup,
         )
       : undefined;

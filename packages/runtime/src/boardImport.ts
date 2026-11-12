@@ -129,7 +129,15 @@ export function exportBoardSuggestion(
   }
 }
 
-export function previewBoardImport(store: Store, bundle: WorkflowBundle) {
+export function boardImportCatalog(store: Store) {
+  return store.list<WorkflowBoard>(boardCollection);
+}
+
+export function previewBoardImport(
+  store: Store,
+  bundle: WorkflowBundle,
+  includeBoardCatalog = true,
+) {
   const suggestions = new Map<string, SuggestedBoard>();
   const unresolved: UnresolvedStages[] = [];
   for (const workflow of bundle.workflows) {
@@ -171,7 +179,8 @@ export function previewBoardImport(store: Store, bundle: WorkflowBundle) {
   }
   return {
     suggestions: [...suggestions.values()],
-    boards: suggestions.size ? store.list<WorkflowBoard>(boardCollection) : [],
+    boards:
+      includeBoardCatalog && suggestions.size ? boardImportCatalog(store) : [],
     unresolved,
   };
 }
