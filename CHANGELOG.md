@@ -1,5 +1,22 @@
 # @type_of/interlock
 
+## 0.2.17
+
+### Patch Changes
+
+- f279bfc: Open Boards from their names and clear searches from the empty results view. Keep the last loaded collection results during a refresh, show when they may be stale, and retry the failed read.
+- 3ad482a: Open the run inspector from any run title and use separate links to review exact requests. Returning from inspection restores the source Runs view or Board, including filters and loaded pages.
+- e5e87e3: Use a full-page editor for custom integration configuration and protect Agent preset drafts during pending saves, conflict recovery, and navigation.
+- 0fc8750: Align Board, Automation, and Variable editor actions and conflict recovery. Guard navigation during pending Variable and Workflow writes, and keep acknowledged saves visible when related reads fail.
+- b1b2cfc: Refresh run details, automation lists, variable editors, and workflow pause status through the same query cache. Refresh again when an engine event arrives during a pending read, and keep the last loaded data available when a refresh fails. Config value reads include the saved value revision, so the editor can verify it before displaying the value.
+- a4c3d3d: Load Board pages through indexed run and event lookups. Select the requested cards before loading their details while preserving column totals, placement, and attention counts.
+- 9918bae: Keep Schedule input edits in place when the target workflow's input contract refreshes or needs a retry.
+- e7c6759: Reduce idle CPU and speed up run discovery when long-lived runs have large execution histories. Startup backs up existing databases before indexing current run and assignment state.
+- 4202a8d: Reduce background loading in Runs, Boards, Automations, and workspace editors. Workflow and prompt selectors load metadata, and variable searches keep results tied to the current search.
+- 67e688d: Give collection tables accessible column and row headers, with named links and independent row actions. Keep all columns available at narrow widths and expose workflow and run cards as lists.
+- f86a4c0: Keep large validation and preview requests on a shared transport policy across the client and server.
+- b8f1e11: Use the same long-form editor to create and edit saved prompts. Protect pending saves during navigation and offer to load the latest revision when another client changes the prompt.
+
 ## 0.2.16
 
 ### Patch Changes
