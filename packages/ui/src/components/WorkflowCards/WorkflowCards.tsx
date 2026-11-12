@@ -5,6 +5,7 @@ import { Link } from 'react-router';
 import { ChevronRight, GitBranch } from 'lucide-react';
 
 import classes from './WorkflowCards.module.css';
+import stretched from '../StretchedLink.module.css';
 
 type CardProps = {
   name: string;
@@ -72,7 +73,7 @@ export function WorkflowCard({
 
   return (
     <li
-      className={classes.card}
+      className={`${classes.card} ${stretched.container}`}
       data-highlighted={highlighted || undefined}
       data-disabled={disabled || undefined}
     >
@@ -80,13 +81,13 @@ export function WorkflowCard({
         <span className={classes.icon} aria-hidden="true">
           <GitBranch size={19} />
         </span>
-        <div className={classes.actions}>{actions}</div>
+        <div className={stretched.action}>{actions}</div>
       </div>
       <div className={classes.body}>
         <h2 ref={heading} tabIndex={-1}>
           {to !== undefined ? (
             <Link
-              className={classes.link}
+              className={`${classes.link} ${stretched.link}`}
               to={to}
               ref={(element) => {
                 navigation.current = element;
@@ -97,7 +98,7 @@ export function WorkflowCard({
           ) : (
             <button
               type="button"
-              className={classes.link}
+              className={`${classes.link} ${stretched.link}`}
               onClick={onOpen}
               disabled={disabled}
               ref={(element) => {
@@ -125,7 +126,7 @@ export function WorkflowCard({
             type="button"
             size="sm"
             ref={disclosure}
-            className={classes.disclosure}
+            className={`${classes.disclosure} ${stretched.action}`}
             aria-expanded={expanded}
             aria-controls={descriptionId}
             aria-label={`${expanded ? 'Show Less' : 'Show More'} about ${name}`}

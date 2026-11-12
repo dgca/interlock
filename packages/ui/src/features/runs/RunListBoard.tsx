@@ -1,5 +1,6 @@
 import { Anchor, Badge, Button, Text } from '../../design-system';
 import { StatusBadge } from '../../components/StatusBadge/StatusBadge';
+import stretched from '../../components/StretchedLink.module.css';
 import {
   WorkspaceReadWarning,
   type WorkspaceRead,
@@ -16,7 +17,7 @@ import {
   runReviewLink,
   type RunTab,
 } from './runAttention';
-import { runProjectionText } from './runProjectionText';
+import { runDisplayStatus, runProjectionText } from './runProjectionText';
 import classes from './RunList.module.css';
 import { runDisplayTitle } from '@interlock/core';
 
@@ -50,7 +51,7 @@ function RunCard({
       : undefined;
   return (
     <li
-      className={`run-row ${classes.runCard}`}
+      className={`run-row ${classes.runCard} ${stretched.container}`}
       data-attention={!!review || undefined}
     >
       <span className={classes.cardBody}>
@@ -61,28 +62,20 @@ function RunCard({
           <span>v{run.version}</span>
         </span>
         <strong className={classes.cardTitle}>
-          <Anchor component={Link} to={runHref(run.id)} underline="hover">
+          <Link className={stretched.link} to={runHref(run.id)}>
             {runDisplayTitle(run)}
-          </Anchor>
+          </Link>
         </strong>
         {(run.title || run.externalTask?.title) && (
           <span className={classes.cardNote}>{run.workflowName}</span>
         )}
         <span className={classes.cardStatuses}>
-          {attention ? (
-            attention.reasons.map((reason) => (
-              <Badge
-                key={reason}
-                component="span"
-                color="yellow"
-                variant="light"
-              >
-                {attentionText({ ...attention, reasons: [reason] })}
-              </Badge>
-            ))
-          ) : (
-            <StatusBadge status={run.status} />
-          )}
+          <StatusBadge status={runDisplayStatus(run)} />
+          {attention?.reasons.map((reason) => (
+            <Badge key={reason} component="span" color="yellow" variant="light">
+              {attentionText({ ...attention, reasons: [reason] })}
+            </Badge>
+          ))}
         </span>
         {reason && <span className={classes.cardReason}>{reason}</span>}
         <ComparisonContext comparison={run.comparison} />
@@ -121,7 +114,7 @@ function RunCard({
         <Anchor
           component={Link}
           to={review.href}
-          className={classes.cardAction}
+          className={`${classes.cardAction} ${stretched.action}`}
         >
           {review.label}
           <ArrowUpRight size={16} aria-hidden="true" />

@@ -63,13 +63,15 @@ The shared `runs.attention` API supplies run IDs, reason categories and target e
 
 Run pages show at most 100 rows. Schedule alert pages show 20 items and refresh their current offset after engine events; a vanished last page clamps to the last available page. Workflow scope changes reset schedule paging. Run tab/filter and run page persist in the URL, and run inspection retains that return destination. Schedule links open inspection using the stable trigger ID. Counts include all matching run and schedule items, independently of which page is visible.
 
-Run titles in Runs and Boards link to the inspector. Separate attention actions name what the user can do, including **Review request**, **Review recovery**, **Choose a model**, and **Resolve stall**. Request links target one request. **Switch request** lists other exact requests for that run. Inspector review actions select managed assignments or open the Human input request. Multiple items use a menu. Attention in an owned child belongs to the parent run. Detached runs retain their own attention state.
+The run title links to the inspector across the full Runs row or card. The link outlines the row or card on hover and keyboard focus. Request and external task links have their own targets. Separate attention actions name what the user can do, including **Review request**, **Review recovery**, **Choose a model**, and **Resolve stall**. Request links target one request. **Switch request** lists other exact requests for that run. Inspector review actions select managed assignments or open the Human input request. Multiple items use a menu. Attention in an owned child belongs to the parent run. Detached runs retain their own attention state.
 
 The selected step appears beside the graph on wide screens and before the graph on narrow screens. On narrow screens, selecting a graph node or timeline row moves focus to the details. Assignment actions precede the prompt and context disclosure. A manual result remains in the inspector while its claim is active, including when another step is selected.
 
 Narrow run inspection scrolls as one page so a long handoff or action header does not leave the graph and details in a small trapped pane. Wide inspection retains separate overview and detail scrolling. Shared headers keep room for their title and wrap actions when needed; icon-only Back actions use the standard 40px action control.
 
-An agent waiting for a human response is **Waiting for your response**, even while its ownership claim remains active. Interrupted managed work is **Recovery needed**. These are presentation labels; they do not change execution or claim state.
+Runs List, Overview, Boards, and the inspector derive the displayed status from the shared run projection. Claimed Agent work shows **Running** when it can proceed, including when another Parallel path waits for an agent. Unclaimed work, holds, and Human input show **Waiting** with their own reasons. An agent waiting for a human response is **Waiting for your response**, even while its ownership claim remains active. Interrupted managed work is **Recovery needed**. These labels are for display only.
+
+When every node in a published graph has the default origin position, the run inspector uses Tidy to display the graph. The layout is local to the inspector view.
 
 ## Approval requests
 

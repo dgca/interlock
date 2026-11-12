@@ -1,0 +1,40 @@
+.container {
+  position: relative;
+  isolation: isolate;
+}
+
+.link {
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.link::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--stretched-link-radius, 0);
+  z-index: 1;
+}
+
+.link:hover::after {
+  box-shadow: inset 0 0 0 1px var(--stretched-link-hover, transparent);
+}
+
+.link:focus-visible {
+  outline: none;
+}
+
+.link:focus-visible::after {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.link:disabled {
+  cursor: default;
+}
+
+.action {
+  position: relative;
+  z-index: 2;
+}

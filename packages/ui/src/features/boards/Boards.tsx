@@ -29,6 +29,7 @@ import {
 } from '../../design-system';
 import { ExternalTaskLink } from '../../components/ExternalTaskLink';
 import { StatusBadge } from '../../components/StatusBadge/StatusBadge';
+import stretched from '../../components/StretchedLink.module.css';
 import {
   WorkspaceReadWarning,
   workspaceRead,
@@ -37,7 +38,10 @@ import { paths, runOffset } from '../../routes/paths';
 import { requestActionLabel } from '../runs/runAttention';
 import type { api } from '../../lib/api';
 import { trpc, useQuery } from '../../lib/query';
-import { runProjectionLabels } from '../runs/runProjectionText';
+import {
+  runDisplayStatus,
+  runProjectionLabels,
+} from '../runs/runProjectionText';
 import { parseRequestTarget, RequestView } from './RequestView';
 import { BoardRowsSkeleton, BoardColumnsSkeleton } from './BoardSkeleton';
 import classes from './Boards.module.css';
@@ -508,22 +512,24 @@ function BoardCard({
     card.status === 'failed' ||
     card.status === 'completed' ||
     card.status === 'cancelled';
+  const projection = runProjectionLabels(card);
   const reason =
     card.requestSummary ||
     (card.status === 'failed' ? card.error?.split('\n')[0] : undefined) ||
     card.waiting?.detail.message ||
-    runProjectionLabels(card).waiting ||
+    projection.waiting ||
+    projection.activity ||
     (!terminal ? card.activity : undefined);
   const boardUrl = paths.board(boardId) + (search.size ? `?${search}` : '');
   const runLink = paths.run(card.runId, { returnTo: boardUrl });
   const requestSearch = card.request ? new URLSearchParams(search) : undefined;
   requestSearch?.set('request', JSON.stringify(card.request));
   return (
-    <li className={classes.card}>
+    <li className={`${classes.card} ${stretched.container}`}>
       <h3>
-        <Anchor component={Link} to={runLink} underline="hover">
+        <Link className={stretched.link} to={runLink}>
           {title}
-        </Anchor>
+        </Link>
       </h3>
       {(card.title || card.externalTask?.title) && (
         <Text c="dimmed" size="sm">
@@ -531,7 +537,7 @@ function BoardCard({
         </Text>
       )}
       <Group gap="xs" mt={5}>
-        {terminal && <StatusBadge status={card.status} />}
+        <StatusBadge status={runDisplayStatus(card)} />
         {!!card.attentionCount && (
           <Badge color="yellow" variant="light">
             Needs attention · {card.attentionCount}
@@ -544,6 +550,7 @@ function BoardCard({
           <Anchor
             component={Link}
             to={{ search: `?${requestSearch}` }}
+            className={stretched.action}
             preventScrollReset
             onClick={(event) => {
               if (
@@ -562,7 +569,11 @@ function BoardCard({
             <ArrowUpRight size={14} aria-hidden="true" />
           </Anchor>
         )}
-        <ExternalTaskLink task={card.externalTask} withArrow />
+        <ExternalTaskLink
+          task={card.externalTask}
+          withArrow
+          className={stretched.action}
+        />
       </Group>
     </li>
   );

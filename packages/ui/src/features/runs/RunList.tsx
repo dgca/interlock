@@ -14,6 +14,7 @@ import {
 } from '../../design-system';
 
 import { ListTable, ListTableRow } from '../../components/ListTable/ListTable';
+import stretched from '../../components/StretchedLink.module.css';
 import {
   WorkspaceReadWarning,
   workspaceRead,
@@ -29,7 +30,7 @@ import {
   runReviewLink,
   type RunTab,
 } from './runAttention';
-import { runProjectionText } from './runProjectionText';
+import { runDisplayStatus, runProjectionText } from './runProjectionText';
 
 import { useId, useRef, useState, type MouseEventHandler } from 'react';
 import { Link } from 'react-router';
@@ -252,17 +253,17 @@ export function RunList({
           {page.items.map((r) => {
             const started = new Date(r.createdAt);
             const review = runReviewLink(r, runHref, returnTo);
+            const status = runDisplayStatus(r);
             return (
-              <ListTableRow className="run-row" key={r.id}>
+              <ListTableRow
+                className={`run-row ${classes.runRow} ${stretched.container}`}
+                key={r.id}
+              >
                 <span className={classes.identity}>
                   <strong>
-                    <Anchor
-                      component={Link}
-                      to={runHref(r.id)}
-                      underline="hover"
-                    >
+                    <Link className={stretched.link} to={runHref(r.id)}>
                       {runDisplayTitle(r)}
-                    </Anchor>
+                    </Link>
                   </strong>
                   {(r.title || r.externalTask?.title) && (
                     <small>{r.workflowName}</small>
@@ -280,8 +281,8 @@ export function RunList({
                   )}
                 </span>
                 <span className={classes.status}>
-                  <span className={classes.state} data-status={r.status}>
-                    {r.status}
+                  <span className={classes.state} data-status={status}>
+                    {status}
                   </span>
                   {r.actor ? (
                     <small className={classes.reason}>
@@ -304,7 +305,12 @@ export function RunList({
                       </small>
                     )}
                   {review && (
-                    <Anchor component={Link} to={review.href} size="sm">
+                    <Anchor
+                      component={Link}
+                      to={review.href}
+                      size="sm"
+                      className={stretched.action}
+                    >
                       {review.label}
                     </Anchor>
                   )}

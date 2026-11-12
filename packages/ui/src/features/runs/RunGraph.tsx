@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Background, Controls, ReactFlow } from '@xyflow/react';
 import type { WorkflowDefinition } from '@interlock/core';
+import { tidyWorkflow } from '@interlock/core/layout';
 import { FlowNode } from '../workflows/FlowNode';
 import { RestoreHandleBounds } from '../workflows/RestoreHandleBounds';
 import { LoopEdge } from '../workflows/LoopEdge';
@@ -26,8 +27,18 @@ export function RunGraph({
 }) {
   const [hovered, setHovered] = useState<string>();
   const boxZoom = useBoxZoom(true);
+  const graphDefinition = useMemo(
+    () =>
+      definition.nodes.length > 1 &&
+      definition.nodes.every(
+        ({ position }) => position.x === 0 && position.y === 0,
+      )
+        ? tidyWorkflow(definition)
+        : definition,
+    [definition],
+  );
   const graph = useMemo(() => {
-    const graph = canvasGraph(definition, { selected, hovered });
+    const graph = canvasGraph(graphDefinition, { selected, hovered });
     return {
       ...graph,
       nodes: graph.nodes.map((node) => ({
@@ -38,7 +49,7 @@ export function RunGraph({
         data: { ...node.data, progress: progress[node.id] },
       })),
     };
-  }, [definition, progress, selected, hovered]);
+  }, [graphDefinition, progress, selected, hovered]);
   return (
     <div
       ref={boxZoom.containerRef}

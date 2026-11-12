@@ -5,6 +5,17 @@
   min-height: 0;
   min-width: 0;
 }
+.runRow,
+.runCard {
+  --stretched-link-hover: var(--accent-border);
+}
+.runRow:last-child {
+  --stretched-link-radius: 0 0 calc(var(--radius-card) - 1px)
+    calc(var(--radius-card) - 1px);
+}
+.runRow .identity strong {
+  color: var(--text);
+}
 .identity,
 .status,
 .started {
@@ -110,6 +121,7 @@
   background: var(--mantine-color-green-3);
 }
 .runCard {
+  --stretched-link-radius: var(--radius-card);
   width: 100%;
   padding: 0;
   border: 1px solid transparent;
@@ -120,9 +132,6 @@
   font: inherit;
   text-align: left;
   overflow: hidden;
-}
-.runCard:hover:not([data-loading]) {
-  border-color: var(--border-strong);
 }
 .runCard[data-attention] {
   border-color: var(--border-strong);

@@ -363,6 +363,14 @@ it('shows setup guidance for missing Pi and links directly to the custom integra
   ).toContain('Add integration');
   expect(rpc.manage).not.toHaveBeenCalled();
 });
+function discardHarnessChanges() {
+  const dialog = document.querySelector('[role="dialog"]')!;
+  const discard = [...dialog.querySelectorAll('button')].find(
+    (item) => item.textContent === 'Discard changes',
+  )!;
+  discard.click();
+}
+
 it('preserves open configuration edits across refresh and reloads only on explicit recovery', async () => {
   const original = harnessProfile();
   rpc.profiles.mockResolvedValue([original]);
@@ -390,6 +398,8 @@ it('preserves open configuration edits across refresh and reloads only on explic
   expect(container.textContent).toContain('Harness configuration changed');
   expect(input.value).toBe('/unsaved');
   await act(async () => button('Reload defaults').click());
+  expect(input.value).toBe('/unsaved');
+  await act(async () => discardHarnessChanges());
   expect(input.value).toBe('/updated');
   expect(button('Save defaults').disabled).toBe(true);
 });
@@ -515,9 +525,10 @@ it('locks a pending save and preserves model, paths, capabilities and permission
       skills: ['review'],
     },
   });
-  const updated = { ...original, cwd: '/renamed', revision: 1 };
-  rpc.profiles.mockResolvedValue([updated]);
-  await act(async () => resolve(updated));
+  const { detection, ...profile } = original;
+  const saved = { ...profile, cwd: '/renamed', revision: 1 };
+  rpc.profiles.mockResolvedValue([{ ...saved, detection }]);
+  await act(async () => resolve(saved));
   expect(button('Edit defaults')).toBeDefined();
   await act(async () => button('Edit defaults').click());
   await act(async () =>
@@ -529,6 +540,7 @@ it('locks a pending save and preserves model, paths, capabilities and permission
     ),
   );
   await act(async () => button('Close defaults').click());
+  await act(async () => discardHarnessChanges());
   expect(document.activeElement).toBe(button('Edit defaults'));
   await act(async () => button('Edit defaults').click());
   expect(

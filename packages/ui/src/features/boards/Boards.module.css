@@ -58,7 +58,8 @@
   list-style: none;
 }
 .card {
-  position: relative;
+  --stretched-link-hover: var(--accent-border);
+  --stretched-link-radius: 12px;
   background: var(--gradient-card);
   box-shadow: var(--shadow-card);
   border-radius: 12px;
