@@ -9,17 +9,17 @@ import {
 
 import {
   ListTableSkeleton,
-  type ListTableColumn,
+  type ListTableLayout,
 } from '../../components/ListTable/ListTable';
 
-import styles from './Prompts.module.css';
-
-export const promptColumns: readonly ListTableColumn[] = [
-  { label: 'Name', width: 'minmax(0, 1fr)' },
-  { label: 'Revision', width: '110px', compactWidth: '100px' },
-  { label: 'Updated', width: '110px', compactWidth: '95px' },
-  { label: '', width: '16px' },
-];
+export const promptTable: ListTableLayout = {
+  minWidth: 288,
+  columns: [
+    { label: 'Name' },
+    { label: 'Revision', width: '110px', compactWidth: '70px' },
+    { label: 'Updated', width: '110px', compactWidth: '78px' },
+  ],
+};
 
 export function PromptLibrarySkeleton() {
   return (
@@ -35,18 +35,13 @@ export function PromptLibrarySkeleton() {
         actions={<Placeholder h={40} w={134} />}
       />
       <div className={workspacePage.content}>
-        <ListTableSkeleton
-          columns={promptColumns}
-          label="Loading prompts…"
-          rowClassName={styles.listRow}
-        >
+        <ListTableSkeleton {...promptTable} label="Loading prompts…">
           <Stack gap={7}>
             <Placeholder h={13} w="55%" />
             <Placeholder h={10} w="80%" />
           </Stack>
           <Placeholder h={12} w={70} />
-          <Placeholder className={styles.updated} h={12} w={70} />
-          <Placeholder className={styles.rowArrow} h={14} w={8} />
+          <Placeholder h={12} w={70} />
         </ListTableSkeleton>
       </div>
     </section>

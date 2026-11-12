@@ -55,6 +55,13 @@
     justify-content: flex-start;
   }
 }
+.cards {
+  display: grid;
+  gap: var(--mantine-spacing-xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
 .card {
   position: relative;
   background: var(--gradient-card);

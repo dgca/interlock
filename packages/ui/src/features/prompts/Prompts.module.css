@@ -25,9 +25,3 @@
   padding: 16px 0;
   border-top: 1px solid var(--border);
 }
-@media (max-width: 900px) {
-  .listRow > .updated,
-  .listRow > .rowArrow {
-    display: none;
-  }
-}

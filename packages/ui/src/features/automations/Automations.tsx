@@ -1,5 +1,6 @@
 import {
   Alert,
+  Anchor,
   Button,
   Loader,
   Select,
@@ -24,7 +25,6 @@ import {
 import {
   ArrowRight,
   CalendarClock,
-  ChevronRight,
   Search,
   Timer,
   Workflow as WorkflowIcon,
@@ -41,7 +41,7 @@ import {
   AutomationRowsSkeleton,
 } from './AutomationListSkeleton';
 import {
-  automationColumns,
+  automationTable,
   automationStatus,
   eventLabels,
   listHref,
@@ -248,7 +248,7 @@ function AutomationList() {
           !error && <AutomationRowsSkeleton />
         ) : page.items.length ? (
           <>
-            <ListTable columns={automationColumns}>
+            <ListTable {...automationTable} label="Automations">
               {page.items.map((trigger) => {
                 const state = automationStatus(trigger);
                 const sourceId =
@@ -268,16 +268,20 @@ function AutomationList() {
                     : `${source} · ${trigger.events.map((event) => eventLabels[event].toLowerCase()).join(', ')}`;
                 const latest = trigger.lastActivity;
                 return (
-                  <ListTableRow
-                    className={classes.listRow}
-                    key={trigger.id}
-                    to={
-                      paths.automation(trigger.id) +
-                      (from ? `?from=${encodeURIComponent(from)}` : '')
-                    }
-                  >
+                  <ListTableRow key={trigger.id}>
                     <span className={classes.identity}>
-                      <strong>{trigger.name}</strong>
+                      <strong>
+                        <Anchor
+                          component={Link}
+                          to={
+                            paths.automation(trigger.id) +
+                            (from ? `?from=${encodeURIComponent(from)}` : '')
+                          }
+                          underline="hover"
+                        >
+                          {trigger.name}
+                        </Anchor>
+                      </strong>
                       <span className={classes.condition}>
                         {trigger.kind === 'schedule' ? (
                           <Timer size={14} />
@@ -309,7 +313,6 @@ function AutomationList() {
                               : 'Listening for events'}
                       </small>
                     </span>
-                    <ChevronRight size={16} />
                   </ListTableRow>
                 );
               })}

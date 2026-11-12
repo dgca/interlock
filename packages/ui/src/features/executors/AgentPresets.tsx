@@ -27,6 +27,7 @@ import {
   ListTable,
   ListTableRow,
   ListTableSkeleton,
+  type ListTableLayout,
 } from '../../components/ListTable/ListTable';
 import { api, errorMessage } from '../../lib/api';
 import { isConfirmedWriteRejection } from '../../lib/isConfirmedWriteRejection';
@@ -45,12 +46,15 @@ import {
 import { permissionLabels, permissionOptions } from './permissions';
 import styles from './AgentPresets.module.css';
 
-const columns = [
-  { label: 'Preset', width: 'minmax(150px, 1fr)' },
-  { label: 'Primary choice', width: 'minmax(180px, 1.5fr)' },
-  { label: 'Fallbacks', width: '100px' },
-  { label: '', width: '80px' },
-];
+const presetTable: ListTableLayout = {
+  minWidth: 340,
+  columns: [
+    { label: 'Preset', width: '31%', compactWidth: '27%' },
+    { label: 'Primary choice' },
+    { label: 'Fallbacks', width: '100px', compactWidth: '61px' },
+    { label: 'Actions', width: '80px', compactWidth: '65px' },
+  ],
+};
 
 function presetHarnessLabel(
   profile: Profile,
@@ -229,11 +233,7 @@ export function AgentPresets({
         )}
         {!page ? (
           !error && (
-            <ListTableSkeleton
-              columns={columns}
-
-              label="Loading agent presets…"
-            >
+            <ListTableSkeleton {...presetTable} label="Loading agent presets…">
               <span>—</span>
               <span>—</span>
               <span>—</span>
@@ -242,14 +242,14 @@ export function AgentPresets({
           )
         ) : page.items.length ? (
           <>
-            <ListTable columns={columns}>
+            <ListTable {...presetTable} label="Agent presets">
               {page.items.map((alias) => {
                 const first = alias.candidates[0];
                 const profile = profiles?.find(
                   (profile) => profile.id === first?.profileId,
                 );
                 return (
-                  <ListTableRow key={alias.id} className={styles.aliasRow}>
+                  <ListTableRow key={alias.id}>
                     <span className={styles.identity}>
                       <strong>{alias.name}</strong>
                       {alias.description && <span>{alias.description}</span>}
@@ -268,23 +268,15 @@ export function AgentPresets({
                           : ''}
                       </span>
                     </span>
-                    <span>
-                      {Math.max(0, alias.candidates.length - 1)}
-                      <span className={styles.compactLabel}>
-                        {' '}
-                        fallback{alias.candidates.length === 2 ? '' : 's'}
-                      </span>
-                    </span>
-                    <span className={styles.rowActions}>
-                      <Button
-                        variant="ghost"
-                        disabled={opening || editing !== undefined}
-                        onClick={() => void open(alias.id)}
-                        aria-label={`Edit preset ${alias.name}`}
-                      >
-                        Edit
-                      </Button>
-                    </span>
+                    <span>{Math.max(0, alias.candidates.length - 1)}</span>
+                    <Button
+                      variant="ghost"
+                      disabled={opening || editing !== undefined}
+                      onClick={() => void open(alias.id)}
+                      aria-label={`Edit preset ${alias.name}`}
+                    >
+                      Edit
+                    </Button>
                   </ListTableRow>
                 );
               })}

@@ -13,9 +13,6 @@
   width: 210px;
   max-width: 100%;
 }
-.listRow {
-  color: var(--text);
-}
 .choice:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
@@ -321,14 +318,6 @@
     border-left: 0;
     border-top: 1px solid var(--border);
     overflow: visible;
-  }
-  .listRow > :nth-child(2),
-  .listRow > :nth-child(4) {
-    grid-column: 1;
-  }
-  .listRow > :nth-child(3) {
-    grid-column: 2;
-    grid-row: 1;
   }
 }
 @media (max-width: 600px) {

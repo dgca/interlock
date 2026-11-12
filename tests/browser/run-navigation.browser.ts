@@ -104,6 +104,7 @@ it.each([1440, 900, 390])(
       await expect.poll(() => titles.count()).toBe(31);
       const sourceBoard = address(page);
       const title = titles.last();
+      expect(await columns.getByRole('listitem').count()).toBe(31);
       const runTitle = (await title.textContent())!.trim();
       const href = new URL((await title.getAttribute('href'))!, app.url);
       expect(href.searchParams.get('returnTo')).toBe(sourceBoard);
@@ -157,7 +158,7 @@ it.each([1440, 900, 390])(
       await inspector.close();
 
       const review = title
-        .locator('xpath=ancestor::article')
+        .locator('xpath=ancestor::li')
         .getByRole('link', { name: 'Review request' });
       const request = await openInNewTab(page, review);
       await request.getByRole('button', { name: 'Switch request' }).click();
@@ -210,6 +211,30 @@ it.each([1440, 900, 390])(
           : paths.workflowRuns(workflow.id, 'attention', 0, tags);
       await page.goto(app.url + sourceRuns);
       const runLink = page.getByRole('link', { name: runTitle, exact: true });
+      if (width === 900) {
+        const attention = page.getByRole('region', {
+          name: 'Needs attention',
+          exact: true,
+        });
+        await attention
+          .getByRole('list')
+          .getByRole('listitem')
+          .filter({ has: runLink })
+          .waitFor();
+      } else {
+        const table = page.getByRole('table', { name: 'Runs' });
+        await table.getByRole('rowheader').filter({ has: runLink }).waitFor();
+        expect(await table.getByRole('columnheader').allTextContents()).toEqual(
+          ['Run', 'Status', 'Started', 'Steps'],
+        );
+        await runLink.focus();
+        await page.keyboard.press('Tab');
+        const focused = page.locator(':focus');
+        expect(await focused.textContent()).toBe('Review request');
+        expect(
+          await focused.evaluate((element) => element.closest('td')?.cellIndex),
+        ).toBe(1);
+      }
       const runTab = await openInNewTab(page, runLink);
       await runTab
         .getByRole('heading', { name: runTitle, exact: true })

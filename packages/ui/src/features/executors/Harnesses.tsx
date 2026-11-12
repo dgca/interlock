@@ -28,7 +28,7 @@ import { api, errorMessage } from '../../lib/api';
 import { trpc, useQuery } from '../../lib/query';
 
 import { ListTable, ListTableRow } from '../../components/ListTable/ListTable';
-import { HarnessRowsSkeleton, harnessColumns } from './HarnessListSkeleton';
+import { HarnessRowsSkeleton, harnessTable } from './HarnessListSkeleton';
 import styles from './Harnesses.module.css';
 import { permissionOptions, permissionDescriptions } from './permissions';
 import { ModelSettings } from './ModelSettings';
@@ -179,7 +179,7 @@ export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
             {!profiles ? (
               !error && <HarnessRowsSkeleton />
             ) : (
-              <ListTable columns={harnessColumns}>
+              <ListTable {...harnessTable} label="Harnesses">
                 {profiles
                   .filter(isPrimaryHarness)
                   .sort(
@@ -246,7 +246,8 @@ function ProfileRow({
   refresh: () => Promise<Profile[] | undefined>;
 }) {
   const editorId = useId();
-  const row = useRef<HTMLElement>(null);
+  const headerId = `${editorId}-harness`;
+  const defaultsTrigger = useRef<HTMLButtonElement>(null);
   const wasOpen = useRef(false);
   const [open, setOpen] = useState(false),
     [draft, setDraft] = useState<ExecutorProfile>(() => configuration(profile)),
@@ -256,10 +257,7 @@ function ProfileRow({
     [busy, setBusy] = useState(false),
     [error, setError] = useState('');
   useEffect(() => {
-    if (wasOpen.current && !open)
-      row.current
-        ?.querySelector<HTMLButtonElement>('button[aria-expanded]')
-        ?.focus();
+    if (wasOpen.current && !open) defaultsTrigger.current?.focus();
     wasOpen.current = open;
   }, [open]);
   const changed =
@@ -316,8 +314,8 @@ function ProfileRow({
   const label = harnessLabel(profile);
   const detected = profile.detection.status === 'detected';
   return (
-    <section ref={row} aria-label={label}>
-      <ListTableRow className={styles.rowHeading}>
+    <>
+      <ListTableRow headerId={headerId}>
         <div className={styles.profileIdentity}>
           {profile.harness === 'custom' ? (
             <Cpu size={21} className={styles.customIcon} />
@@ -325,7 +323,7 @@ function ProfileRow({
             <Terminal size={21} className={styles.icon} />
           )}
           <div className={styles.identity}>
-            <h2>{label}</h2>
+            <strong>{label}</strong>
             <p>
               {profile.harness === 'custom'
                 ? `Custom integration · ${profile.mode === 'launcher' ? 'Delegated launcher' : 'Direct turn'}${profile.transport === 'http' ? ' over HTTP' : ' over subprocess'}`
@@ -344,7 +342,7 @@ function ProfileRow({
                 : 'Unavailable'}
           </Badge>
         </span>
-        <span className={styles.enabledControl}>
+        <span>
           {detected ? (
             <Switch
               checked={profile.enabled}
@@ -364,10 +362,11 @@ function ProfileRow({
             </span>
           )}
         </span>
-        <span className={styles.configureControl}>
+        <span>
           <Button
             variant="ghost"
             id={integrationReturnFocusId(profile.id)}
+            ref={defaultsTrigger}
             aria-expanded={open}
             aria-controls={open ? editorId : undefined}
             aria-label={`${open ? 'Close defaults for' : 'Edit defaults for'} ${label}`}
@@ -386,178 +385,218 @@ function ProfileRow({
           </Button>
         </span>
       </ListTableRow>
-      {!detected && (
-        <p className={styles.guidance}>
-          {profile.detection.message}{' '}
-          <a
-            href={harnessSetup[profile.harness]}
-            target="_blank"
-            rel="noreferrer"
-          >
-            Setup instructions
-          </a>
-        </p>
-      )}
-      {error && !open && (
-        <ActionError message={error} className={styles.error} />
-      )}
-      {open && (
-        <form
-          id={editorId}
-          className={styles.configuration}
-          onSubmit={(e) => {
-            e.preventDefault();
-            void save(draft);
-          }}
-        >
-          <div className={styles.defaultsFields}>
-            <ModelSettings
-              compact
-              disabled={busy}
-              label="Default model"
-              defaultLabel="Use CLI default"
-              profileId={profile.id}
-              paths={{ command: draft.command, cwd: draft.cwd }}
-              model={draft.model}
-              effort={draft.effort}
-              effortDefaultLabel="Use native default"
-              canResetEffort={false}
-              alwaysShowEffort
-              onModelChange={(model) => setDraft({ ...draft, model })}
-              onEffortChange={(effort) => setDraft({ ...draft, effort })}
-            />
-            <NativeSelect
-              label="Default permissions"
-              disabled={busy}
-              inputWrapperOrder={['label', 'input', 'description', 'error']}
-              description={
-                draft.harness === 'custom'
-                  ? 'Interlock sends this mode to the integration. The integration is responsible for enforcing it.'
-                  : draft.harness === 'pi' && draft.permissions === 'standard'
-                    ? 'Allow read tools; ask before commands, file changes, and other tools.'
-                    : permissionDescriptions[draft.permissions]
-              }
-              value={draft.permissions}
-              onChange={(e) =>
-                setDraft({
-                  ...draft,
-                  permissions: e.currentTarget
-                    .value as ExecutorProfile['permissions'],
-                })
-              }
-              data={permissionOptions}
-            />
-          </div>
-          {draft.harness !== 'custom' && draft.permissions === 'read-only' && (
-            <p className={styles.note}>
-              Read-only restrictions do not sandbox project startup hooks.
-            </p>
-          )}
-          {draft.harness === 'custom' ? (
-            busy || changed ? (
-              <Button mt="md" disabled>
-                Edit integration
-              </Button>
-            ) : (
-              <Button
-                mt="md"
-                component={Link}
-                to={paths.integration(profile.id)}
-              >
-                Edit integration
-              </Button>
-            )
-          ) : (
-            <details className={styles.advanced}>
-              <summary>Advanced settings</summary>
-              <div className={styles.fields}>
-                <TextInput
-                  label="Working directory"
-                  description="The folder this agent starts in. Leave blank to use Interlock’s working directory."
-                  inputWrapperOrder={['label', 'input', 'description', 'error']}
-                  placeholder="Use Interlock’s working directory"
-                  disabled={busy}
-                  maxLength={4096}
-                  value={draft.cwd ?? ''}
-                  onChange={(e) =>
-                    setDraft({
-                      ...draft,
-                      cwd: e.currentTarget.value || undefined,
-                    })
-                  }
-                />
-
-                <NumberInput
-                  label="Concurrent assignments"
-                  description="Leave blank for no profile limit. The shared limit still applies."
-                  inputWrapperOrder={['label', 'input', 'description', 'error']}
-                  min={1}
-                  max={Number.MAX_SAFE_INTEGER}
-                  allowDecimal={false}
-                  value={draft.concurrency ?? ''}
-                  onChange={(value) =>
-                    setDraft({
-                      ...draft,
-                      concurrency: value === '' ? undefined : Number(value),
-                    })
-                  }
-                />
-
-                <TextInput
-                  label="Executable path"
-                  disabled={busy}
-                  maxLength={4096}
-                  description={
-                    profile.detection.version
-                      ? `Detected version: ${profile.detection.version}`
-                      : 'Leave blank to find the harness on PATH.'
-                  }
-                  inputWrapperOrder={['label', 'input', 'description', 'error']}
-                  placeholder={
-                    profile.detection.command ?? 'Auto-detect from PATH'
-                  }
-                  value={draft.command ?? ''}
-                  onChange={(e) =>
-                    setDraft({
-                      ...draft,
-                      command: e.currentTarget.value || undefined,
-                    })
-                  }
-                />
-                <TextInput
-                  label="Configuration ID"
-                  description="Stable reference used by workflows and MCP."
-                  inputWrapperOrder={['label', 'input', 'description', 'error']}
-                  value={profile.id}
-                  readOnly
-                />
-              </div>
-            </details>
-          )}
-          {error && (
-            <div className={styles.errorRow}>
-              <p role="alert" className={styles.error}>
-                {error}
+      {(!detected || error || open) && (
+        <ListTableRow colSpan={harnessTable.columns.length} headerId={headerId}>
+          <div className={styles.detailContent}>
+            {!detected && (
+              <p className={styles.guidance}>
+                {profile.detection.message}{' '}
+                <a
+                  href={harnessSetup[profile.harness]}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Setup instructions
+                </a>
               </p>
-              <Button
-                variant="ghost"
-                disabled={busy}
-                onClick={() => void reload()}
+            )}
+            {error && !open && (
+              <ActionError message={error} className={styles.error} />
+            )}
+            {open && (
+              <form
+                id={editorId}
+                aria-label={`${label} defaults`}
+                className={styles.configuration}
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void save(draft);
+                }}
               >
-                Reload defaults
-              </Button>
-            </div>
-          )}
-          <div className={styles.formActions}>
-            <Button disabled={busy} onClick={cancel}>
-              Cancel
-            </Button>
-            <Button type="submit" variant="primary" disabled={busy || !changed}>
-              {busy ? 'Saving…' : 'Save defaults'}
-            </Button>
+                <div className={styles.defaultsFields}>
+                  <ModelSettings
+                    compact
+                    disabled={busy}
+                    label="Default model"
+                    defaultLabel="Use CLI default"
+                    profileId={profile.id}
+                    paths={{ command: draft.command, cwd: draft.cwd }}
+                    model={draft.model}
+                    effort={draft.effort}
+                    effortDefaultLabel="Use native default"
+                    canResetEffort={false}
+                    alwaysShowEffort
+                    onModelChange={(model) => setDraft({ ...draft, model })}
+                    onEffortChange={(effort) => setDraft({ ...draft, effort })}
+                  />
+                  <NativeSelect
+                    label="Default permissions"
+                    disabled={busy}
+                    inputWrapperOrder={[
+                      'label',
+                      'input',
+                      'description',
+                      'error',
+                    ]}
+                    description={
+                      draft.harness === 'custom'
+                        ? 'Interlock sends this mode to the integration. The integration is responsible for enforcing it.'
+                        : draft.harness === 'pi' &&
+                            draft.permissions === 'standard'
+                          ? 'Allow read tools; ask before commands, file changes, and other tools.'
+                          : permissionDescriptions[draft.permissions]
+                    }
+                    value={draft.permissions}
+                    onChange={(e) =>
+                      setDraft({
+                        ...draft,
+                        permissions: e.currentTarget
+                          .value as ExecutorProfile['permissions'],
+                      })
+                    }
+                    data={permissionOptions}
+                  />
+                </div>
+                {draft.harness !== 'custom' &&
+                  draft.permissions === 'read-only' && (
+                    <p className={styles.note}>
+                      Read-only restrictions do not sandbox project startup
+                      hooks.
+                    </p>
+                  )}
+                {draft.harness === 'custom' ? (
+                  busy || changed ? (
+                    <Button mt="md" disabled>
+                      Edit integration
+                    </Button>
+                  ) : (
+                    <Button
+                      mt="md"
+                      component={Link}
+                      to={paths.integration(profile.id)}
+                    >
+                      Edit integration
+                    </Button>
+                  )
+                ) : (
+                  <details className={styles.advanced}>
+                    <summary>Advanced settings</summary>
+                    <div className={styles.fields}>
+                      <TextInput
+                        label="Working directory"
+                        description="The folder this agent starts in. Leave blank to use Interlock’s working directory."
+                        inputWrapperOrder={[
+                          'label',
+                          'input',
+                          'description',
+                          'error',
+                        ]}
+                        placeholder="Use Interlock’s working directory"
+                        disabled={busy}
+                        maxLength={4096}
+                        value={draft.cwd ?? ''}
+                        onChange={(e) =>
+                          setDraft({
+                            ...draft,
+                            cwd: e.currentTarget.value || undefined,
+                          })
+                        }
+                      />
+
+                      <NumberInput
+                        label="Concurrent assignments"
+                        description="Leave blank for no profile limit. The shared limit still applies."
+                        inputWrapperOrder={[
+                          'label',
+                          'input',
+                          'description',
+                          'error',
+                        ]}
+                        min={1}
+                        max={Number.MAX_SAFE_INTEGER}
+                        allowDecimal={false}
+                        value={draft.concurrency ?? ''}
+                        onChange={(value) =>
+                          setDraft({
+                            ...draft,
+                            concurrency:
+                              value === '' ? undefined : Number(value),
+                          })
+                        }
+                      />
+
+                      <TextInput
+                        label="Executable path"
+                        disabled={busy}
+                        maxLength={4096}
+                        description={
+                          profile.detection.version
+                            ? `Detected version: ${profile.detection.version}`
+                            : 'Leave blank to find the harness on PATH.'
+                        }
+                        inputWrapperOrder={[
+                          'label',
+                          'input',
+                          'description',
+                          'error',
+                        ]}
+                        placeholder={
+                          profile.detection.command ?? 'Auto-detect from PATH'
+                        }
+                        value={draft.command ?? ''}
+                        onChange={(e) =>
+                          setDraft({
+                            ...draft,
+                            command: e.currentTarget.value || undefined,
+                          })
+                        }
+                      />
+                      <TextInput
+                        label="Configuration ID"
+                        description="Stable reference used by workflows and MCP."
+                        inputWrapperOrder={[
+                          'label',
+                          'input',
+                          'description',
+                          'error',
+                        ]}
+                        value={profile.id}
+                        readOnly
+                      />
+                    </div>
+                  </details>
+                )}
+                {error && (
+                  <div className={styles.errorRow}>
+                    <p role="alert" className={styles.error}>
+                      {error}
+                    </p>
+                    <Button
+                      variant="ghost"
+                      disabled={busy}
+                      onClick={() => void reload()}
+                    >
+                      Reload defaults
+                    </Button>
+                  </div>
+                )}
+                <div className={styles.formActions}>
+                  <Button disabled={busy} onClick={cancel}>
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    disabled={busy || !changed}
+                  >
+                    {busy ? 'Saving…' : 'Save defaults'}
+                  </Button>
+                </div>
+              </form>
+            )}
           </div>
-        </form>
+        </ListTableRow>
       )}
-    </section>
+    </>
   );
 }

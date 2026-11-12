@@ -78,6 +78,13 @@
   gap: 18px;
   min-width: 0;
 }
+.cards {
+  display: grid;
+  gap: 18px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
 .columnHeading {
   display: flex;
   align-items: center;
@@ -198,18 +205,5 @@
 @media (max-width: 900px) {
   .board {
     grid-template-columns: minmax(0, 1fr);
-  }
-  .row > :nth-child(2) {
-    grid-column: 1 / -1;
-  }
-  .row > :nth-child(3) {
-    grid-column: 1;
-  }
-  .row > :nth-child(4) {
-    grid-column: 2;
-    grid-row: 1;
-  }
-  .steps::after {
-    content: ' steps';
   }
 }

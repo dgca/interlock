@@ -3,6 +3,7 @@ import {
   FormPlaceholder,
   Alert,
   Badge,
+  Anchor,
   Button,
   Group,
   SegmentedControl,
@@ -29,7 +30,7 @@ import {
   useParams,
 } from 'react-router';
 
-import { ArrowRight, ChevronRight, Plus, Search, Trash2 } from 'lucide-react';
+import { ArrowRight, Plus, Search, Trash2 } from 'lucide-react';
 import { isConfirmedWriteRejection } from '../../lib/isConfirmedWriteRejection';
 import type { AppContext } from '../../App';
 import {
@@ -52,7 +53,7 @@ import layout from '../../components/PageLayout/PageLayout.module.css';
 
 import { ListTable, ListTableRow } from '../../components/ListTable/ListTable';
 
-import { VariableRowsSkeleton, variableColumns } from './VariableListSkeleton';
+import { VariableRowsSkeleton, variableTable } from './VariableListSkeleton';
 import styles from './Variables.module.css';
 import { VariablePicker } from './VariablePicker';
 
@@ -173,23 +174,22 @@ export function VariableLibrary() {
         {loading ? (
           <VariableRowsSkeleton />
         ) : data?.items.length ? (
-          <ListTable columns={variableColumns}>
+          <ListTable {...variableTable} label="Variables">
             {data.items.map((v) => (
-              <ListTableRow
-                key={v.id}
-                to={paths.variable(v.id)}
-                className={styles.listRow}
-              >
+              <ListTableRow key={v.id}>
                 <span className={styles.identity}>
-                  <strong>{v.name}</strong>
+                  <strong>
+                    <Anchor
+                      component={Link}
+                      to={paths.variable(v.id)}
+                      underline="hover"
+                    >
+                      {v.name}
+                    </Anchor>
+                  </strong>
                   {v.description && <small>{v.description}</small>}
                 </span>
-                <Badge
-                  className={styles.rowKind}
-                  variant="light"
-                  color="gray"
-                  size="sm"
-                >
+                <Badge variant="light" color="gray" size="sm">
                   {v.kind === 'secret' ? 'Secret' : 'Config'}
                 </Badge>
                 <span
@@ -202,7 +202,6 @@ export function VariableLibrary() {
                 <time className={styles.updated} dateTime={v.updatedAt}>
                   {new Date(v.updatedAt).toLocaleDateString()}
                 </time>
-                <ChevronRight size={16} aria-hidden="true" />
               </ListTableRow>
             ))}
           </ListTable>

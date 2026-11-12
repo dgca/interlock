@@ -1,5 +1,6 @@
 import { isConfirmedWriteRejection } from '../../lib/isConfirmedWriteRejection';
 import {
+  Anchor,
   Button,
   Stack,
   Text,
@@ -37,7 +38,7 @@ import layout from '../../components/PageLayout/PageLayout.module.css';
 
 import { ListTable, ListTableRow } from '../../components/ListTable/ListTable';
 
-import { promptColumns } from './PromptSkeleton';
+import { promptTable } from './PromptSkeleton';
 import styles from './Prompts.module.css';
 
 const fields = ({
@@ -126,22 +127,25 @@ export function PromptLibrary({ prompts }: { prompts: SavedPrompt[] }) {
       />
       <div className={workspacePage.content}>
         {visible.length ? (
-          <ListTable columns={promptColumns}>
+          <ListTable {...promptTable} label="Prompts">
             {visible.map((p) => (
-              <ListTableRow
-                key={p.id}
-                to={paths.prompt(p.id)}
-                className={styles.listRow}
-              >
+              <ListTableRow key={p.id}>
                 <span className={styles.identity}>
-                  <strong>{p.name}</strong>
+                  <strong>
+                    <Anchor
+                      component={Link}
+                      to={paths.prompt(p.id)}
+                      underline="hover"
+                    >
+                      {p.name}
+                    </Anchor>
+                  </strong>
                   {p.description && <small>{p.description}</small>}
                 </span>
                 <span className={styles.revision}>Revision {p.revision}</span>
                 <time className={styles.updated} dateTime={p.updatedAt}>
                   {new Date(p.updatedAt).toLocaleDateString()}
                 </time>
-                <ArrowRight size={16} aria-hidden="true" />
               </ListTableRow>
             ))}
           </ListTable>

@@ -66,9 +66,6 @@
   font-size: 12px;
   line-height: 1.6;
 }
-.rowHeading {
-  color: var(--text);
-}
 .profileIdentity {
   display: flex;
   gap: 16px;
@@ -81,27 +78,25 @@
   align-items: flex-start;
   gap: 8px;
 }
-.configureControl {
-  justify-self: end;
-}
 .identity {
   margin-right: auto;
   min-width: 0;
 }
-.identity h2,
+.identity strong,
 .newProfile h2 {
   font-size: 14px;
   font-weight: 600;
   margin: 0 0 6px;
   overflow-wrap: anywhere;
 }
+.identity strong {
+  display: block;
+}
 .identity p {
   margin: 0;
   color: var(--muted);
   font-size: 12px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 .icon {
   color: var(--accent-text);
@@ -112,6 +107,11 @@
   flex-shrink: 0;
 }
 
+.detailContent {
+  position: sticky;
+  inset-inline-start: 0;
+  width: 100cqw;
+}
 .guidance {
   margin: 0;
   padding: 0 24px 20px;
@@ -224,21 +224,9 @@
   font-size: 13px;
   overflow-wrap: anywhere;
 }
-@media (max-width: 900px) {
-  .rowHeading > .profileIdentity {
-    grid-column: 1 / -1;
-  }
-  .installation {
-    grid-column: 1;
-    grid-row: 2;
-  }
-  .enabledControl {
-    grid-column: 2;
-    grid-row: 2;
-  }
-  .configureControl {
-    grid-column: 1 / -1;
-    justify-self: end;
+@container (max-width: 720px) {
+  .profileIdentity {
+    gap: 8px;
   }
   .fields,
   .defaultsFields {

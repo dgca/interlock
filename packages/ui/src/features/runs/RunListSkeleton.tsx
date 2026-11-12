@@ -13,7 +13,7 @@ import { useSearchParams } from 'react-router';
 import { ListTableSkeleton } from '../../components/ListTable/ListTable';
 
 import { runTab } from './runAttention';
-import { runColumns, runViews, runMode } from './runListConfig';
+import { runTable, runViews, runMode } from './runListConfig';
 import classes from './RunList.module.css';
 
 export function RunListSkeleton({ embedded = false }: { embedded?: boolean }) {
@@ -89,11 +89,7 @@ export function RunBoardSkeleton() {
 
 export function RunRowsSkeleton() {
   return (
-    <ListTableSkeleton
-      columns={runColumns}
-      label="Loading runs…"
-      rowClassName={classes.row}
-    >
+    <ListTableSkeleton {...runTable} label="Loading runs…">
       <Stack gap={7}>
         <Placeholder h={13} w="75%" />
         <Placeholder h={10} w={90} />

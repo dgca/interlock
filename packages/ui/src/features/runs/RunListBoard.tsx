@@ -45,7 +45,7 @@ function RunCard({
       ? waitReasonText[run.waitReason]
       : undefined;
   return (
-    <article
+    <li
       className={`run-row ${classes.runCard}`}
       data-attention={!!review || undefined}
     >
@@ -123,7 +123,7 @@ function RunCard({
           <ArrowUpRight size={16} aria-hidden="true" />
         </Anchor>
       )}
-    </article>
+    </li>
   );
 }
 
@@ -187,9 +187,18 @@ export function RunListBoard({
   const completed =
     preview?.completed?.items.filter((run) => run.status === 'completed') ?? [];
   const cards = (items: RunItem[]) =>
-    items.map((run) => (
-      <RunCard key={run.id} run={run} runHref={runHref} returnTo={returnTo} />
-    ));
+    items.length > 0 && (
+      <ul className={classes.cards} role="list">
+        {items.map((run) => (
+          <RunCard
+            key={run.id}
+            run={run}
+            runHref={runHref}
+            returnTo={returnTo}
+          />
+        ))}
+      </ul>
+    );
   const previewError = (message: string) => (
     <div role="alert">
       <Text c="red" size="sm">

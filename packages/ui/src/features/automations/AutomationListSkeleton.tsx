@@ -10,7 +10,7 @@ import { useSearchParams } from 'react-router';
 
 import { ListTableSkeleton } from '../../components/ListTable/ListTable';
 
-import { automationColumns, listQuery, statusViews } from './model';
+import { automationTable, listQuery, statusViews } from './model';
 import classes from './Automations.module.css';
 
 export function AutomationListSkeleton() {
@@ -42,9 +42,8 @@ export function AutomationListSkeleton() {
 export function AutomationRowsSkeleton() {
   return (
     <ListTableSkeleton
-      columns={automationColumns}
+      {...automationTable}
       label="Loading automations…"
-      rowClassName={classes.listRow}
       footer={
         <div className={classes.pagination}>
           <Placeholder h={10} w={85} />
@@ -61,7 +60,6 @@ export function AutomationRowsSkeleton() {
         <Placeholder h={11} w="88%" />
         <Placeholder h={10} w="72%" />
       </Stack>
-      <Placeholder h={14} w={8} />
     </ListTableSkeleton>
   );
 }
