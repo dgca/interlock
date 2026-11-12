@@ -5,6 +5,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { UiTestProvider as DesignSystemProvider } from './uiTestProvider';
 import { createBrowserRouter, RouterProvider } from 'react-router';
 import { afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest';
+import { WorkspaceReadWarning } from '../packages/ui/src/components/WorkspaceReads';
 import { routes } from '../packages/ui/src/routes';
 import { blankDefinition, type Workflow } from '@interlock/core';
 import { trpc, useQueryClient } from '../packages/ui/src/lib/query';
@@ -140,6 +141,7 @@ vi.mock('../packages/ui/src/features/workflows/WorkflowEditor', () => ({
     onSectionChange,
     runsView,
     onDeleted,
+    promptsRead,
   }: any) => {
     useEffect(() => () => onDirty(false), [onDirty]);
     return h(
@@ -155,6 +157,9 @@ vi.mock('../packages/ui/src/features/workflows/WorkflowEditor', () => ({
       h('button', { onClick: onDeleted }, 'Confirm deletion'),
       section === 'runs' ? runsView : null,
       section === 'children' ? 'Child workflows content' : null,
+      section === 'editor' && promptsRead
+        ? h(WorkspaceReadWarning, { reads: [promptsRead] })
+        : null,
       h('button', { onClick: () => onDirty(true) }, 'Edit draft'),
       h('button', { onClick: () => onDirty(false) }, 'Save draft'),
       h('button', { onClick: onBack }, 'Back to library'),
@@ -549,20 +554,20 @@ it('opens a cold workflow editor while one sidebar count fails and the other is 
   );
 });
 
-it('opens the workflow library without prompts, but waits and retries for prompts in its editor', async () => {
+it('opens the workflow library without prompts and offers a local prompts retry in the editor', async () => {
   queries.prompts.mockRejectedValue(new Error('Prompt library unavailable'));
   await mount('/workflows');
   expect(container.textContent).toContain('Open workflow');
   expect(container.textContent).not.toContain('Prompt library unavailable');
   await click('Open workflow');
-  expect(container.textContent).toContain(
-    'Could not load workflow. Prompt library unavailable',
-  );
+  expect(container.textContent).toContain('Editor w1');
+  expect(container.textContent).toContain('Could not load prompts.');
   expect(container.textContent).not.toContain('Workflow not found');
   expect(container.textContent).toContain('Local engine connected');
   queries.prompts.mockResolvedValue([]);
-  await click('Retry');
+  await click('Retry prompts');
   expect(container.textContent).toContain('Editor w1');
+  expect(container.textContent).not.toContain('Could not load prompts.');
   expect(queries.prompts).toHaveBeenCalledTimes(2);
   expect(queries.workflows).toHaveBeenCalledTimes(1);
   expect(queries.requestCount).toHaveBeenCalledTimes(1);
@@ -590,13 +595,21 @@ it.each([
       );
     else expect(container.textContent).toContain('Child workflows content');
 
+    const editor = container.querySelector('main section');
+    await click('Edit draft');
     await click('Workflow editor');
-    expect(container.textContent).not.toContain('Editor w1');
-    expect(container.textContent).toContain(
-      status === 'pending'
-        ? 'Loading workflow…'
-        : 'Could not load workflow. Prompt library unavailable',
-    );
+    expect(container.querySelector('main section')).toBe(editor);
+    expect(container.textContent).toContain('Editor w1');
+    if (status === 'failed')
+      expect(container.textContent).toContain('Could not load prompts.');
+
+    await click('Prompts');
+    expect(document.body.textContent).toContain('Discard unsaved changes?');
+    await click('Keep editing');
+    await traverse('back');
+    expect(window.location.search).toBe(`?view=${section}`);
+    expect(container.querySelector('main section')).toBe(editor);
+    expect(container.textContent).not.toContain('Could not load prompts.');
   },
 );
 

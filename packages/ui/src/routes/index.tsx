@@ -342,6 +342,7 @@ function WorkflowRoute() {
         workflow={workflow}
         workflows={context.workflows}
         prompts={context.prompts}
+        promptsRead={context.promptsRead}
         act={context.act}
         onDirty={context.onDirty}
         onSaved={context.onSaved}
@@ -406,11 +407,7 @@ function WorkflowRoute() {
   );
   return (
     <WorkspaceReads
-      reads={
-        section === 'editor'
-          ? [context.workflowsRead, context.promptsRead]
-          : [context.workflowsRead]
-      }
+      reads={[context.workflowsRead]}
       subject="workflow"
       loading={<RouteSkeleton subject="workflow" />}
     >

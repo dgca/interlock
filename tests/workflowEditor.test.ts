@@ -13,6 +13,7 @@ import {
 } from '@interlock/core';
 import { batchDefinition, nestedBatches } from './fixtures/batch';
 import parallelEdges from './fixtures/parallelEdges.json';
+import type { WorkspaceRead } from '../packages/ui/src/components/WorkspaceReads';
 import { WorkflowEditor } from '../packages/ui/src/features/workflows/WorkflowEditor';
 import { WorkflowLayoutNotice } from '../packages/ui/src/features/workflows/WorkflowLayoutNotice';
 import { DeleteWorkflowDialog } from '../packages/ui/src/features/workflows/DeleteWorkflowDialog';
@@ -163,7 +164,7 @@ vi.mock('../packages/ui/src/features/workflows/SettingsDialog', () => ({
     ),
 }));
 vi.mock('../packages/ui/src/design-system/Button', () => ({
-  Button: ({ variant, leftSection, rightSection, ...props }: any) =>
+  Button: ({ variant, leftSection, rightSection, loading, ...props }: any) =>
     h('button', props),
 }));
 vi.mock('../packages/ui/src/design-system/CodeEditor/CodeEditor', () => ({
@@ -190,6 +191,7 @@ const runAction = async (fn: () => Promise<unknown>) => {
   }
 };
 let section: 'editor' | 'runs';
+let promptsRead: WorkspaceRead | undefined;
 const deleted = vi.fn();
 let strict = false;
 const render = async (visible = true, deletingOutside = false) => {
@@ -200,6 +202,7 @@ const render = async (visible = true, deletingOutside = false) => {
       ? h(WorkflowEditor, {
           workflow,
           section,
+          promptsRead,
           onDeleted: deleted,
           runsView: h('p', {}, 'Workflow runs'),
           workflows: [workflow],
@@ -271,6 +274,7 @@ beforeEach(() => {
   (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
   vi.clearAllMocks();
   section = 'editor';
+  promptsRead = undefined;
   strict = false;
   rawEditor.props = undefined;
   window.matchMedia = vi.fn().mockReturnValue({
@@ -1156,6 +1160,40 @@ it('keeps raw text and dirty protection across Runs and disables hidden editor s
   await click('Discard');
   await click('Visual');
   expect(button('Undo').disabled).toBe(false);
+});
+
+it('keeps staged workflow settings from Runs while the prompt catalog fails and recovers', async () => {
+  section = 'runs';
+  const retry = vi.fn();
+  promptsRead = {
+    resource: 'prompts',
+    ready: false,
+    error: 'Catalog unavailable',
+    fetching: false,
+    retry,
+  };
+  await render();
+  expect(container.textContent).not.toContain('Could not load prompts.');
+  await click('Workflow settings');
+  await click('Apply local edit');
+  expect(onDirty).toHaveBeenLastCalledWith(true);
+
+  section = 'editor';
+  await render();
+  expect(container.textContent).toContain('Could not load prompts.');
+  expect(container.textContent).toContain('Unsaved changes');
+  await click('Retry prompts');
+  expect(retry).toHaveBeenCalledTimes(1);
+
+  section = 'runs';
+  await render();
+  expect(onDirty).toHaveBeenLastCalledWith(true);
+  expect(container.textContent).not.toContain('Could not load prompts.');
+  promptsRead = { ...promptsRead, ready: true, error: '' };
+  section = 'editor';
+  await render();
+  expect(button('Save draft').disabled).toBe(false);
+  expect(container.textContent).toContain('Unsaved changes');
 });
 
 it('preserves text typed during a save and discards back to the successfully saved definition', async () => {

@@ -34,6 +34,7 @@ import {
   type ContractPage,
 } from '../../components/ContractEditor/ContractEditor';
 import { workflowTargets } from './workflowTargets';
+import type { WorkspaceRead } from '../../components/WorkspaceReads';
 import { NodeInspector } from './NodeInspector';
 import { nodeDescriptions } from './nodeDescriptions';
 import type { NodeSectionName } from './NodeSettingsSections';
@@ -62,6 +63,7 @@ export function SettingsDialog({
   definition,
   workflows,
   prompts = [],
+  promptsRead,
   onClose,
   onApply,
   onBoardSaved,
@@ -87,6 +89,7 @@ export function SettingsDialog({
   parentParallel?: { parallelId: string; parallelBranchId: string };
   workflows: Workflow[];
   prompts?: import('@interlock/core').SavedPrompt[];
+  promptsRead?: WorkspaceRead;
   onClose: () => void;
   onApply: (settings: Settings) => void;
   onBoardSaved?: (workflow: Workflow) => void;
@@ -477,6 +480,7 @@ export function SettingsDialog({
                     section={nodeSection}
                     onSectionChange={setNodeSection}
                     prompts={prompts}
+                    promptsRead={promptsRead}
                     node={nodeDraft}
                     creating={creating}
                     workflowId={workflowId}

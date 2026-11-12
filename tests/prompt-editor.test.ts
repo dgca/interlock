@@ -5,6 +5,7 @@ import { UiTestProvider as DesignSystemProvider } from './uiTestProvider';
 import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { nodeSchema, type SavedPrompt } from '@interlock/core';
+import type { WorkspaceRead } from '../packages/ui/src/components/WorkspaceReads';
 import type { Action } from '../packages/ui/src/lib/useActionFeedback';
 import { PromptEditor } from '../packages/ui/src/features/prompts/Prompts';
 import { PromptPicker } from '../packages/ui/src/features/prompts/PromptPicker';
@@ -190,6 +191,59 @@ it('clears picker search after selection, preserves order, and exposes missing r
   );
   expect(container.textContent).toContain('Missing prompt: gone');
 });
+it('waits for the prompt catalog without treating existing references as missing', async () => {
+  const node = nodeSchema.parse({
+    id: 'a',
+    kind: 'agent',
+    label: 'Agent',
+    prompt: 'Task',
+    promptIds: [prompt.id],
+  });
+  if (node.kind !== 'agent') throw new Error('Agent');
+  const onChange = vi.fn();
+  const retry = vi.fn();
+  const read: WorkspaceRead = {
+    resource: 'prompts',
+    ready: false,
+    error: '',
+    fetching: true,
+    retry,
+  };
+  const picker = async (promptsRead: WorkspaceRead) =>
+    act(async () =>
+      root.render(
+        h(
+          DesignSystemProvider,
+          { env: 'test' },
+          h(PromptPicker, {
+            node,
+            prompts: promptsRead.ready ? [prompt] : [],
+            promptsRead,
+            onChange,
+          }),
+        ),
+      ),
+    );
+  await picker(read);
+  expect(
+    container.querySelector('[aria-label="Loading saved prompts"]'),
+  ).not.toBeNull();
+  expect(container.querySelector('[role="combobox"]')).toBeNull();
+  expect(container.textContent).not.toContain('Missing prompt');
+
+  await picker({ ...read, error: 'Catalog unavailable', fetching: false });
+  expect(container.textContent).toContain('Could not load prompts.');
+  await click('Retry prompts');
+  expect(retry).toHaveBeenCalledTimes(1);
+  expect(onChange).not.toHaveBeenCalled();
+  expect(container.textContent).not.toContain('Missing prompt');
+
+  await picker({ ...read, ready: true, fetching: false });
+  expect(container.querySelector('[role="combobox"]')).not.toBeNull();
+  expect(container.textContent).toContain(prompt.name);
+  expect(onChange).not.toHaveBeenCalled();
+});
+
 async function render(value = prompt) {
   await act(async () =>
     root.render(

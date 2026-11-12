@@ -1,20 +1,47 @@
-import { ActionIcon, Group, Select, Stack, Text } from '../../design-system';
+import {
+  ActionIcon,
+  Group,
+  Loader,
+  Select,
+  Stack,
+  Text,
+} from '../../design-system';
 
 import { useState } from 'react';
 import { ArrowUp, ArrowDown, X } from 'lucide-react';
 import type { SavedPrompt, WorkflowNode } from '@interlock/core';
+import {
+  WorkspaceReadWarning,
+  type WorkspaceRead,
+} from '../../components/WorkspaceReads';
 import styles from './Prompts.module.css';
 
 export function PromptPicker({
   node,
   prompts,
+  promptsRead,
   onChange,
 }: {
   node: Extract<WorkflowNode, { kind: 'agent' }>;
   prompts: SavedPrompt[];
+  promptsRead?: WorkspaceRead;
   onChange: (ids: string[]) => void;
 }) {
   const [search, setSearch] = useState('');
+  if (promptsRead && !promptsRead.ready)
+    return (
+      <Stack gap="xs" mb="md">
+        <Text size="sm" fw={500}>
+          Saved prompts
+        </Text>
+        {promptsRead.error ? (
+          <WorkspaceReadWarning reads={[promptsRead]} inline />
+        ) : (
+          <Loader size="sm" aria-label="Loading saved prompts" />
+        )}
+      </Stack>
+    );
+
   const ids = node.promptIds ?? [];
   const selected = ids.map((id) => prompts.find((p) => p.id === id));
   const move = (index: number, offset: number) => {
@@ -45,6 +72,7 @@ export function PromptPicker({
           setSearch('');
         }}
       />
+      {promptsRead && <WorkspaceReadWarning reads={[promptsRead]} inline />}
       {ids.map((id, i) => (
         <div key={id} className={styles.selection}>
           <Group justify="space-between" wrap="nowrap">

@@ -54,6 +54,7 @@ import { WorkflowModeEditor } from './WorkflowModeEditor';
 
 import { ContractEditor } from '../../components/ContractEditor/ContractEditor';
 import { ScriptCode } from './ScriptCode';
+import type { WorkspaceRead } from '../../components/WorkspaceReads';
 import { PromptPicker } from '../prompts/PromptPicker';
 import styles from './NodeInspector.module.css';
 
@@ -115,6 +116,7 @@ export function NodeInspector({
   node,
   workflows,
   prompts = [],
+  promptsRead,
   workflowId,
   hideWorkflowTarget = false,
   creating = false,
@@ -134,6 +136,7 @@ export function NodeInspector({
   node: WorkflowNode;
   workflows: Workflow[];
   prompts?: import('@interlock/core').SavedPrompt[];
+  promptsRead?: WorkspaceRead;
   workflowId?: string;
   hideWorkflowTarget?: boolean;
   creating?: boolean;
@@ -313,6 +316,7 @@ export function NodeInspector({
               <PromptPicker
                 node={node}
                 prompts={prompts}
+                promptsRead={promptsRead}
                 onChange={(promptIds) =>
                   patch({ promptIds: promptIds.length ? promptIds : undefined })
                 }
