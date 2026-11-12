@@ -56,7 +56,7 @@ const presetTable: ListTableLayout = {
     { label: 'Preset', width: '31%', compactWidth: '27%' },
     { label: 'Primary choice' },
     { label: 'Fallbacks', width: '100px', compactWidth: '61px' },
-    { label: 'Actions', width: '80px', compactWidth: '65px' },
+    { label: 'Actions', fitContent: true },
   ],
 };
 

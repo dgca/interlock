@@ -10,7 +10,12 @@ import {
 import classes from './ListTable.module.css';
 
 export type ListTableLayout = {
-  columns: readonly { label: string; width?: string; compactWidth?: string }[];
+  columns: readonly {
+    label: string;
+    width?: string;
+    compactWidth?: string;
+    fitContent?: boolean;
+  }[];
   minWidth: number;
 };
 
@@ -55,9 +60,10 @@ export function ListTable({
         aria-label={label}
       >
         <colgroup>
-          {columns.map(({ label, width, compactWidth }) => (
+          {columns.map(({ label, width, compactWidth, fitContent }) => (
             <col
               key={label}
+              className={fitContent ? classes.fitContentColumn : undefined}
               style={
                 {
                   '--column-width': width,
