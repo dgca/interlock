@@ -88,3 +88,57 @@ it('keeps unrelated catalogs out of Runs and opens instructions only when reques
     await app.close();
   }
 });
+
+it('checks exact children before offering deletion from scoped Runs', async () => {
+  const app = await openBrowserApp();
+  const browser = await chromium.launch();
+  const page = await browser.newPage({ viewport: { width: 390, height: 900 } });
+  page.setDefaultTimeout(5000);
+  let release!: () => void;
+  const hold = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  try {
+    const workflow = app.engine.create('Parent workflow');
+    app.engine.create('Owned child', '', blankDefinition(), workflow.id);
+    let childReads = 0;
+    await page.route(
+      (url) =>
+        url.pathname.includes('workflows.catalog') &&
+        url.searchParams.get('input')?.includes('ownerWorkflowId') === true,
+      async (route) => {
+        if (++childReads === 1) {
+          await hold;
+          return route.abort('failed');
+        }
+        return route.continue();
+      },
+    );
+    await page.goto(app.url + paths.workflowRuns(workflow.id));
+    await page.getByRole('button', { name: 'Workflow actions' }).click();
+    await page.getByRole('menuitem', { name: 'Delete workflow' }).click();
+    const dialog = page.getByRole('dialog');
+    const remove = dialog.getByRole('button', { name: 'Delete', exact: true });
+    await dialog
+      .getByText('Checking for child workflows…', { exact: true })
+      .waitFor();
+    expect(await remove.count()).toBe(0);
+    release();
+    const retry = dialog.getByRole('button', { name: 'Retry child workflows' });
+    await retry.waitFor();
+    expect(await remove.count()).toBe(0);
+    await retry.click();
+    await page
+      .getByRole('dialog', { name: 'Workflow has child workflows' })
+      .waitFor();
+    expect(await remove.count()).toBe(0);
+    await dialog.getByRole('link', { name: 'View child workflows' }).click();
+    await page.getByRole('button', { name: 'Open Owned child' }).waitFor();
+    expect(childReads).toBe(2);
+  } finally {
+    release();
+    await page.close();
+    await browser.close();
+    await app.close();
+  }
+});

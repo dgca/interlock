@@ -276,31 +276,64 @@ export function App() {
       );
     },
     onPublicationChecked: (workflowId, latestVersion) => {
-      const key = trpc.workflows.get.queryKey({ id: workflowId });
-      const cached = queryClient.getQueryData(key);
-      const acknowledged = Math.max(cached?.latestVersion ?? 0, latestVersion);
-      if (cached && cached.latestVersion < acknowledged) {
+      const detailKey = trpc.workflows.get.queryKey({ id: workflowId });
+      const detail = queryClient.getQueryData(detailKey);
+      const catalogKeys = [
+        trpc.workflows.catalog.queryKey(),
+        trpc.workflows.catalog.queryKey({ id: workflowId }),
+        ...(detail?.boardId
+          ? [trpc.workflows.catalog.queryKey({ boardId: detail.boardId })]
+          : []),
+        ...(detail?.ownerWorkflowId
+          ? [
+              trpc.workflows.catalog.queryKey({
+                ownerWorkflowId: detail.ownerWorkflowId,
+              }),
+            ]
+          : []),
+      ];
+      const catalogs = catalogKeys.map((key) => {
+        const rows = queryClient.getQueryData(key);
+        return { key, rows, entry: rows?.find((row) => row.id === workflowId) };
+      });
+      const acknowledged = Math.max(
+        latestVersion,
+        detail?.latestVersion ?? 0,
+        ...catalogs.map(({ entry }) => entry?.latestVersion ?? 0),
+      );
+      function retainVersion<T>(
+        key: readonly unknown[],
+        before: T | undefined,
+        after: T | undefined,
+      ) {
         const exact = { queryKey: key, exact: true };
         const pending =
           queryClient.getQueryState(key)?.fetchStatus === 'fetching';
-        // The independent check has settled. A read started earlier can carry an older version.
+        // An earlier snapshot can carry an older version. Keep the known data
+        // through cancellation and refresh, including when the retry fails.
         if (pending) void queryClient.cancelQueries(exact);
-        queryClient.setQueryData(key, {
-          ...cached,
-          latestVersion: acknowledged,
-          draftMatchesLatest: null,
-        });
+        if (after !== undefined && (pending || after !== before))
+          queryClient.setQueryData(key, after);
         if (pending)
           void queryClient.refetchQueries(exact, { cancelRefetch: false });
       }
-      const catalogKey = trpc.workflows.catalog.queryKey();
-      queryClient.setQueryData(catalogKey, (catalog) =>
-        catalog?.map((entry) =>
-          entry.id === workflowId && entry.latestVersion < acknowledged
-            ? { ...entry, latestVersion: acknowledged }
-            : entry,
-        ),
+      retainVersion(
+        detailKey,
+        detail,
+        detail && detail.latestVersion < acknowledged
+          ? { ...detail, latestVersion: acknowledged, draftMatchesLatest: null }
+          : detail,
       );
+      for (const { key, rows, entry } of catalogs)
+        retainVersion(
+          key,
+          rows,
+          entry && entry.latestVersion < acknowledged
+            ? rows?.map((row) =>
+                row === entry ? { ...row, latestVersion: acknowledged } : row,
+              )
+            : rows,
+        );
       return acknowledged;
     },
     onRun: setRunDialog,

@@ -284,9 +284,6 @@ export function WorkflowLibrary({
       {deleting && (
         <DeleteWorkflowDialog
           workflow={deleting}
-          hasChildren={workflows.some(
-            (child) => child.ownerWorkflowId === deleting.id,
-          )}
           act={act}
           onClose={() => setDeleting(undefined)}
           onDeleted={() => setDeleting(undefined)}

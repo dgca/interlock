@@ -57,6 +57,9 @@ it('reads workflow and prompt metadata without loading full catalogs or versions
     expect(
       await caller.workflows.catalog({ id: child.id, boardId: board.id }),
     ).toEqual([]);
+    expect(
+      await caller.workflows.catalog({ ownerWorkflowId: root.id }),
+    ).toEqual([workflowCatalogEntry(child)]);
     expect(await caller.prompts.catalog()).toEqual([
       promptCatalogEntry(prompt),
     ]);

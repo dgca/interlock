@@ -16,6 +16,10 @@ export function workflowCatalog(db: DatabaseSync, query: WorkflowCatalogQuery) {
     filters.push("json_extract(value, '$.boardId') = ?");
     params.push(query.boardId);
   }
+  if (query.ownerWorkflowId !== undefined) {
+    filters.push("json_extract(value, '$.ownerWorkflowId') = ?");
+    params.push(query.ownerWorkflowId);
+  }
   const rows = db
     .prepare(
       `SELECT id,

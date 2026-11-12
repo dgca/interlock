@@ -305,20 +305,25 @@ export function AutomationEditor({
     if (!needsReload && !unconfirmedCreation) setError('');
   };
   const back = id ? itemHref(id, search) : returnHref(search);
-  const fallback = useQuery(
+  const published = version?.workflowId === workflowId ? version : undefined;
+  const needsDraftContract =
+    config.kind === 'schedule' && workflow?.latestVersion === 0 && !published;
+  const draftContract = useQuery(
     trpc.workflows.get.queryOptions(
       { id: workflowId },
-      {
-        enabled: Boolean(
-          workflow && (!workflow.latestVersion || (!version && contractError)),
-        ),
-      },
+      { enabled: needsDraftContract },
     ),
   );
+  const draftContractError =
+    needsDraftContract && draftContract.error
+      ? errorMessage(draftContract.error)
+      : '';
+  const loadingContract =
+    contractLoading || (needsDraftContract && draftContract.isPending);
+  const contractFailure = contractError || draftContractError;
   const schema =
-    (version?.workflowId === workflowId
-      ? version.definition.inputSchema
-      : undefined) ?? fallback.data?.draft.inputSchema;
+    published?.definition.inputSchema ??
+    (needsDraftContract ? draftContract.data?.draft.inputSchema : undefined);
   const save = async () => {
     if (
       busy ||
@@ -353,7 +358,7 @@ export function AutomationEditor({
       );
       return;
     }
-    if (contractError || contractLoading) {
+    if (contractFailure || loadingContract) {
       setError('Wait for the workflow contract to load, or retry loading it.');
       return;
     }
@@ -501,6 +506,8 @@ export function AutomationEditor({
                 busy ||
                 needsReload ||
                 unconfirmedCreation ||
+                loadingContract ||
+                Boolean(contractFailure) ||
                 (!!id && (!baseline || !dirty))
               }
             >
@@ -754,12 +761,19 @@ export function AutomationEditor({
                       }}
                       error={issues.workflowId}
                     />
-                    {contractError ? (
+                    {contractFailure ? (
                       <Alert color="red">
-                        {contractError}
+                        {contractFailure}
                         <Button
                           variant="ghost"
-                          onClick={() => setReload((n) => n + 1)}
+                          disabled={!contractError && draftContract.isFetching}
+                          onClick={() => {
+                            if (contractError) setReload((n) => n + 1);
+                            else
+                              void draftContract.refetch({
+                                cancelRefetch: false,
+                              });
+                          }}
                         >
                           Retry contract
                         </Button>
@@ -767,10 +781,10 @@ export function AutomationEditor({
                     ) : (
                       workflow && (
                         <p className={classes.hint}>
-                          {contractLoading ? (
+                          {loadingContract ? (
                             'Loading workflow contract…'
-                          ) : version ? (
-                            `Starts the latest published version, currently v${version.version}.`
+                          ) : published ? (
+                            `Starts the latest published version, currently v${published.version}.`
                           ) : (
                             <>
                               Publish this workflow before enabling.{' '}
@@ -823,16 +837,16 @@ export function AutomationEditor({
                         </p>
                       </details>
                     </>
-                  ) : contractLoading ? (
+                  ) : loadingContract ? (
                     <FormPlaceholder />
-                  ) : schema &&
+                  ) : contractFailure && !schema ? null : schema &&
                     schema.type === 'object' &&
                     schema.properties &&
                     config.input !== null &&
                     typeof config.input === 'object' &&
                     !Array.isArray(config.input) ? (
                     <SchemaInput
-                      key={`${workflowId}:${version?.version ?? 'draft'}:${revision ?? 'new'}`}
+                      key={`${workflowId}:${published?.version ?? 'draft'}:${revision ?? 'new'}`}
                       schema={schema}
                       value={config.input}
                       onChange={(input) => patch({ input })}

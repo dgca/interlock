@@ -1,4 +1,14 @@
-import { Button, Modal, ModalBody, ModalFooter } from '../../design-system';
+import {
+  Button,
+  LoadingSkeleton,
+  Modal,
+  ModalBody,
+  ModalFooter,
+} from '../../design-system';
+import {
+  WorkspaceReadWarning,
+  workspaceRead,
+} from '../../components/WorkspaceReads';
 
 import { useRef, useState } from 'react';
 
@@ -8,30 +18,36 @@ import type { Workflow } from '@interlock/core';
 
 import { api } from '../../lib/api';
 import type { Action } from '../../lib/useActionFeedback';
-import { trpc, useQueryClient } from '../../lib/query';
+import { trpc, useQuery, useQueryClient } from '../../lib/query';
 import { forgetWorkflowLayout } from './useWorkflowLayout';
 
 export function DeleteWorkflowDialog({
   workflow,
   onClose,
-  hasChildren = false,
   returnFocusTo,
   onDeleted,
   act,
 }: {
   workflow: Pick<Workflow, 'id' | 'name'>;
   onClose: () => void;
-  hasChildren?: boolean;
   returnFocusTo?: () => HTMLElement | null;
   onDeleted: () => void;
   act: Action;
 }) {
   const queryClient = useQueryClient();
+  const children = useQuery(
+    trpc.workflows.catalog.queryOptions(
+      { ownerWorkflowId: workflow.id },
+      { meta: { engineRefresh: false } },
+    ),
+  );
   const [busy, setBusy] = useState(false);
+  const checked = busy || (children.isSuccess && !children.isFetching);
+  const hasChildren = !busy && checked && Boolean(children.data?.length);
   const [error, setError] = useState('');
   const inFlight = useRef(false);
   const remove = async () => {
-    if (inFlight.current || hasChildren) return;
+    if (inFlight.current || !checked || hasChildren) return;
     inFlight.current = true;
     setBusy(true);
     setError('');
@@ -68,7 +84,16 @@ export function DeleteWorkflowDialog({
       }}
     >
       <ModalBody>
-        {hasChildren ? (
+        {!checked ? (
+          children.error ? (
+            <WorkspaceReadWarning
+              reads={[workspaceRead('child workflows', children)]}
+              inline
+            />
+          ) : (
+            <LoadingSkeleton label="Checking for child workflows…" />
+          )
+        ) : hasChildren ? (
           <p>
             Remove the child workflows before deleting{' '}
             <strong>{workflow.name}</strong>.
@@ -103,7 +128,7 @@ export function DeleteWorkflowDialog({
           >
             View child workflows
           </Button>
-        ) : (
+        ) : checked ? (
           <Button
             variant="danger"
             disabled={busy}
@@ -111,7 +136,7 @@ export function DeleteWorkflowDialog({
           >
             {busy ? 'Deleting…' : 'Delete'}
           </Button>
-        )}
+        ) : null}
       </ModalFooter>
     </Modal>
   );

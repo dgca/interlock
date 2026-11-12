@@ -6,6 +6,7 @@ export const workflowCatalogQuerySchema = z
   .object({
     id: z.string().min(1).optional(),
     boardId: z.string().min(1).optional(),
+    ownerWorkflowId: z.string().min(1).optional(),
   })
   .strict();
 

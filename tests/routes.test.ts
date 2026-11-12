@@ -150,12 +150,14 @@ vi.mock('../packages/ui/src/features/workflows/WorkflowEditor', () => ({
     onDirty,
     onBack,
     onRun,
+    onPublicationChecked,
     section,
     onSectionChange,
     runsView,
     onDeleted,
     workflowsRead,
   }: any) => {
+    libraryClient = useQueryClient();
     useEffect(() => () => onDirty(false), [onDirty]);
     return h(
       'section',
@@ -168,6 +170,11 @@ vi.mock('../packages/ui/src/features/workflows/WorkflowEditor', () => ({
         'Workflow editor',
       ),
       h('button', { onClick: onDeleted }, 'Confirm deletion'),
+      h(
+        'button',
+        { onClick: () => onPublicationChecked(workflow.id, 2) },
+        'Acknowledge publication',
+      ),
       section === 'runs' ? runsView : null,
       section === 'children' ? 'Child workflows content' : null,
       section === 'editor' && workflowsRead
@@ -1248,6 +1255,77 @@ it('preserves scoped Overview and exact tags through inspector links and return 
     container.querySelector<HTMLInputElement>('input[value="overview"]')
       ?.checked,
   ).toBe(true);
+});
+
+it('names the exact scoped workflow in history cleanup without a catalog read', async () => {
+  mockWorkflowDetails([{ id: 'w1', name: 'Repository review' }]);
+  await mount('/workflows/w1?view=runs');
+  await click('History settings');
+  await click('Clean up history');
+  const workflow = document.querySelector<HTMLInputElement>(
+    '[role="dialog"] input[role="combobox"]',
+  );
+  expect(workflow?.value).toBe('Repository review');
+  expect(workflow?.disabled).toBe(true);
+  expect(queries.workflows).not.toHaveBeenCalled();
+});
+
+it('keeps an observed publication in complete catalogs through older reads and failed refresh', async () => {
+  const workflow: Workflow = {
+    id: 'w1',
+    name: 'Workflow',
+    description: '',
+    archived: false,
+    boardId: 'board',
+    draft: blankDefinition(),
+    draftRevision: 1,
+    latestVersion: 1,
+    createdAt: '',
+    updatedAt: '',
+  };
+  const entry = workflowCatalogEntry(workflow);
+  const other = { ...entry, id: 'other' };
+  const defaultKey = trpc.workflows.catalog.queryKey();
+  const boardKey = trpc.workflows.catalog.queryKey({ boardId: 'board' });
+  const exactKey = trpc.workflows.catalog.queryKey({ id: workflow.id });
+  mockWorkflowDetails([workflow]);
+  queries.workflows.mockImplementation(async (scope) =>
+    scope?.boardId ? [workflow] : [workflow, { ...workflow, id: other.id }],
+  );
+  await mount('/workflows/w1');
+  await act(async () => {
+    await Promise.all([
+      libraryClient.fetchQuery(trpc.workflows.catalog.queryOptions()),
+      libraryClient.fetchQuery(
+        trpc.workflows.catalog.queryOptions({ boardId: 'board' }),
+      ),
+    ]);
+  });
+  let release!: (rows: Workflow[]) => void;
+  const stale = new Promise<Workflow[]>((resolve) => {
+    release = resolve;
+  });
+  queries.workflows
+    .mockImplementationOnce(() => stale)
+    .mockImplementationOnce(() => stale)
+    .mockRejectedValue(new Error('Catalog unavailable'));
+  await act(async () => {
+    void libraryClient.refetchQueries({ queryKey: defaultKey, exact: true });
+    void libraryClient.refetchQueries({ queryKey: boardKey, exact: true });
+  });
+
+  expect(libraryClient.getQueryState(defaultKey)?.fetchStatus).toBe('fetching');
+  expect(libraryClient.getQueryState(boardKey)?.fetchStatus).toBe('fetching');
+  await click('Acknowledge publication');
+  await act(async () => release([workflow]));
+  await vi.waitFor(() => {
+    expect(libraryClient.getQueryState(defaultKey)?.status).toBe('error');
+    expect(libraryClient.getQueryState(boardKey)?.status).toBe('error');
+  });
+  const published = { ...entry, latestVersion: 2 };
+  expect(libraryClient.getQueryData(defaultKey)).toEqual([published, other]);
+  expect(libraryClient.getQueryData(boardKey)).toEqual([published]);
+  expect(libraryClient.getQueryData(exactKey)).toBeUndefined();
 });
 
 it('returns to the original List tab even when an inspected run has a different status', async () => {

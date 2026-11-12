@@ -26,25 +26,30 @@ const rpc = vi.hoisted(() => ({
   update: vi.fn(),
   saveLayout: vi.fn(),
   get: vi.fn(),
+  catalog: vi.fn(),
   publish: vi.fn(),
   versions: vi.fn(),
   remove: vi.fn(),
   createChild: vi.fn(),
 }));
-vi.mock('../packages/ui/src/lib/api', () => ({
-  errorMessage: (error: Error) => error.message,
-  api: {
-    workflows: {
-      update: { mutate: rpc.update },
-      saveLayout: { mutate: rpc.saveLayout },
-      get: { query: rpc.get },
-      createChild: { mutate: rpc.createChild },
-      publish: { mutate: rpc.publish },
-      versions: { query: rpc.versions },
-      delete: { mutate: rpc.remove },
-    },
-  },
-}));
+vi.mock('../packages/ui/src/lib/api', async () => {
+  const { mockRpcClient } = await import('./mockRpcClient');
+  return {
+    errorMessage: (error: Error) => error.message,
+    api: mockRpcClient({
+      workflows: {
+        update: { mutate: rpc.update },
+        saveLayout: { mutate: rpc.saveLayout },
+        get: { query: rpc.get },
+        catalog: { query: rpc.catalog },
+        createChild: { mutate: rpc.createChild },
+        publish: { mutate: rpc.publish },
+        versions: { query: rpc.versions },
+        delete: { mutate: rpc.remove },
+      },
+    }),
+  };
+});
 vi.mock(
   '../packages/ui/node_modules/@xyflow/react',
   async (importOriginal) => ({
@@ -319,6 +324,7 @@ beforeEach(() => {
       };
     },
   );
+  rpc.catalog.mockReset().mockResolvedValue([]);
   rpc.get.mockImplementation(async () => ({
     ...workflow,
     draft: applyWorkflowPositions(workflow.draft, layoutPositions),
@@ -647,10 +653,7 @@ it('checks a lost publication response without replacing a newer Raw draft', asy
   ].find((candidate) => candidate.textContent === 'Check published version')!;
   rpc.get.mockResolvedValueOnce({ ...workflow, latestVersion: 1 });
   await act(async () => check.click());
-  expect(rpc.get).toHaveBeenLastCalledWith(
-    { id: workflow.id },
-    expect.objectContaining({ signal: expect.anything() }),
-  );
+  expect(rpc.get).toHaveBeenLastCalledWith({ id: workflow.id });
   expect(publicationChecked).toHaveBeenLastCalledWith(workflow.id, 1);
   expect(saved).not.toHaveBeenCalled();
   expect(rawEditor.props.value).toBe('{newer raw edit');

@@ -12,16 +12,20 @@ import {
 import { WorkflowLibrary } from '../packages/ui/src/features/workflows/WorkflowLibrary';
 import { WorkflowChildren } from '../packages/ui/src/features/workflows/WorkflowChildren';
 const rpc = vi.hoisted(() => ({ create: vi.fn(), delete: vi.fn() }));
-vi.mock('../packages/ui/src/lib/api', () => ({
-  api: {
-    workflows: {
-      create: { mutate: rpc.create },
-      delete: { mutate: rpc.delete },
-    },
-  },
-  download: vi.fn(),
-  errorMessage: (e: Error) => e.message,
-}));
+vi.mock('../packages/ui/src/lib/api', async () => {
+  const { mockRpcClient } = await import('./mockRpcClient');
+  return {
+    api: mockRpcClient({
+      workflows: {
+        catalog: { query: async () => [] },
+        create: { mutate: rpc.create },
+        delete: { mutate: rpc.delete },
+      },
+    }),
+    download: vi.fn(),
+    errorMessage: (e: Error) => e.message,
+  };
+});
 function workflow(
   id: string,
   name: string,

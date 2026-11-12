@@ -190,7 +190,6 @@ export function WorkflowEditor({
   onReport?: () => void;
   runsView?: ReactNode;
 }) {
-  const hasChildren = workflows.some((w) => w.ownerWorkflowId === workflow.id);
   const [deleting, setDeleting] = useState(false);
   const [confirmReload, setConfirmReload] = useState(false);
   const [review, setReview] = useState<{
@@ -1556,7 +1555,6 @@ export function WorkflowEditor({
       {deleting && (
         <DeleteWorkflowDialog
           workflow={workflow}
-          hasChildren={hasChildren}
           act={act}
           returnFocusTo={() => workflowActions.current}
           onClose={() => setDeleting(false)}

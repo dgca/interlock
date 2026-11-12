@@ -441,7 +441,12 @@ function WorkflowRoute() {
         }}
         runsView={
           <Suspense fallback={<RunListSkeleton embedded />}>
-            <RunList {...page} act={context.act} workflowId={workflow.id} />
+            <RunList
+              {...page}
+              act={context.act}
+              workflowId={workflow.id}
+              workflowName={workflow.name}
+            />
           </Suspense>
         }
       />
