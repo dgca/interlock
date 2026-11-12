@@ -86,6 +86,45 @@ it('protects revision saves, preserves history, and rejects blank names/instruct
   expect(() => engine.prompts.create({ ...p, content: '\n  ' })).toThrow();
 });
 
+it('recovers keyed prompt creation after restart and rejects conflicting or deleted replays', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'interlock-prompt-create-'));
+  dirs.push(dir);
+  const path = join(dir, 'prompts.sqlite');
+  const input = {
+    name: 'Retryable prompt',
+    description: '',
+    content: 'Original instructions',
+  };
+  const request = { ...input, requestId: 'prompt-create-test' };
+  const before = setup(path);
+  const created = before.prompts.create({
+    ...request,
+    name: ' Retryable prompt ',
+  });
+  before.stop();
+  before.store.close();
+
+  const after = setup(path);
+  expect(after.prompts.create(request)).toEqual(created);
+  expect(after.prompts.list()).toEqual([created]);
+  const edited = update(after, created.id);
+  expect(after.prompts.create(request)).toEqual(edited);
+  expect(() =>
+    after.prompts.create({ ...request, content: 'Changed instructions' }),
+  ).toThrow(/requestId was already used with different content/);
+  expect(after.prompts.list()).toEqual([edited]);
+
+  after.prompts.delete(created.id);
+  expect(() => after.prompts.create(request)).toThrow(/was deleted/);
+  expect(after.prompts.list()).toEqual([]);
+  const independent = after.prompts.create(input);
+  expect(after.prompts.create(input).id).not.toBe(independent.id);
+  expect(
+    after.prompts.create({ ...input, requestId: 'another-create' }).id,
+  ).not.toBe(created.id);
+  after.stop();
+});
+
 it('composes saved guidance in order, preserves exact legacy text and raw/stable-ID references', () => {
   const engine = setup();
   const a = prompt(engine, 'Alpha'),

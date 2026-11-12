@@ -72,6 +72,7 @@ import {
   waitQuerySchema,
   resultQuerySchema,
   promptContentSchema,
+  promptCreateSchema,
   promptReadSchema,
   versionSelectionSchema,
   versionDeletionSchema,
@@ -350,7 +351,7 @@ export const appRouter = t.router({
       .input(promptReadSchema)
       .query(({ ctx, input }) => ctx.engine.prompts.read(input)),
     create: p
-      .input(promptContentSchema)
+      .input(promptCreateSchema)
       .mutation(({ ctx, input }) => ctx.engine.prompts.create(input)),
     update: p
       .input(

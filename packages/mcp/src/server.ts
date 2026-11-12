@@ -46,6 +46,7 @@ import {
   waitQuerySchema,
   resultQuerySchema,
   promptContentSchema,
+  promptCreateSchema,
   promptReadSchema,
   versionSelectionSchema,
   versionDeletionSchema,
@@ -321,8 +322,8 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
   );
   tool(
     'create_prompt',
-    'Create reusable Markdown instructions with a stable ID and revision 1. Name is trimmed, nonblank and at most 120 characters. Description defaults to empty. Content must contain non-whitespace text. Saving this prompt does not attach it to any workflow or start a run.',
-    promptContentSchema.shape,
+    'Create reusable Markdown instructions with a stable ID and revision 1. Name is trimmed, nonblank and at most 120 characters. Description defaults to empty. Content must contain non-whitespace text. Saving this prompt does not attach it to any workflow or start a run. Reuse the same requestId and content after a lost response to recover the current saved prompt. Changed content or a missing original rejects without creating another prompt. Omit the key for an independent create.',
+    promptCreateSchema.shape,
     (input) => client.prompts.create(input),
   );
   tool(

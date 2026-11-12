@@ -4,6 +4,7 @@ import { Store } from '@interlock/storage';
 import {
   InterlockError,
   promptContentSchema,
+  promptCreateSchema,
   promptIds,
   snapshotPrompt,
   promptReadSchema,
@@ -12,6 +13,15 @@ import {
   type PromptUsage,
   type WorkflowDefinition,
 } from '@interlock/core';
+import { fingerprint } from './versionIdentity.js';
+
+const creations = 'promptCreations';
+
+interface PromptCreation {
+  id: string;
+  requestHash: string;
+  promptId: string;
+}
 
 export class Prompts {
   constructor(private store: Store) {}
@@ -57,18 +67,44 @@ export class Prompts {
         : {}),
     };
   }
-  create(input: PromptContent) {
-    const content = promptContentSchema.parse(input);
-    const time = new Date().toISOString();
-    const prompt: SavedPrompt = {
-      ...content,
-      id: randomUUID(),
-      revision: 1,
-      createdAt: time,
-      updatedAt: time,
-    };
-    this.store.transaction(() => this.store.savePrompt(prompt));
-    return prompt;
+  create(input: PromptContent & { requestId?: string }) {
+    const { requestId, ...content } = promptCreateSchema.parse(input);
+    return this.store.transaction(() => {
+      const receipt =
+        requestId === undefined
+          ? undefined
+          : { id: fingerprint(requestId), requestHash: fingerprint(content) };
+      if (receipt) {
+        const prior = this.store.get<PromptCreation>(creations, receipt.id);
+        if (prior) {
+          if (prior.requestHash !== receipt.requestHash)
+            throw new InterlockError(
+              'Prompt creation requestId was already used with different content.',
+            );
+          const saved = this.store.get<SavedPrompt>('prompts', prior.promptId);
+          if (!saved)
+            throw new InterlockError(
+              'The prompt created by this request was deleted. Use a new requestId to create another prompt.',
+            );
+          return saved;
+        }
+      }
+      const time = new Date().toISOString();
+      const prompt: SavedPrompt = {
+        ...content,
+        id: randomUUID(),
+        revision: 1,
+        createdAt: time,
+        updatedAt: time,
+      };
+      this.store.savePrompt(prompt);
+      if (receipt)
+        this.store.put<PromptCreation>(creations, {
+          ...receipt,
+          promptId: prompt.id,
+        });
+      return prompt;
+    });
   }
   update(id: string, revision: number, input: PromptContent) {
     return this.store.transaction(() => {
