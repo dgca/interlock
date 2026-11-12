@@ -277,16 +277,16 @@ export class Store {
       WITH RECURSIVE tree(id) AS (
         SELECT ?
         UNION
-        SELECT d.id FROM documents d JOIN tree t
-          ON json_extract(d.value, '$.parentRunId') = t.id
+        SELECT d.id FROM tree CROSS JOIN documents d
+          ON json_extract(d.value, '$.parentRunId') = +tree.id
           WHERE d.collection = 'runs'
         UNION
         SELECT json_extract(d.value, '$.chain.nextRunId')
-          FROM documents d JOIN tree t ON d.id = t.id
-          WHERE d.collection = 'runs' AND json_type(d.value, '$.chain.nextRunId') = 'text'
+          FROM tree CROSS JOIN documents d ON d.collection = 'runs' AND d.id = tree.id
+          WHERE json_type(d.value, '$.chain.nextRunId') = 'text'
       )
-      SELECT d.value FROM documents d JOIN tree t ON d.id = t.id
-        WHERE d.collection = 'runs'
+      SELECT d.value FROM tree CROSS JOIN documents d
+        ON d.collection = 'runs' AND d.id = tree.id ORDER BY d.rowid
     `,
       )
       .all(runId)
@@ -849,7 +849,7 @@ export class Store {
       this.put('promptRevisions', { ...prompt, promptId: prompt.id, id: key });
   }
   events(runId: string) {
-    return this.list<RunEvent>('events').filter((e) => e.runId === runId);
+    return this.forRuns<RunEvent>('events', new Set([runId]));
   }
   transaction<T>(fn: () => T): T {
     const depth = this.transactionDepth;

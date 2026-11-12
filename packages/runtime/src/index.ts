@@ -1749,10 +1749,9 @@ export class Engine {
   inspect(id: string) {
     const run = this.run(id);
     const handledFailure = this.handledWorkflowFailure(run);
-    const allRuns = this.store.runs();
     if (run.batchNodeId && run.parentRunId && !run.parentExecutionId) {
-      const invocation = allRuns
-        .find((parent) => parent.id === run.parentRunId)
+      const invocation = this.store
+        .get<Run>('runs', run.parentRunId)
         ?.executions.find((step) => step.childRunIds.includes(run.id));
       if (invocation) {
         run.parentExecutionId = invocation.id;
@@ -1760,19 +1759,22 @@ export class Engine {
       }
     }
     const ids = new Set([id]);
-    let changed = true;
-    while (changed) {
-      changed = false;
-      for (const child of allRuns)
-        if (
-          child.parentRunId &&
-          ids.has(child.parentRunId) &&
-          !ids.has(child.id)
-        ) {
-          ids.add(child.id);
-          changed = true;
-        }
-    }
+    const descendants = this.store
+      .runTrees(ids)
+      .filter((child) => child.id !== id);
+    for (const child of descendants) ids.add(child.id);
+    const descendantWork = this.store
+      .forRuns<WorkRequest>('work', ids)
+      .map((work) => {
+        const { token, ...visible } = this.describeWork(work);
+        return {
+          ...visible,
+          ...(work.holdRevision
+            ? { holdHistory: this.holds.history(work.id) }
+            : {}),
+        };
+      });
+    const definition = this.store.getVersion(run.workflowId, run.version);
     const chain = this.chains.read(run);
     return {
       run: { ...run, ...this.projectRun(id) },
@@ -1787,42 +1789,18 @@ export class Engine {
           }
         : {}),
       counterpartRunId: this.testbench.counterpart(run),
-      descendants: allRuns
-        .filter((child) => child.id !== id && ids.has(child.id))
-        .map((child) => ({ ...child, ...this.projectRun(child.id) })),
-      descendantWork: this.store
-        .work()
-        .filter((work) => ids.has(work.runId))
-        .map((work) => {
-          const { token, ...visible } = this.describeWork(work);
-          return {
-            ...visible,
-            ...(work.holdRevision
-              ? { holdHistory: this.holds.history(work.id) }
-              : {}),
-          };
-        }),
-      definition:
-        this.store.getVersion(run.workflowId, run.version)?.definition ?? null,
-      definitionAvailable: Boolean(
-        this.store.getVersion(run.workflowId, run.version),
-      ),
-      work: this.store
-        .work()
-        .filter((w) => w.runId === id)
-        .map((work) => {
-          const { token, ...visible } = this.describeWork(work);
-          return {
-            ...visible,
-            ...(work.holdRevision
-              ? { holdHistory: this.holds.history(work.id) }
-              : {}),
-          };
-        }),
+      descendants: descendants.map((child) => ({
+        ...child,
+        ...this.projectRun(child.id),
+      })),
+      descendantWork,
+      definition: definition?.definition ?? null,
+      definitionAvailable: Boolean(definition),
+      work: descendantWork.filter((work) => work.runId === id),
       stalls: this.stalls.inspect(id),
       events: this.store.events(id),
       quiescence: this.quiescence(id),
-      children: this.store.runs().filter((r) => r.parentRunId === id),
+      children: descendants.filter((child) => child.parentRunId === id),
     };
   }
   private definition(
