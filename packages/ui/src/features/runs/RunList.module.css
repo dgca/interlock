@@ -9,6 +9,10 @@
 .runCard {
   --stretched-link-hover: var(--accent-border);
 }
+.runRow:last-child {
+  --stretched-link-radius: 0 0 calc(var(--radius-card) - 1px)
+    calc(var(--radius-card) - 1px);
+}
 .runRow .identity strong {
   color: var(--text);
 }
