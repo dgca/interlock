@@ -1,9 +1,15 @@
 // @vitest-environment jsdom
 import { transferableAbortController } from 'node:util';
+import {
+  boardSettingsRevisionConflict,
+  type SaveBoard,
+  type WorkflowBoard,
+} from '@interlock/core';
 import { act, createElement as h } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest';
+import { trpc, useQueryClient } from '../packages/ui/src/lib/query';
 import { routes } from '../packages/ui/src/routes';
 import { UiTestProvider } from './uiTestProvider';
 
@@ -47,7 +53,10 @@ vi.mock('../packages/ui/src/lib/api', async () => {
   };
 });
 
-const board = {
+const board: WorkflowBoard & {
+  workflowIds: string[];
+  protectedColumnIds: string[];
+} = {
   id: 'board',
   name: 'Saved board',
   columns: [{ id: 'stage', name: 'Stage' }],
@@ -81,6 +90,12 @@ const prompt = {
 let root: Root;
 let container: HTMLDivElement;
 let router: ReturnType<typeof createMemoryRouter>;
+let queryClient: ReturnType<typeof useQueryClient>;
+
+function TestApp() {
+  queryClient = useQueryClient();
+  return h(RouterProvider, { router });
+}
 const scrollIntoView = HTMLElement.prototype.scrollIntoView;
 
 beforeAll(async () => {
@@ -143,9 +158,7 @@ afterEach(async () => {
 async function render(path: string) {
   router = createMemoryRouter(routes, { initialEntries: ['/boards', path] });
   await act(async () => {
-    root.render(
-      h(UiTestProvider, { env: 'test' }, h(RouterProvider, { router })),
-    );
+    root.render(h(UiTestProvider, { env: 'test' }, h(TestApp)));
   });
   await act(async () => vi.dynamicImportSettled());
 }
@@ -319,6 +332,120 @@ it('leaves a clean new Board freely and abandons its draft only after confirmati
   expect(router.state.location.pathname).toBe('/boards');
   await act(async () => router.navigate('/boards/new'));
   expect(field('Board name').value).toBe('');
+});
+
+it('keeps a Board conflict draft through background refresh and failed recovery, then saves the latest revision', async () => {
+  let saved = board;
+  rpc.boardSettings.mockImplementation(async () => saved);
+  rpc.listWorkflows.mockResolvedValue([
+    { id: 'workflow', name: 'Shared workflow', boardId: 'other-board' },
+  ]);
+  rpc.saveBoard.mockImplementation(async (input: SaveBoard) => {
+    if (input.expectedRevision !== saved.revision)
+      throw new Error(boardSettingsRevisionConflict);
+    saved = { ...saved, name: input.name, revision: saved.revision + 1 };
+    return saved;
+  });
+
+  await render('/boards/board/settings');
+  await ready(() => field('Board name'));
+  await fill('Board name', 'My local board');
+  await fill('Column 1 name', 'My local stage');
+
+  // Another client saves while the first editor keeps its original baseline.
+  const firstRemoteSave = {
+    ...board,
+    name: 'First remote save',
+    revision: 4,
+  };
+  saved = firstRemoteSave;
+  const query = trpc.boards.settings.queryFilter({ id: board.id });
+  await act(async () => queryClient.invalidateQueries(query));
+  expect(field('Board name').value).toBe('My local board');
+  await click('Save changes');
+  expect(rpc.saveBoard).toHaveBeenLastCalledWith(
+    expect.objectContaining({ expectedRevision: board.revision }),
+  );
+  expect(document.body.textContent).toContain(
+    'Board settings changed elsewhere',
+  );
+  expect(button('Save changes').disabled).toBe(true);
+  await click('Load latest');
+  await click('Keep editing');
+  expect(rpc.boardSettings).toHaveBeenCalledTimes(2);
+  expect(field('Column 1 name').value).toBe('My local stage');
+
+  const background = deferred<typeof board>();
+  rpc.boardSettings.mockReturnValueOnce(background.promise);
+  await act(async () => {
+    void queryClient.invalidateQueries(query);
+  });
+  saved = {
+    ...board,
+    name: 'Second remote save',
+    revision: 5,
+    columns: [{ id: 'stage', name: 'Remote stage' }],
+    workflowIds: ['workflow'],
+    protectedColumnIds: ['stage'],
+  };
+
+  const failedRead = deferred<never>();
+  rpc.boardSettings.mockReturnValueOnce(failedRead.promise);
+  await click('Load latest');
+  await act(async () => {
+    const confirm = button('Discard changes');
+    confirm.click();
+    confirm.click();
+  });
+  expect(rpc.boardSettings).toHaveBeenCalledTimes(4);
+  expect(field('Board name').disabled).toBe(true);
+  expect(field('Column 1 name').disabled).toBe(true);
+  expect(field('Workflows').disabled).toBe(true);
+  await submitTwice(field('Board name'));
+  expect(rpc.saveBoard).toHaveBeenCalledTimes(1);
+  await act(async () => failedRead.reject(new Error('Read interrupted')));
+  expect(document.body.textContent).toContain(
+    'Could not load board settings. Read interrupted',
+  );
+  expect(field('Board name').value).toBe('My local board');
+  expect(field('Column 1 name').value).toBe('My local stage');
+  expect(warnsBeforeUnload()).toBe(true);
+
+  await click('Load latest');
+  await click('Discard changes');
+  expect(rpc.boardSettings).toHaveBeenCalledTimes(5);
+  await act(async () => background.resolve(firstRemoteSave));
+  expect(field('Board name').value).toBe('Second remote save');
+  expect(field('Column 1 name').value).toBe('Remote stage');
+  expect(button('Remove Remote stage').disabled).toBe(true);
+  expect(warnsBeforeUnload()).toBe(false);
+  expect(document.body.textContent).not.toContain('Read interrupted');
+
+  await fill('Board name', 'Save after recovery');
+  await click('Save changes');
+  expect(rpc.saveBoard).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      expectedRevision: 5,
+      columns: [{ id: 'stage', name: 'Remote stage' }],
+      workflowIds: ['workflow'],
+      expectedBoards: { workflow: board.id },
+    }),
+  );
+  expect(router.state.location.pathname).toBe('/boards/board');
+});
+
+it('retains the Board draft and its ordinary retry for a separate workflow membership rejection', async () => {
+  await render('/boards/board/settings');
+  await ready(() => field('Board name'));
+  const message =
+    'The board for Shared workflow changed. Review the selection and try again.';
+  rpc.saveBoard.mockRejectedValue(new Error(message));
+  await fill('Board name', 'My local board');
+  await click('Save changes');
+  expect(document.body.textContent).toContain(message);
+  expect(document.body.textContent).not.toContain('Load latest');
+  expect(field('Board name').value).toBe('My local board');
+  expect(button('Save changes').disabled).toBe(false);
 });
 
 it('guards new prompt dismissal and Back, and opens the acknowledged prompt after a failed attempt', async () => {

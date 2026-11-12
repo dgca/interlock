@@ -7,6 +7,8 @@
 3. Select the workflows to include. If a workflow belongs to another board, the form names the board it moves from.
 4. Save the board. You can also change membership in **Workflow settings → Board**.
 
+If the board changes elsewhere before you save, the editor keeps your draft. Choose **Load latest** and confirm to replace your edits with the current saved settings. If loading fails, your draft stays available and you can try again.
+
 Membership applies to existing and future runs as soon as you save. It is independent of publication. To place runs in a stage, open a node's settings, choose a board column in **Stage**, and publish the workflow. Selecting a column binds its ID. Typing stage text creates a label for run summaries, even if the text matches a column. Renaming or reordering a column preserves its bindings. A draft, retained version, or retained run can prevent column removal.
 
 ## Find work and answer a request

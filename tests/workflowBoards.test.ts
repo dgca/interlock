@@ -5,6 +5,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import {
   blankDefinition,
   boardQuerySchema,
+  boardSettingsRevisionConflict,
   definitionSchema,
   nodeSchema,
   requestListSchema,
@@ -114,6 +115,36 @@ function approve(
     submissionId,
   };
 }
+
+it('rejects a stale board settings write through the shared API and accepts the current revision', async () => {
+  const engine = open();
+  const board = createBoard(engine);
+  const first = appRouter.createCaller({ engine });
+  const second = appRouter.createCaller({ engine });
+  const input = {
+    id: board.id,
+    name: 'Other editor',
+    columns: board.columns,
+    workflowIds: [],
+  };
+  const original = await first.boards.settings({ id: board.id });
+  const saved = await second.boards.save({
+    ...input,
+    expectedRevision: original.revision,
+  });
+  await expect(
+    first.boards.save({ ...input, expectedRevision: original.revision }),
+  ).rejects.toThrow(boardSettingsRevisionConflict);
+  const latest = await first.boards.settings({ id: board.id });
+  expect(latest.revision).toBe(saved.revision);
+  await expect(
+    first.boards.save({
+      ...input,
+      name: 'Reopened editor',
+      expectedRevision: latest.revision,
+    }),
+  ).resolves.toMatchObject({ name: 'Reopened editor' });
+});
 
 it('persists board settings, bound entry order, live membership and explicit titles across restart', async () => {
   const path = join(directory(), 'test.db');

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import {
   InterlockError,
+  boardSettingsRevisionConflict,
   type BoardMembership,
   type BoardQuery,
   type RunProjection,
@@ -109,9 +110,7 @@ export class WorkflowBoards {
     const saved = this.store.transaction(() => {
       const current = input.id ? this.get(input.id) : undefined;
       if (current?.revision !== input.expectedRevision)
-        throw new InterlockError(
-          'Board settings changed. Refresh and try again.',
-        );
+        throw new InterlockError(boardSettingsRevisionConflict);
       const existing = new Set(current?.columns.map((column) => column.id));
       const retained = new Set<string>();
       const columns = input.columns.map(({ id, name }) => {

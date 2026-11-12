@@ -4,6 +4,9 @@ import type { RunStatus } from './index.js';
 const id = z.string().min(1).max(200);
 const name = z.string().trim().min(1).max(200);
 
+export const boardSettingsRevisionConflict =
+  'Board settings changed. Refresh and try again.';
+
 export const saveBoardSchema = z
   .object({
     id: id.optional(),
