@@ -33,7 +33,7 @@ import { runAttention } from './runAttention.js';
 import { Requests } from './requests.js';
 import { WorkflowBoards } from './workflowBoards.js';
 import { captureHumanInput } from './humanInput.js';
-import { projectRun } from './runProjection.js';
+import { createRunProjector } from './runProjection.js';
 import { WorkResources } from './workResources.js';
 import { ExecutorManager } from './executors/manager.js';
 import { resolveAndValidateCwd } from './workingDirectory.js';
@@ -52,7 +52,7 @@ import { writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
-import { Store } from '@interlock/storage';
+import { Store, type ProjectionState } from '@interlock/storage';
 import { tidyWorkflow } from '@interlock/core/layout';
 import {
   applyWorkflowPositions,
@@ -268,7 +268,7 @@ export class Engine {
     this.chains = new RunChains(store);
     this.continuation = new Continuation(
       store,
-      (id) => this.projectionState(id),
+      (id) => this.overlayProjection(this.store.continuation(id)),
       (id) => this.quiescence(id),
     );
     this.externalInputs = new ExternalInputs(store, {
@@ -1734,8 +1734,7 @@ export class Engine {
   runAttention(requests = this.requests.current()) {
     return runAttention(requests);
   }
-  private projectionState(id: string) {
-    const state = this.store.continuation(id);
+  private overlayProjection<T extends ProjectionState>(state: T): T {
     for (const execution of state.executions)
       if (execution.kind === 'wait' && this.localJobs.has(execution.id))
         execution.pollCheckRunning = true;
@@ -1744,7 +1743,21 @@ export class Engine {
     return state;
   }
   projectRun(id: string, override?: Run) {
-    return projectRun(this.store, id, this.projectionState(id), override);
+    const children = override?.executions.at(-1)?.childRunIds ?? [];
+    return createRunProjector(
+      this.store,
+      this.overlayProjection(this.store.currentProjection([id, ...children])),
+      override,
+    )(id);
+  }
+  projectRuns<T extends { id: string }>(runs: T[]) {
+    const project = createRunProjector(
+      this.store,
+      this.overlayProjection(
+        this.store.currentProjection(runs.map((run) => run.id)),
+      ),
+    );
+    return runs.map((run) => ({ ...run, ...project(run.id) }));
   }
   inspect(id: string) {
     const run = this.run(id);
@@ -3165,8 +3178,14 @@ export class Engine {
       this.pauses.refresh();
       this.budgets.refresh();
       this.resources.refresh();
-      for (const work of this.store.work('claimed'))
-        if (this.stalls.deadlineExpired(work)) {
+      for (const state of this.store.workState('claimed')) {
+        const deadline = this.stalls.deadlineExpired(state);
+        if (!deadline && !(Date.parse(state.leaseUntil!) <= this.nowMs()))
+          continue;
+        const work = this.store.get<WorkRequest>('work', state.id);
+        if (work?.status !== 'claimed' || work.attempt !== state.attempt)
+          continue;
+        if (deadline) {
           this.event(
             this.run(work.runId),
             'work.execution_timed_out',
@@ -3177,7 +3196,7 @@ export class Engine {
             'Maximum active execution duration reached',
             'deadline',
           );
-        } else if (Date.parse(work.leaseUntil!) <= this.nowMs()) {
+        } else {
           work.expiredClaims = [
             ...(work.expiredClaims ?? []),
             {
@@ -3188,6 +3207,7 @@ export class Engine {
           ];
           this.releaseFailure(work, 'Worker lease expired', 'expiry');
         }
+      }
       const continuedChains = new Set<string>();
       let changed = true,
         rounds = 0;
@@ -3202,9 +3222,26 @@ export class Engine {
           )
         )
           changed = true;
+        const due = this.store.dueAgentExecutions(
+          new Date(this.nowMs()).toISOString(),
+        );
         // Earlier advances can cancel or resume descendants in this same pass.
-        for (const { id } of this.store.activeRuns()) {
-          const candidate = this.run(id);
+        for (const { run, execution } of this.store.activeRunState()) {
+          if (run.status === 'queued') continue;
+          if (
+            execution?.status === 'waiting' &&
+            execution.nodeId === run.cursor &&
+            !execution.resourceBlocked &&
+            (execution.kind === 'input' ||
+              (execution.kind === 'agent' && !due.has(execution.id)) ||
+              (execution.kind === 'wait' &&
+                execution.resumeAt &&
+                Date.parse(execution.resumeAt) > this.nowMs() &&
+                (!execution.timeoutAt ||
+                  Date.parse(execution.timeoutAt) > this.nowMs())))
+          )
+            continue;
+          const candidate = this.run(run.id);
           if (candidate.chain && continuedChains.has(candidate.chain.rootRunId))
             continue;
           const before = this.chains.read(candidate)?.latestRunId;
@@ -3218,26 +3255,34 @@ export class Engine {
       }
       this.resources.refresh();
     });
-    for (const run of this.store.activeRuns()) {
-      const execution = run.executions.at(-1);
+    for (const {
+      run: state,
+      execution: current,
+    } of this.store.activeRunState()) {
+      if (!current) continue;
+      const duePoll =
+        current.kind === 'wait' &&
+        state.status === 'waiting' &&
+        current.status === 'waiting' &&
+        current.nextCheckAt &&
+        Date.parse(current.nextCheckAt) <= this.nowMs();
+      const localOperation =
+        state.status === 'running' &&
+        current.status === 'running' &&
+        (current.kind === 'script' || current.kind === 'fetch');
       if (
-        !execution ||
-        (execution.resources?.length && !execution.resourceActive) ||
-        this.localJobs.has(execution.id) ||
-        (this.pauses.applicable(run.workflowId).length && !execution.background)
+        (!duePoll && !localOperation) ||
+        (current.resources?.length && !current.resourceActive) ||
+        this.localJobs.has(current.id) ||
+        (this.pauses.applicable(state.workflowId).length && !current.background)
       )
         continue;
-      if (execution.kind === 'wait') {
-        if (run.status === 'waiting' && execution.status === 'waiting')
-          this.runPollCheck(run, execution);
+      const run = this.run(state.id);
+      const execution = run.executions.at(-1)!;
+      if (duePoll) {
+        this.runPollCheck(run, execution);
         continue;
       }
-      if (
-        run.status !== 'running' ||
-        (execution.kind !== 'script' && execution.kind !== 'fetch') ||
-        execution.status !== 'running'
-      )
-        continue;
       const node = this.definition(run).nodes.find(
         (n) => n.id === execution.nodeId,
       )!;

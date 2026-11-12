@@ -796,15 +796,10 @@ export const appRouter = t.router({
     find: p
       .input(runQuerySchema.default({}))
       .query(({ ctx, input }) =>
-        ctx.engine.store
-          .findRuns(input)
-          .map((run) => ({ ...run, ...ctx.engine.projectRun(run.id) })),
+        ctx.engine.projectRuns(ctx.engine.store.findRuns(input)),
       ),
     list: p.query(({ ctx }) =>
-      ctx.engine.store
-        .runs()
-        .reverse()
-        .map((run) => ({ ...run, ...ctx.engine.projectRun(run.id) })),
+      ctx.engine.projectRuns(ctx.engine.store.runs().reverse()),
     ),
     summaries: p
       .input(runSummaryQuerySchema.default({}))
@@ -825,9 +820,8 @@ export const appRouter = t.router({
             0,
             1,
           ).total,
-          items: page.items.map((run) => ({
+          items: ctx.engine.projectRuns(page.items).map((run) => ({
             ...run,
-            ...ctx.engine.projectRun(run.id),
             attention: attention.get(run.id),
             request: requests.get(run.id)?.[0]?.target,
             attentionCount: requests.get(run.id)?.length,

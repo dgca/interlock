@@ -470,3 +470,78 @@ it('29f3cb6-input-hold-since: anchors inherited hold, release and rehold to the 
   expect(reheld.waiting!.since).toBe('2026-01-04T00:00:00.000Z');
   expect(e.projectRun(child)).toEqual(reheld);
 });
+
+it('reads parked runs and paged status without loading execution histories', async () => {
+  const e = setup();
+  const definition = blankDefinition();
+  definition.nodes[1].stage = 'Review';
+  const workflowId = publish(e, definition);
+  const active = e.start(workflowId, { visible: null }).run;
+  const [work] = e.store.work('available', active.id);
+  const payload = { marker: 'retained'.repeat(2048) };
+  e.store.transaction(() => {
+    for (let i = 0; i < 80; i++) {
+      e.store.put('runs', {
+        ...active,
+        id: `retained-${i}`,
+        status: 'completed',
+        createdAt: '2000-01-01T00:00:00.000Z',
+        executions: [
+          { ...active.executions[0], input: payload, output: payload },
+        ],
+      });
+      e.store.put('work', {
+        ...work,
+        id: `retained-work-${i}`,
+        executionId: `retained-execution-${i}`,
+        status: 'completed',
+        input: payload,
+        output: payload,
+      });
+    }
+  });
+  const read = vi.spyOn(e.store, 'get');
+  const history = vi.spyOn(e.store, 'continuation');
+  const loadActive = vi.spyOn(e.store, 'activeRuns');
+  e.pump();
+  const caller = appRouter.createCaller({ engine: e });
+  const result = await caller.runs.find({ limit: 1 });
+  expect(result).toMatchObject([
+    {
+      id: active.id,
+      stage: 'Review',
+      waiting: { kind: 'claim_queue' },
+      input: { visible: null },
+    },
+  ]);
+  expect(
+    read.mock.calls.filter(
+      ([collection]) => collection === 'runs' || collection === 'work',
+    ),
+  ).toEqual([]);
+  expect(history).not.toHaveBeenCalled();
+  expect(loadActive).not.toHaveBeenCalled();
+});
+
+it('keeps status metadata in sync across a rolled-back update and deletion', () => {
+  const e = setup();
+  const workflowId = publish(e);
+  const run = e.start(workflowId, {}).run;
+  const [work] = e.store.work('available', run.id);
+  expect(() =>
+    e.store.transaction(() => {
+      e.store.put('runs', { ...run, status: 'completed' });
+      e.store.put('work', { ...work, status: 'cancelled' });
+      expect(e.projectRun(run.id).waiting).toBeNull();
+      expect(e.store.workStatus(work.id)).toBe('cancelled');
+      throw new Error('rollback');
+    }),
+  ).toThrow('rollback');
+  expect(e.projectRun(run.id).waiting?.kind).toBe('claim_queue');
+  expect(e.store.workStatus(work.id)).toBe('available');
+  e.store.remove('work', work.id);
+  e.store.remove('runs', run.id);
+  expect(e.store.currentRun(run.id)).toBeUndefined();
+  expect(e.store.workStatus(work.id)).toBeUndefined();
+  expect(e.store.findRuns({ rootOnly: false, limit: 10 })).toEqual([]);
+});

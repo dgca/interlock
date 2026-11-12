@@ -596,7 +596,7 @@ it('adds policies to a published legacy database and preserves consumption acros
   let e = setup(path);
   expect(e.store.migration).toMatchObject({
     from: 3,
-    to: 18,
+    to: 19,
     backup: expect.any(String),
   });
   for (const [collection, records] of Object.entries(previousRelease.documents))

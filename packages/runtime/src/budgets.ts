@@ -7,6 +7,7 @@ import {
   type BudgetRecord,
   type SetBudgetInput,
   type Run,
+  type WorkRequest,
 } from '@interlock/core';
 import type { Store } from '@interlock/storage';
 import type { Usage } from './usage.js';
@@ -134,21 +135,27 @@ export class Budgets {
       );
   }
   refresh() {
-    const available = this.store.work('available');
+    const available = this.store.workState('available');
     if (!available.length) return;
     const evaluations = this.evaluations(
       new Set(available.map((work) => work.runId)),
     );
-    for (const work of available) {
+    for (const state of available) {
       const runIds = evaluations
         .filter(
           ({ scope, result }) =>
-            scope.has(work.runId) && result.state === 'blocked',
+            scope.has(state.runId) && result.state === 'blocked',
         )
         .map(({ record }) => record.id)
         .sort();
+      if (
+        runIds.length
+          ? isDeepStrictEqual(state.budgetBlocked?.runIds, runIds)
+          : !state.budgetBlocked
+      )
+        continue;
+      const work = this.store.get<WorkRequest>('work', state.id)!;
       if (runIds.length) {
-        if (isDeepStrictEqual(work.budgetBlocked?.runIds, runIds)) continue;
         work.budgetBlocked = {
           runIds,
           since: work.budgetBlocked?.since ?? new Date().toISOString(),
@@ -162,11 +169,10 @@ export class Budgets {
         };
         work.availableUntil = undefined;
       } else {
-        if (!work.budgetBlocked) continue;
         if (
           !work.resourceBlocked &&
           !work.pauseBlocked &&
-          work.budgetBlocked.remainingMs !== undefined
+          work.budgetBlocked?.remainingMs !== undefined
         )
           work.availableUntil = new Date(
             Date.now() + work.budgetBlocked.remainingMs,

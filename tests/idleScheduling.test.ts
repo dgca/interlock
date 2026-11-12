@@ -243,18 +243,26 @@ it('uses indexed lookups for work maintenance and continuation joins', () => {
   }
   expect(
     plan(
-      () => engine.store.work('claimed'),
+      () => engine.store.workState('claimed'),
       () => true,
       ['claimed'],
     ),
-  ).toContain('SEARCH documents USING INDEX work_status');
-  expect(
-    plan(
-      () => engine.store.resourceAdmissionWork(),
-      () => true,
-      [],
-    ),
-  ).toContain('INDEX work_admission');
+  ).toContain('SEARCH work_metadata USING INDEX work_metadata_status');
+  const resources = plan(
+    () => engine.store.resourceAdmissionWork(),
+    () => true,
+    [],
+  );
+  expect(resources).toContain('INDEX work_metadata_status');
+  expect(resources).toContain('INDEX work_metadata_resource_block');
+  expect(resources).toContain('(collection=? AND id=?)');
+  const background = plan(
+    () => engine.store.terminalBackgroundRuns(),
+    () => true,
+    [],
+  );
+  expect(background.split('\n')[0]).toContain('SCAN b');
+  expect(background).toContain('(collection=? AND id=?)');
   const continuation = plan(
     () => engine.store.continuation(run.id),
     (sql) => sql.includes("d.collection = 'work'"),
@@ -266,11 +274,11 @@ it('uses indexed lookups for work maintenance and continuation joins', () => {
   expect(continuation).not.toContain('(collection=?)');
   expect(
     plan(
-      () => engine.store.activeRuns(),
+      () => engine.store.activeRunState(),
       () => true,
       [],
     ),
-  ).toContain('SEARCH documents USING INDEX runs_status_created');
+  ).toContain('SEARCH run_metadata USING INDEX run_metadata_status');
   for (const read of [
     () => engine.store.runAncestors(new Set([run.id])),
     () => engine.store.runTrees(new Set([run.id])),

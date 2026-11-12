@@ -47,8 +47,12 @@ export class Stalls {
       return result;
     });
   }
-  policy(definition: WorkflowDefinition, node: WorkflowNode): StallPolicy {
-    const result: StallPolicy = { ...this.settings().policy };
+  policy(
+    definition: WorkflowDefinition,
+    node: WorkflowNode,
+    library = this.settings().policy,
+  ): StallPolicy {
+    const result: StallPolicy = { ...library };
     for (const level of [definition, node])
       for (const key of [
         'unclaimedStallMs',
@@ -77,7 +81,11 @@ export class Stalls {
       for (const h of current)
         this.store.put('activeClockHolds', { ...h, releasedAt: iso() });
   }
-  elapsed(run: Run, since: string, workId?: string) {
+  elapsed(
+    run: Pick<Run, 'id' | 'parentRunId' | 'parentMode' | 'workflowId'>,
+    since: string,
+    workId?: string,
+  ) {
     // Input acceptance holds inherit through ordinary ancestors; work holds are local.
     const ids = new Set([run.id]);
     let ancestor = run;
@@ -87,7 +95,7 @@ export class Stalls {
       !ids.has(ancestor.parentRunId)
     ) {
       ids.add(ancestor.parentRunId);
-      const parent = this.store.get<Run>('runs', ancestor.parentRunId);
+      const parent = this.store.currentRun(ancestor.parentRunId);
       if (!parent) break;
       ancestor = parent;
     }
@@ -113,10 +121,15 @@ export class Stalls {
       })),
     );
   }
-  deadlineExpired(work: WorkRequest) {
+  deadlineExpired(
+    work: Pick<
+      WorkRequest,
+      'status' | 'runId' | 'id' | 'maxExecutionMs' | 'claimedAt'
+    >,
+  ) {
     if (work.status !== 'claimed' || !work.maxExecutionMs || !work.claimedAt)
       return false;
-    const run = this.store.get<Run>('runs', work.runId);
+    const run = this.store.currentRun(work.runId);
     return (
       !!run &&
       this.elapsed(run, work.claimedAt, work.id).activeMs >= work.maxExecutionMs
@@ -147,27 +160,37 @@ export class Stalls {
   }
   tick() {
     const existing = this.store.currentStalls();
+    const unresolved = new Set(existing.map((record) => record.id));
     const current = new Set<string>();
-    for (const run of this.store.activeRuns()) {
+    const library = this.settings().policy;
+    const definitions = new Map<string, WorkflowDefinition | undefined>();
+    for (const { run, execution } of this.store.activeRunState()) {
       if (run.status === 'queued') continue;
-      const execution = run.executions.at(-1);
       if (!execution || !['running', 'waiting'].includes(execution.status))
         continue;
-      const definition = this.store.getVersion(
-        run.workflowId,
-        run.version,
-      )?.definition;
+      const key = JSON.stringify([run.workflowId, run.version]);
+      if (!definitions.has(key))
+        definitions.set(
+          key,
+          this.store.getVersion(run.workflowId, run.version)?.definition,
+        );
+      const definition = definitions.get(key);
       const node = definition?.nodes.find((n) => n.id === execution.nodeId);
       if (!definition || !node) continue;
-      const work = this.store
-        .forRuns<WorkRequest>('work', new Set([run.id]))
-        .find((w) => w.executionId === execution.id);
+      const policy = this.policy(definition, node, library);
+      if (
+        !policy.unclaimedStallMs &&
+        !policy.claimedIdleStallMs &&
+        !policy.humanWaitStallMs &&
+        !policy.runStallMs
+      )
+        continue;
+      const work = this.store.workForExecution(run.id, execution.id);
       const held =
         this.store.pauseHolds(run.workflowId).length > 0 ||
         work?.status === 'held' ||
         work?.managedExecution?.state === 'needs_human' ||
         !!this.store.externalInputHoldOwner(run.id);
-      const policy = this.policy(definition, node);
       const candidate = (kind: StallKind, since: string) => {
         const thresholdMs = policy[kind];
         if (!thresholdMs) return;
@@ -175,7 +198,7 @@ export class Stalls {
         const activeMs = this.elapsed(run, since, work?.id).activeMs;
         if (activeMs < thresholdMs) return;
         current.add(key);
-        if (held || existing.some((r) => r.id === key)) return;
+        if (held || unresolved.has(key)) return;
         const record: StallRecord = {
           id: key,
           runId: run.id,
@@ -189,11 +212,13 @@ export class Stalls {
           activeMs,
         };
         this.store.put('stalls', record);
-        this.emit(
-          run,
-          'stalled',
-          `${node.label.slice(0, 200)}: ${kind} reached ${thresholdMs} active ms`,
-        );
+        const full = this.store.get<Run>('runs', run.id);
+        if (full)
+          this.emit(
+            full,
+            'stalled',
+            `${node.label.slice(0, 200)}: ${kind} reached ${thresholdMs} active ms`,
+          );
       };
       if (work?.status === 'available')
         candidate('unclaimedStallMs', work.availableSince ?? work.createdAt);
@@ -205,9 +230,10 @@ export class Stalls {
       if (node.kind === 'input')
         candidate('humanWaitStallMs', execution.startedAt);
       if (
+        policy.runStallMs &&
         node.kind !== 'wait' &&
         !execution.childRunIds.some((id) => {
-          const r = this.store.get<Run>('runs', id);
+          const r = this.store.currentRun(id);
           return r && ['queued', 'running', 'waiting'].includes(r.status);
         })
       )

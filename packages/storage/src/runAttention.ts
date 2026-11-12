@@ -137,14 +137,14 @@ export function attentionAncestors(db: DatabaseSync, ids: Set<string>) {
     .prepare(
       `WITH RECURSIVE lineage(id) AS (
     SELECT value FROM json_each(?) UNION
-    SELECT json_extract(d.value, '$.parentRunId') FROM documents d JOIN lineage ON d.id = lineage.id
-    WHERE d.collection = 'runs' AND json_extract(d.value, '$.parentRunId') IS NOT NULL
-  ) SELECT d.id, json_extract(d.value, '$.parentRunId') AS parentRunId,
+    SELECT d.parent_id FROM lineage CROSS JOIN run_metadata d ON d.id = lineage.id
+    WHERE d.parent_id IS NOT NULL
+  ) SELECT d.id, d.parent_id AS parentRunId,
     json_extract(d.value, '$.parentMode') AS parentMode,
-    json_extract(d.value, '$.workflowId') AS workflowId,
-    json_extract(d.value, '$.chain.rootRunId') AS chainRootRunId,
-    json_extract(d.value, '$.status') AS status
-    FROM lineage CROSS JOIN documents d ON d.collection = 'runs' AND d.id = lineage.id
+    d.workflow_id AS workflowId,
+    d.chain_root_id AS chainRootRunId,
+    d.status
+    FROM lineage CROSS JOIN run_metadata d ON d.id = lineage.id
   `,
     )
     .all(JSON.stringify([...ids])) as Pick<

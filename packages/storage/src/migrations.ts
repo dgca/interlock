@@ -1,4 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
+import { migrateCurrentState } from './currentState.js';
 import {
   closeSync,
   mkdirSync,
@@ -350,6 +351,7 @@ export const migrations: readonly Migration[] = [
       `);
     },
   },
+  { version: 19, up: migrateCurrentState },
 ];
 
 type Migration = { version: number; up: (db: DatabaseSync) => void };
