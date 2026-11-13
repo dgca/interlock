@@ -9,8 +9,8 @@ import { Store } from '@interlock/storage';
 import { createApp } from '../../packages/server/src/app';
 import { developmentConnection } from '../../packages/server/src/connection';
 
-export async function openBrowserApp() {
-  const ui = 'packages/ui/dist';
+/** Serves the production UI build unless a test passes another build, such as the gallery build. */
+export async function openBrowserApp({ ui = 'packages/ui/dist' } = {}) {
   const index = join(ui, 'index.html');
   await access(index).catch(() => {
     throw new Error('Run pnpm build before the browser tests.');

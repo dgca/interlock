@@ -1,0 +1,40 @@
+.page {
+  min-height: 100vh;
+  background: var(--workspace);
+}
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+}
+.section h2 {
+  margin: 0 0 16px;
+  font-size: 18px;
+  font-weight: 600;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+  gap: 16px;
+}
+.specimen {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.caption {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.sample {
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--form);
+  overflow-x: auto;
+}
+.specimen[data-wide] {
+  grid-column: 1 / -1;
+}

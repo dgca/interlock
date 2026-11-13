@@ -119,6 +119,12 @@ const VariableRoute = lazy(() =>
   })),
 );
 
+// The component gallery is development-only. Production builds replace the
+// flag with false, so the bundler drops this import and its chunk.
+const Gallery = import.meta.env.INTERLOCK_GALLERY
+  ? lazy(() => import('../gallery/Gallery'))
+  : null;
+
 function RouteLoading({ label = 'Loading…' }: { label?: string }) {
   return (
     <Center
@@ -609,6 +615,18 @@ function NotFound({ title = 'Page not found' }: { title?: string }) {
 // A shared layout keeps connections alive while child routes change. Future
 // folder/group pages can be siblings without changing resource URLs.
 export const routes: RouteObject[] = [
+  ...(Gallery
+    ? [
+        {
+          path: '-/gallery',
+          element: (
+            <Suspense fallback={<RouteLoading />}>
+              <Gallery />
+            </Suspense>
+          ),
+        },
+      ]
+    : []),
   {
     Component: App,
     children: [
