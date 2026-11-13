@@ -723,7 +723,6 @@ export async function runDoctor(
         }
       }
 
-      // Fetch steps that call loopback, private or link-local hosts
       const privateFetch = privateFetchCheck(workflow, engine.store);
       if (privateFetch) {
         workflowIssues++;
