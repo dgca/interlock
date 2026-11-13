@@ -1,0 +1,8 @@
+{
+  "gallery-collections@1440": ["button-name", "color-contrast"],
+  "gallery-collections@390": ["button-name", "color-contrast"],
+  "run-inspector@1440": ["label-content-name-mismatch"],
+  "run-inspector@390": ["color-contrast", "label-content-name-mismatch"],
+  "workflow-editor@1440": ["aria-prohibited-attr"],
+  "workflow-editor@390": ["aria-prohibited-attr"]
+}

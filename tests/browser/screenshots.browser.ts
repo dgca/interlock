@@ -6,6 +6,7 @@ import {
 } from 'playwright';
 import { afterAll, beforeAll, describe, inject, it, vi } from 'vitest';
 import { paths } from '../../packages/ui/src/routes/paths';
+import { expectAccessible } from './accessibility';
 import { openBrowserApp } from './app';
 import {
   comparesScreenshots,
@@ -117,10 +118,13 @@ describe.each(widths)('gallery at %dpx', (width) => {
     await app?.close();
   });
 
-  it.for(gallerySections)('matches the %s section', async (section, ctx) => {
-    ctx.skip(!comparesScreenshots, screenshotSkipReason);
+  it.for(gallerySections)('checks the %s section', async (section) => {
+    const selector = `[data-gallery-section="${section}"]`;
+    await expectAccessible(page, `gallery-${section}@${width}`, {
+      include: selector,
+    });
     await expectScreenshot(
-      page.locator(`[data-gallery-section="${section}"]`),
+      page.locator(selector),
       `gallery-${section}-${width}`,
     );
   });
@@ -147,11 +151,13 @@ describe.each(widths)('gallery at %dpx', (width) => {
   });
 
   it.for(['modal', 'busy', 'discard'])(
-    'matches the %s dialog',
-    async (dialog, ctx) => {
+    'checks the %s dialog',
+    async (dialog) => {
       await page.goto(`${app.url}/-/gallery?open=${dialog}`);
       await page.getByRole('dialog').waitFor();
-      ctx.skip(!comparesScreenshots, screenshotSkipReason);
+      await expectAccessible(page, `gallery-dialog-${dialog}@${width}`, {
+        include: '[role="dialog"]',
+      });
       await expectScreenshot(page, `gallery-dialog-${dialog}-${width}`);
     },
   );
@@ -180,10 +186,10 @@ describe.each(widths)('main screens at %dpx', (width) => {
     vi.useRealTimers();
   });
 
-  it.for(screens)('matches the $name screen', async (screen, ctx) => {
+  it.for(screens)('checks the $name screen', async (screen) => {
     await page.goto(app.url + screen.path(seed));
     await screen.ready(page).first().waitFor();
-    ctx.skip(!comparesScreenshots, screenshotSkipReason);
+    await expectAccessible(page, `${screen.name}@${width}`);
     await expectScreenshot(page, `${screen.name}-${width}`, {
       mask: volatile(page),
     });
