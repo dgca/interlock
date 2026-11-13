@@ -18,6 +18,7 @@ import {
   parseReportArgs,
   formatWorkflowReport,
 } from './commands.js';
+import { runPricesCommand } from './prices.js';
 
 async function main() {
   const argv = process.argv.slice(2);
@@ -45,7 +46,7 @@ mcp       Stdio MCP bridge to the running engine. Set INTERLOCK_URL to override
 
 Workflow commands: workflows, workflow, starters, import-starter, import, update, edit, export, publish, archive, restore, delete, start, simulation, test-suite
 Run commands: runs, run, run-history, run-version, context-group, handoff-context, work, claim, preflight, submit, fail, renew, assignment-size, external-input, work-hold, work-resources, script, approve-script, script-approval, cancel-tree, cancel, retry
-Usage and budget commands: usage, report-usage, budget, set-budget
+Usage and budget commands: usage, report-usage, budget, set-budget, prices
 Local harness configuration and execution: executors
 Workflow variables: variables <read|manage> <json|@file> [--value-stdin]
 Workflow triggers: triggers (schedules is an alias) <read|manage> <json|@file>
@@ -129,6 +130,7 @@ Commands and the mcp bridge read the token from the api-token file beside the ke
       'report-usage',
       'budget',
       'set-budget',
+      'prices',
       'doctor',
       'report',
     ];
@@ -160,7 +162,11 @@ Commands and the mcp bridge read the token from the api-token file beside the ke
       }
       process.exit(report.status === 'fail' ? 1 : 0);
     }
-    console.log(JSON.stringify(await runCommand(argv), null, 2));
+    const result =
+      argv[0] === 'prices'
+        ? await runPricesCommand(argv.slice(1))
+        : await runCommand(argv);
+    console.log(JSON.stringify(result, null, 2));
     return;
   }
   const { values } = parseArgs({

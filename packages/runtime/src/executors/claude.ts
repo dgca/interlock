@@ -324,6 +324,7 @@ export const claudeAdapter: HarnessAdapter = {
               u.cacheCreationInputTokens,
             outputTokens: u.outputTokens,
             cachedInputTokens: u.cacheReadInputTokens,
+            cacheWriteInputTokens: u.cacheCreationInputTokens,
             ...(u.thinkingTokens !== undefined
               ? { reasoningOutputTokens: u.thinkingTokens }
               : {}),

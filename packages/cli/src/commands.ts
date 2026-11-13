@@ -17,6 +17,7 @@ import {
   runVersionPolicySchema,
   runTagsSchema,
   scriptApprovalModeSchema,
+  pricingLines,
   type DoctorReport,
   type DiagnosticCategory,
   type WorkflowReport,
@@ -834,7 +835,7 @@ export function formatWorkflowReport(report: WorkflowReport): string {
   );
   const costStr =
     report.usage.costs.map((c) => c.formatted).join(', ') || '0 USD';
-  lines.push(`  Attributed Cost: ${costStr}`);
+  lines.push(`  Attributed Cost: ${costStr}`, ...pricingLines(report.usage));
   lines.push(
     `  Coverage: ${report.usage.coverage.measuredPercentage}% measured (${report.usage.coverage.measuredAttempts}/${report.usage.coverage.totalAttempts} attempts), ${report.usage.coverage.unknownPercentage}% unknown (${report.usage.coverage.unknownAttempts}/${report.usage.coverage.totalAttempts} attempts)`,
   );

@@ -1,6 +1,6 @@
 # Usage reporting
 
-Interlock records usage supplied by external executors or measuring observers. It does not read provider accounts, parse session logs, infer token counts from prompts, or calculate prices. Optional [run budgets](run-budgets.md) can gate new Agent claims using these reports. Reporting is optional. Missing figures appear as unknown, including for completed runs.
+Interlock records usage supplied by external executors or measuring observers. It does not read provider accounts, parse session logs, or infer token counts from prompts. When tokens arrive without a cost, it [derives the cost from a local price table](#derived-cost). Optional [run budgets](run-budgets.md) can gate new Agent claims using these reports. Reporting is optional. Missing figures appear as unknown, including for completed runs.
 
 ## Report a claim attempt
 
@@ -33,7 +33,7 @@ MCP `report_usage` and the shared API `work.reportUsage` accept a work ID, the c
 }
 ```
 
-Use measured values in place of the example. Omit unavailable fields. A reported zero means the executor measured zero. Input and output counts include their cache and reasoning subsets; those subsets are not added again. When both are supplied, a subset cannot exceed its total.
+Use measured values in place of the example. Omit unavailable fields. A reported zero means the executor measured zero. Input and output counts include their cache and reasoning subsets; those subsets are not added again. `cachedInputTokens` counts prompt-cache reads and the optional `cacheWriteInputTokens` counts prompt-cache writes; both are part of `inputTokens`. When both are supplied, a subset cannot exceed its total.
 
 Each snapshot contains one to 20 unique, case-sensitive provider/model pairs. Provider and model names are trimmed, nonempty strings of at most 200 characters. Token counts and `amountMicros` are nonnegative safe integers. Costs use millionths of the stated three-letter uppercase currency code. Every cost requires a nonempty source of at most 300 characters, such as a provider response or an executor estimate. Interlock stores that attribution; it does not verify it against a bill.
 
@@ -155,6 +155,67 @@ The run inspector displays input/output totals, costs, reporting coverage, and p
 
 For [continue-as-new chains](continue-as-new.md), set `includeChain:true` to include all members of the requested run's chain. This defaults to false. `includeDescendants:true` then adds descendants of every selected member, including detached runs, exactly once. The response echoes `includeChain`; pagination still bounds groups rather than totals.
 
+## Derived cost
+
+When a model's usage has tokens but no `cost`, Interlock prices it from a local price table. A cost the executor or observer reported always wins and is never replaced. Derived costs are added to `get_run_usage` totals, the run inspector, and workflow reports, and are marked so they stay distinguishable:
+
+- Each derived model in a `snapshot` carries `derivedCost` with the price table (`id`, `version`, `custom`) and the per-million-token rates used. Its `cost.source` reads `Interlock price table VERSION`. Reported costs have no `derivedCost`.
+- `totals.pricing` (and `usage.pricing` in reports) lists the tables and prices assumed, and the models with no price. A reason accompanies each gap: `no_price` (model not in the table), `incomplete_tokens` (input or output count unknown), or `no_table` (usage recorded before this feature, which stays unpriced). Lists are capped at 20 entries with `truncated`.
+
+Failed, expired, cancelled and held attempts are priced like completed ones whenever they reported tokens. Managed executors that fail before returning a result still record no usage for that attempt.
+
+Pricing uses integer arithmetic: rates are millionths of the table currency per million tokens, every token class is multiplied exactly, and the sum is rounded half up to millionths once per model report. Totals add those integers, so they do not drift.
+
+Token classes:
+
+- Uncached input (`inputTokens` minus cached reads and cache writes) uses the input rate.
+- `cachedInputTokens` uses the cached-input rate, and `cacheWriteInputTokens` the cache-write rate. Where a model has no such rate, the input rate applies.
+- When a count is not reported, those tokens are priced as ordinary input. Codex does not report cache writes, so OpenAI cache-write charges are priced as input. The Claude Code executor reports cache writes; 1-hour writes are priced at the 5-minute write rate.
+- Reasoning tokens are part of `outputTokens` and use the output rate.
+- The shipped OpenAI rates are the short-context rates (requests up to 272K input tokens). Interlock cannot see each request's size, so long-context requests are underpriced.
+
+### Price table
+
+A run captures the current price table the first time it reports tokens without cost, and keeps that table for all its later usage. Editing the table changes derived cost for runs that capture it afterwards; runs that already captured a table keep their prices. Tables are stored by content, so a captured table never changes.
+
+Interlock ships a table of public list prices for Claude (`anthropic`) and OpenAI (`openai`) models, with its version, source URLs and retrieval dates. List prices change between releases. Unknown models get no price rather than an estimate. Models served through other providers, such as Bedrock or Vertex, are not in the shipped table.
+
+Table entries match the reported provider exactly (case-insensitive) and the model by exact ID first, then with a trailing date (`-20251001` or `@20251001`) and a trailing bracketed tag such as `[1m]` removed from both sides. An exact entry can therefore price one dated snapshot differently.
+
+Read and replace the table with the CLI or the shared API `prices.read` and `prices.set`:
+
+```sh
+interlock prices
+interlock prices @prices.json
+```
+
+The file holds the `id` returned by the read and the replacement table, or `null` to restore the shipped table:
+
+```json
+{
+  "expectedId": "CURRENT_TABLE_ID",
+  "table": {
+    "version": "2026-11-13-local",
+    "currency": "USD",
+    "sources": [],
+    "models": [
+      {
+        "provider": "anthropic",
+        "model": "claude-opus-5-5",
+        "inputMicros": 4000000,
+        "cachedInputMicros": 200000,
+        "cacheWriteMicros": 5000000,
+        "outputMicros": 20000000
+      }
+    ]
+  }
+}
+```
+
+Rates are integer millionths of the currency per million tokens, so `4000000` is $4 per million tokens. `cachedInputMicros` and `cacheWriteMicros` are optional. A stale `expectedId` is rejected. The replacement table holds every model you want priced; it does not merge with the shipped table.
+
+Run budgets count reported costs only; derived costs do not change budget admission.
+
 ## Use the CLI
 
 Save the report payload in a private file and submit it with:
@@ -169,9 +230,9 @@ The CLI uses the same request contracts as MCP. `report-usage` accepts either so
 
 ## Existing data and retention
 
-Usage receipts use the `usageAttempts` document collection, and run-level observer streams use `runUsage`. Observer snapshots are separate optional fields on attempt receipts; no database schema migration is needed. Existing snapshots remain executor reports. Historical attempts without receipts remain unknown and cannot receive observer reports. The latest legacy attempt can report as executor if its token is still retained by the work record. Older replaced or revoked legacy tokens cannot create attribution retroactively. Claim timestamps unavailable in legacy data remain null.
+Usage receipts use the `usageAttempts` document collection, and run-level observer streams use `runUsage`. Price tables use `priceTables`, the selected table `priceTableSetting`, and each run's captured table `runPricing`. Observer snapshots are separate optional fields on attempt receipts; no database schema migration is needed. Existing snapshots remain executor reports. Historical attempts without receipts remain unknown and cannot receive observer reports. The latest legacy attempt can report as executor if its token is still retained by the work record. Older replaced or revoked legacy tokens cannot create attribution retroactively. Claim timestamps unavailable in legacy data remain null.
 
-Receipts survive restart, retries, and published-definition cleanup. Deleting a workflow's run history also deletes its usage receipts and run-level usage streams. Portable workflow bundles exclude usage, just as they exclude runs. Summaries bound the returned groups, not the database scan or lifetime of retained history.
+Receipts survive restart, retries, and published-definition cleanup. Deleting a workflow's run history also deletes its usage receipts, run-level usage streams and captured price table references. Portable workflow bundles exclude usage, just as they exclude runs. Summaries bound the returned groups, not the database scan or lifetime of retained history.
 
 ## Usage in workflow comparisons
 
@@ -212,7 +273,7 @@ The Reports UI provides **Filter by tags** with **Apply filters** and **Clear fi
 - Run duration measures terminal wall time or elapsed time up to report generation for active runs. Admission queue wait measures time between queuing and admission. Human wait sums Input node execution time and declared work-hold intervals. Named library/workflow pauses are not themselves human-wait observations; their overlap with recorded human waits is exposed as paused time.
 - Node durations include executions with both start and completion timestamps. Stage durations sum those node durations per stage within each run, using each execution’s recorded workflow version. A node group spanning different stages has no single stage label. Median and p90 interpolate between sorted observations at `(count - 1) * percentile`, rounded to two decimals. For example, observations of 1 and 10 produce p90 of 9.1.
 - Claim wait measures availability to claim, split by new versus continuing sessions. Reliability includes attempts, lease expiries, failures, managed recovery events, and inactivity stalls.
-- Usage totals sum supplied token and cost figures. Currency totals and alias groups keep currencies separate. Run, node, model, and provider groups spanning multiple currencies return `costMicros: null` and `currency: "mixed"`. Selected observer attempt snapshots take precedence over executor snapshots. Groups cover run, node, reported provider/model, provider, and captured model alias. Run-level observer streams contribute to totals and run, model, and provider groups, but not node groups or attempt coverage.
+- Usage totals sum supplied token and cost figures, plus [derived costs](#derived-cost) for tokens reported without cost. `usage.pricing` states the prices assumed and the models with no price. Currency totals and alias groups keep currencies separate. Run, node, model, and provider groups spanning multiple currencies return `costMicros: null` and `currency: "mixed"`. Selected observer attempt snapshots take precedence over executor snapshots. Groups cover run, node, reported provider/model, provider, and captured model alias. Run-level observer streams contribute to totals and run, model, and provider groups, but not node groups or attempt coverage.
 - The UI shows **Unmeasured** for headline spend when attempt coverage is zero or no currency totals were supplied. An explicitly reported zero cost remains zero when coverage is nonzero. Partial coverage stays visible beside reported totals.
 - Measured coverage is the percentage of retained attempts with at least one selected model snapshot. It does not establish that each token or cost field is known or final. Missing numeric fields contribute zero to these report sums. Use `get_run_usage` or `interlock usage RUN_ID` for per-metric completeness, finality, overflow handling, and attempt details.
 - Top-level costs stay separated by currency. Each run, node, model, or provider breakdown has one cost amount and currency field. Use top-level currency totals when the selected data contains multiple currencies. Node and Exit group identities use node IDs across the sample, so reused IDs in different workflows can share a group.
