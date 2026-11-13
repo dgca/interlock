@@ -4,6 +4,8 @@ import { TRPCClientError } from '@interlock/client';
 import { ResultRejection } from '@interlock/core';
 import {
   inMcpProfile,
+  profileSchema,
+  profileShape,
   profileText,
   withProfileNextCall,
   type McpProfile,
@@ -42,13 +44,18 @@ export function createProfileServer(profile: McpProfile, version: string) {
     outputSchema?: z.AnyZodObject,
   ) {
     if (!inMcpProfile(profile, name)) return;
-    const schema: z.ZodRawShape | z.AnyZodObject = inputSchema;
+    const schema: z.ZodRawShape | z.AnyZodObject =
+      inputSchema instanceof z.ZodType
+        ? profileSchema(profile, inputSchema)
+        : profileShape(profile, inputSchema);
     server.registerTool<z.AnyZodObject, typeof schema>(
       name,
       {
         description: profileText(profile, description),
         inputSchema: schema,
-        ...(outputSchema ? { outputSchema } : {}),
+        ...(outputSchema
+          ? { outputSchema: profileSchema(profile, outputSchema) }
+          : {}),
       },
       async (input, extra) => {
         try {
