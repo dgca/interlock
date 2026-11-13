@@ -31,9 +31,14 @@ jobs:
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
       - run: pnpm install --frozen-lockfile
       - run: pnpm format:check
-      - run: pnpm lint
-      - run: pnpm lint:deps
-      - run: pnpm lint:unused
+      # Static analysis does not depend on the platform; type-aware lint also
+      # runs out of memory on the macOS runner.
+      - if: matrix.platform == 'linux'
+        run: pnpm lint
+      - if: matrix.platform == 'linux'
+        run: pnpm lint:deps
+      - if: matrix.platform == 'linux'
+        run: pnpm lint:unused
       - run: pnpm test
       - run: pnpm build
       - run: pnpm exec playwright install --with-deps --only-shell chromium
