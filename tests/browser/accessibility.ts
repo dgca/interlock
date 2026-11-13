@@ -8,12 +8,12 @@ import type { Page } from 'playwright';
  * selectors because selectors contain hashed CSS module class names. A count
  * that rises fails, and so does one that falls, so the baseline only shrinks.
  */
-const baseline: Record<string, Record<string, number>> = JSON.parse(
+const baseline = JSON.parse(
   readFileSync(
     new URL('./accessibility-baseline.json', import.meta.url),
     'utf8',
   ),
-);
+) as Record<string, Record<string, number>>;
 const file = 'tests/browser/accessibility-baseline.json';
 const blocking = new Set(['serious', 'critical']);
 const visited = new Set<string>();

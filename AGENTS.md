@@ -15,6 +15,8 @@ Interlock is a local workflow engine and editor. The public npm package is `@typ
 
 Keep execution rules in `packages/runtime`, contracts and graph validation in `packages/core`, and persistence in `packages/storage`. UI, CLI, and MCP callers share the server API.
 
+`pnpm lint:deps` enforces these boundaries with dependency-cruiser ([.dependency-cruiser.mjs](.dependency-cruiser.mjs)): each package imports only the lower layers its `allowedPackages` entry lists (from the bottom: `core`, `storage`, `runtime`, `server`, `client`, then `mcp`, `ui`, and `cli`), crosses packages through `@interlock/*` names rather than relative paths, forms no package cycle, and resolves every import. Only `packages/cli/src/bin.ts`, the executable's composition root, may import `server` and `mcp`; `client` imports only types from `server`, plus `@interlock/server/transport`. `packages/ui/src/design-system` imports no feature, route, API client, or domain code. Root `scripts/`, `tests/`, and `website/` are not packages and are not checked. Known violations are baselined in `.dependency-cruiser-known-violations.json` and the config's `knownPackageCycleEdges`; remove entries as they are fixed and never add new ones.
+
 New script nodes default to JavaScript. Definitions that omit `language` retain legacy Bash behavior. Preserve both paths when changing script execution or serialization.
 
 Prefix every new environment variable defined by Interlock with `INTERLOCK_`. Preserve names supplied by users or required by external tools.
@@ -30,6 +32,8 @@ While Interlock is on `0.x`, use `patch` changesets for all non-breaking changes
 Before changing a repeated interaction, compare the matching screens and identify the shared implementation. Reuse its behavior as well as its appearance. Put common fixes in the shared implementation; keep domain-specific differences explicit.
 
 Every UI element should provide useful information or help the user decide or act. Use existing titles and navigation for context instead of repeating them in subtitles or labels. Omit generic filler copy added to make a layout feel complete. Keep guidance that explains a non-obvious behavior, consequence, or next step, and place it where needed. Build visual hierarchy with spacing, typography, and grouping rather than extra copy.
+
+Before implementing a new screen, get a short written layout proposal approved. For changes under `packages/ui` other than Markdown files, complete the PR template's [UI evidence](.github/pull_request_template.md#ui-evidence) section and review its screenshots against the [UI review checklist](packages/ui/UI-REVIEW.md).
 
 ## Keep documentation and MCP definitions current
 
@@ -53,6 +57,6 @@ See [README.md](README.md) and the root `package.json` scripts for setup and com
 
 Connection configuration defaults to the running server's `/mcp` HTTP endpoint. The stdio fallback uses checkout paths in development and `interlock mcp` for installed copies, with optional absolute paths. Check which server is running before changing connection instructions.
 
-Run tests relevant to changed behavior and `pnpm build` for TypeScript and UI build checks. For packaging, CLI startup, or version changes, also run `pnpm test:package`. Check formatting with `pnpm format:check`.
+Run tests relevant to changed behavior and `pnpm build` for TypeScript and UI build checks. For packaging, CLI startup, or version changes, also run `pnpm test:package`. Run the static checks that CI runs: `pnpm format:check` for formatting, `pnpm lint` for type-aware ESLint rules and file-size budgets, `pnpm lint:deps` for the package boundaries above, and `pnpm lint:unused` for unused files, exports and dependencies. For ESLint, new source files stay within 800 lines and files listed in `eslint-size-budgets.json` must not grow; existing violations live in `eslint-suppressions.json`, so after fixing some, run `pnpm lint --prune-suppressions`, and lower or remove a file's size ceiling when it shrinks. For Knip, configure new entry points in `knip.json`; after removing a finding listed in `knip-baseline.json`, drop it with `pnpm lint:unused --update` (`--allow-new` baselines new findings).
 
 The package smoke test needs a completed build. It installs into a temporary prefix and exercises the bundled engine and MCP bridge. The separate `scripts/codex-smoke.ts` uses a real account and model, creates workflow data, and is not part of routine validation.

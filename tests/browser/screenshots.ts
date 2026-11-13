@@ -9,14 +9,18 @@ import type { Locator, Page } from 'playwright';
  * differs on macOS, so other platforms skip comparisons and still run every
  * other assertion, including accessibility checks.
  */
-export const screenshotPlatform = 'linux';
+const screenshotPlatform = 'linux';
 export const comparesScreenshots = process.platform === screenshotPlatform;
 export const screenshotSkipReason = `Screenshot comparisons run only on ${screenshotPlatform} (baselines are pinned to the CI runner); skipped on ${process.platform}.`;
 
 const update = process.env.INTERLOCK_UPDATE_SNAPSHOTS === '1';
+if (update && process.env.CI)
+  throw new Error(
+    'INTERLOCK_UPDATE_SNAPSHOTS cannot run in CI, where it would rewrite baselines silently. Take new baselines from the screenshot-diffs artifact instead (see tests/browser/README.md).',
+  );
 const baselines = 'tests/browser/__screenshots__';
 /** CI uploads this directory when the browser tests fail. */
-export const screenshotResults = 'test-results/screenshots';
+const screenshotResults = 'test-results/screenshots';
 
 /** A fixed clock keeps relative times and durations stable in screenshots. */
 export const screenshotTime = new Date('2026-01-15T12:00:00.000Z');
