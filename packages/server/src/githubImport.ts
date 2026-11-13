@@ -3,11 +3,11 @@ import { InterlockError } from '@interlock/core';
 import type { BoardImportSetup, VariableImportBindings } from '@interlock/core';
 import type { Store } from '@interlock/storage';
 import type { Engine } from '@interlock/runtime';
-import { boardImportCatalog } from '../../runtime/src/boardImport.js';
+import { boardImportCatalog } from '@interlock/runtime/boardImport';
 import {
   inspectImportDocument,
   importSelection,
-} from '../../runtime/src/importSelection.js';
+} from '@interlock/runtime/importSelection';
 
 const segment = z
   .string()

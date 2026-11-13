@@ -4,7 +4,10 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@interlock/client": "workspace:*"
+    "@interlock/client": "workspace:*",
+    "@interlock/core": "workspace:*",
+    "@interlock/mcp": "workspace:*",
+    "@interlock/server": "workspace:*"
   },
   "scripts": {
     "start": "tsx src/index.ts",

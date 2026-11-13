@@ -1,14 +1,14 @@
 #!/usr/bin/env node
-import '../../server/src/sqliteWarning.js';
-import { createMcpClient } from '../../mcp/src/client.js';
+import '@interlock/server/sqliteWarning';
+import { createMcpClient } from '@interlock/mcp/client';
 import { parseArgs } from 'node:util';
 import { homedir } from 'node:os';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { startServer } from '../../server/src/start.js';
-import { createMcpServer } from '../../mcp/src/server.js';
-import { VERSION } from '../../core/src/version.js';
+import { startServer } from '@interlock/server/start';
+import { createMcpServer } from '@interlock/mcp';
+import { VERSION } from '@interlock/core/version';
 import {
   runCommand,
   commandError,

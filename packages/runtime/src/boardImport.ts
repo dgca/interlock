@@ -14,7 +14,7 @@ import {
   type WorkflowNode,
 } from '@interlock/core';
 import type { Store } from '@interlock/storage';
-import type { WorkflowBundle } from '../../core/src/transfer.js';
+import type { WorkflowBundle } from '@interlock/core/transfer';
 import { fingerprint } from './versionIdentity.js';
 
 export const boardCollection = 'workflowBoards';

@@ -78,9 +78,9 @@ import {
 } from './responses.js';
 import { createProfileServer } from './register.js';
 import { parseMcpProfile } from './profiles.js';
-import { VERSION } from '../../core/src/version.js';
+import { VERSION } from '@interlock/core/version';
 import type { createMcpClient } from './client.js';
-import { workflowBundleSchema } from '../../core/src/transfer.js';
+import { workflowBundleSchema } from '@interlock/core/transfer';
 import {
   publishSchemaResources,
   sharedDefinitionSchema,

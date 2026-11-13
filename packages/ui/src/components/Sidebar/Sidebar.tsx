@@ -13,7 +13,7 @@ import {
   Columns3,
   RefreshCw,
 } from 'lucide-react';
-import { VERSION } from '../../../../core/src/version';
+import { VERSION } from '@interlock/core/version';
 import { Link } from 'react-router';
 import { paths } from '../../routes/paths';
 import styles from './Sidebar.module.css';

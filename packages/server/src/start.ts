@@ -8,7 +8,7 @@ import { isLoopback, parseRequireToken } from './apiToken.js';
 import { apiTokenPath, ensureApiToken } from '@interlock/core/apiToken';
 import type { ConnectionConfig } from './connection.js';
 import { checkPort, lockDatabase, startupError } from './startup.js';
-import { nativeAdapters } from '../../runtime/src/executors/native.js';
+import { nativeAdapters } from '@interlock/runtime/executors/native';
 
 export function parseAllowedRoots(value?: string): string[] | undefined {
   if (!value || !value.trim()) return undefined;

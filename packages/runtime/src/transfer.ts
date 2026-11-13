@@ -39,7 +39,7 @@ import {
 import {
   workflowBundleSchema,
   type WorkflowBundle,
-} from '../../core/src/transfer.js';
+} from '@interlock/core/transfer';
 import {
   applyBoardImport,
   exportBoardSuggestion,

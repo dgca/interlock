@@ -8,11 +8,11 @@ import {
   type BoardSuggestion,
 } from '@interlock/core';
 import type { Engine } from '@interlock/runtime';
-import { fingerprint } from '../../runtime/src/versionIdentity.js';
+import { fingerprint } from '@interlock/runtime/versionIdentity';
 import {
   applyBoardImport,
   previewBoardImport,
-} from '../../runtime/src/boardImport.js';
+} from '@interlock/runtime/boardImport';
 import sdlc from '../../../workflows/sdlc.json';
 import evaluate from '../../../workflows/evaluate.json';
 

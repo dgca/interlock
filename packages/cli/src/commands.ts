@@ -307,7 +307,7 @@ export async function runCommand(argv: string[]) {
       if (args.length !== 1)
         throw new Error('Import options require a workflow bundle');
       const { assertLegacyVariableFree } =
-        await import('../../core/src/importDocument.js');
+        await import('@interlock/core/importDocument');
       assertLegacyVariableFree(input);
       return client.workflows.create.mutate({ ...input, imported: true });
     }

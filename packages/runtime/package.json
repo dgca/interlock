@@ -5,7 +5,12 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./log": "./src/log.ts"
+    "./log": "./src/log.ts",
+    "./boardImport": "./src/boardImport.ts",
+    "./executors/native": "./src/executors/native.ts",
+    "./importSelection": "./src/importSelection.ts",
+    "./transfer": "./src/transfer.ts",
+    "./versionIdentity": "./src/versionIdentity.ts"
   },
   "dependencies": {
     "@interlock/core": "workspace:*",

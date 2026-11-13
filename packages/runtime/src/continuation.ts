@@ -25,7 +25,7 @@ import type {
   BriefingQuery,
   WaitQuery,
   ResultQuery,
-} from '../../core/src/continuation.js';
+} from '@interlock/core/continuation';
 import type { Store } from '@interlock/storage';
 
 const counts = (statuses: string[]) =>

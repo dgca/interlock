@@ -1,4 +1,4 @@
-import { VERSION } from '../../../core/src/version.js';
+import { VERSION } from '@interlock/core/version';
 import { type ModelUsage } from '@interlock/core';
 import {
   HarnessResultError,
