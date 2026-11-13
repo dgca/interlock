@@ -320,19 +320,19 @@ Script nodes and Script checks in polling Waits receive these environment
 variables. Read them through `process.env` in JavaScript or shell variables
 in Bash. JavaScript's `input` and Bash's JSON stdin keep their usual format.
 
-| Variable                              | Value                                                                                                                                  |
-| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `INTERLOCK_RUN_ID`                    | Run executing the script. Use this ID to inspect the run.                                                                              |
-| `INTERLOCK_ROOT_RUN_ID`               | Outermost ancestor run. A top-level run identifies itself. A detached child keeps its original ancestry.                               |
-| `INTERLOCK_WORKFLOW_ID`               | Workflow whose published definition supplies the step. Batch items use their owner's workflow.                                         |
-| `INTERLOCK_WORKFLOW_VERSION`          | Published version number.                                                                                                              |
-| `INTERLOCK_NODE_ID`                   | Step ID in the published definition. For a polling check, this is the Wait node ID.                                                    |
-| `INTERLOCK_EXECUTION_ID`              | Current node execution. Each new visit and explicit retry gets a fresh ID. Checks within the same Wait attempt share its execution ID. |
-| `INTERLOCK_ATTEMPT`                   | Attempt within a visit, starting at 1. Explicit retries increment it. A later visit starts at 1.                                       |
-| `INTERLOCK_BATCH_OWNER_RUN_ID`        | Run containing the Batch that started this item. Present for Batch item runs.                                                          |
-| `INTERLOCK_BATCH_ITEM_INDEX`          | Zero-based position in the Batch input. Present for Batch item runs.                                                                   |
-| `INTERLOCK_POLL_CHECK_NUMBER`         | Present for polling Script checks. Starts at 1 within each Wait attempt. An interrupted check can reuse its number after restart.      |
-| `INTERLOCK_EXECUTION_PROVENANCE_FILE` | Path to temporary JSON file with prior node provenance: `{ [nodeId]: { visitCount, latest, history } }`. Cleaned up upon completion.   |
+| Variable                              | Value                                                                                                                                             |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `INTERLOCK_RUN_ID`                    | Run executing the script. Use this ID to inspect the run.                                                                                         |
+| `INTERLOCK_ROOT_RUN_ID`               | Outermost ancestor run. A top-level run identifies itself. A detached child keeps its original ancestry.                                          |
+| `INTERLOCK_WORKFLOW_ID`               | Workflow whose published definition supplies the step. Batch items use their owner's workflow.                                                    |
+| `INTERLOCK_WORKFLOW_VERSION`          | Published version number.                                                                                                                         |
+| `INTERLOCK_NODE_ID`                   | Step ID in the published definition. For a polling check, this is the Wait node ID.                                                               |
+| `INTERLOCK_EXECUTION_ID`              | Current node execution. Each new visit and explicit retry gets a fresh ID. Checks within the same Wait attempt share its execution ID.            |
+| `INTERLOCK_ATTEMPT`                   | Attempt within a visit, starting at 1. Explicit retries increment it. A later visit starts at 1.                                                  |
+| `INTERLOCK_BATCH_OWNER_RUN_ID`        | Run containing the Batch that started this item. Present for Batch item runs.                                                                     |
+| `INTERLOCK_BATCH_ITEM_INDEX`          | Zero-based position in the Batch input. Present for Batch item runs.                                                                              |
+| `INTERLOCK_POLL_CHECK_NUMBER`         | Present for polling Script checks. Starts at 1 within each Wait attempt. An interrupted check can reuse its number after restart.                 |
+| `INTERLOCK_EXECUTION_PROVENANCE_FILE` | Path to temporary owner-only JSON file with prior node provenance: `{ [nodeId]: { visitCount, latest, history } }`. Removed when the Script ends. |
 
 Interlock uses `INTERLOCK_` for its own environment variables. Choose names
 outside that prefix for saved variable bindings to avoid collisions. Explicit

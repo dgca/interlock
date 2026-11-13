@@ -5,7 +5,7 @@ import { createApp, serveUi } from './app.js';
 import { parseRequireToken } from './apiToken.js';
 import { apiTokenPath, ensureApiToken } from '@interlock/core/apiToken';
 import type { ConnectionConfig } from './connection.js';
-import { checkPort, startupError } from './startup.js';
+import { checkPort, lockDatabase, startupError } from './startup.js';
 import { nativeAdapters } from '../../runtime/src/executors/native.js';
 
 export function parseAllowedRoots(value?: string): string[] | undefined {
@@ -52,10 +52,12 @@ export async function startServer(options: {
 }) {
   await checkPort(options.port);
   const connection = withApiToken(options.connection);
+  const unlock = lockDatabase(options.database);
   let store: Store;
   try {
     store = new Store(options.database);
   } catch (error) {
+    unlock();
     throw startupError(error, options.database);
   }
   if (store.migration.backup)
@@ -75,6 +77,7 @@ export async function startServer(options: {
   } catch (error) {
     engine?.stop();
     store.close();
+    unlock();
     throw startupError(error, options.database);
   }
   const app = createApp(engine, connection);
@@ -100,6 +103,7 @@ export async function startServer(options: {
       server.close();
       engine.stop();
       store.close();
+      unlock();
       process.exitCode = 1;
     };
   server.on('error', onError(options.port, '--port'));
@@ -115,6 +119,7 @@ export async function startServer(options: {
       engine.stop();
       server.close(() => {
         store.close();
+        unlock();
         process.exit(0);
       });
       setTimeout(() => process.exit(0), 1000).unref();
