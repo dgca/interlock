@@ -191,7 +191,12 @@ it.each(['http', 'stdio'])(
           definition: { ...d, nodes: [...d.nodes, added] },
         }),
       ])) as { id: string };
-      expect(engine.scriptApprovals.required(scripted.id, added)).toBeDefined();
+      expect(
+        engine.scriptApprovals.required(scripted.id, {
+          language: 'javascript',
+          command: 'return input;',
+        }),
+      ).toBeDefined();
       const cliUpdated = (await runCommand([
         'update',
         imported.id,
