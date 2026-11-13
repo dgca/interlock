@@ -12,30 +12,55 @@ const allowedPackages = {
   client: ['server'],
   mcp: ['client', 'core'],
   ui: ['client', 'core'],
-  // The CLI is the packaged executable's composition root.
-  cli: ['client', 'core', 'mcp', 'server'],
+  cli: ['client', 'core'],
 };
 
-const packageDirection = Object.entries(allowedPackages).map(
-  ([name, allowed]) => ({
-    name: `package-direction-${name}`,
-    comment: `packages/${name} may import only ${
-      allowed.length
-        ? allowed.map((other) => `packages/${other}`).join(', ')
-        : 'no other workspace package'
-    }.`,
+// Single files allowed more than their package; the package rules exclude them.
+const allowedFiles = {
+  // The packaged executable's composition root starts the server and MCP server.
+  'packages/cli/src/bin.ts': ['client', 'core', 'mcp', 'server'],
+};
+
+const escape = (path) => path.replace(/[.]/g, '\\.');
+const directionRule = (name, from, allowed) => {
+  const own = from.path.match(/^\^packages\/([^/]+)\//)[1];
+  allowed = [own, ...allowed];
+  return {
+    name,
+    comment: `${from.path} may import only ${allowed
+      .map((other) => `packages/${other}`)
+      .join(', ')}.`,
     severity: 'error',
-    from: { path: `^packages/${name}/` },
+    from,
     to: {
       // Undeclared workspace imports stay unresolved, so match the name too.
       path: ['^packages/[^/]+/', '^@interlock/'],
       pathNot: [
-        `^packages/(${[name, ...allowed].join('|')})/`,
-        `^@interlock/(${[name, ...allowed].join('|')})(/|$)`,
+        `^packages/(${allowed.join('|')})/`,
+        `^@interlock/(${allowed.join('|')})(/|$)`,
       ],
     },
-  }),
-);
+  };
+};
+const packageDirection = [
+  ...Object.entries(allowedPackages).map(([name, allowed]) =>
+    directionRule(
+      `package-direction-${name}`,
+      {
+        path: `^packages/${name}/`,
+        pathNot: Object.keys(allowedFiles).map((file) => `^${escape(file)}$`),
+      },
+      allowed,
+    ),
+  ),
+  ...Object.entries(allowedFiles).map(([file, allowed]) =>
+    directionRule(
+      `package-direction-${file.split('/')[1]}-${file.split('/').pop()}`,
+      { path: `^${escape(file)}$` },
+      allowed,
+    ),
+  ),
+];
 
 // Baseline for the folder-scoped cycle rule. dependency-cruiser applies
 // --ignore-known only to module-level violations, so known package cycles are
@@ -100,6 +125,25 @@ export default {
     },
     ...packageCycles,
     {
+      name: 'client-server-type-only',
+      comment:
+        'packages/client imports only types from packages/server, plus the dependency-free @interlock/server/transport module.',
+      severity: 'error',
+      from: { path: '^packages/client/' },
+      to: {
+        path: ['^packages/server/', '^@interlock/server(/|$)'],
+        pathNot: '^packages/server/src/transport\\.ts$',
+        dependencyTypesNot: ['type-only'],
+      },
+    },
+    {
+      name: 'not-to-unresolvable',
+      comment: 'Every import must resolve to a file or an installed module.',
+      severity: 'error',
+      from: {},
+      to: { couldNotResolve: true },
+    },
+    {
       name: 'design-system-independent',
       comment:
         'packages/ui/src/design-system must not import features, routes, API clients, or Interlock domain code.',
@@ -113,6 +157,8 @@ export default {
   ],
   options: {
     doNotFollow: { path: 'node_modules' },
+    // Build output such as packages/ui/dist is not source.
+    exclude: { path: '^packages/[^/]+/dist/' },
     tsConfig: { fileName: 'tsconfig.json' },
     tsPreCompilationDeps: true,
     enhancedResolveOptions: {
