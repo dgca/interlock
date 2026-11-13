@@ -565,8 +565,8 @@ export function NodeInspector({
               <ScriptCode value={node} onChange={patch} />
               <EnvironmentEditor
                 language={node.language}
-                value={node.environment}
-                onChange={(environment) => patch({ environment })}
+                value={node}
+                onChange={patch}
               />
 
               <p className="hint">
@@ -976,6 +976,7 @@ type PollTiming = Extract<WaitTiming, { kind: 'poll' }>;
 const defaultScriptCheck = {
   kind: 'script',
   language: 'javascript',
+  environmentMode: 'minimal',
   command: 'return { ready: true };',
   timeoutMs: 30_000,
 } as const;
@@ -1039,10 +1040,8 @@ function PollEditor({
           <EnvironmentEditor
             language={check.language}
             polling
-            value={check.environment}
-            onChange={(environment) =>
-              patch({ check: { ...check, environment } })
-            }
+            value={check}
+            onChange={(value) => patch({ check: { ...check, ...value } })}
           />
           <p className="hint">
             {check.language === 'javascript'

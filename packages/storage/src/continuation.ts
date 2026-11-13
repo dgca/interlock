@@ -135,3 +135,19 @@ export function continuationState(db: DatabaseSync, id: string) {
   );
   return { runs, executions, work, revision };
 }
+/** Advance a run cursor for state retained outside run/work documents. */
+export function touchRunRevision(db: DatabaseSync, id: string) {
+  if (
+    !db
+      .prepare("SELECT id FROM documents WHERE collection = 'runs' AND id = ?")
+      .get(id)
+  )
+    return false;
+  db.prepare(
+    'UPDATE continuation_sequence SET revision = revision + 1 WHERE id = 1',
+  ).run();
+  db.prepare(
+    'INSERT INTO run_revisions(run_id, revision) SELECT ?, revision FROM continuation_sequence WHERE id = 1 ON CONFLICT(run_id) DO UPDATE SET revision = excluded.revision',
+  ).run(id);
+  return true;
+}

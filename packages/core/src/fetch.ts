@@ -7,6 +7,12 @@ export type FetchConfig = Pick<
 >;
 export type FetchBinding = FetchNode['headers'][number]['value'];
 export type FetchField = FetchNode['headers'][number];
+/** A Fetch step target in a loopback, private or link-local range. */
+export interface PrivateNetworkTarget {
+  host: string;
+  address: string;
+  range: 'loopback' | 'private' | 'link-local';
+}
 export interface FetchRequest {
   url: string;
   method: string;

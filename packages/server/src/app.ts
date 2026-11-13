@@ -1,4 +1,4 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import { createMcpServer } from '../../mcp/src/server.js';
 import { streamSSE } from 'hono/streaming';
@@ -8,6 +8,10 @@ import type { Engine } from '@interlock/runtime';
 import { appRouter } from './router.js';
 import type { ConnectionConfig } from './connection.js';
 import { largeQueryProcedures } from './transport.js';
+import { pageWithApiToken, requireApiToken } from './apiToken.js';
+import { serveStatic } from '@hono/node-server/serve-static';
+import { readFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
 
 const largeQueryPaths = largeQueryProcedures.map(
   (procedure) => `/trpc/${procedure}`,
@@ -15,6 +19,14 @@ const largeQueryPaths = largeQueryProcedures.map(
 
 export function createApp(engine: Engine, connection?: ConnectionConfig) {
   const app = new Hono();
+  const trustedOrigins = [
+    'http://127.0.0.1:4310',
+    'http://localhost:4310',
+    // The Vite development server proxies the UI only from a checkout.
+    ...((connection?.development ?? true)
+      ? ['http://127.0.0.1:5173', 'http://localhost:5173']
+      : []),
+  ];
   app.use(
     '*',
     bodyLimit({
@@ -33,20 +45,21 @@ export function createApp(engine: Engine, connection?: ConnectionConfig) {
     if (!['127.0.0.1', 'localhost', '[::1]'].includes(host))
       return c.json({ error: 'Local requests only' }, 403);
     const origin = c.req.header('origin');
+    // Read engineUrl per request: callers may set it after binding a port.
     if (
       origin &&
-      ![
-        connection?.engineUrl,
-        'http://127.0.0.1:4310',
-        'http://localhost:4310',
-        'http://127.0.0.1:5173',
-        'http://localhost:5173',
-      ].includes(origin)
+      origin !== connection?.engineUrl &&
+      !trustedOrigins.includes(origin)
     )
       return c.json({ error: 'Untrusted origin' }, 403);
     await next();
   });
-  app.all('/mcp', async (c) => {
+  app.use('/mcp', requireApiToken(connection));
+  app.use('/mcp/*', requireApiToken(connection));
+  app.use('/trpc/*', requireApiToken(connection));
+  // EventSource cannot send headers, so the stream also accepts ?token=.
+  app.use('/events', requireApiToken(connection, { query: true }));
+  app.all('/mcp/:profile?', async (c) => {
     // There are no server-initiated messages or transport sessions to retain.
     if (c.req.method !== 'POST') {
       c.header('Allow', 'POST');
@@ -59,13 +72,35 @@ export function createApp(engine: Engine, connection?: ConnectionConfig) {
         405,
       );
     }
+    const path = c.req.param('profile');
+    const header = c.req.header('x-interlock-mcp-profile');
+    let mcp: ReturnType<typeof createMcpServer>;
+    try {
+      if (path && header && path !== header)
+        throw new Error('The MCP profile path and header disagree.');
+      mcp = createMcpServer(
+        appRouter.createCaller({
+          engine,
+          connection,
+          signal: c.req.raw.signal,
+          author: 'agent',
+        }),
+        path ?? header,
+      );
+    } catch (error) {
+      return c.json(
+        {
+          jsonrpc: '2.0',
+          error: { code: -32000, message: (error as Error).message },
+          id: null,
+        },
+        path && !header ? 404 : 400,
+      );
+    }
     const transport = new WebStandardStreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
       enableJsonResponse: true,
     });
-    const mcp = createMcpServer(
-      appRouter.createCaller({ engine, connection, signal: c.req.raw.signal }),
-    );
     try {
       await mcp.connect(transport);
       return await transport.handleRequest(c.req.raw);
@@ -82,7 +117,15 @@ export function createApp(engine: Engine, connection?: ConnectionConfig) {
       router: appRouter,
       // Keep the query contract and legacy GET callers while accepting large bodies.
       allowMethodOverride: largeQueryPaths.includes(c.req.path),
-      createContext: () => ({ engine, connection, signal: c.req.raw.signal }),
+      createContext: () => ({
+        engine,
+        connection,
+        signal: c.req.raw.signal,
+        // The stdio MCP bridge identifies itself; other callers are people.
+        ...(c.req.header('x-interlock-author') === 'agent'
+          ? { author: 'agent' as const }
+          : {}),
+      }),
     }),
   );
   app.get('/events', (c) =>
@@ -105,4 +148,26 @@ export function createApp(engine: Engine, connection?: ConnectionConfig) {
     }),
   );
   return app;
+}
+
+/** Serves the UI build; the page carries the API token as permitted by the connection. */
+export function serveUi(
+  app: Hono,
+  ui: string,
+  connection: ConnectionConfig | undefined,
+) {
+  const page = async (c: Context) => {
+    c.header('Cache-Control', 'no-store');
+    return c.html(
+      pageWithApiToken(
+        await readFile(resolve(ui, 'index.html'), 'utf8'),
+        c.req.raw,
+        connection,
+      ),
+    );
+  };
+  app.get('/', page);
+  app.get('/index.html', page);
+  app.get('*', serveStatic({ root: ui }));
+  app.get('*', page);
 }

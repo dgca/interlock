@@ -1,3 +1,4 @@
+import { listToolsWithSharedSchemas } from './fixtures/mcpDiscovery';
 import { expect, it, vi } from 'vitest';
 import { serve } from '@hono/node-server';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -43,7 +44,7 @@ it.each(['http', 'stdio'])(
               stderr: 'pipe',
             }),
       );
-      const tools = (await client.listTools()).tools;
+      const tools = (await listToolsWithSharedSchemas(client)).tools;
       expect(
         tools.find((t) => t.name === 'export_workflow')?.description,
       ).toMatch(/Format 4.*variable requirements/);

@@ -9,6 +9,7 @@ import {
 
 import { StallSettings } from './StallSettings';
 import { RetentionSettings } from '../runs/RetentionSettings';
+import { ScriptApprovalSettings } from './ScriptApprovalSettings';
 import { useEffect, useId, useState } from 'react';
 
 import { executorSettingsSchema } from '@interlock/core';
@@ -25,6 +26,7 @@ export function ExecutionSettings({
   const inputId = useId();
   const [stallDirty, setStallDirty] = useState(false);
   const [retentionDirty, setRetentionDirty] = useState(false);
+  const [approvalDirty, setApprovalDirty] = useState(false);
   const queryClient = useQueryClient();
   const settingsQuery = useQuery(trpc.executors.settings.queryOptions());
   const [settings, setSettings] = useState(settingsQuery.data);
@@ -72,8 +74,8 @@ export function ExecutionSettings({
     setValue(next.concurrency ?? 3);
   }, [settingsQuery.data, dirty, busy]);
   useEffect(
-    () => onDirty?.(dirty || stallDirty || retentionDirty),
-    [dirty, stallDirty, retentionDirty, onDirty],
+    () => onDirty?.(dirty || stallDirty || retentionDirty || approvalDirty),
+    [dirty, stallDirty, retentionDirty, approvalDirty, onDirty],
   );
   useEffect(() => () => onDirty?.(false), [onDirty]);
   return (
@@ -216,6 +218,12 @@ export function ExecutionSettings({
       <section id="history-retention" className={workspacePage.card}>
         <h3 className={styles.settingsHeading}>History retention</h3>
         <RetentionSettings showHeading={false} onDirty={setRetentionDirty} />
+      </section>
+      <section
+        id="script-approval"
+        className={`${workspacePage.card} ${styles.sharedSettings}`}
+      >
+        <ScriptApprovalSettings onDirty={setApprovalDirty} />
       </section>
     </>
   );

@@ -101,6 +101,8 @@ Interlock supports user-defined custom harnesses (`harness: "custom"`) to execut
 - **Direct Turn Mode (`mode: "direct"`)**: Interlock manages the assignment claim, renews the claim lease, executes the command or HTTP endpoint, and submits the returned result envelope.
 - **Delegated Claim-Ticket Mode (`mode: "launcher"`)**: Interlock launches an external session and issues a one-time `claimTicket`. The launched session claims the work via MCP `claim_work` using this ticket, executes autonomously, and submits its own result.
 
+Subprocess commands (turn, launch, status, message, stop and archive) inherit the server's full environment by default. Set `environmentMode: "minimal"` to pass only `PATH`, `HOME`, locale variables (`LANG`, `LANGUAGE`, `LC_*`), `INTERLOCK_*`, the profile's `env` values and any names listed in `environmentPassthrough`. Profiles without `environmentMode` keep `inherit`. When a minimal command fails and its source or error output mentions a withheld server variable, the error names it and the fix. HTTP transports are unaffected.
+
 ### Direct Turn Mode
 
 Direct turn mode executes a subprocess command (`turnCommand`) or HTTP POST endpoint (`turnUrl`). Interlock passes assignment context JSON via stdin or the HTTP request body:
@@ -160,6 +162,7 @@ Subprocess commands receive Interlock token values through the environment. HTTP
 - `$INTERLOCK_CLAIM_TICKET`
 - `$INTERLOCK_SESSION_NAME`
 - `$INTERLOCK_INPUT`
+- `$INTERLOCK_MCP_URL` (launch only): the running server's `execute` [tool profile](connect-harness.md#choose-a-tool-profile) endpoint, also sent as `mcpUrl` in the launch payload. Configure the launched session's MCP client with it to claim and submit with fewer tools in context.
 
 Commands use normal shell quoting. Double-quote token arguments, such as `agent --session "$INTERLOCK_SESSION_NAME"`, to preserve spaces and special characters as data. Single quotes keep token names literal. Token values never become shell source. Identity tokens are also available to scripts through their environment. Turn and launch commands receive the full assignment payload as JSON on stdin. Their `$INTERLOCK_INPUT` token exposes the assignment input; message commands use that token for the recovery message. Status, stop, and archive commands have no input token. The input token enters the subprocess environment only when explicitly referenced in the command. Use stdin for large inputs because operating systems limit environment and argument sizes.
 

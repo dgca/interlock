@@ -73,7 +73,7 @@ For managed-agent questions or permissions, use `manage_executors` with the requ
 
 For manual history removal, use `manage_run_history` with `request.action:"preview"` before `"delete"`. Preview accepts root workflow and age filters, exact root IDs, and bounded pagination. Show the selected trees, sizes, blockers and irreversible loss, then obtain explicit user agreement. Delete accepts exact per-root confirmations and `acknowledgeHistoryLoss:true`; it rechecks the entire selection atomically. Active trees, unresolved resources and retained comparison/evaluation dependencies remain protected. Start-request tombstones, workflows and published versions survive. Removed JSON bytes do not imply a smaller database file. For opt-in scheduled cleanup, use the same tool with `settings`, `configure` and `status`. Configure requires the current scope revision and authorization for permanent age/count deletion. A workflow whole-policy override replaces library inheritance; null disables and `"inherit"` removes the override. See [history cleanup](history-cleanup.md) for bounds, count pools, scheduling, fields and recovery.
 
-MCP `create_workflow.definition` and `update_workflow.draft` expose the workflow object schema, including node fields and edge handles. Incomplete routes remain saveable drafts. Publication validates graph routes and pinned dependencies. For small changes, `edit_workflow` avoids resending the full graph. `validate_workflow` reports read-only diagnostics for the stored draft or a candidate.
+MCP `create_workflow.definition`, `update_workflow.draft` and `validate_workflow.definition` accept the workflow object schema published once as the MCP resource `interlock://schemas/workflow-definition`, including node fields and edge handles. Read it with your client's resource tool before writing a definition from scratch; `get_workflow` and `export_workflow` output already follow it. `import_workflows.bundle` references `interlock://schemas/workflow-bundle`. Argument validation still applies the complete schema. Incomplete routes remain saveable drafts. Publication validates graph routes and pinned dependencies. For small changes, `edit_workflow` avoids resending the full graph. `validate_workflow` reports read-only diagnostics for the stored draft or a candidate.
 
 For node configuration and examples, see [author definitions through MCP](connect-harness.md#author-definitions-through-mcp), [workflow definitions and Batch scopes](architecture.md#workflow-definitions), [branch routing](switch.md), and [input and output bindings](node-data.md).
 
@@ -81,6 +81,13 @@ Set `timeoutMs` on a Script node to allow 100 to 3,600,000 milliseconds. Omissio
 
 Scripts and polling Script checks can read `INTERLOCK_RUN_ID` directly from
 their environment to inspect the current run. See [Script execution context](architecture.md#script-execution-context).
+
+Set `environmentMode: "minimal"` on new Script nodes and Script checks so they
+do not receive credentials from the server's environment. Bind saved variables
+through `environment` or list required server names in `environmentPassthrough`.
+Omitted mode keeps `inherit`. See [Scripts and interruptions](architecture.md#scripts-and-interruptions).
+
+Imported Script content waits for a person's approval before its first run. The run waits with `waiting.kind: "human_request"` and `workflow_requests` lists an `Approve imported Script` request whose detail shows the code. Agents cannot approve it. Scripts you create or edit over MCP run without approval unless the person extends approval to agent-authored Scripts. See [approve imported Scripts](reuse-work.md#approve-imported-scripts).
 
 Script, Fetch and waited Workflow calls support `onFailure: "route"` with `default` and `failed` edges through these same tools. Failed receives the fixed `{input,error,output}` contract described in [failure routes](failure-routes.md). The operation stays failed while its run continues. Workflow failures add `error.child` run/version/execution references. Cancelled children and caller input/dispatch errors remain terminal; a handled child cannot be retried independently. Earlier-node bindings select completed outputs only; read the incoming envelope for recovery. Removing the policy through MCP requires explicitly removing its edge. No automatic retry is added, and completed recovery runs cannot be retried.
 

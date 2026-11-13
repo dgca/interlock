@@ -42,6 +42,8 @@ INTERLOCK_URL=http://127.0.0.1:4400 interlock workflows
 
 Standalone workflow imports create drafts. Starter imports create published copies. Neither starts work automatically.
 
+Imported Scripts wait for approval before their first run. Review the code in the run's request, then run `interlock approve-script RUN_ID EXECUTION_ID`. `interlock script-approval` prints which Scripts need approval; pass `imports`, `imports_and_agents` or `off` to change it. See [approve imported Scripts](reuse-work.md#approve-imported-scripts).
+
 To inspect a portable bundle's board suggestions, run `interlock import @workflow.json --dry-run`. Use `interlock starters` for starter suggestions. When you have chosen the destination board setup, pass it as JSON or a file with `--board-setup`.
 
 ```sh

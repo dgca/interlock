@@ -55,7 +55,7 @@ Use a coding agent with access to your Git checkout, files, and development comm
 
 Replace the example request with the change you want. The workflow resolves the target repository and artifact directory, follows that repository's instructions, and asks when a consequential decision remains unresolved or planning repeatedly fails review. Set `reviewPolicy` to `always` to approve each planning artifact, or `createPr` to `true` to request PR delivery. Your agent's tool approval settings still apply. See [Use the SDLC workflow](docs/sdlc-workflow.md) for inputs, executor requirements, and resuming work.
 
-The connection uses Streamable HTTP at `http://127.0.0.1:4310/mcp`, served by the same process as the UI and engine. Keep that process running. Upgrading and restarting at the same address preserves your agent configuration. The dialog also provides a stdio fallback for clients that need it. See [Connect a harness](docs/connect-harness.md) for configuration and the assignment loop.
+The connection uses Streamable HTTP at `http://127.0.0.1:4310/mcp`, served by the same process as the UI and engine. Keep that process running. Upgrading and restarting at the same address preserves your agent configuration. The dialog also provides a stdio fallback for clients that need it. Smaller [tool profiles](docs/connect-harness.md#choose-a-tool-profile) such as `/mcp/execute` reduce the context each agent spends on tool definitions. See [Connect a harness](docs/connect-harness.md) for configuration and the assignment loop.
 
 ## Install workflow skills
 
@@ -333,11 +333,13 @@ interlock doctor --json
 interlock doctor --live
 ```
 
-`interlock doctor` performs read-only diagnostics across SQLite integrity, schema version, free disk space, history size, enabled harness binaries and allowed roots, schedule lag, failures and automatic pauses across enabled triggers of every kind, active pause holds, uncertain resource reservations, work stalls, and latest published workflow variable, known alias, and saved prompt dependencies including exact prompt pins. Adding `--live` performs a live model connectivity check on enabled harnesses. The CLI exits with code 0 on passing/warning checks and code 1 on failure. These diagnostics are also accessible via **Diagnostics** in the sidebar utilities, MCP `doctor`, and the shared API `system.doctor`.
+`interlock doctor` performs read-only diagnostics across SQLite integrity, schema version, free disk space, history size, disabled variables that upgrading to 0.3.0 would delete (with the workflows that reference them), enabled harness binaries and allowed roots, schedule lag, failures and automatic pauses across enabled triggers of every kind, active pause holds, the last background scheduler error, uncertain resource reservations, work stalls, and latest published workflow variable, known alias, and saved prompt dependencies including exact prompt pins. Adding `--live` performs a live model connectivity check on enabled harnesses. The CLI exits with code 0 on passing/warning checks and code 1 on failure. These diagnostics are also accessible via **Diagnostics** in the sidebar utilities, MCP `doctor`, and the shared API `system.doctor`.
 
 ## Current scope
 
 Interlock is a local, single-user application. Agent steps use connected executors, manual submission, or opt-in managed Claude Code, Codex, and Pi sessions; script steps run in the engine. Managed harnesses use their native account and permission configuration.
+
+The server listens only on loopback and rejects requests with other hosts or untrusted browser origins. On loopback the [API token](docs/connect-harness.md#api-token) is accepted when sent and required only with `INTERLOCK_REQUIRE_TOKEN=1`. A server listening on any other address always requires the token on `/trpc`, `/mcp` and `/events` and refuses to start without one. Interlock does not offer a non-loopback listen address yet; do not expose it through a tunnel or proxy.
 
 Agent nodes can opt into [context continuity groups](docs/context-continuity.md) to declare a shared session within a run, with recorded handoffs when the session must change.
 
@@ -354,7 +356,7 @@ pnpm install
 pnpm dev
 ```
 
-The development UI runs on [port 5173](http://127.0.0.1:5173), with the engine on port 4310. `pnpm dev` waits for the engine's `/health` endpoint before starting Vite. If the engine does not become healthy within 30 seconds, development startup stops; check the server output for the cause. Stop any installed Interlock server using port 4310 before starting development.
+The development UI runs on [port 5173](http://127.0.0.1:5173), with the engine on port 4310. `pnpm dev` waits for the engine's `/health` endpoint before starting Vite. If the engine does not become healthy within 30 seconds, development startup stops; check the server output for the cause. Stop any installed Interlock server using port 4310 before starting development. The engine accepts browser requests from the Vite origin only in development; an installed copy rejects them.
 
 Development stores data in `.interlock/interlock.db` inside the checkout. Installed copies use a separate database unless you pass `--db` explicitly. Run `pnpm build` followed by `pnpm start` to serve the built UI on port 4310 with the development database.
 

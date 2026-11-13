@@ -15,6 +15,10 @@ import { Engine } from '@interlock/runtime';
 import { Store } from '@interlock/storage';
 import { batchDefinition } from './fixtures/batch';
 import { parseRawDefinition } from '../packages/ui/src/features/workflows/rawDefinition';
+import {
+  executeFetch,
+  privateNetworkTarget,
+} from '../packages/runtime/src/fetch';
 let server: Server,
   base: string,
   engine: Engine,
@@ -81,6 +85,10 @@ beforeEach(async () => {
     res.setHeader('content-type', 'application/json; charset=utf-8');
     if (url.pathname === '/invalid') {
       res.end('{');
+      return;
+    }
+    if (url.pathname === '/redirect') {
+      res.writeHead(302, { location: 'http://169.254.169.254/' }).end();
       return;
     }
     if (url.pathname === '/failure') {
@@ -212,6 +220,95 @@ it.each([
     start(definition(node({ url: base + '/' + path }))).id,
   );
   expect(result.output).toMatchObject({ body });
+});
+it('reports private network Fetch targets and blocks them only when the step opts in', async () => {
+  const warned = await done(start().id);
+  expect(warned.status).toBe('completed');
+  expect(warned.executions[1].privateNetwork).toEqual({
+    host: '127.0.0.1',
+    address: '127.0.0.1',
+    range: 'loopback',
+  });
+  expect(
+    engine.store
+      .list<{ runId: string; type: string }>('events')
+      .filter(
+        (e) => e.runId === warned.id && e.type === 'node.private_network',
+      ),
+  ).toHaveLength(1);
+  const blocked = await done(
+    start(definition(node({ blockPrivateNetwork: true }))).id,
+  );
+  expect(blocked.status).toBe('failed');
+  expect(blocked.error).toContain('Fetch blocks loopback address 127.0.0.1');
+  expect(requests).toBe(1);
+  // Blocking steps stop at redirects instead of following them unchecked.
+  await expect(
+    executeFetch(
+      { url: base + '/redirect', method: 'GET', headers: {} },
+      1000,
+      new AbortController().signal,
+      { allowRedirects: 'blockPrivateNetwork' },
+    ),
+  ).rejects.toThrow('blockPrivateNetwork cannot follow a redirect');
+});
+it('classifies resolved and IPv4-mapped private, link-local and public addresses', async () => {
+  const resolved = (address: string) => () => Promise.resolve([address]);
+  expect(
+    await privateNetworkTarget(
+      'http://metadata.test/',
+      resolved('169.254.169.254'),
+    ),
+  ).toMatchObject({ host: 'metadata.test', range: 'link-local' });
+  expect(
+    await privateNetworkTarget('http://[::ffff:a9fe:a9fe]/'),
+  ).toMatchObject({ range: 'link-local' });
+  expect(await privateNetworkTarget('http://10.1.2.3/')).toMatchObject({
+    range: 'private',
+  });
+  expect(await privateNetworkTarget('http://[fd00::1]/')).toMatchObject({
+    range: 'private',
+  });
+  expect(
+    await privateNetworkTarget(
+      'https://example.test/',
+      resolved('93.184.216.34'),
+    ),
+  ).toBeUndefined();
+  expect(
+    await privateNetworkTarget('https://example.test/', () =>
+      Promise.reject(new Error('ENOTFOUND')),
+    ),
+  ).toBeUndefined();
+});
+it('warns in doctor about published Fetch steps with private literal hosts unless they block them', async () => {
+  const d = definition(node({ id: 'agent', url: 'http://169.254.169.254/x' }));
+  d.nodes.push(
+    node({ id: 'blocked', url: 'http://10.0.0.5/', blockPrivateNetwork: true }),
+  );
+  d.edges = [
+    { id: 'e1', source: 'entry', target: 'agent', port: 'default' },
+    { id: 'e2', source: 'agent', target: 'blocked', port: 'default' },
+    { id: 'e3', source: 'blocked', target: 'exit', port: 'default' },
+  ];
+  engine.publish(engine.create('Private Fetch', '', d).id);
+  const checks = (await engine.doctor()).checks.filter((c) =>
+    c.name.startsWith('Private network Fetch'),
+  );
+  expect(checks.map((c) => [c.status, c.details?.fetches])).toEqual([
+    [
+      'warn',
+      [
+        {
+          nodeId: 'agent',
+          label: 'Fetch data',
+          host: '169.254.169.254',
+          address: '169.254.169.254',
+          range: 'link-local',
+        },
+      ],
+    ],
+  ]);
 });
 it('fails on HTTP errors, retains their responses, and sends again only on explicit retry', async () => {
   const run = start(

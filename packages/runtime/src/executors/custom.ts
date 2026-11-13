@@ -2,6 +2,7 @@ import { spawnManagedProcess } from './process.js';
 import type { HarnessAdapter, HarnessRun, HarnessResult } from './contracts.js';
 import { HarnessResultError, HarnessCleanupError } from './contracts.js';
 import type { ExecutorProfile, Json, ModelUsage } from '@interlock/core';
+import { baseEnvironment, withheldEnvironmentNames } from '../scripts.js';
 
 export function customInvocation(
   profile: ExecutorProfile,
@@ -66,7 +67,11 @@ export interface CustomTurnEnvelope {
 export async function executeCustomCommand(input: {
   command: string;
   cwd: string;
-  env?: Record<string, string>;
+  /** Profile env values plus its server environment mode. */
+  profile?: Pick<
+    ExecutorProfile,
+    'env' | 'environmentMode' | 'environmentPassthrough'
+  >;
   payload?: unknown;
   tokens: Record<string, string>;
   signal?: AbortSignal;
@@ -77,8 +82,8 @@ export async function executeCustomCommand(input: {
   if (input.signal?.aborted) throw new Error('Custom command aborted');
   const payload =
     input.payload === undefined ? undefined : JSON.stringify(input.payload);
-  const env: NodeJS.ProcessEnv = { ...process.env };
-  for (const [key, value] of Object.entries(input.env ?? {}))
+  const env = baseEnvironment(input.profile ?? {});
+  for (const [key, value] of Object.entries(input.profile?.env ?? {}))
     env[key] = interpolateTokens(value, input.tokens);
   // Identity metadata is also available to scripts reading their environment.
   // Input is delivered through stdin and may exceed OS environment limits, so
@@ -115,13 +120,20 @@ export async function executeCustomCommand(input: {
         if (error.code !== 'EPIPE') reject(error);
       });
       child.on('close', (code) => {
-        code === 0
-          ? resolve(stdout.trim())
-          : reject(
-              new Error(
-                `Custom command failed with exit code ${code}${stderr ? ': ' + stderr.trim() : ''}`,
-              ),
-            );
+        if (code === 0) return resolve(stdout.trim());
+        const error = `Custom command failed with exit code ${code}${stderr ? ': ' + stderr.trim() : ''}`;
+        const names = withheldEnvironmentNames(
+          input.profile ?? {},
+          [input.command, stderr],
+          Object.keys(env),
+        );
+        reject(
+          new Error(
+            names.length
+              ? `${error}\nMinimal environment mode did not pass ${names.join(', ')} from the server environment. Add ${names.length > 1 ? 'these names' : 'it'} to the executor profile's environmentPassthrough list or env, or set environmentMode to inherit.`
+              : error,
+          ),
+        );
       });
       aborted = () => reject(new Error('Custom command aborted'));
       input.signal?.addEventListener('abort', aborted, { once: true });
@@ -160,16 +172,12 @@ export async function executeCustomCommand(input: {
   }
 }
 
-export async function executeSubprocessTurn(input: {
-  command: string;
-  cwd: string;
-  env?: Record<string, string>;
-  payload: unknown;
-  tokens: Record<string, string>;
-  signal: AbortSignal;
-  timeoutSeconds?: number;
-  onProgress?: (msg: string) => void;
-}): Promise<CustomTurnEnvelope> {
+export async function executeSubprocessTurn(
+  input: Parameters<typeof executeCustomCommand>[0] & {
+    payload: unknown;
+    signal: AbortSignal;
+  },
+): Promise<CustomTurnEnvelope> {
   const stdout = await executeCustomCommand(input);
   if (!stdout)
     throw new HarnessResultError(
@@ -295,7 +303,7 @@ export const customAdapter: HarnessAdapter = {
       envelope = await executeSubprocessTurn({
         command: invocation,
         cwd,
-        env: profile.env,
+        profile,
         payload: contextPayload,
         tokens,
         signal,

@@ -24,7 +24,7 @@ New Script node definitions that omit `timeoutMs` use 60 seconds. Saved drafts a
 
 ## Install an update
 
-1. Stop the running Interlock server with Ctrl+C. Close any other server using the same database.
+1. Stop the running Interlock server with Ctrl+C. Only one server can use a database at a time; a second server started on the same database exits with an error naming it.
 2. Record the installed version with `interlock --version`.
 3. Install the update:
 

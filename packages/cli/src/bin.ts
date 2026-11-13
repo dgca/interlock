@@ -29,7 +29,7 @@ async function main() {
     console.log(`Interlock ${VERSION}
 
 Usage: interlock [--port 4310] [--workdir PATH] [--db PATH]
-       interlock mcp
+       interlock mcp [--profile all|execute|author|operate]
        interlock <command> [arguments]
 
 With no command, starts the local engine, UI, and HTTP MCP endpoint at /mcp.
@@ -40,9 +40,11 @@ Default script working directory: current directory
 
 mcp       Stdio MCP bridge to the running engine. Set INTERLOCK_URL to override
           http://127.0.0.1:4310. Stdout is reserved for the MCP protocol.
+          --profile or INTERLOCK_MCP_PROFILE limits the tools served (default
+          all). HTTP clients use /mcp/<profile>.
 
 Workflow commands: workflows, workflow, starters, import-starter, import, update, edit, export, publish, archive, restore, delete, start, simulation, test-suite
-Run commands: runs, run, run-history, run-version, context-group, handoff-context, work, claim, preflight, submit, fail, renew, assignment-size, external-input, work-hold, work-resources, script, cancel-tree, cancel, retry
+Run commands: runs, run, run-history, run-version, context-group, handoff-context, work, claim, preflight, submit, fail, renew, assignment-size, external-input, work-hold, work-resources, script, approve-script, script-approval, cancel-tree, cancel, retry
 Usage and budget commands: usage, report-usage, budget, set-budget
 Local harness configuration and execution: executors
 Workflow variables: variables <read|manage> <json|@file> [--value-stdin]
@@ -55,18 +57,24 @@ Report dates must be valid ISO datetimes whose rounded UTC bounds stay within ye
 System readiness check: doctor [--live] [--json]
 Run 'interlock commands' for argument syntax.
 
-Environment: INTERLOCK_DB, INTERLOCK_WORKDIR, INTERLOCK_URL, INTERLOCK_SECRET_KEY_FILE
-Variable encryption keys are held separately from the database. Back up keys separately.`);
+Environment: INTERLOCK_DB, INTERLOCK_WORKDIR, INTERLOCK_URL, INTERLOCK_SECRET_KEY_FILE,
+             INTERLOCK_MCP_PROFILE, INTERLOCK_REQUIRE_TOKEN, INTERLOCK_LOG_LEVEL
+Variable encryption keys are held separately from the database. Back up keys separately.
+INTERLOCK_REQUIRE_TOKEN=1 rejects API, MCP and event requests without the API token.
+Commands and the mcp bridge read the token from the api-token file beside the key folder.`);
     return;
   }
   if (argv[0] === 'mcp') {
-    if (argv.length !== 1)
+    const profile =
+      argv.length === 3 && argv[1] === '--profile' ? argv[2] : undefined;
+    if (argv.length !== 1 && profile === undefined)
       throw new Error(
-        'Usage: interlock mcp. Set INTERLOCK_URL to choose the engine.',
+        'Usage: interlock mcp [--profile all|execute|author|operate]. Set INTERLOCK_URL to choose the engine.',
       );
-    await createMcpServer(createMcpClient(process.env.INTERLOCK_URL)).connect(
-      new StdioServerTransport(),
-    );
+    await createMcpServer(
+      createMcpClient(process.env.INTERLOCK_URL),
+      profile ?? process.env.INTERLOCK_MCP_PROFILE,
+    ).connect(new StdioServerTransport());
     return;
   }
   if (argv[0] && !argv[0].startsWith('-')) {
@@ -112,6 +120,8 @@ Variable encryption keys are held separately from the database. Back up keys sep
       'work-hold',
       'work-resources',
       'script',
+      'approve-script',
+      'script-approval',
       'cancel-tree',
       'cancel',
       'retry',

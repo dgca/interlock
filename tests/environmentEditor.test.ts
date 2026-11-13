@@ -8,7 +8,10 @@ import {
   nodeSchema,
   type ScriptEnvironment,
 } from '@interlock/core';
-import { EnvironmentEditor } from '../packages/ui/src/features/variables/EnvironmentEditor';
+import {
+  EnvironmentEditor,
+  type ScriptEnvironmentSettings,
+} from '../packages/ui/src/features/variables/EnvironmentEditor';
 import { SettingsDialog } from '../packages/ui/src/features/workflows/SettingsDialog';
 import {
   createQueryClient,
@@ -23,6 +26,7 @@ vi.mock('../packages/ui/src/lib/api', async () => {
     errorMessage: (e: Error) => e.message,
   };
 });
+let settings: ScriptEnvironmentSettings | undefined;
 let root: Root,
   container: HTMLDivElement,
   latest: ScriptEnvironment | undefined,
@@ -39,13 +43,17 @@ let initial: ScriptEnvironment | undefined,
   polling = false,
   key = 0;
 function Harness() {
-  const [value, setValue] = useState(initial);
+  const [value, setValue] = useState<ScriptEnvironmentSettings>({
+    environment: initial,
+  });
   return h(EnvironmentEditor, {
     value,
     language,
     polling,
-    onChange: (next) => {
-      latest = next;
+    onChange: (patch) => {
+      const next = { ...value, ...patch };
+      latest = next.environment;
+      settings = next;
       setValue(next);
     },
   });
@@ -190,7 +198,7 @@ it('adds a complete same-name mapping by selecting a saved variable, with option
   expect(container.textContent).not.toContain('Use in script as');
   await click('Change environment name');
   const name = container.querySelector<HTMLInputElement>(
-    'input:not([role="combobox"]):not([type="hidden"])',
+    'input:not([role="combobox"]):not([type="hidden"]):not([type="radio"])',
   )!;
   await input(name, 'API_KEY');
   expect(latest).toEqual([{ name: 'API_KEY', variableId: 'token' }]);
@@ -441,4 +449,22 @@ it('shows the execution context for the selected language and polling mode', asy
   await act(async () => checkHelp.querySelector('summary')!.click());
   expect(checkHelp.textContent).toContain('$INTERLOCK_RUN_ID');
   expect(checkHelp.textContent).toContain('INTERLOCK_POLL_CHECK_NUMBER');
+});
+
+it('keeps existing bindings when switching to minimal mode with passthrough names', async () => {
+  await render([{ name: 'API_KEY', variableId: 'token' }]);
+  const minimal = [...container.querySelectorAll('label')].find(
+    (label) => label.textContent === 'Minimal',
+  )!;
+  act(() => minimal.click());
+  const names = container.querySelector<HTMLInputElement>(
+    'input[placeholder="Add a name"]',
+  )!;
+  await input(names, 'GH_TOKEN');
+  act(() => names.blur());
+  expect(settings).toEqual({
+    environment: [{ name: 'API_KEY', variableId: 'token' }],
+    environmentMode: 'minimal',
+    environmentPassthrough: ['GH_TOKEN'],
+  });
 });

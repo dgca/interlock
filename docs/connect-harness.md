@@ -19,7 +19,21 @@ An embedded host can hide these connection controls through [UI configuration](e
 
 Use Streamable HTTP at `http://127.0.0.1:4310/mcp`. The UI, engine, and MCP tools run in the same process and package version. After upgrading, restart Interlock at the same address and reconnect your client if needed. Keep the existing URL configuration; no separate bridge installation is needed.
 
-For a custom port, copy the URL from the connection dialog. These instructions apply to clients running on the same computer as Interlock. The service listens on loopback without authentication and must not be exposed through a public tunnel.
+For a custom port, copy the URL from the connection dialog. These instructions apply to clients running on the same computer as Interlock. The service listens on loopback and must not be exposed through a public tunnel.
+
+## API token
+
+Interlock creates a per-install API token on startup. The file is named `api-token` and is readable only by its owner (mode 0600). It sits in the protected-value key folder: `~/Library/Application Support/Interlock/keys/` on macOS, or `$XDG_CONFIG_HOME/interlock/keys/` (default `~/.config/interlock/keys/`) on Linux. When `INTERLOCK_SECRET_KEY_FILE` is set, the token sits in that file's folder.
+
+First-party clients send the token as `Authorization: Bearer <token>`. The UI receives it with the page. The `interlock` CLI and the stdio bridge read the file, so stdio configuration carries no token. Custom harness launchers inherit the server environment, so an `interlock mcp` bridge they start reads the same file. HTTP configuration copied from **Connect with MCP** includes the header.
+
+The token is optional in 0.2. Set `INTERLOCK_REQUIRE_TOKEN=1` before starting Interlock to reject requests without it on `/trpc`, `/mcp` and `/events` with HTTP 401. Existing configurations without the header keep working while the setting is off. With it on:
+
+- Startup prints a UI link that carries the token. Open it once per browser; the page keeps the token for later visits at that address.
+- Copy HTTP configuration again from **Connect with MCP** for clients configured without the header.
+- A stdio bridge started with a different `INTERLOCK_SECRET_KEY_FILE` from the server reads a different file. Give the bridge the same value.
+
+To replace the token, stop Interlock, delete `api-token`, start Interlock again, and copy client configuration again.
 
 ## Codex
 
@@ -28,6 +42,7 @@ Add this to `~/.codex/config.toml`:
 ```toml
 [mcp_servers.interlock]
 url = "http://127.0.0.1:4310/mcp"
+http_headers = { Authorization = "Bearer <token>" }
 ```
 
 If replacing a stdio entry, remove its `command`, `args`, and bridge environment settings. See the [Codex MCP guide](https://developers.openai.com/codex/mcp).
@@ -37,8 +52,10 @@ If replacing a stdio entry, remove its `command`, `args`, and bridge environment
 Run:
 
 ```sh
-claude mcp add --transport http --scope user interlock http://127.0.0.1:4310/mcp
+claude mcp add --transport http --scope user interlock http://127.0.0.1:4310/mcp --header 'Authorization: Bearer <token>'
 ```
+
+Keep `--header` after the URL; it accepts several values.
 
 If an `interlock` entry already exists, remove it with `claude mcp remove --scope user interlock` before adding the HTTP entry. See the [Claude Code MCP guide](https://code.claude.com/docs/en/mcp).
 
@@ -56,7 +73,8 @@ Merge this into `opencode.json`, replacing any existing local Interlock entry:
       "type": "remote",
       "url": "http://127.0.0.1:4310/mcp",
       "enabled": true,
-      "oauth": false
+      "oauth": false,
+      "headers": { "Authorization": "Bearer <token>" }
     }
   }
 }
@@ -66,9 +84,24 @@ See the [OpenCode MCP guide](https://opencode.ai/docs/mcp-servers/).
 
 ## Other clients
 
-Choose **Streamable HTTP** and enter `http://127.0.0.1:4310/mcp`. No command, arguments, or authentication are required. The endpoint returns JSON responses; it does not provide a standalone SSE notification stream or retain transport sessions.
+Choose **Streamable HTTP**, enter `http://127.0.0.1:4310/mcp`, and send the `Authorization: Bearer <token>` header. No command or arguments are required. The endpoint returns JSON responses; it does not provide a standalone SSE notification stream or retain transport sessions.
 
 Restart or reconnect your harness after changing configuration. Enable Interlock's tools in its approval settings. Interlock does not modify harness configuration for you.
+
+## Choose a tool profile
+
+Every tool definition a client lists costs context in each conversation. Profiles serve a smaller tool set:
+
+| Profile   | Tools                                                                                                    | Endpoint             |
+| --------- | -------------------------------------------------------------------------------------------------------- | -------------------- |
+| `all`     | Every tool. The default, so existing configurations keep the same tools.                                 | `/mcp` or `/mcp/all` |
+| `execute` | Assignment execution: list, claim, renew, preflight, submit and fail work, usage, resources, run reads.  | `/mcp/execute`       |
+| `author`  | Workflows, versions, ownership, prompts, variables, presets, triggers, boards and the testbench.         | `/mcp/author`        |
+| `operate` | Starting, inspecting, waiting on, pausing, holding, retrying and cancelling runs, executors and budgets. | `/mcp/operate`       |
+
+Select a profile with the URL path, such as `http://127.0.0.1:4310/mcp/execute`, or send the header `X-Interlock-Mcp-Profile: execute` to `/mcp`. Unknown profiles are rejected; a path and header that disagree are rejected. For the stdio bridge, use `interlock mcp --profile execute` or set `INTERLOCK_MCP_PROFILE`. Connect more than one profile under different names when an agent needs tools from several. A tool outside the connected profile is not found. When a compact mutation would suggest a `nextCall` tool outside the profile, it suggests `get_run_briefing` for the same run instead.
+
+Sessions launched by a custom harness in launcher mode receive the `execute` endpoint as `$INTERLOCK_MCP_URL` and the launch payload's `mcpUrl`. See [custom harnesses](managed-executors.md#custom-harnesses).
 
 ## Install workflow skills
 
@@ -107,7 +140,7 @@ For Claude Desktop, merge this into its MCP configuration:
 
 If your client cannot find the global command, select **Use absolute paths** in the dialog. For a server launched through npx, this fallback points to its cached installation. Regenerate stdio configuration when those paths change. Prefer HTTP for clients that support it.
 
-Set the bridge environment variable `INTERLOCK_URL` when using another port. This value is the engine address, such as `http://127.0.0.1:4400`, without `/mcp`. The connection dialog includes the correct environment settings.
+Add `--profile` and a [profile name](#choose-a-tool-profile) to the arguments, such as `["mcp", "--profile", "execute"]`, to serve fewer tools. Set the bridge environment variable `INTERLOCK_URL` when using another port. This value is the engine address, such as `http://127.0.0.1:4400`, without `/mcp`. The connection dialog includes the correct environment settings. The bridge reads the [API token](#api-token) from disk.
 
 ## Development configuration
 
