@@ -35,6 +35,8 @@ jobs:
       # runs out of memory on the macOS runner.
       - if: matrix.platform == 'linux'
         run: pnpm lint
+      - if: matrix.platform == 'linux'
+        run: pnpm lint:deps
       - run: pnpm test
       - run: pnpm build
       - run: pnpm exec playwright install --with-deps --only-shell chromium
