@@ -169,6 +169,16 @@ export class TrialEnvironments {
       .filter(active)
       .map((r) => r.id);
   }
+  /** Whether a local Git trial, not the run's own setup, isolates this run. */
+  isolates(run: Run) {
+    return Boolean(
+      run.comparison &&
+      this.store.get<WorkflowComparison>(
+        'comparisons',
+        run.comparison.comparisonId,
+      )?.trialSetup,
+    );
+  }
   context(run: Run): TrialWorkContext | undefined {
     if (!run.comparison) return undefined;
     const c = this.store.get<WorkflowComparison>(

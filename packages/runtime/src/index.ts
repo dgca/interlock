@@ -41,7 +41,6 @@ import {
 } from './localOperations.js';
 import { WorkResources } from './workResources.js';
 import { ExecutorManager } from './executors/manager.js';
-import { resolveAndValidateCwd } from './workingDirectory.js';
 export type {
   HarnessAdapter,
   HarnessRun,
@@ -121,6 +120,7 @@ import {
   type CancelRunTree,
 } from '@interlock/core';
 import { TrialEnvironments } from './trialEnvironments.js';
+import { ManagedWorkspaces } from './workspaces.js';
 import { Continuation } from './continuation.js';
 import { Prompts } from './prompts.js';
 import { Variables } from './variables.js';
@@ -194,6 +194,7 @@ export class Engine {
   readonly contextGroups: ContextContinuityGroups;
   private readonly starts: RunStarts;
   private readonly trials: TrialEnvironments;
+  readonly workspaces: ManagedWorkspaces;
   private readonly inspection: RunInspection;
   private readonly authoring: WorkflowAuthoring;
   private readonly deletion: WorkflowDeletion;
@@ -209,6 +210,7 @@ export class Engine {
     private cwd: string,
     private options: {
       trialRoot?: string;
+      workspaceRoot?: string;
       allowedRoots?: string[];
       clock?: { now: () => number };
       substituteWorkflow?: (
@@ -464,6 +466,7 @@ export class Engine {
     this.trials = new TrialEnvironments(store, options.trialRoot, () =>
       this.pump(),
     );
+    this.workspaces = new ManagedWorkspaces(this, this.trials, options);
     this.testbench = new Testbench(
       store,
       {
@@ -516,6 +519,7 @@ export class Engine {
       cwd,
       this.scriptApprovals,
       this.trials,
+      this.workspaces,
       this.variables,
       this.backgroundScripts,
       () => this.stopped,
@@ -1479,6 +1483,12 @@ export class Engine {
     if (!pending || terminal(pending.status)) this.runVersions.advance(run);
     const definition = this.definition(run),
       node = definition.nodes.find((n) => n.id === run.cursor)!;
+    const workspace = this.workspaces.gate(run, definition);
+    if (typeof workspace === 'boolean') return workspace;
+    if (workspace && pending && !terminal(pending.status)) {
+      this.fail(run, pending, workspace);
+      return true;
+    }
     let execution = run.executions.at(-1);
     const starting = !execution || terminal(execution.status);
     if (!execution || terminal(execution.status)) {
@@ -1499,6 +1509,7 @@ export class Engine {
       };
       run.executions.push(execution);
       try {
+        if (workspace) throw new InterlockError(workspace);
         if (node.batchId !== run.batchNodeId)
           throw new InterlockError('Execution cannot cross Batch groups');
         if (
@@ -1613,37 +1624,13 @@ export class Engine {
               .sort()
           : undefined;
         const definition = this.definition(run);
-        const cwdBinding = node.cwd ?? definition.cwd;
-        let resolvedCwd: string | undefined;
-        let cwdBlocked: { reason: string; path?: string } | undefined;
-        if (cwdBinding !== undefined) {
-          const source = this.bindingSource(run, execution.input);
-          const allowed = this.getAllowedRoots();
-          const result = resolveAndValidateCwd(
-            cwdBinding,
-            source,
-            allowed.length ? allowed : undefined,
-          );
-          if (result.error) {
-            cwdBlocked = {
-              reason: `${node.label}: ${result.error}`,
-            };
-          } else {
-            resolvedCwd = result.resolvedCwd;
-            execution.resolvedCwd = resolvedCwd;
-          }
-        }
-        if (node.context.continuityGroup) {
-          const groupState = this.contextGroups.describe(
-            run.id,
-            node.context.continuityGroup,
-          );
-          if (groupState.session && groupState.cwd) {
-            resolvedCwd = groupState.cwd;
-            execution.resolvedCwd = resolvedCwd;
-            cwdBlocked = undefined;
-          }
-        }
+        const { resolvedCwd, cwdBlocked } = this.workspaces.agentCwd(
+          run,
+          node,
+          definition,
+          this.bindingSource(run, execution.input),
+        );
+        if (resolvedCwd) execution.resolvedCwd = resolvedCwd;
         const executorSettings = this.agentSettings.resolve(
           run,
           definition,
@@ -2220,6 +2207,7 @@ export class Engine {
     if (this.stopped) return;
     void this.executors.stop();
     this.trials.stop();
+    this.workspaces.stop();
     this.simulations.stop();
     this.continuation.stop();
     this.stopped = true;
@@ -2549,6 +2537,7 @@ export class Engine {
     });
     this.retention.tick();
     this.trials.pump(new Set(this.localJobs.keys()));
+    this.workspaces.pump(new Set(this.localJobs.keys()));
   }
   quiescence(runId: string) {
     return sourceQuiescence(this.store, runId, new Set(this.localJobs.keys()));

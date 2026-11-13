@@ -20,7 +20,6 @@ import {
   type MessageReceipt,
 } from '@interlock/core';
 import type { Engine, Worker } from '../index.js';
-import { validateDirectoryContainment } from '../workingDirectory.js';
 import { SchedulerErrors } from '../log.js';
 import {
   ExecutorConfiguration,
@@ -706,13 +705,10 @@ export class ExecutorManager {
             this.defaultCwd;
           let cwd: string;
           try {
-            const profileRoots = configured.allowedRoots ?? [];
-            const serverRoots = this.settings().allowedRoots ?? [];
-            const rootsToCheck = [...profileRoots, ...serverRoots];
-            cwd = validateDirectoryContainment(
-              candidateCwd,
-              rootsToCheck.length ? rootsToCheck : undefined,
-            );
+            cwd = this.engine.workspaces.validateCwd(candidateCwd, [
+              ...(configured.allowedRoots ?? []),
+              ...(this.settings().allowedRoots ?? []),
+            ]);
           } catch (err) {
             offered.cwdBlocked = {
               reason: `Managed executor "${configured.id}": ${err instanceof Error ? err.message : String(err)}`,
@@ -859,13 +855,10 @@ export class ExecutorManager {
           this.defaultCwd;
         let cwd: string;
         try {
-          const profileRoots = profile.allowedRoots ?? [];
-          const serverRoots = this.settings().allowedRoots ?? [];
-          const rootsToCheck = [...profileRoots, ...serverRoots];
-          cwd = validateDirectoryContainment(
-            candidateCwd,
-            rootsToCheck.length ? rootsToCheck : undefined,
-          );
+          cwd = this.engine.workspaces.validateCwd(candidateCwd, [
+            ...(profile.allowedRoots ?? []),
+            ...(this.settings().allowedRoots ?? []),
+          ]);
         } catch (err) {
           currentOffer.cwdBlocked = {
             reason: `Managed executor "${profile.id}": ${err instanceof Error ? err.message : String(err)}`,
