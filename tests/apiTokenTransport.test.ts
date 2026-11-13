@@ -34,8 +34,8 @@ it('requires the API token on HTTP, MCP and the event stream when enabled', asyn
   };
   const app = createApp(engine, connection);
   serveUi(app, dir, connection);
-  const initialize = (headers: Record<string, string> = {}) =>
-    app.request('http://127.0.0.1:4310/mcp', {
+  const initialize = (headers: Record<string, string> = {}, path = '/mcp') =>
+    app.request(`http://127.0.0.1:4310${path}`, {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
@@ -63,11 +63,13 @@ it('requires the API token on HTTP, MCP and the event stream when enabled', asyn
     for (const headers of [{}, wrong]) {
       expect((await get('/trpc/connection', headers)).status).toBe(401);
       expect((await initialize(headers)).status).toBe(401);
+      expect((await initialize(headers, '/mcp/execute')).status).toBe(401);
       expect((await get('/events', headers)).status).toBe(401);
     }
     // Header tokens belong to clients that can send them; the query is for EventSource.
     expect((await get(`/trpc/connection?token=${token}`)).status).toBe(401);
     expect((await initialize(bearer)).status).toBe(200);
+    expect((await initialize(bearer, '/mcp/execute')).status).toBe(200);
     const read = await get('/trpc/connection', bearer);
     expect(read.status).toBe(200);
     expect(
