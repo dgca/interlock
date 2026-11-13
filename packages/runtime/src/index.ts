@@ -33,7 +33,7 @@ import { runAttention } from './runAttention.js';
 import { Requests } from './requests.js';
 import { WorkflowBoards } from './workflowBoards.js';
 import { captureHumanInput } from './humanInput.js';
-import { createRunProjector } from './runProjection.js';
+import { RunInspection } from './runInspection.js';
 import { WorkResources } from './workResources.js';
 import { ExecutorManager } from './executors/manager.js';
 import { resolveAndValidateCwd } from './workingDirectory.js';
@@ -50,7 +50,7 @@ import {
 import { rmSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
-import { Store, type ProjectionState } from '@interlock/storage';
+import { Store } from '@interlock/storage';
 import { tidyWorkflow } from '@interlock/core/layout';
 import {
   applyWorkflowPositions,
@@ -106,7 +106,6 @@ import {
   type Json,
   type NodeExecution,
   type Run,
-  type RunAncestry,
   type Workflow,
   type WorkflowDefinition,
   type WorkflowEdge,
@@ -127,7 +126,6 @@ import {
   draftLayoutSchema,
   type DraftLayout,
 } from '@interlock/core';
-import { assignmentInstructions } from './agentInstructions.js';
 import {
   checkPrivateNetwork,
   executeFetch,
@@ -139,9 +137,8 @@ import { ScriptApprovals } from './scriptApprovals.js';
 import { RunStarts } from './runStarts.js';
 import { RunAdmission } from './runAdmission.js';
 import { HistoryRetention } from './historyRetention.js';
-import { RunHistory, discoverRunTree } from './runHistory.js';
+import { RunHistory } from './runHistory.js';
 import {
-  previewRunCancellationSchema,
   cancelRunTreeSchema,
   type RunCancellationPreview,
   type CancelRunTree,
@@ -235,6 +232,7 @@ export class Engine {
   readonly contextGroups: ContextContinuityGroups;
   private readonly starts: RunStarts;
   private readonly trials: TrialEnvironments;
+  private readonly inspection: RunInspection;
   private localJobs = new Map<string, AbortController>();
   private backgroundScripts: BackgroundScripts;
   private stopped = false;
@@ -278,7 +276,7 @@ export class Engine {
     this.chains = new RunChains(store);
     this.continuation = new Continuation(
       store,
-      (id) => this.overlayProjection(this.store.continuation(id)),
+      (id) => this.inspection.overlayProjection(this.store.continuation(id)),
       (id) => this.quiescence(id),
     );
     this.externalInputs = new ExternalInputs(store, {
@@ -329,7 +327,7 @@ export class Engine {
       ),
     );
     this.assignmentSizes = new AssignmentSizes(store, this.prompts, (work) =>
-      this.describeWork(work),
+      this.inspection.describeWork(work),
     );
     this.versions = new VersionCleanup(store);
     this.runVersions = new RunVersions(store, {
@@ -485,98 +483,7 @@ export class Engine {
     this.history = new RunHistory(
       store,
       (ids) => this.starts.deleted(ids),
-      (ids) => {
-        const blockers: string[] = [];
-        if (
-          this.localJobs.size > 0 &&
-          store
-            .runTrees(ids)
-            .some((run) =>
-              run.executions.some((execution) =>
-                this.localJobs.has(execution.id),
-              ),
-            )
-        )
-          blockers.push(
-            'Native operations are still closing. Retry after they stop.',
-          );
-        if (
-          store
-            .runTrees(ids)
-            .some((run) =>
-              run.executions.some(
-                (execution) =>
-                  execution.background &&
-                  ['launching', 'running', 'uncertain'].includes(
-                    execution.background.state,
-                  ),
-              ),
-            )
-        )
-          blockers.push(
-            'Background Scripts must have a verified outcome or explicit stopped reconciliation before deleting history.',
-          );
-        if (
-          store
-            .runTrees(ids)
-            .some((run) =>
-              run.executions.some((execution) =>
-                execution.childRunIds?.some((id) => !ids.has(id)),
-              ),
-            )
-        )
-          blockers.push(
-            'Incomplete descendant history must be recovered before cleanup.',
-          );
-        try {
-          this.executors.assertDelete(ids);
-        } catch (error) {
-          if (!(error instanceof InterlockError)) throw error;
-          blockers.push(error.message);
-        }
-        if (
-          store.forRuns<UncertainClaim>(uncertainClaimCollection, ids).length ||
-          store.forRuns<UncertainOperation>(uncertainOperationCollection, ids)
-            .length
-        )
-          blockers.push(
-            'Uncertain claims or operations must be confirmed stopped before deleting history.',
-          );
-        if (
-          store
-            .pendingEventDeliveries()
-            .some(
-              (delivery) => !delivery.runId && ids.has(delivery.sourceRunId),
-            )
-        )
-          blockers.push(
-            'Pending lifecycle deliveries retain their source tree until dispatch or suppression.',
-          );
-        if (
-          store
-            .pendingScheduleFires()
-            .some((fire) => fire.runId && ids.has(fire.runId)) ||
-          store
-            .pendingEventDeliveries()
-            .some((delivery) => delivery.runId && ids.has(delivery.runId))
-        )
-          blockers.push(
-            'Trigger outcomes must be observed before deleting history.',
-          );
-        if (
-          store
-            .queuedRuns()
-            .some((run) =>
-              run.admission?.after.some(
-                (dependency) => dependency.runId && ids.has(dependency.runId),
-              ),
-            )
-        )
-          blockers.push(
-            'Queued admission dependencies retain this history until promotion or cancellation.',
-          );
-        return blockers;
-      },
+      (ids) => this.inspection.historyDeletionBlockers(ids),
       () =>
         queueMicrotask(() => this.listeners.forEach((listener) => listener())),
     );
@@ -605,6 +512,19 @@ export class Engine {
       this.usage,
       this.trials,
       this.modelAliases,
+    );
+    this.inspection = new RunInspection(
+      store,
+      (id) => this.run(id),
+      this.localJobs,
+      this.executors,
+      this.resources,
+      this.holds,
+      this.chains,
+      this.testbench,
+      this.stalls,
+      (id) => this.quiescence(id),
+      (runId) => this.available(runId),
     );
     for (const id of this.trials.recover()) this.cancelTree(id);
     // Deterministic ownership survives a lost process outcome. Background supervisors
@@ -1749,87 +1669,14 @@ export class Engine {
   runAttention(requests = this.requests.current()) {
     return runAttention(requests);
   }
-  private overlayProjection<T extends ProjectionState>(state: T): T {
-    for (const execution of state.executions)
-      if (execution.kind === 'wait' && this.localJobs.has(execution.id))
-        execution.pollCheckRunning = true;
-    for (const work of state.work)
-      if (work.executor) work.managedExecution = this.executors.describe(work);
-    return state;
-  }
   projectRun(id: string, override?: Run) {
-    const children = override?.executions.at(-1)?.childRunIds ?? [];
-    return createRunProjector(
-      this.store,
-      this.overlayProjection(this.store.currentProjection([id, ...children])),
-      override,
-    )(id);
+    return this.inspection.projectRun(id, override);
   }
   projectRuns<T extends { id: string }>(runs: T[]) {
-    const project = createRunProjector(
-      this.store,
-      this.overlayProjection(
-        this.store.currentProjection(runs.map((run) => run.id)),
-      ),
-    );
-    return runs.map((run) => ({ ...run, ...project(run.id) }));
+    return this.inspection.projectRuns(runs);
   }
   inspect(id: string) {
-    const run = this.run(id);
-    const handledFailure = this.handledWorkflowFailure(run);
-    if (run.batchNodeId && run.parentRunId && !run.parentExecutionId) {
-      const invocation = this.store
-        .get<Run>('runs', run.parentRunId)
-        ?.executions.find((step) => step.childRunIds.includes(run.id));
-      if (invocation) {
-        run.parentExecutionId = invocation.id;
-        run.batchItemIndex ??= invocation.childRunIds.indexOf(run.id);
-      }
-    }
-    const ids = new Set([id]);
-    const descendants = this.store
-      .runTrees(ids)
-      .filter((child) => child.id !== id);
-    for (const child of descendants) ids.add(child.id);
-    const descendantWork = this.store
-      .forRuns<WorkRequest>('work', ids)
-      .map((work) => {
-        const { token, ...visible } = this.describeWork(work);
-        return {
-          ...visible,
-          ...(work.holdRevision
-            ? { holdHistory: this.holds.history(work.id) }
-            : {}),
-        };
-      });
-    const definition = this.store.getVersion(run.workflowId, run.version);
-    const chain = this.chains.read(run);
-    return {
-      run: { ...run, ...this.projectRun(id) },
-      externalInputHeldByRunId: this.store.externalInputHoldOwner(run.id),
-      ...(handledFailure ? { handledFailure } : {}),
-      ...(chain
-        ? {
-            chain: {
-              ...chain,
-              latestStatus: this.run(chain.latestRunId).status,
-            },
-          }
-        : {}),
-      counterpartRunId: this.testbench.counterpart(run),
-      descendants: descendants.map((child) => ({
-        ...child,
-        ...this.projectRun(child.id),
-      })),
-      descendantWork,
-      definition: definition?.definition ?? null,
-      definitionAvailable: Boolean(definition),
-      work: descendantWork.filter((work) => work.runId === id),
-      stalls: this.stalls.inspect(id),
-      events: this.store.events(id),
-      quiescence: this.quiescence(id),
-      children: descendants.filter((child) => child.parentRunId === id),
-    };
+    return this.inspection.inspect(id);
   }
   private definition(
     run: Pick<Run, 'workflowId' | 'version'>,
@@ -1838,22 +1685,6 @@ export class Engine {
     if (!snapshot)
       throw new InterlockError('Published workflow version not found');
     return snapshot.definition;
-  }
-  private handledWorkflowFailure(run: Run) {
-    if (
-      run.status !== 'failed' ||
-      !run.parentRunId ||
-      run.parentMode === 'detached'
-    )
-      return undefined;
-    const parent = this.run(run.parentRunId);
-    const caller = parent.executions.find(
-      (execution) =>
-        execution.kind === 'workflow' &&
-        execution.port === 'failed' &&
-        execution.childRunIds.includes(run.id),
-    );
-    return caller ? { runId: parent.id, executionId: caller.id } : undefined;
   }
   private fail(run: Run, execution: NodeExecution, error: string) {
     if (execution.resourceActive)
@@ -3931,36 +3762,6 @@ export class Engine {
         this.pump();
       });
   }
-  private describeWork(work: WorkRequest): WorkRequest {
-    const {
-      expiredClaims: _receipts,
-      holdReceipt: _holdReceipt,
-      ...visible
-    } = work;
-    work = visible;
-    const reservations = work.resources?.length
-      ? this.resources.forWork(work.id)
-      : [];
-    work = {
-      ...work,
-      ...(this.executors.describe(work)
-        ? { managedExecution: this.executors.describe(work) }
-        : {}),
-      ...(reservations.length ? { resourceReservations: reservations } : {}),
-    };
-    const instructions = assignmentInstructions(work, {
-      lifecycleRunId: this.lifecycleRunId(work.runId),
-    });
-    return instructions
-      ? { ...work, executionInstructions: instructions }
-      : work;
-  }
-  private lifecycleRunId(id: string) {
-    let run = this.run(id);
-    while (run.parentRunId && run.parentMode !== 'detached')
-      run = this.run(run.parentRunId);
-    return run.id;
-  }
   available(runId?: string, options: { advance?: boolean } = {}) {
     if (options.advance !== false) this.pump();
     const within = (id: string): boolean => {
@@ -3978,57 +3779,10 @@ export class Engine {
           !w.cwdBlocked &&
           within(w.runId),
       )
-      .map((work) => this.describeWork(work));
+      .map((work) => this.inspection.describeWork(work));
   }
   workSummaries(runId?: string) {
-    const ancestry = new Map<string, RunAncestry>();
-    return this.available(runId).map((work) => ({
-      id: work.id,
-      runId: work.runId,
-      ...this.store.runAncestry(work.runId, ancestry),
-      nodeId: work.nodeId,
-      label: work.label,
-      status: work.status,
-      context: work.context,
-      ...(work.executor
-        ? {
-            executor: work.executor,
-            ...(work.executorModel
-              ? { executorModel: work.executorModel }
-              : {}),
-            ...(work.executorModelSource
-              ? { executorModelSource: work.executorModelSource }
-              : {}),
-            ...(work.executorEffort !== undefined
-              ? {
-                  executorEffort: work.executorEffort,
-                  executorEffortSource: work.executorEffortSource,
-                }
-              : {}),
-            ...(work.executorPermissions
-              ? { executorPermissions: work.executorPermissions }
-              : {}),
-            managedExecution: this.executors.describe(work),
-          }
-        : {}),
-      ...(work.trialEnvironment
-        ? { trialEnvironmentId: work.trialEnvironment.id }
-        : {}),
-      ...(work.continuity ? { continuity: work.continuity } : {}),
-      attempt: work.attempt,
-      ...(work.resources ? { resources: work.resources } : {}),
-      maxAttempts: work.maxAttempts,
-      maxLeaseExpiries: work.maxLeaseExpiries,
-      failureCount: work.failureCount,
-      leaseExpiryCount: work.leaseExpiryCount,
-      ...(work.holdRevision ? { holdRevision: work.holdRevision } : {}),
-      ...(work.heldClaimCount ? { heldClaimCount: work.heldClaimCount } : {}),
-      maxExecutionMs: work.maxExecutionMs,
-      claimedAt: work.claimedAt,
-      lastActivityAt: work.lastActivityAt,
-      leaseSeconds: work.leaseSeconds,
-      availableUntil: work.availableUntil,
-    }));
+    return this.inspection.workSummaries(runId);
   }
   manageWorkHold(input: WorkHoldRequest) {
     const q = workHoldRequestSchema.parse(input);
@@ -4162,7 +3916,7 @@ export class Engine {
       this.usage.claimed(work);
       this.budgets.refresh();
       this.resources.refresh();
-      return this.describeWork(work);
+      return this.inspection.describeWork(work);
     });
     this.executors.claimCommitted(workId);
     return claimed;
@@ -4216,7 +3970,7 @@ export class Engine {
         this.nowMs() + (leaseSeconds ?? work.claimLeaseSeconds ?? 300) * 1000,
       ).toISOString();
       this.store.put('work', work);
-      return this.describeWork(work);
+      return this.inspection.describeWork(work);
     });
   }
   /** Read-only: do not pump, renew, or process expired claims. */
@@ -4311,7 +4065,10 @@ export class Engine {
     const bounded = continuationLimitSchema.parse(limit);
     const workRunId = this.submitWork(id, token, output);
     return {
-      ...this.continuation.summary(this.lifecycleRunId(workRunId), bounded),
+      ...this.continuation.summary(
+        this.inspection.lifecycleRunId(workRunId),
+        bounded,
+      ),
       workId: id,
       workRunId,
     };
@@ -4618,51 +4375,14 @@ export class Engine {
       reason ? `Run cancelled: ${reason}` : 'Run cancelled',
     );
   }
-  private cancellationSelection(id: string, includeDetached: boolean) {
-    return discoverRunTree(this.store.historyRuns(), id, includeDetached);
-  }
-  private cancellationReference(run: ReturnType<Store['historyRuns']>[number]) {
-    return {
-      id: run.id,
-      workflowId: run.workflowId,
-      workflowName: run.workflowName,
-      status: run.status,
-      ...(run.parentRunId ? { parentRunId: run.parentRunId } : {}),
-      ...(run.parentMode === 'detached'
-        ? { parentMode: 'detached' as const }
-        : {}),
-    };
-  }
   previewRunCancellation(input: RunCancellationPreview) {
-    const query = previewRunCancellationSchema.parse(input);
-    return this.store.transaction(() => {
-      const active = this.cancellationSelection(
-        query.id,
-        query.includeDetached,
-      ).filter((run) => !terminal(run.status));
-      const items = active
-        .slice(query.offset, query.offset + query.limit)
-        .map((run) => this.cancellationReference(run));
-      return {
-        rootRunId: query.id,
-        includeDetached: query.includeDetached,
-        items,
-        total: active.length,
-        offset: query.offset,
-        nextOffset:
-          query.offset + items.length < active.length
-            ? query.offset + items.length
-            : null,
-        truncated:
-          query.offset > 0 || query.offset + items.length < active.length,
-      };
-    });
+    return this.inspection.previewRunCancellation(input);
   }
   cancelRunTree(input: CancelRunTree) {
     const query = cancelRunTreeSchema.parse(input);
     const afterCommit: (() => void)[] = [];
     const result = this.store.transaction(() => {
-      const selected = this.cancellationSelection(
+      const selected = this.inspection.cancellationSelection(
         query.id,
         query.includeDetached,
       );
@@ -4678,11 +4398,12 @@ export class Engine {
         includeDetached: query.includeDetached,
         reason: query.reason,
         cancelled: {
-          items: active
-            .slice(0, query.limit)
-            .map((run) =>
-              this.cancellationReference({ ...run, status: 'cancelled' }),
-            ),
+          items: active.slice(0, query.limit).map((run) =>
+            this.inspection.cancellationReference({
+              ...run,
+              status: 'cancelled',
+            }),
+          ),
           total: active.length,
           truncated: active.length > query.limit,
         },
@@ -4801,7 +4522,7 @@ export class Engine {
         );
       this.assertResumeSafe(run);
       this.chains.assertRetry(run);
-      if (this.handledWorkflowFailure(run))
+      if (this.inspection.handledWorkflowFailure(run))
         throw new InterlockError(
           'This child failure was handled by its Workflow Failed route; inspect the parent recovery instead of retrying the child',
         );
