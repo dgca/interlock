@@ -165,9 +165,13 @@ describe.each(widths)('main screens at %dpx', (width) => {
 
   beforeAll(async () => {
     // Freeze server timestamps so dates and durations match the baselines.
-    vi.useFakeTimers({ toFake: ['Date'], now: screenshotTime });
+    // Records are created a minute apart, ending before the fixed browser time.
+    vi.useFakeTimers({
+      toFake: ['Date'],
+      now: screenshotTime.getTime() - 60 * 60_000,
+    });
     ({ app, context, page } = await open(width));
-    seed = seedScreens(app.engine);
+    seed = seedScreens(app.engine, () => vi.setSystemTime(Date.now() + 60_000));
   });
 
   afterAll(async () => {

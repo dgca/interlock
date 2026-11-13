@@ -1,8 +1,12 @@
 import { blankDefinition } from '@interlock/core';
 import type { Engine } from '@interlock/runtime';
 
-/** Representative data for screenshot and accessibility coverage of the main screens. */
-export function seedScreens(engine: Engine) {
+/**
+ * Representative data for screenshot and accessibility coverage of the main
+ * screens. `tick` advances a fake clock between records so that lists ordered
+ * by time never fall back to random IDs.
+ */
+export function seedScreens(engine: Engine, tick: () => void = () => {}) {
   const board = engine.boards.save({
     name: 'Release delivery',
     columns: [{ name: 'Draft' }, { name: 'Review' }, { name: 'Done' }],
@@ -17,6 +21,7 @@ export function seedScreens(engine: Engine) {
     definition,
   );
   engine.publish(release.id);
+  tick();
   engine.create(
     'Incident triage',
     'Collects alerts and proposes an owner.',
@@ -27,12 +32,13 @@ export function seedScreens(engine: Engine) {
     boardId: board.id,
     expectedBoardId: null,
   });
-  const runs = ['Release 0.3.0', 'Release 0.3.1'].map((title) =>
-    engine.startSummary(release.id, {}, undefined, 1, undefined, {
+  const runs = ['Release 0.3.0', 'Release 0.3.1'].map((title) => {
+    tick();
+    return engine.startSummary(release.id, {}, undefined, 1, undefined, {
       title,
       tags: { channel: 'stable' },
-    }),
-  );
+    });
+  });
   engine.variables.mutate({
     action: 'create',
     name: 'RELEASE_CHANNEL',
@@ -40,6 +46,7 @@ export function seedScreens(engine: Engine) {
     value: 'stable',
     description: 'Channel used for published builds.',
   });
+  tick();
   engine.variables.mutate({
     action: 'create',
     name: 'REVIEW_LIMIT',
