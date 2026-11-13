@@ -344,7 +344,7 @@
       "count": 1
     },
     "@typescript-eslint/no-unused-vars": {
-      "count": 5
+      "count": 2
     },
     "@typescript-eslint/prefer-promise-reject-errors": {
       "count": 1
@@ -370,6 +370,11 @@
     },
     "@typescript-eslint/no-unsafe-member-access": {
       "count": 2
+    }
+  },
+  "packages/runtime/src/runInspection.ts": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 3
     }
   },
   "packages/runtime/src/runVersions.ts": {
