@@ -18,4 +18,4 @@ Update baselines only for a visual change you intend, and review every changed i
 2. Download the `screenshot-diffs` artifact from the failed CI run. Check each `-diff.png` and `-actual.png` to confirm only the intended change appears.
 3. Replace each matching file in `tests/browser/__screenshots__/` with its `-actual.png`, dropping the `-actual` suffix. A new screenshot has no baseline yet, so its `-actual.png` becomes the new baseline the same way.
 
-On a Linux machine with the same Playwright Chromium, `INTERLOCK_UPDATE_SNAPSHOTS=1 pnpm test:browser` rewrites the baselines that differ instead. Compare the result with CI before committing, because local Linux font packages can still differ from the runner.
+On a Linux machine with the same Playwright Chromium, `INTERLOCK_UPDATE_SNAPSHOTS=1 pnpm test:browser` rewrites the baselines that differ instead. It refuses to run when `CI` is set. Compare the result with CI before committing, because local Linux font packages can still differ from the runner.
