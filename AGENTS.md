@@ -31,7 +31,7 @@ Before changing a repeated interaction, compare the matching screens and identif
 
 Every UI element should provide useful information or help the user decide or act. Use existing titles and navigation for context instead of repeating them in subtitles or labels. Omit generic filler copy added to make a layout feel complete. Keep guidance that explains a non-obvious behavior, consequence, or next step, and place it where needed. Build visual hierarchy with spacing, typography, and grouping rather than extra copy.
 
-Before implementing a new screen, get a short written layout proposal approved. For changes under `packages/ui`, complete the PR template's [UI evidence](.github/pull_request_template.md#ui-evidence) section and review its screenshots against the [UI review checklist](packages/ui/UI-REVIEW.md).
+Before implementing a new screen, get a short written layout proposal approved. For changes under `packages/ui` other than Markdown files, complete the PR template's [UI evidence](.github/pull_request_template.md#ui-evidence) section and review its screenshots against the [UI review checklist](packages/ui/UI-REVIEW.md).
 
 ## Keep documentation and MCP definitions current
 

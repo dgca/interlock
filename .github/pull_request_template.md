@@ -15,7 +15,7 @@ Explain any added discovery text or response volume and why it earns its context
 
 ## UI evidence
 
-<!-- Required when this PR changes any file under packages/ui. Remove this section only when the PR changes no files under packages/ui.
+<!-- Required when this PR changes any file under packages/ui other than Markdown (.md) files. Remove this section only when every changed file under packages/ui, if any, is a Markdown file.
 Attach before and after screenshots at desktop and narrow widths.
 For a new screen, link the approved layout proposal and write "None" under Before.
 -->
