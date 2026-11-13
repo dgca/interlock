@@ -1,0 +1,744 @@
+{
+  "findings": [
+    {
+      "file": "packages/core/src/backgroundScripts.ts",
+      "type": "types",
+      "symbol": "BackgroundScript"
+    },
+    {
+      "file": "packages/core/src/budgets.ts",
+      "type": "types",
+      "symbol": "BudgetBlock"
+    },
+    {
+      "file": "packages/core/src/continuation.ts",
+      "type": "exports",
+      "symbol": "continuationWorkSchema"
+    },
+    {
+      "file": "packages/core/src/continuation.ts",
+      "type": "exports",
+      "symbol": "heldWorkSchema"
+    },
+    {
+      "file": "packages/core/src/doctor.ts",
+      "type": "exports",
+      "symbol": "diagnosticCategorySchema"
+    },
+    {
+      "file": "packages/core/src/doctor.ts",
+      "type": "exports",
+      "symbol": "diagnosticCheckSchema"
+    },
+    {
+      "file": "packages/core/src/doctor.ts",
+      "type": "exports",
+      "symbol": "diagnosticStatusSchema"
+    },
+    {
+      "file": "packages/core/src/evaluation.ts",
+      "type": "exports",
+      "symbol": "evaluationEvidenceSchema"
+    },
+    {
+      "file": "packages/core/src/eventTriggers.ts",
+      "type": "duplicates",
+      "symbol": "eventWorkflowActionSchema|eventActionSchema"
+    },
+    {
+      "file": "packages/core/src/eventTriggers.ts",
+      "type": "exports",
+      "symbol": "eventActionSchema"
+    },
+    {
+      "file": "packages/core/src/eventTriggers.ts",
+      "type": "exports",
+      "symbol": "eventScopeSchema"
+    },
+    {
+      "file": "packages/core/src/eventTriggers.ts",
+      "type": "exports",
+      "symbol": "eventWorkflowActionSchema"
+    },
+    {
+      "file": "packages/core/src/eventTriggers.ts",
+      "type": "exports",
+      "symbol": "lifecycleEventKindSchema"
+    },
+    {
+      "file": "packages/core/src/eventTriggers.ts",
+      "type": "types",
+      "symbol": "EventAction"
+    },
+    {
+      "file": "packages/core/src/eventTriggers.ts",
+      "type": "types",
+      "symbol": "EventWorkflowAction"
+    },
+    {
+      "file": "packages/core/src/eventTriggers.ts",
+      "type": "types",
+      "symbol": "LifecycleEventKind"
+    },
+    {
+      "file": "packages/core/src/executors.ts",
+      "type": "exports",
+      "symbol": "allowedRootSchema"
+    },
+    {
+      "file": "packages/core/src/executors.ts",
+      "type": "exports",
+      "symbol": "errorClassSchema"
+    },
+    {
+      "file": "packages/core/src/executors.ts",
+      "type": "exports",
+      "symbol": "executorConcurrencySchema"
+    },
+    {
+      "file": "packages/core/src/executors.ts",
+      "type": "exports",
+      "symbol": "executorSettingSourceSchema"
+    },
+    {
+      "file": "packages/core/src/executors.ts",
+      "type": "exports",
+      "symbol": "harnessNameSchema"
+    },
+    {
+      "file": "packages/core/src/executors.ts",
+      "type": "exports",
+      "symbol": "recoveryActionSchema"
+    },
+    {
+      "file": "packages/core/src/executors.ts",
+      "type": "exports",
+      "symbol": "recoveryEventSchema"
+    },
+    {
+      "file": "packages/core/src/executors.ts",
+      "type": "types",
+      "symbol": "ContinueOnMissingResult"
+    },
+    {
+      "file": "packages/core/src/executors.ts",
+      "type": "types",
+      "symbol": "ExecutorState"
+    },
+    {
+      "file": "packages/core/src/executors.ts",
+      "type": "types",
+      "symbol": "HarnessName"
+    },
+    {
+      "file": "packages/core/src/executors.ts",
+      "type": "types",
+      "symbol": "RecoveryAction"
+    },
+    {
+      "file": "packages/core/src/executors.ts",
+      "type": "types",
+      "symbol": "TransientRetry"
+    },
+    {
+      "file": "packages/core/src/externalInput.ts",
+      "type": "types",
+      "symbol": "ExternalInputHold"
+    },
+    {
+      "file": "packages/core/src/externalInput.ts",
+      "type": "types",
+      "symbol": "ExternalInputMetadata"
+    },
+    {
+      "file": "packages/core/src/importDocument.ts",
+      "type": "exports",
+      "symbol": "legacyImportSchema"
+    },
+    {
+      "file": "packages/core/src/index.ts",
+      "type": "exports",
+      "symbol": "bindingLeaves"
+    },
+    {
+      "file": "packages/core/src/index.ts",
+      "type": "exports",
+      "symbol": "comparisonExecutorSchema"
+    },
+    {
+      "file": "packages/core/src/index.ts",
+      "type": "exports",
+      "symbol": "comparisonSideSchema"
+    },
+    {
+      "file": "packages/core/src/index.ts",
+      "type": "exports",
+      "symbol": "contractSchema"
+    },
+    {
+      "file": "packages/core/src/index.ts",
+      "type": "exports",
+      "symbol": "cwdBindingSchema"
+    },
+    {
+      "file": "packages/core/src/index.ts",
+      "type": "exports",
+      "symbol": "deletedVersionSchema"
+    },
+    {
+      "file": "packages/core/src/index.ts",
+      "type": "exports",
+      "symbol": "evaluationEvidenceSchema"
+    },
+    {
+      "file": "packages/core/src/index.ts",
+      "type": "exports",
+      "symbol": "evaluationReferenceSchema"
+    },
+    {
+      "file": "packages/core/src/index.ts",
+      "type": "exports",
+      "symbol": "executionProvenanceSchema"
+    },
+    {
+      "file": "packages/core/src/index.ts",
+      "type": "exports",
+      "symbol": "pollCheckSchema"
+    },
+    {
+      "file": "packages/core/src/index.ts",
+      "type": "exports",
+      "symbol": "routingSchema"
+    },
+    {
+      "file": "packages/core/src/index.ts",
+      "type": "exports",
+      "symbol": "savedPromptSchema"
+    },
+    {
+      "file": "packages/core/src/index.ts",
+      "type": "exports",
+      "symbol": "testCaseSchema"
+    },
+    {
+      "file": "packages/core/src/index.ts",
+      "type": "exports",
+      "symbol": "validateFetch"
+    },
+    {
+      "file": "packages/core/src/index.ts",
+      "type": "exports",
+      "symbol": "validateParallelScopes"
+    },
+    {
+      "file": "packages/core/src/index.ts",
+      "type": "exports",
+      "symbol": "valueBindingSchema"
+    },
+    {
+      "file": "packages/core/src/index.ts",
+      "type": "exports",
+      "symbol": "versionReferenceSchema"
+    },
+    {
+      "file": "packages/core/src/index.ts",
+      "type": "exports",
+      "symbol": "workflowEditSchema"
+    },
+    {
+      "file": "packages/core/src/index.ts",
+      "type": "types",
+      "symbol": "BackgroundScript"
+    },
+    {
+      "file": "packages/core/src/index.ts",
+      "type": "types",
+      "symbol": "CheckResult"
+    },
+    {
+      "file": "packages/core/src/index.ts",
+      "type": "types",
+      "symbol": "ContextPolicy"
+    },
+    {
+      "file": "packages/core/src/index.ts",
+      "type": "types",
+      "symbol": "DraftChanges"
+    },
+    {
+      "file": "packages/core/src/index.ts",
+      "type": "types",
+      "symbol": "InputHint"
+    },
+    {
+      "file": "packages/core/src/index.ts",
+      "type": "types",
+      "symbol": "PollCheckResult"
+    },
+    {
+      "file": "packages/core/src/index.ts",
+      "type": "types",
+      "symbol": "QualityJudgment"
+    },
+    {
+      "file": "packages/core/src/index.ts",
+      "type": "types",
+      "symbol": "SuiteContent"
+    },
+    {
+      "file": "packages/core/src/index.ts",
+      "type": "types",
+      "symbol": "TestAssertion"
+    },
+    {
+      "file": "packages/core/src/modelAliases.ts",
+      "type": "exports",
+      "symbol": "modelAliasCandidateSchema"
+    },
+    {
+      "file": "packages/core/src/pauseHolds.ts",
+      "type": "types",
+      "symbol": "PauseBlock"
+    },
+    {
+      "file": "packages/core/src/providers.ts",
+      "type": "exports",
+      "symbol": "defaultProviderPrefixes"
+    },
+    {
+      "file": "packages/core/src/providers.ts",
+      "type": "exports",
+      "symbol": "normalizeProvider"
+    },
+    {
+      "file": "packages/core/src/report.ts",
+      "type": "exports",
+      "symbol": "claimWaitReportSchema"
+    },
+    {
+      "file": "packages/core/src/report.ts",
+      "type": "exports",
+      "symbol": "costAmountSchema"
+    },
+    {
+      "file": "packages/core/src/report.ts",
+      "type": "exports",
+      "symbol": "distributionMetricSchema"
+    },
+    {
+      "file": "packages/core/src/report.ts",
+      "type": "exports",
+      "symbol": "elapsedDistributionMetricSchema"
+    },
+    {
+      "file": "packages/core/src/report.ts",
+      "type": "exports",
+      "symbol": "exitNodeOutcomeSchema"
+    },
+    {
+      "file": "packages/core/src/report.ts",
+      "type": "exports",
+      "symbol": "nodeDurationMetricSchema"
+    },
+    {
+      "file": "packages/core/src/report.ts",
+      "type": "exports",
+      "symbol": "stageDurationMetricSchema"
+    },
+    {
+      "file": "packages/core/src/report.ts",
+      "type": "exports",
+      "symbol": "terminalOutcomesReportSchema"
+    },
+    {
+      "file": "packages/core/src/report.ts",
+      "type": "exports",
+      "symbol": "tokenSummarySchema"
+    },
+    {
+      "file": "packages/core/src/report.ts",
+      "type": "exports",
+      "symbol": "usageByAliasSchema"
+    },
+    {
+      "file": "packages/core/src/report.ts",
+      "type": "exports",
+      "symbol": "usageByModelSchema"
+    },
+    {
+      "file": "packages/core/src/report.ts",
+      "type": "exports",
+      "symbol": "usageByNodeSchema"
+    },
+    {
+      "file": "packages/core/src/report.ts",
+      "type": "exports",
+      "symbol": "usageByProviderSchema"
+    },
+    {
+      "file": "packages/core/src/report.ts",
+      "type": "exports",
+      "symbol": "usageByRunSchema"
+    },
+    {
+      "file": "packages/core/src/report.ts",
+      "type": "exports",
+      "symbol": "usageCostReportSchema"
+    },
+    {
+      "file": "packages/core/src/report.ts",
+      "type": "exports",
+      "symbol": "usageCoverageReportSchema"
+    },
+    {
+      "file": "packages/core/src/report.ts",
+      "type": "exports",
+      "symbol": "workflowReportSummarySchema"
+    },
+    {
+      "file": "packages/core/src/report.ts",
+      "type": "types",
+      "symbol": "ClaimWaitReport"
+    },
+    {
+      "file": "packages/core/src/report.ts",
+      "type": "types",
+      "symbol": "ResolvedReportFilter"
+    },
+    {
+      "file": "packages/core/src/report.ts",
+      "type": "types",
+      "symbol": "TerminalOutcomesReport"
+    },
+    {
+      "file": "packages/core/src/report.ts",
+      "type": "types",
+      "symbol": "TokenSummary"
+    },
+    {
+      "file": "packages/core/src/report.ts",
+      "type": "types",
+      "symbol": "UsageCostReport"
+    },
+    {
+      "file": "packages/core/src/report.ts",
+      "type": "types",
+      "symbol": "UsageCoverageReport"
+    },
+    {
+      "file": "packages/core/src/report.ts",
+      "type": "types",
+      "symbol": "WorkflowReportSummary"
+    },
+    {
+      "file": "packages/core/src/resultValidation.ts",
+      "type": "exports",
+      "symbol": "resultDiagnosticSchema"
+    },
+    {
+      "file": "packages/core/src/resultValidation.ts",
+      "type": "types",
+      "symbol": "ResultDiagnostic"
+    },
+    {
+      "file": "packages/core/src/runChains.ts",
+      "type": "types",
+      "symbol": "RunChainLink"
+    },
+    {
+      "file": "packages/core/src/runProjection.ts",
+      "type": "exports",
+      "symbol": "runWaitingSchema"
+    },
+    {
+      "file": "packages/core/src/runStarts.ts",
+      "type": "exports",
+      "symbol": "startDependencySchema"
+    },
+    {
+      "file": "packages/core/src/runStarts.ts",
+      "type": "types",
+      "symbol": "RunAdmission"
+    },
+    {
+      "file": "packages/core/src/runStarts.ts",
+      "type": "types",
+      "symbol": "StartDependency"
+    },
+    {
+      "file": "packages/core/src/runVersions.ts",
+      "type": "types",
+      "symbol": "RunVersionBlocker"
+    },
+    {
+      "file": "packages/core/src/runVersions.ts",
+      "type": "types",
+      "symbol": "RunVersionChange"
+    },
+    {
+      "file": "packages/core/src/simulation.ts",
+      "type": "exports",
+      "symbol": "routeCoverageSchema"
+    },
+    {
+      "file": "packages/core/src/simulation.ts",
+      "type": "types",
+      "symbol": "SimulationFixture"
+    },
+    {
+      "file": "packages/core/src/testbench.ts",
+      "type": "exports",
+      "symbol": "comparisonExecutorSchema"
+    },
+    {
+      "file": "packages/core/src/testbench.ts",
+      "type": "exports",
+      "symbol": "comparisonSideSchema"
+    },
+    {
+      "file": "packages/core/src/testbench.ts",
+      "type": "exports",
+      "symbol": "testCaseSchema"
+    },
+    {
+      "file": "packages/core/src/testbench.ts",
+      "type": "types",
+      "symbol": "QualityJudgment"
+    },
+    {
+      "file": "packages/core/src/testbench.ts",
+      "type": "types",
+      "symbol": "SuiteContent"
+    },
+    {
+      "file": "packages/core/src/transcripts.ts",
+      "type": "types",
+      "symbol": "ExecutorMessage"
+    },
+    {
+      "file": "packages/core/src/transcripts.ts",
+      "type": "types",
+      "symbol": "TranscriptKind"
+    },
+    {
+      "file": "packages/core/src/usage.ts",
+      "type": "exports",
+      "symbol": "usageSnapshotSchema"
+    },
+    {
+      "file": "packages/core/src/usage.ts",
+      "type": "types",
+      "symbol": "UsageCoverage"
+    },
+    {
+      "file": "packages/core/src/usage.ts",
+      "type": "types",
+      "symbol": "UsageReport"
+    },
+    {
+      "file": "packages/core/src/valueBindings.ts",
+      "type": "exports",
+      "symbol": "bindingContract"
+    },
+    {
+      "file": "packages/core/src/variables.ts",
+      "type": "exports",
+      "symbol": "variableKindSchema"
+    },
+    {
+      "file": "packages/core/src/versionCleanup.ts",
+      "type": "exports",
+      "symbol": "versionReferenceSchema"
+    },
+    {
+      "file": "packages/core/src/workflowBoards.ts",
+      "type": "types",
+      "symbol": "BoardColumn"
+    },
+    {
+      "file": "packages/core/src/workflowDiff.ts",
+      "type": "exports",
+      "symbol": "sameValue"
+    },
+    {
+      "file": "packages/core/src/workflowDiff.ts",
+      "type": "types",
+      "symbol": "ChangeKind"
+    },
+    {
+      "file": "packages/core/src/workflowEdits.ts",
+      "type": "exports",
+      "symbol": "workflowEditSchema"
+    },
+    {
+      "file": "packages/core/src/workflowTriggers.ts",
+      "type": "types",
+      "symbol": "TriggerState"
+    },
+    {
+      "file": "packages/core/src/workHolds.ts",
+      "type": "exports",
+      "symbol": "holdCategorySchema"
+    },
+    {
+      "file": "packages/core/src/workHolds.ts",
+      "type": "types",
+      "symbol": "WorkHold"
+    },
+    {
+      "file": "packages/core/src/workResources.ts",
+      "type": "exports",
+      "symbol": "resourceNameSchema"
+    },
+    {
+      "file": "packages/core/src/workResources.ts",
+      "type": "types",
+      "symbol": "ResourceBlock"
+    },
+    {
+      "file": "packages/runtime/src/comparisonConfigurations.ts",
+      "type": "exports",
+      "symbol": "comparisonSides"
+    },
+    {
+      "file": "packages/runtime/src/comparisonConfigurations.ts",
+      "type": "exports",
+      "symbol": "promptIdentity"
+    },
+    {
+      "file": "packages/runtime/src/executors/contracts.ts",
+      "type": "exports",
+      "symbol": "extractErrorText"
+    },
+    {
+      "file": "packages/runtime/src/executors/contracts.ts",
+      "type": "exports",
+      "symbol": "isMissingResultError"
+    },
+    {
+      "file": "packages/runtime/src/index.ts",
+      "type": "exports",
+      "symbol": "generateWorkflowReport"
+    },
+    {
+      "file": "packages/runtime/src/index.ts",
+      "type": "exports",
+      "symbol": "runDoctor"
+    },
+    {
+      "file": "packages/runtime/src/index.ts",
+      "type": "types",
+      "symbol": "HarnessResult"
+    },
+    {
+      "file": "packages/runtime/src/workingDirectory.ts",
+      "type": "exports",
+      "symbol": "isPathInsideRoot"
+    },
+    {
+      "file": "packages/runtime/src/workingDirectory.ts",
+      "type": "exports",
+      "symbol": "resolveDynamicCwd"
+    },
+    {
+      "file": "packages/server/src/index.ts",
+      "type": "types",
+      "symbol": "AppRouter"
+    },
+    {
+      "file": "packages/server/src/start.ts",
+      "type": "exports",
+      "symbol": "parseAllowedRoots"
+    },
+    {
+      "file": "packages/storage/src/index.ts",
+      "type": "exports",
+      "symbol": "runsForReport"
+    },
+    {
+      "file": "packages/ui/src/design-system/Button.tsx",
+      "type": "types",
+      "symbol": "ButtonVariant"
+    },
+    {
+      "file": "packages/ui/src/design-system/index.ts",
+      "type": "exports",
+      "symbol": "Collapse"
+    },
+    {
+      "file": "packages/ui/src/design-system/index.ts",
+      "type": "exports",
+      "symbol": "theme"
+    },
+    {
+      "file": "packages/ui/src/design-system/index.ts",
+      "type": "types",
+      "symbol": "ButtonProps"
+    },
+    {
+      "file": "packages/ui/src/design-system/index.ts",
+      "type": "types",
+      "symbol": "ButtonVariant"
+    },
+    {
+      "file": "packages/ui/src/design-system/index.ts",
+      "type": "types",
+      "symbol": "DesignSystemProviderProps"
+    },
+    {
+      "file": "packages/ui/src/features/automations/model.ts",
+      "type": "types",
+      "symbol": "Listing"
+    },
+    {
+      "file": "packages/ui/src/features/report/WorkflowReportView.tsx",
+      "type": "duplicates",
+      "symbol": "WorkflowReportView|default"
+    },
+    {
+      "file": "packages/ui/src/features/runs/runProgress.ts",
+      "type": "types",
+      "symbol": "ItemExecution"
+    },
+    {
+      "file": "packages/ui/src/features/workflows/inputBindings.ts",
+      "type": "types",
+      "symbol": "InputBinding"
+    },
+    {
+      "file": "packages/ui/src/features/workflows/useWorkflowHistory.ts",
+      "type": "exports",
+      "symbol": "serializeSnapshot"
+    },
+    {
+      "file": "packages/ui/src/features/workflows/workflowDiff.ts",
+      "type": "exports",
+      "symbol": "sameValue"
+    },
+    {
+      "file": "packages/ui/src/features/workflows/workflowDiff.ts",
+      "type": "types",
+      "symbol": "ChangeKind"
+    },
+    {
+      "file": "packages/ui/src/features/workflows/workflowDiff.ts",
+      "type": "types",
+      "symbol": "WorkflowDiff"
+    },
+    {
+      "file": "packages/ui/src/lib/query.tsx",
+      "type": "exports",
+      "symbol": "queryClient"
+    },
+    {
+      "file": "tests/restoreHandleBounds.test.ts",
+      "type": "unlisted",
+      "symbol": "@xyflow/react"
+    },
+    {
+      "file": "tests/runGraphNavigation.test.ts",
+      "type": "unlisted",
+      "symbol": "@xyflow/react"
+    }
+  ]
+}
