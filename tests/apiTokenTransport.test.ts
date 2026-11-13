@@ -1,8 +1,14 @@
-import { mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { once } from 'node:events';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { it, expect } from 'vitest';
+import { it, expect, vi } from 'vitest';
 import { serve } from '@hono/node-server';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
@@ -11,6 +17,7 @@ import { Engine } from '@interlock/runtime';
 import { ensureApiToken } from '@interlock/core/apiToken';
 import { createApp, serveUi } from '../packages/server/src/app';
 import { developmentConnection } from '../packages/server/src/connection';
+import { withApiToken } from '../packages/server/src/start';
 
 // Token-off behavior is the default in every other transport test.
 it('requires the API token on HTTP, MCP and the event stream when enabled', async () => {
@@ -108,6 +115,44 @@ it('requires the API token on HTTP, MCP and the event stream when enabled', asyn
     await client.close();
     if (server)
       await new Promise<void>((resolve) => server!.close(() => resolve()));
+    engine.stop();
+    store.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+it('requires the API token only when listening beyond loopback', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'interlock-bind-'));
+  vi.stubEnv('INTERLOCK_REQUIRE_TOKEN', '');
+  vi.stubEnv('INTERLOCK_SECRET_KEY_FILE', join(dir, 'ok', 'secret.key'));
+  const store = new Store(':memory:');
+  const engine = new Engine(store, process.cwd());
+  const status = async (hostname: string) => {
+    const app = createApp(
+      engine,
+      withApiToken(developmentConnection(), hostname),
+    );
+    return (await app.request('http://127.0.0.1:4310/trpc/connection')).status;
+  };
+  try {
+    expect(await status('127.0.0.1')).toBe(200);
+    expect(await status('localhost')).toBe(200);
+    expect(await status('0.0.0.0')).toBe(401);
+    expect(await status('192.168.1.20')).toBe(401);
+
+    // Without a usable token, a non-loopback server refuses to start.
+    mkdirSync(join(dir, 'bad', 'api-token'), { recursive: true });
+    vi.stubEnv('INTERLOCK_SECRET_KEY_FILE', join(dir, 'bad', 'secret.key'));
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    expect(withApiToken(developmentConnection(), '127.0.0.1').token).toBe(
+      undefined,
+    );
+    expect(() => withApiToken(developmentConnection(), '0.0.0.0')).toThrow(
+      /api-token/,
+    );
+  } finally {
+    vi.restoreAllMocks();
+    vi.unstubAllEnvs();
     engine.stop();
     store.close();
     rmSync(dir, { recursive: true, force: true });

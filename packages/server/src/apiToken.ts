@@ -12,6 +12,16 @@ export function parseRequireToken(value = process.env.INTERLOCK_REQUIRE_TOKEN) {
   );
 }
 
+/** Whether a listen address stays on this machine. Anything else requires the token. */
+export function isLoopback(hostname: string) {
+  const host = hostname.replace(/^\[|\]$/g, '').toLowerCase();
+  return (
+    host === 'localhost' ||
+    host === '::1' ||
+    /^(::ffff:)?127\.\d+\.\d+\.\d+$/.test(host)
+  );
+}
+
 const matches = (candidate: string | undefined, token: string) => {
   if (!candidate) return false;
   const a = Buffer.from(candidate),

@@ -339,6 +339,8 @@ interlock doctor --live
 
 Interlock is a local, single-user application. Agent steps use connected executors, manual submission, or opt-in managed Claude Code, Codex, and Pi sessions; script steps run in the engine. Managed harnesses use their native account and permission configuration.
 
+The server listens only on loopback and rejects requests with other hosts or untrusted browser origins. On loopback the [API token](docs/connect-harness.md#api-token) is accepted when sent and required only with `INTERLOCK_REQUIRE_TOKEN=1`. A server listening on any other address always requires the token on `/trpc`, `/mcp` and `/events` and refuses to start without one. Interlock does not offer a non-loopback listen address yet; do not expose it through a tunnel or proxy.
+
 Agent nodes can opt into [context continuity groups](docs/context-continuity.md) to declare a shared session within a run, with recorded handoffs when the session must change.
 
 A connected executor supplies the tools, skills, and context isolation requested by a workflow. Interlock checks the executor's declared capabilities but does not install or provide them.
