@@ -964,6 +964,8 @@ export interface RunEvent {
 }
 export class InterlockError extends Error {}
 export class ExternalInputConflict extends InterlockError {}
+/** A start that conflicts with a retained receipt or an active task; nothing was started. */
+export class RunStartConflict extends InterlockError {}
 export class ResultRejection extends InterlockError {
   constructor(
     readonly resultCheck: import('./resultValidation.js').ResultCheck,

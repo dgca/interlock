@@ -20,7 +20,7 @@ import { developmentConnection } from '../packages/server/src/connection';
 import { withApiToken } from '../packages/server/src/start';
 
 // Token-off behavior is the default in every other transport test.
-it('requires the API token on HTTP, MCP and the event stream when enabled', async () => {
+it('requires the API token on tRPC, the HTTP API, MCP and the event stream when enabled', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'interlock-token-'));
   const token = ensureApiToken(join(dir, 'api-token'));
   expect(statSync(join(dir, 'api-token')).mode & 0o777).toBe(0o600);
@@ -62,6 +62,7 @@ it('requires the API token on HTTP, MCP and the event stream when enabled', asyn
   try {
     for (const headers of [{}, wrong]) {
       expect((await get('/trpc/connection', headers)).status).toBe(401);
+      expect((await get('/api/workflows', headers)).status).toBe(401);
       expect((await initialize(headers)).status).toBe(401);
       expect((await initialize(headers, '/mcp/execute')).status).toBe(401);
       expect((await get('/events', headers)).status).toBe(401);
@@ -69,6 +70,7 @@ it('requires the API token on HTTP, MCP and the event stream when enabled', asyn
     // Header tokens belong to clients that can send them; the query is for EventSource.
     expect((await get(`/trpc/connection?token=${token}`)).status).toBe(401);
     expect((await initialize(bearer)).status).toBe(200);
+    expect((await get('/api/workflows', bearer)).status).toBe(200);
     expect((await initialize(bearer, '/mcp/execute')).status).toBe(200);
     const read = await get('/trpc/connection', bearer);
     expect(read.status).toBe(200);
