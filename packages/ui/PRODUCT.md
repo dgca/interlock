@@ -32,7 +32,7 @@ Starting a run in the UI can dispatch Agent work automatically when managed exec
 
 ## Capabilities and constraints
 
-These describe current behavior, not permanent limits. Interlock is actively adding features. Verify implementation and [current scope](../../docs/v1.md) before making new capability claims.
+These describe current behavior, not permanent limits. Interlock is actively adding features. Verify implementation, the [feature index](../../docs/features.md) and [current limits](../../docs/v1.md) before making new capability claims.
 
 - Drafts are editable. Runs use published versions whose definitions remain immutable while retained. Editing a draft does not change an existing run.
 - Draft saving and publication have separate validation rules. Incomplete graphs can be saved; publication checks whether the graph can run.
@@ -54,7 +54,7 @@ UI copy should help users understand, decide, or act. Use existing navigation an
 ## Evidence on hand
 
 - [README](../../README.md) documents installation and user workflows.
-- [Current scope](../../docs/v1.md) records implemented capabilities and limits.
+- The [feature index](../../docs/features.md) records implemented capabilities; [current limits](../../docs/v1.md) records their bounds.
 - [Workflow examples](../../workflows/README.md) includes the SDLC starter and an all-node editor reference. These demonstrate behavior; they are not performance or outcome claims.
 - The existing UI implementation and [favicon](public/favicon.svg) provide product assets. This record does not define or replace the visual system.
 

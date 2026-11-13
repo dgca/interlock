@@ -8,7 +8,7 @@ Interlock is a local workflow engine and editor. The public npm package is `@typ
 - For UI work, read the UI components section of [architecture](docs/architecture.md) and [UI interaction patterns](docs/ui-patterns.md). Reuse the Mantine theme and existing contract editors.
 - For run inspection, history, or collection-query changes, follow [read query review](docs/architecture.md#read-query-review).
 - For MCP configuration or agent execution, read [Connect a harness](docs/connect-harness.md).
-- For feature scope, read [current limits](docs/v1.md). Distinguish implemented behavior from planned capabilities.
+- For feature scope, read the [feature index](docs/features.md) and [current limits](docs/v1.md). Distinguish implemented behavior from planned capabilities.
 - For a releasable change, version bump, or publication, follow [Release Interlock](docs/releases.md).
 
 ## Preserve these boundaries
