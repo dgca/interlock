@@ -197,16 +197,44 @@ function objectLiterals(node) {
     case 'TSNonNullExpression':
     case 'ParenthesizedExpression':
       return objectLiterals(node.expression);
+    // Mantine style functions: style={(theme) => ({ ... })}
+    case 'ArrowFunctionExpression':
+    case 'FunctionExpression':
+      return node.body.type === 'BlockStatement'
+        ? returnedExpressions(node.body).flatMap(objectLiterals)
+        : objectLiterals(node.body);
     default:
       return [];
   }
 }
 
+/** Arguments of the return statements of one function body, excluding nested functions. */
+function returnedExpressions(node) {
+  if (!node || typeof node.type !== 'string') return [];
+  if (node.type === 'ReturnStatement')
+    return node.argument ? [node.argument] : [];
+  if (
+    node.type === 'FunctionDeclaration' ||
+    node.type === 'FunctionExpression' ||
+    node.type === 'ArrowFunctionExpression'
+  ) {
+    return [];
+  }
+  return Object.entries(node).flatMap(([key, value]) => {
+    if (key === 'parent') return [];
+    if (Array.isArray(value)) return value.flatMap(returnedExpressions);
+    return value && typeof value === 'object' ? returnedExpressions(value) : [];
+  });
+}
+
 function propertyName(property) {
-  if (property.type !== 'Property' || property.computed) return undefined;
-  if (property.key.type === 'Identifier') return property.key.name;
-  if (property.key.type === 'Literal' && typeof property.key.value === 'string')
-    return property.key.value;
+  if (property.type !== 'Property') return undefined;
+  const { key } = property;
+  if (key.type === 'Identifier' && !property.computed) return key.name;
+  // Plain and computed string keys: 'color' and ['color'].
+  if (key.type === 'Literal' && typeof key.value === 'string') return key.value;
+  if (key.type === 'TemplateLiteral' && key.expressions.length === 0)
+    return key.quasis[0].value.cooked;
   return undefined;
 }
 

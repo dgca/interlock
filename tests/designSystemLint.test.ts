@@ -130,20 +130,34 @@ describe('design-system lint rules', () => {
         const b = <div style={wide ? { padding: 0 } : undefined} />;
         const c = <div style={{ boxShadow: 'none' } as CSSProperties} />;
         const d = <div style={{ fontSize: 13, border: 0 }} />;
+        const e = <div style={{ ['gap']: 8, [\`lineHeight\`]: 1.4 }} />;
+        const f = <Box style={() => ({ background: 'var(--form)' })} />;
+        const g = <Box style={(theme) => { if (theme) return { outline: 0 }; return {}; }} />;
       `),
     ).toEqual(
-      ['color', 'marginTop', 'padding', 'boxShadow', 'fontSize', 'border'].map(
-        (name) => ({
-          ruleId: 'design-system/no-inline-style',
-          message: expect.stringContaining(`'${name}'`) as unknown,
-        }),
-      ),
+      [
+        'color',
+        'marginTop',
+        'padding',
+        'boxShadow',
+        'fontSize',
+        'border',
+        'gap',
+        'lineHeight',
+        'background',
+        'outline',
+      ].map((name) => ({
+        ruleId: 'design-system/no-inline-style',
+        message: expect.stringContaining(`'${name}'`) as unknown,
+      })),
     );
     expect(
       lintTsx(`
         const a = <div style={{ top, left: 32, width: 125, display: 'flex', overflowWrap: 'anywhere' }} />;
         const b = <col style={{ '--column-width': width } as CSSProperties} />;
         const c = <Edge style={style} />;
+        const d = <div style={{ [key]: 1, ['width']: 2 }} />;
+        const e = <Box style={() => ({ top: 0, width: '100%' })} />;
       `),
     ).toEqual([]);
   });
