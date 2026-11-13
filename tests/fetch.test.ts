@@ -15,7 +15,10 @@ import { Engine } from '@interlock/runtime';
 import { Store } from '@interlock/storage';
 import { batchDefinition } from './fixtures/batch';
 import { parseRawDefinition } from '../packages/ui/src/features/workflows/rawDefinition';
-import { privateNetworkTarget } from '../packages/runtime/src/fetch';
+import {
+  executeFetch,
+  privateNetworkTarget,
+} from '../packages/runtime/src/fetch';
 let server: Server,
   base: string,
   engine: Engine,
@@ -82,6 +85,10 @@ beforeEach(async () => {
     res.setHeader('content-type', 'application/json; charset=utf-8');
     if (url.pathname === '/invalid') {
       res.end('{');
+      return;
+    }
+    if (url.pathname === '/redirect') {
+      res.writeHead(302, { location: 'http://169.254.169.254/' }).end();
       return;
     }
     if (url.pathname === '/failure') {
@@ -235,6 +242,15 @@ it('reports private network Fetch targets and blocks them only when the step opt
   expect(blocked.status).toBe('failed');
   expect(blocked.error).toContain('Fetch blocks loopback address 127.0.0.1');
   expect(requests).toBe(1);
+  // Blocking steps stop at redirects instead of following them unchecked.
+  await expect(
+    executeFetch(
+      { url: base + '/redirect', method: 'GET', headers: {} },
+      1000,
+      new AbortController().signal,
+      { allowRedirects: 'blockPrivateNetwork' },
+    ),
+  ).rejects.toThrow('blockPrivateNetwork cannot follow a redirect');
 });
 it('classifies resolved and IPv4-mapped private, link-local and public addresses', async () => {
   const resolved = (address: string) => () => Promise.resolve([address]);

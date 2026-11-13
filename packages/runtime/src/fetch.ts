@@ -5,6 +5,7 @@ import {
   jsonSchema,
   type DiagnosticCheck,
   type FetchNode,
+  type PollCheck,
   type Json,
   type FetchRequest,
   type PrivateNetworkTarget,
@@ -150,10 +151,12 @@ export function privateFetchCheck(
 
 /** Report a Fetch step's private target, and refuse it when the step opts in. */
 export async function checkPrivateNetwork(
-  node: FetchNode,
+  node: FetchNode | PollCheck,
   url: string,
   record: (target: PrivateNetworkTarget, message: string) => void,
 ) {
+  // Polling checks repeat; only Fetch steps record their target.
+  if (!('id' in node)) return;
   const target = await privateNetworkTarget(url);
   if (!target) return;
   const { range, address, host } = target;
@@ -168,6 +171,19 @@ export async function checkPrivateNetwork(
     );
 }
 
+/** Secret headers and blockPrivateNetwork both refuse unchecked redirects. */
+export function redirectPolicy(
+  operation: FetchNode | PollCheck,
+  hasSecrets: boolean,
+) {
+  return {
+    allowRedirects:
+      'blockPrivateNetwork' in operation && operation.blockPrivateNetwork
+        ? 'blockPrivateNetwork'
+        : !hasSecrets,
+  };
+}
+
 /** The client stopped observing a dispatched request before its full response. */
 export class UncertainFetch extends Error {}
 
@@ -176,7 +192,7 @@ export async function executeFetch(
   request: FetchRequest,
   timeoutMs: number,
   signal: AbortSignal,
-  { allowRedirects }: { allowRedirects: boolean },
+  { allowRedirects }: { allowRedirects: boolean | string },
 ) {
   const controller = new AbortController();
   const timer = setTimeout(
@@ -194,20 +210,20 @@ export async function executeFetch(
       headers: request.headers,
       body:
         request.body === undefined ? undefined : JSON.stringify(request.body),
-      redirect: allowRedirects ? 'follow' : 'manual',
+      redirect: allowRedirects === true ? 'follow' : 'manual',
       signal: controller.signal,
     };
     controller.signal.throwIfAborted();
     dispatched = true;
     const response = await fetch(request.url, options);
     if (
-      !allowRedirects &&
+      allowRedirects !== true &&
       [301, 302, 303, 307, 308].includes(response.status) &&
       response.headers.has('location')
     ) {
       await response.body?.cancel();
       throw new Error(
-        'Fetch with a Secret header cannot follow a redirect. Use the final URL.',
+        `Fetch with ${allowRedirects || 'a Secret header'} cannot follow a redirect. Use the final URL.`,
       );
     }
     const reader = response.body?.getReader();

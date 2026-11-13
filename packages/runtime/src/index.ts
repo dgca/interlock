@@ -127,7 +127,12 @@ import {
   type DraftLayout,
 } from '@interlock/core';
 import { assignmentInstructions } from './agentInstructions.js';
-import { checkPrivateNetwork, executeFetch, UncertainFetch } from './fetch.js';
+import {
+  checkPrivateNetwork,
+  executeFetch,
+  redirectPolicy,
+  UncertainFetch,
+} from './fetch.js';
 import { executeScript } from './scripts.js';
 import { RunStarts } from './runStarts.js';
 import { RunAdmission } from './runAdmission.js';
@@ -3623,22 +3628,20 @@ export class Engine {
         if (deliveredSecrets.size)
           redact = secretRedaction([...resolved.secrets, ...deliveredSecrets]);
         const request = resolveFetch(operation, input, resolved.value);
-        // Polling checks repeat; only Fetch steps record their target.
-        if ('id' in operation)
-          await checkPrivateNetwork(operation, request.url, (target, text) => {
-            if (this.stopped) return;
-            const latest = this.run(run.id);
-            const step = latest.executions.find((e) => e.id === execution.id);
-            if (latest.status !== 'running' || !step) return;
-            step.privateNetwork = target;
-            this.save(latest);
-            this.event(latest, 'node.private_network', text);
-          });
+        await checkPrivateNetwork(operation, request.url, (target, text) => {
+          if (this.stopped) return;
+          const latest = this.run(run.id);
+          const step = latest.executions.find((e) => e.id === execution.id);
+          if (latest.status !== 'running' || !step) return;
+          step.privateNetwork = target;
+          this.save(latest);
+          this.event(latest, 'node.private_network', text);
+        });
         const response = await executeFetch(
           request,
           operation.timeoutMs,
           signal,
-          { allowRedirects: !resolved.secrets.length },
+          redirectPolicy(operation, resolved.secrets.length > 0),
         );
         const error = operation.failOnHttpError
           ? fetchHttpError(response.status)
