@@ -1,11 +1,21 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdtempSync, rmSync, existsSync, writeFileSync } from 'node:fs';
+import {
+  mkdtempSync,
+  rmSync,
+  existsSync,
+  readFileSync,
+  writeFileSync,
+} from 'node:fs';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { setTimeout as delay } from 'node:timers/promises';
+import { blankDefinition } from '@interlock/core';
+import { Engine } from '@interlock/runtime';
+import { Store } from '@interlock/storage';
 import { executeSubprocessTurn } from '../packages/runtime/src/executors/custom';
+import { nativeAdapters } from '../packages/runtime/src/executors/native';
 import * as processes from '../packages/runtime/src/executors/process';
 import {
   HarnessCleanupError,
@@ -13,14 +23,21 @@ import {
 } from '../packages/runtime/src/executors/contracts';
 
 const directories: string[] = [];
+const engines: Engine[] = [];
 const quote = (value: string) => "'" + value.replaceAll("'", "'\\''") + "'";
 function directory() {
   const path = mkdtempSync(join(tmpdir(), 'interlock-custom-process-'));
   directories.push(path);
   return path;
 }
-afterEach(() => {
+afterEach(async () => {
+  for (const engine of engines.splice(0)) {
+    await engine.executors.stop();
+    engine.stop();
+    engine.store.close();
+  }
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
   for (const path of directories.splice(0))
     rmSync(path, { recursive: true, force: true });
 });
@@ -164,3 +181,61 @@ it('accepts a successful result when the command closes stdin without reading it
   });
   expect(result.output).toEqual({ ok: true });
 });
+
+it('names a server variable withheld from a failed minimal custom command', async () => {
+  vi.stubEnv('SERVER_ONLY_API_KEY', 'server-secret-value');
+  const failure = executeSubprocessTurn({
+    command: 'test -n "$SERVER_ONLY_API_KEY"',
+    cwd: directory(),
+    profile: { environmentMode: 'minimal' },
+    payload: {},
+    tokens: {},
+    signal: new AbortController().signal,
+  });
+  await expect(failure).rejects.toThrow(
+    /did not pass SERVER_ONLY_API_KEY .*environmentPassthrough/,
+  );
+  await failure.catch((error: Error) =>
+    expect(error.message).not.toContain('server-secret-value'),
+  );
+});
+
+it.each([
+  ['direct', undefined, 'server-key:declared:profile:run'],
+  ['direct', 'minimal', ':declared:profile:run'],
+  ['launcher', 'inherit', 'server-key:declared:profile:run'],
+  ['launcher', 'minimal', ':declared:profile:run'],
+] as const)(
+  'gives a %s custom executor in %s mode the expected server environment',
+  async (mode, environmentMode, expected) => {
+    vi.stubEnv('SERVER_ONLY_API_KEY', 'server-key');
+    vi.stubEnv('DECLARED_KEY', 'declared');
+    const marker = join(directory(), 'env');
+    const command = `cat >/dev/null; printf '%s:%s:%s:%s' "\${SERVER_ONLY_API_KEY-}" "\${DECLARED_KEY-}" "\${PROFILE_KEY-}" "\${INTERLOCK_RUN_ID:+run}" > ${quote(marker)}; echo '{"output":{}}'`;
+    const engine = new Engine(new Store(':memory:'), process.cwd());
+    engines.push(engine);
+    engine.executors.saveProfile({
+      id: 'custom-env',
+      harness: 'custom',
+      name: 'Custom environment',
+      enabled: true,
+      expectedRevision: 0,
+      mode,
+      transport: 'subprocess',
+      [mode === 'direct' ? 'turnCommand' : 'launchCommand']: command,
+      env: { PROFILE_KEY: 'profile' },
+      environmentMode,
+      environmentPassthrough: ['DECLARED_KEY'],
+    });
+    engine.executors.start(nativeAdapters);
+    const definition = blankDefinition();
+    definition.executor = 'custom-env';
+    const workflow = engine.create('Custom environment', '', definition);
+    engine.publish(workflow.id);
+    engine.start(workflow.id, {});
+    await vi.waitFor(
+      () => expect(readFileSync(marker, 'utf8')).toBe(expected),
+      { timeout: 5000 },
+    );
+  },
+);

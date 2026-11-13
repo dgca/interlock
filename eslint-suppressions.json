@@ -218,9 +218,6 @@
     "@typescript-eslint/no-unsafe-return": {
       "count": 1
     },
-    "@typescript-eslint/no-unused-expressions": {
-      "count": 1
-    },
     "@typescript-eslint/require-await": {
       "count": 2
     },
