@@ -8,6 +8,9 @@ export function referencedBoardColumns(db: DatabaseSync, ids: string[]) {
       `
     WITH candidates(id) AS (SELECT value FROM json_each(?))
     SELECT candidates.id FROM candidates WHERE EXISTS (
+      SELECT 1 FROM documents d, json_each(d.value, '$.boardStageColumns') m
+      WHERE d.collection = 'workflows' AND m.value = candidates.id
+    ) OR EXISTS (
       SELECT 1 FROM documents d, json_each(d.value, '$.draft.nodes') n
       WHERE d.collection = 'workflows' AND json_extract(n.value, '$.boardColumnId') = candidates.id
     ) OR EXISTS (
@@ -22,6 +25,20 @@ export function referencedBoardColumns(db: DatabaseSync, ids: string[]) {
     )
     .all(JSON.stringify(ids));
   return rows.map((row) => row.id as string);
+}
+
+export function workflowBoardStageColumn(
+  db: DatabaseSync,
+  workflowId: string,
+  stageId: string,
+): string | null | undefined {
+  const match = db
+    .prepare(
+      `SELECT m.value FROM documents d, json_each(d.value, '$.boardStageColumns') m
+       WHERE d.collection = 'workflows' AND d.id = ? AND m.key = ?`,
+    )
+    .get(workflowId, stageId);
+  return match?.value as string | null | undefined;
 }
 
 /** Page Board metadata before retrieving the selected runs' card fields. */

@@ -72,11 +72,13 @@ export function SettingsDialog({
   onOpenWorkflow,
   workflowId,
   workflowBoardId,
+  boardStageColumns,
   canExport = true,
   returnFocusTo,
 }: Settings & {
   workflowId?: string;
   workflowBoardId?: string;
+  boardStageColumns?: Workflow['boardStageColumns'];
   canExport?: boolean;
   returnFocusTo?: () => HTMLElement | null;
   onCreateChild?: (
@@ -487,6 +489,7 @@ export function SettingsDialog({
                     creating={creating}
                     workflowId={workflowId}
                     board={assignedBoard}
+                    boardStageColumns={boardStageColumns}
                     previousBoard={boards?.find((board) =>
                       board.columns.some(
                         (column) => column.id === nodeDraft.boardColumnId,

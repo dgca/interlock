@@ -30,7 +30,7 @@ export const resultRulesSchema = z
   )
   .max(32)
   .describe(
-    'Optional Agent acceptance checks: exists requires outputPath; equalsInput requires outputPath and inputPath in captured resolved input. Dot paths, blank/$ selects root. Missing values fail; null exists; equality is structural without coercion. Max 32 rules.',
+    'Agent result checks: exists checks outputPath; equalsInput compares to captured inputPath. Dot paths, blank/$ selects root. Missing fails; null exists. Structural equality without coercion.',
   );
 export type ResultRule = z.infer<typeof resultRulesSchema>[number];
 

@@ -1,11 +1,12 @@
 import { api } from '../../lib/api';
-import type { VariableImportBindings } from '@interlock/core';
+import type { BoardImportSetup, VariableImportBindings } from '@interlock/core';
 import { assertLegacyVariableFree } from '../../../../core/src/importDocument';
 
 /** Both local files and pasted JSON use the same server operations and defaults. */
 export async function importWorkflowJson(
   text: string,
   variableBindings?: VariableImportBindings,
+  boardSetup?: BoardImportSetup,
 ): Promise<string> {
   let data;
   try {
@@ -19,12 +20,15 @@ export async function importWorkflowJson(
   if (data.format === 'interlock-workflows') {
     const result = await api.workflows.import.mutate({
       bundle: data,
+      ...(boardSetup ? { boardSetup } : {}),
       ...(variableBindings && Object.keys(variableBindings).length
         ? { variableBindings }
         : {}),
     });
     return result.rootId;
   }
+  if (boardSetup)
+    throw new Error('Board setup requires a portable workflow bundle.');
   assertLegacyVariableFree(data);
   const workflow = await api.workflows.create.mutate(data);
   return workflow.id;

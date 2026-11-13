@@ -36,7 +36,9 @@ import { developmentConnection, type ConnectionConfig } from './connection.js';
 import {
   externalInputMutationSchema,
   externalInputStatusSchema,
+  blankDefinition,
   boardMembershipSchema,
+  boardImportSetupSchema,
   boardQuerySchema,
   saveBoardSchema,
   humanResponseSchema,
@@ -107,6 +109,10 @@ import {
   importWorkflows,
 } from '../../runtime/src/transfer.js';
 import { workflowBundleSchema } from '../../core/src/transfer.js';
+import {
+  previewBoardImport,
+  previewLegacyBoardImport,
+} from '../../runtime/src/boardImport.js';
 
 import { GithubImporter, githubSourceSchema } from './githubImport.js';
 const githubImporter = new GithubImporter();
@@ -425,6 +431,7 @@ export const appRouter = t.router({
               .max(120)
               .refine((v) => /\S/.test(v), 'Use a nonblank request key'),
             copy: z.boolean().default(false),
+            boardSetup: boardImportSetupSchema.optional(),
           })
           .strict(),
       )
@@ -441,6 +448,10 @@ export const appRouter = t.router({
             prompts: [] as { id: string; name: string }[],
             published: false,
             variables: [],
+            boardSetup: previewLegacyBoardImport(
+              doc.workflow.name,
+              doc.workflow.definition ?? blankDefinition(),
+            ),
           };
         const root = doc.bundle.workflows.find(
           (w) => w.id === doc.bundle.rootId,
@@ -465,12 +476,17 @@ export const appRouter = t.router({
           variables: ctx.engine.variables.previewRequirements(
             doc.bundle.variables ?? [],
           ),
+          boardSetup: previewBoardImport(ctx.engine.store, doc.bundle),
         };
       }),
     discoverGithub: p
       .input(z.object({ url: z.string().max(2000) }))
       .query(({ ctx, input, signal }) =>
-        githubImporter.discover(input.url, ctx.signal ?? signal),
+        githubImporter.discover(
+          input.url,
+          ctx.signal ?? signal,
+          ctx.engine.store,
+        ),
       ),
     importGithub: p
       .input(
@@ -479,6 +495,7 @@ export const appRouter = t.router({
             source: githubSourceSchema,
             files: z.array(z.string().min(1).max(255)).min(1).max(50),
             variableBindings: variableImportBindingsSchema.optional(),
+            boardSetup: boardImportSetupSchema.optional(),
           })
           .strict(),
       )
@@ -489,6 +506,7 @@ export const appRouter = t.router({
           input.files,
           ctx.signal ?? signal,
           input.variableBindings,
+          input.boardSetup,
         ),
       ),
     export: p
@@ -513,6 +531,7 @@ export const appRouter = t.router({
           draftRevisions: z.record(z.number().int().positive()).optional(),
           restoreDeletedVersions: z.boolean().optional(),
           variableBindings: variableImportBindingsSchema.optional(),
+          boardSetup: boardImportSetupSchema.optional(),
           publish: z.boolean().optional(),
           cascade: z.boolean().optional(),
           dryRun: z.boolean().optional(),

@@ -20,7 +20,9 @@ Interlock defines repeatable procedures that agents and people can execute and i
 
 **Node**: A step in a workflow. A node can invoke another workflow.
 
-**Stage**: An optional node label or explicit board column binding. The run summary projects the deepest active stage label. A board card keeps the last matching column entered by the run, its waited descendants, or its continue-as-new chain.
+**Stage**: A named phase a workflow can report as it runs. A node can refer to a portable stage, bind directly to a local board column, or supply a label for run summaries.
+
+**Stage mapping**: The local association between an authored stage and a column on the workflow's assigned board.
 
 **Workflow board**: A named view of runs from assigned workflows with ordered stage columns. Each workflow can belong to one board.
 

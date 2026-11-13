@@ -12,7 +12,19 @@ If the board changes elsewhere before you save, the editor keeps your draft. Cho
 If Interlock cannot confirm creation, check **Boards** for the board before starting another draft.
 If Interlock cannot confirm an update, use **Load latest** to check the saved board revision.
 
-Membership applies to existing and future runs as soon as you save. It is independent of publication. To place runs in a stage, open a node's settings, choose a board column in **Stage**, and publish the workflow. Selecting a column binds its ID. Typing stage text creates a label for run summaries, even if the text matches a column. Renaming or reordering a column preserves its bindings. A draft, retained version, or retained run can prevent column removal.
+Membership applies to existing and future runs as soon as you save. It is independent of publication. Reimporting a workflow keeps its board membership. To place runs in a stage, open a node's settings, choose a board column in **Stage**, and publish the workflow. Selecting a column binds its ID. Typing stage text creates a label for run summaries, even if the text matches a column. Renaming or reordering a column preserves its bindings. A draft, retained version, or retained run can prevent column removal.
+
+## Set up a board during import
+
+When an import includes board suggestions, open **Board setup** in the import preview. The preview lists the workflows each choice applies to.
+
+- **Create suggested board** shows the name and column order before import. You can edit the name.
+- **Use existing board** lets you review the local column for each authored stage. Choose **Leave unstaged** for any stage you want to leave unmapped.
+- **Skip board setup** keeps existing local membership and stage mappings. Fresh imports start unassigned.
+
+Interlock saves the workflow and selected board setup together. Board setup does not start a run. A workflow can run before its stages are mapped. Older bundles can contain source column IDs without names or board suggestions. If the preview lists unresolved stages, you can assign a board and bind those steps to local columns in the workflow editor.
+
+A stage mapping applies when a step enters the stage. Existing stage entries keep the column they recorded. Moving a workflow to another board clears its previous mappings. To replace mappings without changing the workflow's published definition, reimport the bundle and choose **Use existing board** again.
 
 ## Find work and answer a request
 

@@ -2244,7 +2244,13 @@ export class Engine {
         )
           throw new InterlockError('Execution cannot cross Parallel branches');
         this.chargeStep(run, node, definition.maxSteps);
-        this.event(run, 'node.started', node.label, node.boardColumnId);
+        const stageId = node.stageId ?? node.boardColumnId;
+        const mapped = stageId
+          ? this.store.workflowBoardStageColumn(run.workflowId, stageId)
+          : undefined;
+        const column =
+          mapped === undefined && !node.stageId ? node.boardColumnId : mapped;
+        this.event(run, 'node.started', node.label, column ?? undefined);
         if (node.inputBindings) {
           execution.originalInput = run.value;
           execution.input = resolveBindingFields(

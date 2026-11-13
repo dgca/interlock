@@ -7,6 +7,89 @@ import {
   importWorkflows,
 } from '../packages/runtime/src/transfer';
 
+function createBuildBoard(engine: Engine) {
+  return engine.boards.save({
+    name: 'Delivery',
+    columns: [{ name: 'Build' }],
+    workflowIds: [],
+  });
+}
+
+function publishBoardWorkflow(engine: Engine) {
+  const board = createBuildBoard(engine);
+  const definition = blankDefinition();
+  definition.nodes[1].boardColumnId = board.columns[0].id;
+  const workflow = engine.create('Build workflow', '', definition);
+  engine.publish(workflow.id);
+  engine.boards.assign({
+    workflowId: workflow.id,
+    boardId: board.id,
+    expectedBoardId: null,
+  });
+  return { workflowId: workflow.id, boardId: board.id };
+}
+
+it.each(['unchanged', 'changed'] as const)(
+  'preserves board membership on %s portable reimports',
+  (change) => {
+    const store = new Store(':memory:');
+    const engine = new Engine(store, process.cwd());
+    try {
+      const { workflowId, boardId } = publishBoardWorkflow(engine);
+      const runId = engine.start(workflowId, {}).run.id;
+      const run = engine.run(runId);
+      const events = engine.inspect(runId).events;
+      const versions = store.listVersions(workflowId);
+      const board = engine.boards.settings(boardId);
+      const workflow = engine.workflow(workflowId);
+      const bundle = exportWorkflows(store, workflowId);
+      if (change === 'changed')
+        bundle.workflows[0].draft.nodes[1].label = 'Revised step';
+
+      const result = importWorkflows(store, bundle, {
+        draftRevisions: { [workflowId]: workflow.draftRevision },
+      });
+
+      expect(result.changed).toEqual(change === 'changed' ? [workflowId] : []);
+      expect(engine.workflow(workflowId)).toMatchObject({
+        boardId,
+        draft: bundle.workflows[0].draft,
+        draftRevision: workflow.draftRevision + (change === 'changed' ? 1 : 0),
+      });
+      expect(engine.boards.settings(boardId)).toEqual(board);
+      expect(store.listVersions(workflowId)).toEqual(versions);
+      expect(engine.run(runId)).toEqual(run);
+      expect(engine.inspect(runId).events).toEqual(events);
+    } finally {
+      engine.stop();
+      store.close();
+    }
+  },
+);
+
+it('leaves a newly imported workflow unassigned even when the destination board names match', () => {
+  const source = new Store(':memory:');
+  const target = new Store(':memory:');
+  const engine = new Engine(source, process.cwd());
+  const destination = new Engine(target, process.cwd());
+  try {
+    const { workflowId } = publishBoardWorkflow(engine);
+    const board = createBuildBoard(destination);
+    const settings = destination.boards.settings(board.id);
+
+    expect(
+      importWorkflows(target, exportWorkflows(source, workflowId)).changed,
+    ).toEqual([workflowId]);
+    expect(destination.workflow(workflowId).boardId).toBeUndefined();
+    expect(destination.boards.settings(board.id)).toEqual(settings);
+  } finally {
+    engine.stop();
+    destination.stop();
+    source.close();
+    target.close();
+  }
+});
+
 it('preserves ownership and archive state, and rolls back invalid published bundles', () => {
   const source = new Store(':memory:'),
     target = new Store(':memory:');

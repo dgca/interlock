@@ -130,9 +130,11 @@ export function NodeInspector({
   onSectionChange,
   board,
   previousBoard,
+  boardStageColumns,
 }: {
   board?: WorkflowBoard;
   previousBoard?: WorkflowBoard;
+  boardStageColumns?: Record<string, string | null>;
   section?: NodeSectionName;
   onSectionChange?: (section: NodeSectionName) => void;
   node: WorkflowNode;
@@ -209,7 +211,10 @@ export function NodeInspector({
             node={node}
             board={board}
             previousBoard={previousBoard}
-            onChange={(stage, boardColumnId) => patch({ stage, boardColumnId })}
+            boardStageColumns={boardStageColumns}
+            onChange={(stage, boardColumnId) =>
+              patch({ stage, boardColumnId, stageId: undefined })
+            }
           />
         </NodeSection>
         {node.kind === 'fetch' && (

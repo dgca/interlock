@@ -44,6 +44,8 @@
     "nodes": [
       {
         "id": "entry",
+        "stage": "Planning",
+        "stageId": "planning",
         "label": "Change request",
         "position": {
           "x": 0,
@@ -55,6 +57,8 @@
       },
       {
         "id": "configure",
+        "stage": "Planning",
+        "stageId": "planning",
         "label": "Resolve task setup",
         "position": {
           "x": 280,
@@ -156,6 +160,8 @@
       },
       {
         "id": "intent",
+        "stage": "Planning",
+        "stageId": "planning",
         "label": "Draft intent",
         "position": {
           "x": 600,
@@ -206,6 +212,8 @@
       },
       {
         "id": "intentReview",
+        "stage": "Planning",
+        "stageId": "planning",
         "label": "Review intent",
         "position": {
           "x": 900,
@@ -372,6 +380,8 @@
       },
       {
         "id": "intentReviewRoute",
+        "stage": "Planning",
+        "stageId": "planning",
         "label": "Intent review result",
         "position": {
           "x": 1200,
@@ -670,6 +680,8 @@
       },
       {
         "id": "intentPolicy",
+        "stage": "Planning",
+        "stageId": "planning",
         "label": "Always require human review?",
         "position": {
           "x": 1500,
@@ -988,6 +1000,8 @@
       },
       {
         "id": "intentGate",
+        "stage": "Planning",
+        "stageId": "planning",
         "label": "Decide intent (human)",
         "position": {
           "x": 1500,
@@ -1074,6 +1088,8 @@
       },
       {
         "id": "intentRoute",
+        "stage": "Planning",
+        "stageId": "planning",
         "label": "Intent human decision",
         "position": {
           "x": 1800,
@@ -1212,6 +1228,8 @@
       },
       {
         "id": "spec",
+        "stage": "Planning",
+        "stageId": "planning",
         "label": "Draft spec",
         "position": {
           "x": 2100,
@@ -1262,6 +1280,8 @@
       },
       {
         "id": "specReview",
+        "stage": "Planning",
+        "stageId": "planning",
         "label": "Review spec",
         "position": {
           "x": 2400,
@@ -1428,6 +1448,8 @@
       },
       {
         "id": "specReviewRoute",
+        "stage": "Planning",
+        "stageId": "planning",
         "label": "Spec review result",
         "position": {
           "x": 2700,
@@ -1726,6 +1748,8 @@
       },
       {
         "id": "specPolicy",
+        "stage": "Planning",
+        "stageId": "planning",
         "label": "Always require human review?",
         "position": {
           "x": 3000,
@@ -2044,6 +2068,8 @@
       },
       {
         "id": "specGate",
+        "stage": "Planning",
+        "stageId": "planning",
         "label": "Decide spec (human)",
         "position": {
           "x": 3000,
@@ -2130,6 +2156,8 @@
       },
       {
         "id": "specRoute",
+        "stage": "Planning",
+        "stageId": "planning",
         "label": "Spec human decision",
         "position": {
           "x": 3300,
@@ -2268,6 +2296,8 @@
       },
       {
         "id": "plan",
+        "stage": "Planning",
+        "stageId": "planning",
         "label": "Plan implementation",
         "position": {
           "x": 3600,
@@ -2318,6 +2348,8 @@
       },
       {
         "id": "planReview",
+        "stage": "Planning",
+        "stageId": "planning",
         "label": "Review plan",
         "position": {
           "x": 3900,
@@ -2484,6 +2516,8 @@
       },
       {
         "id": "planReviewRoute",
+        "stage": "Planning",
+        "stageId": "planning",
         "label": "Plan review result",
         "position": {
           "x": 4200,
@@ -2782,6 +2816,8 @@
       },
       {
         "id": "planPolicy",
+        "stage": "Planning",
+        "stageId": "planning",
         "label": "Always require human review?",
         "position": {
           "x": 4500,
@@ -3100,6 +3136,8 @@
       },
       {
         "id": "planGate",
+        "stage": "Planning",
+        "stageId": "planning",
         "label": "Decide plan (human)",
         "position": {
           "x": 4500,
@@ -3186,6 +3224,8 @@
       },
       {
         "id": "planRoute",
+        "stage": "Planning",
+        "stageId": "planning",
         "label": "Plan human decision",
         "position": {
           "x": 4800,
@@ -3324,6 +3364,8 @@
       },
       {
         "id": "reviewContext",
+        "stage": "Implementation",
+        "stageId": "implementation",
         "label": "Retain review baseline",
         "position": {
           "x": 5100,
@@ -3682,6 +3724,8 @@
       },
       {
         "id": "build",
+        "stage": "Implementation",
+        "stageId": "implementation",
         "label": "Implement and verify",
         "position": {
           "x": 5400,
@@ -3813,6 +3857,8 @@
       },
       {
         "id": "review",
+        "stage": "Review",
+        "stageId": "review",
         "label": "Review change",
         "position": {
           "x": 5700,
@@ -4584,6 +4630,8 @@
       },
       {
         "id": "reviewRoute",
+        "stage": "Review",
+        "stageId": "review",
         "label": "Review verdict",
         "position": {
           "x": 6000,
@@ -5228,6 +5276,8 @@
       },
       {
         "id": "preparePr",
+        "stage": "Delivery",
+        "stageId": "delivery",
         "label": "Finish verified change",
         "position": {
           "x": 6300,
@@ -5657,6 +5707,8 @@
       },
       {
         "id": "ready",
+        "stage": "Delivery",
+        "stageId": "delivery",
         "label": "Verified change ready",
         "position": {
           "x": 6600,

@@ -10,6 +10,7 @@ import { createApp } from '../packages/server/src/app';
 import { exportWorkflows } from '../packages/runtime/src/transfer';
 import { createClient } from '@interlock/client';
 import sdlc from '../workflows/sdlc.json';
+import { runCommand } from '../packages/cli/src/commands';
 let discovery: unknown;
 it('previews large workflow files through the browser client without URL limits or writes', async () => {
   const engine = new Engine(new Store(':memory:'), process.cwd());
@@ -94,13 +95,37 @@ it.each(['http', 'stdio'])(
       ]);
       expect(JSON.stringify(choices).length).toBeLessThan(2000);
       expect(e.store.workflows()).toEqual([]);
-      const q = { starterId: 'sdlc', requestId: ' request-one ' },
+      expect(choices[0].boardSetup?.suggestions[0]).toMatchObject({
+        id: 'sdlc-board',
+        workflows: [{ workflowId: 'sdlc', currentBoardId: null }],
+      });
+      expect(
+        tools.find((tool) => tool.name === 'import_workflows')?.inputSchema
+          .properties,
+      ).toHaveProperty('boardSetup');
+      const requestId = ' request-one ';
+      const q = {
+          starterId: 'sdlc',
+          requestId,
+          boardSetup: {
+            requestId,
+            choices: [
+              {
+                action: 'create',
+                suggestionId: 'sdlc-board',
+                expectedBoards: { sdlc: null },
+              },
+            ],
+          },
+        },
         a = await call('import_workflows', q);
       expect(a).toMatchObject({
         created: true,
         workflow: { latestVersion: 1 },
       });
       expect(await call('import_workflows', q)).toEqual(a);
+      expect(a.boardSetup.boards[0].workflowIds).toEqual([a.workflow.id]);
+      expect(e.boards.list()).toHaveLength(1);
       expect(e.store.runs()).toEqual([]);
       const copy = await call('import_workflows', {
         starterId: 'sdlc',
@@ -110,15 +135,76 @@ it.each(['http', 'stdio'])(
       expect(copy.workflow.id).not.toBe(a.workflow.id);
       expect((await call('list_workflows')).length).toBe(2);
       const bundle = exportWorkflows(e.store, a.workflow.id);
+      expect(bundle.formatVersion).toBe(11);
+      const preview = await call('import_workflows', { bundle, dryRun: true });
+      const suggestion = preview.boardSetup.suggestions[0];
+      expect(suggestion.workflows[0]).toMatchObject({
+        workflowId: a.workflow.id,
+        currentBoardId: a.boardSetup.boards[0].boardId,
+      });
       expect((await call('import_workflows', { bundle })).rootId).toBe(
         a.workflow.id,
       );
+      expect(e.workflow(a.workflow.id).boardId).toBe(
+        a.boardSetup.boards[0].boardId,
+      );
+      const setup = {
+        requestId: 'setup-imported-board',
+        choices: [
+          {
+            action: 'create',
+            suggestionId: suggestion.id,
+            expectedBoards: { [a.workflow.id]: a.boardSetup.boards[0].boardId },
+          },
+        ],
+      };
+      const priorUrl = process.env.INTERLOCK_URL;
+      process.env.INTERLOCK_URL = url;
+      try {
+        const cliPreview = await runCommand([
+          'import',
+          JSON.stringify(bundle),
+          '--dry-run',
+        ]);
+        expect(cliPreview).toEqual(preview);
+        const first = await runCommand([
+          'import',
+          JSON.stringify(bundle),
+          '--board-setup',
+          JSON.stringify(setup),
+        ]);
+        expect(
+          await call('import_workflows', { bundle, boardSetup: setup }),
+        ).toEqual(first);
+        expect(e.boards.list()).toHaveLength(2);
+        const starterSetup = {
+          ...q.boardSetup,
+          requestId: 'cli-starter-board',
+        };
+        const args = [
+          'import-starter',
+          'sdlc',
+          '--copy',
+          '--board-setup',
+          JSON.stringify(starterSetup),
+        ];
+        const cliStarter = await runCommand(args);
+        expect(await runCommand(args)).toEqual(cliStarter);
+        expect(cliStarter).toMatchObject({
+          created: true,
+          boardSetup: { boards: [{ suggestionId: 'sdlc-board' }] },
+        });
+        expect(e.boards.list()).toHaveLength(3);
+      } finally {
+        if (priorUrl === undefined) delete process.env.INTERLOCK_URL;
+        else process.env.INTERLOCK_URL = priorUrl;
+      }
       const invalid = await client.callTool({
         name: 'import_workflows',
         arguments: { ...q, bundle },
       });
       expect(invalid.isError).toBe(true);
-      expect(e.store.workflows()).toHaveLength(2);
+      expect(e.store.workflows()).toHaveLength(3);
       e.deleteWorkflow(copy.workflow.id);
       const old = await client.callTool({
         name: 'import_workflows',

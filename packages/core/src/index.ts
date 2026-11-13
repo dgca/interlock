@@ -339,17 +339,17 @@ const nodeData = {
   inputBindings: valueBindingsSchema
     .optional()
     .describe(
-      'Select fields from input, runInput, rootInput, itemInput, same-scope node/execution, literal or object. Blank paths select the source. default covers missing paths; sourceDefault covers absent executions. Keys are literal; inputs remain immutable.',
+      'Bind literal keys from input, runInput, rootInput, itemInput, same-scope node/execution, literal or object. Blank paths select the source. default covers missing paths; sourceDefault covers absent executions.',
     ),
   outputBindings: valueBindingsSchema
     .optional()
     .describe(
-      'Map forwarded fields after validation/routing. input selects the retained raw result. Omit to forward unchanged.',
+      'Map forwarded fields after routing. input is the accepted raw result. Omit to forward unchanged.',
     ),
   routing: routingSchema
     .optional()
     .describe(
-      'Match the validated raw result before outputBindings on Agent, Script, Fetch or waited Workflow. First match wins; missing path or no match without default fails. Failure/timeout remain separate.',
+      'Route the accepted result before outputBindings. First match wins. Missing path or unmatched result without default fails.',
     ),
 };
 // Inline simple fields in discovered node variants. Repeated long JSON
@@ -359,6 +359,7 @@ const nodeBase = () => ({
   id: z.string().min(1),
   label: z.string().min(1),
   stage: z.string().trim().min(1).max(200).optional(),
+  stageId: z.string().min(1).max(80).optional(),
   boardColumnId: z.string().min(1).max(80).optional(),
   batchId: z.string().min(1).optional(),
   parallelId: z.string().min(1).optional(),
@@ -373,7 +374,7 @@ const onFailureSchema = z
   .enum(['fail', 'route'])
   .optional()
   .describe(
-    'Stop by default. route requires failed and all success edges. Failed sends {input,error:{nodeId,executionId,kind:script|fetch,category:execution|http|output,message},output}, with null when output is absent. The destination validates it. Operation, HTTP and output-contract errors route; validation, cancellation, limits, mapping/routing and uncertain interruptions stay terminal. No automatic retry.',
+    'Stop by default. route requires failed and success edges. Script, HTTP and output-contract failures send {input,error,output} with null for absent output. Validation, cancellation, limits, mapping and uncertain interruptions stay terminal. No automatic retry.',
   );
 
 const nodeShapeSchema = z.discriminatedUnion('kind', [
@@ -427,7 +428,7 @@ const nodeShapeSchema = z.discriminatedUnion('kind', [
     resources: resourceBindingsSchema
       .optional()
       .describe(
-        'Exclusive library-wide resource names, resolved from existing value bindings at assignment creation. Each must resolve to a distinct nonblank string of at most 120 characters. Cooperating Agent and deterministic steps only; no OS isolation.',
+        'Exclusive library resource names. Bind distinct nonblank strings up to 120 characters. Applies to cooperating steps without OS isolation.',
       ),
     resultRules: resultRulesSchema.optional(),
     prompt: z.string(),
@@ -435,7 +436,7 @@ const nodeShapeSchema = z.discriminatedUnion('kind', [
       .array(z.string().min(1))
       .optional()
       .describe(
-        'Ordered saved prompt IDs. Latest content is captured at ordinary workflow startup; Batch items inherit, invoked workflows capture independently. Comparisons use selected side captures.',
+        'Ordered saved prompt IDs. Startup captures revisions; Batch and Parallel inherit; invoked workflows capture separately.',
       ),
     context: contextPolicySchema.default({}),
     maxAttempts: z.number().int().min(1).max(10).default(2),
@@ -446,7 +447,7 @@ const nodeShapeSchema = z.discriminatedUnion('kind', [
       .max(10)
       .optional()
       .describe(
-        'Separate lease-expiry budget. When set, maxAttempts limits explicit failures and this budget limits expiries. Reaching either limit fails the run. Omission uses maxAttempts for both failures and expiries.',
+        'Limits lease expiries separately from maxAttempts, which then counts explicit failures. Omit to share maxAttempts.',
       ),
     leaseSeconds: z
       .number()
@@ -455,7 +456,7 @@ const nodeShapeSchema = z.discriminatedUnion('kind', [
       .max(3600)
       .optional()
       .describe(
-        'Claim duration in seconds. An explicit claim override wins; omission uses this published node setting, then 300 seconds. Workers must renew before expiry. Expiry consumes the separate maxLeaseExpiries budget when configured, otherwise the combined maxAttempts budget.',
+        'Claim duration in seconds. Claim override wins. Default 300. Expiry counts against maxLeaseExpiries or maxAttempts.',
       ),
     unclaimedTimeoutMs: z.number().int().min(1).max(31_536_000_000).optional(),
     continueOnMissingResult: continueOnMissingResultSchema.optional(),
@@ -554,7 +555,7 @@ const nodeShapeSchema = z.discriminatedUnion('kind', [
     ...nodeBase(),
     kind: z.literal('workflow'),
     onFailure: onFailureSchema.describe(
-      'Waited calls only. route requires failed and all success edges. Sends {input,error:{nodeId,executionId,kind:workflow,category:child|output,message,child:{runId,workflowId,version,executionId}},output} for child or output-contract failure. Input/dispatch, cancellation and persistence stay terminal. No automatic retry.',
+      'Waited calls only. route requires failed and success edges. Child and output-contract failures send {input,error,output}; error includes child IDs. Input, dispatch, cancellation and persistence stay terminal. No automatic retry.',
     ),
     mode: z.enum(['wait', 'detached']).optional(),
     workflowId: z.string().min(1),
@@ -581,7 +582,7 @@ const nodeShapeSchema = z.discriminatedUnion('kind', [
       )
       .max(50)
       .describe(
-        '2–50 unique branch IDs and nonblank unique result keys at publication. Members set parallelId and parallelBranchId; wire branch:<id> to the start, targetHandle:join on return, and complete outward.',
+        'Publish with 2–50 unique branch IDs and nonblank result keys. Members set parallelId and parallelBranchId. Wire branch:<id> in, join back and complete out.',
       ),
     concurrency: z.number().int().min(1).max(50).default(5),
   }),
@@ -615,7 +616,7 @@ export const definitionSchema = z.object({
   agentModel: executorModelSchema
     .optional()
     .describe(
-      'Managed model ID. Node model overrides it; omission inherits harness defaults. Connected agents choose their own model. Refusals require a replacement; no automatic substitution.',
+      'Managed model default. Node model overrides it. Omit to inherit the harness.',
     ),
   agentModelMode: z.enum(['literal', 'preset']).optional(),
   agentEffort: executorEffortSchema
@@ -627,7 +628,7 @@ export const definitionSchema = z.object({
   agentPermissions: executorPermissionModeSchema
     .optional()
     .describe(
-      'Permission override for managed Agent execution. Omit to use each selected harness default. Connected agents retain their own permissions.',
+      'Managed Agent permission override. Omit to inherit the harness.',
     ),
   executor: executorReferenceSchema
     .optional()
@@ -673,7 +674,7 @@ export const definitionSchema = z.object({
     .boolean()
     .optional()
     .describe(
-      'When true, publishing this workflow captures exact revisions of referenced saved prompts in the immutable workflow version, and runs capture those pinned revisions instead of floating to latest.',
+      'Pin saved prompt revisions at publication. Runs use those revisions.',
     ),
   maxSteps: z
     .number()
@@ -682,7 +683,7 @@ export const definitionSchema = z.object({
     .max(1000)
     .default(100)
     .describe(
-      'Run step limit, shared by its Parallel branches. Batch items and invoked workflows have separate limits.',
+      'Run step limit. Parallel shares it. Batch items and invoked workflows have separate limits.',
     ),
 });
 export type WorkflowDefinition = z.infer<typeof definitionSchema>;
@@ -691,6 +692,8 @@ export type ContextPolicy = z.infer<typeof contextPolicySchema>;
 export interface Workflow {
   id: string;
   boardId?: string;
+  boardStageColumns?: Record<string, string | null>;
+  boardSuggestion?: import('./workflowBoards.js').BoardSuggestion;
   ownerWorkflowId?: string | null;
   name: string;
   description: string;

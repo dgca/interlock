@@ -6,9 +6,11 @@ New libraries start empty. Existing workflows remain intact after upgrades, incl
 
 1. Open **Workflows → Import** or **Browse starter workflows** in an empty library.
 2. Choose **Starters** and select a procedure: **SDLC workflow** or **Evaluate workflow comparison**.
-3. Review its purpose and requirements, then choose **Add to library**.
+3. Review its purpose and requirements. For SDLC, choose whether to set up the suggested board. Then choose **Add to library**.
 
 This creates and publishes a copy without starting a run. Imported workflows belong to you. Editing, publishing, archive, ownership and deletion use the ordinary operations. The improvement recipe and specialized examples remain optional file imports.
+
+SDLC suggests the Planning, Implementation, Review, and Delivery columns. Create the suggested board, map the stages to an existing board, or skip board setup. When you skip setup, you can run the workflow without a board.
 
 Known copies offer **Open workflow**. To deliberately create another one, select **Add another copy** before adding. Existing copies are never overwritten or republished. A recognized unpublished manual copy stays a draft; review and publish it on its workflow page if needed.
 
@@ -38,7 +40,7 @@ For MCP, discover choices on demand:
 { "source": "starters" }
 ```
 
-Pass that to `list_workflows`; the normal default still lists the library. Choices contain bounded metadata and existing-copy references, without definitions or prompts.
+Pass that to `list_workflows`; the normal default still lists the library. Choices include metadata, existing-copy references, and optional board setup. They omit definitions and prompts.
 
 Pass the chosen identity to `import_workflows`:
 
@@ -46,11 +48,11 @@ Pass the chosen identity to `import_workflows`:
 { "starterId": "sdlc", "requestId": "sdlc-import-1" }
 ```
 
-Use `copy:true` with a new key for a deliberate additional copy. Starter requests cannot include portable-bundle replacement options. Existing calls with `bundle` keep their original behavior.
+Use `copy:true` with a new key for a deliberate additional copy. When you include `boardSetup`, use the starter `requestId` for both keys. Board setup requires a new copy. See [board setup choices](agent-workflows.md#choose-board-setup-on-import).
 
 ## Copies and retry records
 
-Explicit imports track the catalog identity against the local workflow ID, so subsequent edits and renames do not lose that association. Older manual copies can be recognized by current drafts or retained published definitions, ignoring canvas positions and declaration order. An arbitrary changed and renamed old copy without retained matching content cannot be identified reliably. Display names alone never establish identity.
+Explicit imports track the catalog identity against the local workflow ID, so subsequent edits and renames do not lose that association. Older manual copies can be recognized by current drafts or retained published definitions. Matching ignores canvas positions and declaration order. Interlock also recognizes the original SDLC definition from before portable stages. An arbitrary changed and renamed old copy without retained matching content cannot be identified reliably. Display names alone never establish identity.
 
 Definitions that do not match the current schema are skipped during content recognition. They remain unchanged in the library and do not block starter discovery or imports. Other compatible drafts and retained versions can still identify an existing copy.
 

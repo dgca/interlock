@@ -9,6 +9,8 @@ import {
   sameWorkflowContent,
   workflowPositions,
   type DiffItem,
+  type BoardImportSetup,
+  type BoardImportResult,
 } from '@interlock/core';
 import { isDeepStrictEqual } from 'node:util';
 import type { Store } from '@interlock/storage';
@@ -41,6 +43,12 @@ import {
   workflowBundleSchema,
   type WorkflowBundle,
 } from '../../core/src/transfer.js';
+import {
+  applyBoardImport,
+  exportBoardSuggestion,
+  previewBoardImport,
+  withBoardImportReceipt,
+} from './boardImport.js';
 
 export function exportWorkflows(
   store: Store,
@@ -74,6 +82,8 @@ export function exportWorkflows(
         definitionHash,
         deletedAt,
       }));
+    const definitions = [w.draft, ...versions.map((v) => v.definition)];
+    const boardSuggestion = exportBoardSuggestion(store, w, definitions);
     records.push({
       id,
       name: w.name,
@@ -88,6 +98,7 @@ export function exportWorkflows(
             ),
       draftRevision: w.draftRevision,
       versions,
+      ...(boardSuggestion ? { boardSuggestion } : {}),
       ...(store.workflowTriggers(id).some((t) => t.kind === 'schedule')
         ? {
             schedules: store
@@ -122,7 +133,7 @@ export function exportWorkflows(
     if (w.ownerWorkflowId) include(w.ownerWorkflowId);
     for (const child of workflows.values())
       if (child.ownerWorkflowId === id) include(child.id);
-    for (const definition of [w.draft, ...versions.map((v) => v.definition)])
+    for (const definition of definitions)
       for (const node of definition.nodes)
         if (node.kind === 'workflow') include(node.workflowId);
   };
@@ -182,23 +193,31 @@ export function exportWorkflows(
   const modelAliases = new ModelAliases(store).requirements(referencedModels);
   return {
     format: 'interlock-workflows',
-    formatVersion: modelAliases.some((alias) => alias.reference)
-      ? 10
-      : promptRevisions.size
-        ? 9
-        : records.some((w) => w.eventTriggers?.length)
-          ? 8
-          : modelAliases.length
-            ? 6
-            : records.some((w) => w.schedules?.length)
-              ? 5
-              : variables.length
-                ? 4
-                : records.some((w) => w.deletedVersions?.length)
-                  ? 3
-                  : prompts.length
-                    ? 2
-                    : 1,
+    formatVersion: records.some(
+      (entry) =>
+        entry.boardSuggestion ||
+        [entry.draft, ...entry.versions.map((v) => v.definition)].some(
+          (definition) => definition.nodes.some((node) => node.stageId),
+        ),
+    )
+      ? 11
+      : modelAliases.some((alias) => alias.reference)
+        ? 10
+        : promptRevisions.size
+          ? 9
+          : records.some((w) => w.eventTriggers?.length)
+            ? 8
+            : modelAliases.length
+              ? 6
+              : records.some((w) => w.schedules?.length)
+                ? 5
+                : variables.length
+                  ? 4
+                  : records.some((w) => w.deletedVersions?.length)
+                    ? 3
+                    : prompts.length
+                      ? 2
+                      : 1,
     ...(prompts.length ? { prompts } : {}),
     ...(promptRevisions.size
       ? { promptRevisions: [...promptRevisions.values()] }
@@ -236,6 +255,7 @@ export interface BundleDryRunResult {
     kind: WorkflowTrigger['kind'];
     status: 'added' | 'changed' | 'unchanged' | 'conflict';
   }>;
+  boardSetup?: ReturnType<typeof previewBoardImport>;
 }
 
 export function diffBundleImport(
@@ -243,6 +263,7 @@ export function diffBundleImport(
   data: WorkflowBundle,
 ): BundleDryRunResult {
   const bundle = workflowBundleSchema.parse(data);
+  const boardSetup = previewBoardImport(store, bundle);
   const workflows = bundle.workflows.map((entry) => {
     const existing = store.get<Workflow>('workflows', entry.id);
     const published = existing?.latestVersion
@@ -343,6 +364,9 @@ export function diffBundleImport(
     workflows,
     ...(prompts.length ? { prompts } : {}),
     ...(triggers.length ? { triggers } : {}),
+    ...(boardSetup.suggestions.length || boardSetup.unresolved.length
+      ? { boardSetup }
+      : {}),
   };
 }
 
@@ -357,6 +381,7 @@ export type WorkflowImportResult = {
     latestVersion?: number;
   }[];
   published?: { id: string; version: number }[];
+  boardSetup?: BoardImportResult;
 };
 
 export function importWorkflows(
@@ -367,6 +392,7 @@ export function importWorkflows(
     draftRevisions?: Record<string, number>;
     restoreDeletedVersions?: boolean;
     variableBindings?: VariableImportBindings;
+    boardSetup?: BoardImportSetup;
     publish?: boolean;
     cascade?: boolean;
     dryRun: true;
@@ -381,6 +407,7 @@ export function importWorkflows(
     draftRevisions?: Record<string, number>;
     restoreDeletedVersions?: boolean;
     variableBindings?: VariableImportBindings;
+    boardSetup?: BoardImportSetup;
     publish?: boolean;
     cascade?: boolean;
     dryRun?: false;
@@ -395,6 +422,7 @@ export function importWorkflows(
     draftRevisions?: Record<string, number>;
     restoreDeletedVersions?: boolean;
     variableBindings?: VariableImportBindings;
+    boardSetup?: BoardImportSetup;
     publish?: boolean;
     cascade?: boolean;
     dryRun?: boolean;
@@ -409,6 +437,7 @@ export function importWorkflows(
     draftRevisions?: Record<string, number>;
     restoreDeletedVersions?: boolean;
     variableBindings?: VariableImportBindings;
+    boardSetup?: BoardImportSetup;
     publish?: boolean;
     cascade?: boolean;
     dryRun?: boolean;
@@ -419,7 +448,7 @@ export function importWorkflows(
     return diffBundleImport(store, data);
   }
   const bundle = workflowBundleSchema.parse(data);
-  return store.transaction(() => {
+  const apply = (): WorkflowImportResult => {
     new ModelAliases(store).importRequirements(bundle.modelAliases ?? []);
     new Variables(store).importRequirements(
       bundle.variables ?? [],
@@ -599,12 +628,21 @@ export function importWorkflows(
           ),
           importedPositions,
         );
+      const boardSuggestion =
+        entry.boardSuggestion?.id === existing?.boardId
+          ? existing?.boardSuggestion
+          : (entry.boardSuggestion ?? existing?.boardSuggestion);
       const workflow: Workflow = {
         id: entry.id,
         ownerWorkflowId: entry.ownerWorkflowId,
         name: entry.name,
         description: entry.description,
         archived: existing?.archived ?? false,
+        boardId: existing?.boardId,
+        ...(existing?.boardStageColumns
+          ? { boardStageColumns: existing.boardStageColumns }
+          : {}),
+        ...(boardSuggestion ? { boardSuggestion } : {}),
         draft: sameDraft ? existing!.draft : entry.draft,
         draftRevision: existing
           ? existing.draftRevision + (sameDraft ? 0 : 1)
@@ -717,6 +755,13 @@ export function importWorkflows(
         if (!options.engine) engine.stop();
       }
     }
+    const boardSetup = options.boardSetup
+      ? applyBoardImport(
+          store,
+          previewBoardImport(store, bundle, false).suggestions,
+          options.boardSetup,
+        )
+      : undefined;
     return {
       rootId: bundle.rootId,
       changed,
@@ -733,8 +778,27 @@ export function importWorkflows(
           : {}),
       })),
       ...(published ? { published } : {}),
+      ...(boardSetup ? { boardSetup } : {}),
     };
-  });
+  };
+  return store.transaction(() =>
+    withBoardImportReceipt(
+      store,
+      'bundle',
+      options.boardSetup,
+      {
+        bundle,
+        force: options.force ?? false,
+        draftRevisions: options.draftRevisions,
+        restoreDeletedVersions: options.restoreDeletedVersions ?? false,
+        variableBindings: options.variableBindings,
+        publish: options.publish ?? false,
+        cascade: options.cascade ?? false,
+        boardSetup: options.boardSetup,
+      },
+      apply,
+    ),
+  );
 }
 
 function latestVersionUnavailable(store: Store, id: string) {

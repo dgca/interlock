@@ -37,6 +37,8 @@ Runs tables share the Automations row spacing, column headings, typography, and 
 
 AI Settings has three URL-backed tabs: Harnesses, Agent presets, and Execution settings. Collections and policy forms use a 1040px content column and keep actions beside their headings. Harnesses shows one row per built-in harness or custom integration. **Edit defaults** expands a form below the harness row, with its own save action. **Add integration** and **Edit integration** open the same page editor for execution mode, transport, commands or URLs, and advanced settings. The header groups Back, Cancel or Discard changes, and Create integration or Save changes. HTTP headers, launcher hooks, and advanced settings expand in the form.
 
+When a workflow import includes board suggestions, **Board setup** lists the affected workflows and offers **Create suggested board**, **Use existing board**, and **Skip board setup**. Show the proposed column order before creating a board. Show each stage-to-column mapping before using an existing board and allow individual stages to stay unmapped. When the preview lacks a suggestion for authored stages, explain how to bind them after import.
+
 Board names link to their stage columns. **Clear search** restores the full library and focuses **Search boards**. Inside a Board, **Clear filters** restores all runs when the selected filters have no matches.
 
 Board, Prompt, Automation, Variable, and custom integration editors confirm before leaving with unsaved edits. Keep editing returns to the same draft. A pending save blocks in-app navigation, and the browser warns before leaving or reloading a dirty or saving form. A failed save keeps the inputs available for retry.

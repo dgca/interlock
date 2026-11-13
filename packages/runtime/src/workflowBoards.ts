@@ -12,8 +12,8 @@ import {
 } from '@interlock/core';
 import type { Store } from '@interlock/storage';
 import type { Requests } from './requests.js';
+import { boardCollection as collection } from './boardImport.js';
 
-const collection = 'workflowBoards';
 const terminalWindowMs = 86_400_000;
 const terminalLimit = 20;
 
@@ -86,8 +86,10 @@ export class WorkflowBoards {
 
   private writeMembership(workflow: Workflow, boardId?: string) {
     if (workflow.boardId === boardId) return workflow;
-    this.store.put('workflows', { ...workflow, boardId });
-    return { ...workflow, boardId };
+    const { boardStageColumns: _mapping, ...fields } = workflow;
+    const updated = { ...fields, boardId };
+    this.store.put('workflows', updated);
+    return updated;
   }
 
   assign(input: BoardMembership) {
