@@ -55,4 +55,6 @@ Connection configuration defaults to the running server's `/mcp` HTTP endpoint. 
 
 Run tests relevant to changed behavior and `pnpm build` for TypeScript and UI build checks. For packaging, CLI startup, or version changes, also run `pnpm test:package`. Check formatting with `pnpm format:check`.
 
+Run `pnpm lint` for type-aware ESLint rules and file-size budgets. New source files stay within 800 lines; files listed in `eslint-size-budgets.json` must not grow. Existing violations live in `eslint-suppressions.json`; after fixing some, run `pnpm lint --prune-suppressions`. Lower or remove a file's size ceiling when it shrinks.
+
 The package smoke test needs a completed build. It installs into a temporary prefix and exercises the bundled engine and MCP bridge. The separate `scripts/codex-smoke.ts` uses a real account and model, creates workflow data, and is not part of routine validation.
