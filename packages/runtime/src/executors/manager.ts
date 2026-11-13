@@ -38,6 +38,11 @@ import {
   parseProfileSnapshot,
   type ManagedAssignment,
 } from './configuration.js';
+import {
+  LauncherSupervisor,
+  type ClaimTicket,
+  type LauncherSession,
+} from './launcher.js';
 
 import {
   HarnessResultError,
@@ -52,35 +57,11 @@ import {
   assignmentPrompt,
 } from './contracts.js';
 import {
-  buildTokenMap,
-  customInvocation,
-  interpolateTokens,
-  executeCustomCommand,
-} from './custom.js';
-import {
   evaluateSessionNameTemplate,
   evaluateCommandOrUrlTemplate,
   sanitizeDeepLink,
   sanitizeMessage,
 } from './templates.js';
-
-interface LauncherSession {
-  idempotencyKey: string;
-  workId: string;
-  runId: string;
-  profile: ExecutorProfile;
-  claimTicket: string;
-  sessionId: string;
-  sessionName?: string;
-  resumeCommand?: string;
-  deepLink?: string;
-  cwd: string;
-  status: 'working' | 'idle' | 'needs_attention' | 'ended';
-  launchedAt: string;
-  lastStatusAt: number;
-  archived: boolean;
-  cleanupFailed?: boolean;
-}
 
 const attemptsCollection = 'managedExecutions',
   sessionsCollection = 'executorSessions';
@@ -129,23 +110,12 @@ export class ExecutorManager {
   ]);
   private transcripts: ManagedTranscripts;
   private config: ExecutorConfiguration;
+  private launcher: LauncherSupervisor;
   private adapters = new Map<string, HarnessAdapter>();
   private jobs = new Map<string, Job>();
-  private claimTickets = new Map<
-    string,
-    {
-      ticket: string;
-      workId: string;
-      runId: string;
-      profileId: string;
-      idempotencyKey: string;
-      issuedAt: string;
-      used: boolean;
-    }
-  >();
+  private claimTickets = new Map<string, ClaimTicket>();
   private launchedWork = new Map<string, LauncherSession>();
   private launchIdempotency = new Map<string, LauncherSession>();
-  private idleRecovering = new Set<string>();
   private launcherStops = new Map<string, Promise<void>>();
   private launcherCommands = new Map<string, Map<string, Promise<string>>>();
   private customCommands = new Set<{
@@ -165,6 +135,33 @@ export class ExecutorManager {
     private defaultCwd: string,
   ) {
     this.transcripts = new ManagedTranscripts(engine);
+    this.launcher = new LauncherSupervisor(
+      engine,
+      {
+        errors: this.errors,
+        stopped: () => this.stopped,
+        mcpUrl: () => this.mcpUrl,
+        apiToken: () => this.apiToken,
+        latest: (workId) => this.latest(workId),
+        write: (record) => this.write(record),
+        log: (record, message) => this.log(record, message),
+        interrupted: (record, reason) => this.interrupted(record, reason),
+        recordRecoveryEvent: (record, event) =>
+          this.recordRecoveryEvent(record, event),
+        resolveSessionName: (work, profile) =>
+          this.resolveSessionName(work, profile),
+        stopExecution: (executionId) => this.stopExecution(executionId),
+        schedule: () => this.schedule(),
+      },
+      {
+        claimTickets: this.claimTickets,
+        launchedWork: this.launchedWork,
+        launchIdempotency: this.launchIdempotency,
+        launcherStops: this.launcherStops,
+        launcherCommands: this.launcherCommands,
+        customCommands: this.customCommands,
+      },
+    );
     this.config = new ExecutorConfiguration(engine, defaultCwd, {
       adapters: () => this.adapters,
       running: () => this.running,
@@ -1236,611 +1233,41 @@ export class ExecutorManager {
       }
     }
   }
-  private async launchCustom(
-    work: WorkRequest,
-    profile: ExecutorProfile,
-    cwd: string,
-    logicalSession: string,
+  // Launcher operations stay reachable here; the supervisor owns their bodies.
+  private launchCustom(
+    ...args: Parameters<LauncherSupervisor['launchCustom']>
   ) {
-    const idempotencyKey = `${work.id}:${work.attempt}`;
-    const existing = this.launchIdempotency.get(idempotencyKey);
-    if (existing) {
-      this.launchedWork.set(work.id, existing);
-      return existing;
-    }
-    const sessionName = this.resolveSessionName(work, profile);
-    const claimTicket = randomUUID();
-    const tokenMap = buildTokenMap(work, cwd, {
-      claimTicket,
-      sessionId: logicalSession,
-      sessionName,
-      ...(this.mcpUrl ? { INTERLOCK_MCP_URL: this.mcpUrl } : {}),
-      ...(this.apiToken ? { INTERLOCK_API_TOKEN: this.apiToken } : {}),
-    });
-    const launchPayload = {
-      idempotencyKey,
-      workId: work.id,
-      runId: work.runId,
-      attempt: work.attempt,
-      claimTicket,
-      prompt: work.prompt,
-      input: work.input,
-      outputSchema: work.outputSchema,
-      cwd,
-      model: profile.model,
-      effort: profile.effort,
-      permissions: profile.permissions,
-      sessionName,
-      sessionId: logicalSession,
-      mcpUrl: this.mcpUrl,
-    };
-    const record: ManagedExecution = {
-      id: `${work.id}:launch:${work.attempt}`,
-      workId: work.id,
-      runId: work.runId,
-      attempt: work.attempt,
-      state: 'starting',
-      profile,
-      permissionSource: work.executorPermissionsSource ?? 'harness',
-      command: profile.launchCommand || profile.command || 'launch',
-      cwd,
-      sessionId: logicalSession,
-      sessionName,
-      startedAt: now(),
-      requests: [],
-      logs: [
-        {
-          at: now(),
-          message: `Launching ${profile.name}`,
-        },
-      ],
-      logCount: 1,
-    };
-    this.write(record);
-    let remoteSessionId: string | undefined;
-    let remoteResumeCommand: string | undefined;
-    let remoteDeepLink: string | undefined;
-    const invocation = customInvocation(profile, 'launcher');
-    if (profile.transport === 'http') {
-      if (!invocation) {
-        throw new Error(
-          `Custom profile "${profile.id}" in launcher HTTP mode requires launchUrl`,
-        );
-      }
-      const url = interpolateTokens(invocation, tokenMap);
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-      };
-      if (profile.headers) {
-        for (const [k, v] of Object.entries(profile.headers)) {
-          headers[k] = interpolateTokens(v, tokenMap);
-        }
-      }
-      const res = await fetch(url, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(launchPayload),
-      });
-      if (!res.ok) {
-        const errText = await res.text().catch(() => '');
-        throw new Error(
-          `Launcher HTTP launch failed (${res.status}): ${errText.slice(0, 500)}`,
-        );
-      }
-      const data = await res.json().catch(() => ({}));
-      remoteSessionId = (data as any)?.sessionId;
-      remoteResumeCommand = (data as any)?.resumeCommand;
-      remoteDeepLink = (data as any)?.deepLink;
-    } else {
-      if (!invocation) {
-        throw new Error(
-          `Custom profile "${profile.id}" in launcher subprocess mode requires launchCommand`,
-        );
-      }
-      const output = await this.runCustomCommand({
-        command: invocation,
-        cwd,
-        profile,
-        tokens: tokenMap,
-        payload: launchPayload,
-        timeoutSeconds: profile.timeoutSeconds ?? 60,
-        retainChildrenOnSuccess: true,
-      });
-      try {
-        const parsed = JSON.parse(output);
-        remoteSessionId = parsed.sessionId;
-        remoteResumeCommand = parsed.resumeCommand;
-        remoteDeepLink = parsed.deepLink;
-      } catch {}
-    }
-
-    const effectiveSessionId = remoteSessionId || logicalSession;
-    const templateVars: Record<string, string> = {
-      sessionId: effectiveSessionId,
-      workId: work.id,
-      runId: work.runId,
-      cwd,
-      sessionName,
-    };
-    const resumeCommand =
-      remoteResumeCommand ||
-      (profile.resumeCommandTemplate
-        ? evaluateCommandOrUrlTemplate(
-            profile.resumeCommandTemplate,
-            templateVars,
-          )
-        : undefined);
-    const deepLink = sanitizeDeepLink(
-      remoteDeepLink ||
-        (profile.deepLinkTemplate
-          ? evaluateCommandOrUrlTemplate(profile.deepLinkTemplate, templateVars)
-          : undefined),
-    );
-
-    const sessionRecord: LauncherSession = {
-      idempotencyKey,
-      workId: work.id,
-      runId: work.runId,
-      profile,
-      claimTicket,
-      sessionId: effectiveSessionId,
-      sessionName,
-      resumeCommand,
-      deepLink,
-      cwd,
-      status: 'working',
-      launchedAt: now(),
-      lastStatusAt: Date.now(),
-      archived: false,
-    };
-
-    Object.assign(record, {
-      state: 'running',
-      sessionId: effectiveSessionId,
-      resumeCommand,
-      deepLink,
-    });
-    this.write(record);
-    this.claimTickets.set(work.id, {
-      ticket: claimTicket,
-      workId: work.id,
-      runId: work.runId,
-      profileId: profile.id,
-      idempotencyKey,
-      issuedAt: now(),
-      used: false,
-    });
-
-    this.launchedWork.set(work.id, sessionRecord);
-    this.launchIdempotency.set(idempotencyKey, sessionRecord);
-    const current = this.engine.store.get<WorkRequest>('work', work.id);
-    if (
-      this.stopped ||
-      current?.status === 'cancelled' ||
-      this.engine.run(work.runId).status === 'cancelled'
-    ) {
-      // Cancellation may commit while the remote launch response is pending.
-      // Never issue a usable ticket or treat the late response as quiescence.
-      this.claimTickets.delete(work.id);
-      this.stopExecution(record.id);
-    }
-    return sessionRecord;
+    return this.launcher.launchCustom(...args);
   }
-  private async pollLauncherStatus(session: LauncherSession) {
-    if (session.cleanupFailed) return;
-    const tokenMap = {
-      INTERLOCK_WORK_ID: session.workId,
-      INTERLOCK_RUN_ID: session.runId,
-      INTERLOCK_CWD: session.cwd,
-      INTERLOCK_CLAIM_TOKEN: session.claimTicket,
-      INTERLOCK_CLAIM_TICKET: session.claimTicket,
-      INTERLOCK_SESSION_ID: session.sessionId,
-      INTERLOCK_SESSION_NAME: session.sessionName ?? '',
-    };
-    let newStatus: string | undefined;
-    let parsedStatusData: any;
-
-    try {
-      if (session.profile.statusUrl) {
-        const url = interpolateTokens(session.profile.statusUrl, tokenMap);
-        const headers: Record<string, string> = { Accept: 'application/json' };
-        if (session.profile.headers)
-          for (const [k, v] of Object.entries(session.profile.headers))
-            headers[k] = interpolateTokens(v, tokenMap);
-        const res = await fetch(url, { method: 'GET', headers });
-        if (!res.ok) throw new Error(`Status URL returned HTTP ${res.status}`);
-        const data = await res.json().catch(() => ({}));
-        parsedStatusData = data;
-        newStatus = typeof data === 'string' ? data : (data as any)?.status;
-      } else if (session.profile.statusCommand) {
-        const output = await this.runLauncherCommand(session, 'status', {
-          command: session.profile.statusCommand,
-          cwd: session.cwd,
-          profile: session.profile,
-          tokens: tokenMap,
-          timeoutSeconds: 10,
-        });
-        try {
-          const parsed = JSON.parse(output);
-          parsedStatusData = parsed;
-          newStatus = parsed.status ?? parsed;
-        } catch {
-          newStatus = output;
-        }
-      }
-    } catch (error) {
-      this.errors.record('launcher status', error);
-    }
-
-    if (this.stopped || this.launchedWork.get(session.workId) !== session)
-      return;
-
-    const record = this.latest(session.workId);
-    if (record && parsedStatusData && typeof parsedStatusData === 'object') {
-      if (parsedStatusData.resumeCommand) {
-        session.resumeCommand = parsedStatusData.resumeCommand;
-        record.resumeCommand = parsedStatusData.resumeCommand;
-      }
-      if (parsedStatusData.deepLink) {
-        const clean = sanitizeDeepLink(parsedStatusData.deepLink);
-        if (clean) {
-          session.deepLink = clean;
-          record.deepLink = clean;
-        }
-      }
-      if (parsedStatusData.progress || parsedStatusData.message) {
-        this.log(record, parsedStatusData.progress ?? parsedStatusData.message);
-      }
-    }
-    if (
-      newStatus &&
-      ['working', 'idle', 'needs_attention', 'ended'].includes(newStatus)
-    ) {
-      session.status = newStatus as
-        'working' | 'idle' | 'needs_attention' | 'ended';
-      const record = this.latest(session.workId);
-      if (record) {
-        if (newStatus === 'ended' && record.state === 'running') {
-          record.state = 'completed';
-          record.endedAt = now();
-          this.write(record);
-        } else {
-          this.log(record, `Status updated: ${newStatus}`);
-        }
-      }
-    }
-  }
-  private async recoverIdleLauncher(
-    session: LauncherSession,
-    captured: WorkRequest,
+  private pollLauncherStatus(
+    ...args: Parameters<LauncherSupervisor['pollLauncherStatus']>
   ) {
-    if (this.stopped || this.idleRecovering.has(captured.id)) return;
-    const run = this.engine.store.get<Run>('runs', captured.runId);
-    const definition =
-      run &&
-      this.engine.store.getVersion(run.workflowId, run.version)?.definition;
-    const node = definition?.nodes.find((n) => n.id === captured.nodeId);
-    if (
-      !run ||
-      !definition ||
-      !node ||
-      session.status !== 'idle' ||
-      this.engine.pauses.applicable(run.workflowId).length
-    )
-      return;
-    const policy = this.engine.stalls.policy(definition, node);
-    const recovery = policy.idleRecovery;
-    const threshold = policy.claimedIdleStallMs;
-    if (
-      !recovery?.maxRecoveries ||
-      !threshold ||
-      captured.managedExecution?.state === 'needs_human'
-    )
-      return;
-    const activityAt = captured.lastActivityAt ?? captured.claimedAt;
-    if (
-      !activityAt ||
-      this.engine.stalls.elapsed(run, activityAt, captured.id).activeMs <
-        threshold
-    )
-      return;
-    const pending = captured.idleNudge;
-    if (
-      pending &&
-      this.engine.stalls.elapsed(run, pending.at, captured.id).activeMs <
-        threshold
-    )
-      return;
-    if (!pending && (captured.idleRecoveryCount ?? 0) >= recovery.maxRecoveries)
-      return;
-    const owned = () => {
-      if (this.stopped || this.launchedWork.get(captured.id) !== session)
-        return;
-      const w = this.engine.store.get<WorkRequest>('work', captured.id);
-      return w?.status === 'claimed' &&
-        w.managedExecution?.state !== 'needs_human' &&
-        w.attempt === captured.attempt &&
-        !this.engine.stalls.deadlineExpired(w) &&
-        w.token === captured.token &&
-        w.lastActivityAt === captured.lastActivityAt
-        ? w
-        : undefined;
-    };
-    this.idleRecovering.add(captured.id);
-    try {
-      if (!pending) {
-        if (!session.profile.messageCommand && !session.profile.messageUrl)
-          return;
-        const work = owned();
-        if (!work) return;
-        work.idleRecoveryCount = (work.idleRecoveryCount ?? 0) + 1;
-        work.idleNudge = { attempt: work.attempt, activityAt, at: now() };
-        this.engine.store.put('work', work);
-        const record = this.latest(work.id);
-        if (record)
-          this.recordRecoveryEvent(record, {
-            errorClass: 'idle',
-            action: 'nudge',
-            messageExcerpt: recovery.message.slice(0, 500),
-            at: now(),
-          });
-        await this.sendLauncherMessage(session, recovery.message);
-        return;
-      }
-      if (!session.profile.stopCommand && !session.profile.stopUrl) return;
-      await this.requestLauncherStop(session);
-      await this.pollLauncherStatus(session);
-      const work = owned();
-      if (!work) return;
-      if ((session.status as string) !== 'ended')
-        throw new Error('Launcher stop did not confirm ended status');
-      // Confirmed external quiescence permits the ordinary bounded failure path.
-      const recovered = this.latest(work.id);
-      if (recovered)
-        this.recordRecoveryEvent(recovered, {
-          errorClass: 'idle',
-          action: 'relaunch',
-          messageExcerpt:
-            'Confirmed ended status; ordinary attempt admission applies',
-          at: now(),
-        });
-      this.engine.reportFailure(
-        work.id,
-        work.token!,
-        'Idle recovery stopped the stalled session',
-      );
-      this.claimTickets.delete(work.id);
-      this.launchedWork.delete(work.id);
-      const record = this.latest(work.id);
-      if (record) {
-        record.state = 'failed';
-        record.endedAt = now();
-        this.write(record);
-      }
-      this.schedule();
-    } catch (error) {
-      // Deadline/lease processing can revoke the snapshot while external delivery waits.
-      // Hold admission pumps too, so interruption must tolerate a second revocation.
-      try {
-        this.engine.pump();
-        const work = owned();
-        const record = work && this.latest(work.id);
-        if (record)
-          this.interrupted(
-            record,
-            ('Idle recovery uncertain: ' + errorText(error)).slice(0, 1000),
-          );
-      } catch {
-        // The claim may have ended, or the engine may have closed during delivery.
-      }
-    } finally {
-      this.idleRecovering.delete(captured.id);
-    }
+    return this.launcher.pollLauncherStatus(...args);
   }
-  private runCustomCommand(input: Parameters<typeof executeCustomCommand>[0]) {
-    if (this.stopped)
-      return Promise.reject(
-        new Error('Interlock stopped before launching command'),
-      );
-    const abort = new AbortController();
-    const done = executeCustomCommand({ ...input, signal: abort.signal });
-    const command = { abort, done };
-    this.customCommands.add(command);
-    void done
-      .finally(() => this.customCommands.delete(command))
-      .catch(() => {});
-    return done;
+  private recoverIdleLauncher(
+    ...args: Parameters<LauncherSupervisor['recoverIdleLauncher']>
+  ) {
+    return this.launcher.recoverIdleLauncher(...args);
   }
-  private runLauncherCommand(
-    session: LauncherSession,
-    operation: 'status' | 'message' | 'archive' | 'stop',
-    input: Parameters<typeof executeCustomCommand>[0],
-  ): Promise<string> {
-    if (session.cleanupFailed && operation !== 'stop')
-      return Promise.reject(
-        new HarnessCleanupError(
-          'Launcher command cleanup requires stop confirmation',
-        ),
-      );
-    const commands =
-      this.launcherCommands.get(session.workId) ??
-      new Map<string, Promise<string>>();
-    const pending = commands.get(operation);
-    if (pending)
-      return operation === 'message'
-        ? Promise.reject(
-            new HarnessRequestError(
-              'A launcher message is already being delivered',
-            ),
-          )
-        : pending;
-    const command = (async () => {
-      try {
-        return await this.runCustomCommand(input);
-      } catch (error) {
-        if (error instanceof HarnessCleanupError) {
-          session.cleanupFailed = true;
-          const record = this.latest(session.workId);
-          if (record)
-            this.interrupted(
-              record,
-              `Launcher ${operation} cleanup is uncertain. Confirm its subprocesses stopped before reconciling.`,
-            );
-        }
-        throw error;
-      } finally {
-        commands.delete(operation);
-        if (!commands.size) this.launcherCommands.delete(session.workId);
-      }
-    })();
-    commands.set(operation, command);
-    this.launcherCommands.set(session.workId, commands);
-    return command;
+  private sendLauncherMessage(
+    ...args: Parameters<LauncherSupervisor['sendLauncherMessage']>
+  ) {
+    return this.launcher.sendLauncherMessage(...args);
   }
-  private async sendLauncherMessage(session: LauncherSession, message: string) {
-    const tokenMap = {
-      INTERLOCK_WORK_ID: session.workId,
-      INTERLOCK_RUN_ID: session.runId,
-      INTERLOCK_CWD: session.cwd,
-      INTERLOCK_CLAIM_TOKEN: session.claimTicket,
-      INTERLOCK_CLAIM_TICKET: session.claimTicket,
-      INTERLOCK_SESSION_ID: session.sessionId,
-      INTERLOCK_INPUT: message,
-    };
-    const payload = {
-      workId: session.workId,
-      runId: session.runId,
-      sessionId: session.sessionId,
-      message,
-    };
-
-    if (session.profile.messageUrl) {
-      const url = interpolateTokens(session.profile.messageUrl, tokenMap);
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-      };
-      if (session.profile.headers) {
-        for (const [k, v] of Object.entries(session.profile.headers)) {
-          headers[k] = interpolateTokens(v, tokenMap);
-        }
-      }
-      const response = await fetch(url, {
-        method: 'POST',
-        signal: AbortSignal.timeout(10000),
-        headers,
-        body: JSON.stringify(payload),
-      });
-      if (!response.ok)
-        throw new Error(`Launcher operation failed (${response.status})`);
-    } else if (session.profile.messageCommand) {
-      await this.runLauncherCommand(session, 'message', {
-        command: session.profile.messageCommand,
-        cwd: session.cwd,
-        profile: session.profile,
-        tokens: tokenMap,
-        payload,
-        timeoutSeconds: 10,
-      });
-    }
+  private archiveLauncherSession(
+    ...args: Parameters<LauncherSupervisor['archiveLauncherSession']>
+  ) {
+    return this.launcher.archiveLauncherSession(...args);
   }
-  private async archiveLauncherSession(session: LauncherSession) {
-    const tokenMap = {
-      INTERLOCK_WORK_ID: session.workId,
-      INTERLOCK_RUN_ID: session.runId,
-      INTERLOCK_CWD: session.cwd,
-      INTERLOCK_CLAIM_TOKEN: session.claimTicket,
-      INTERLOCK_CLAIM_TICKET: session.claimTicket,
-      INTERLOCK_SESSION_ID: session.sessionId,
-    };
-    const payload = {
-      workId: session.workId,
-      runId: session.runId,
-      sessionId: session.sessionId,
-    };
-
-    if (session.profile.archiveUrl) {
-      const url = interpolateTokens(session.profile.archiveUrl, tokenMap);
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-      };
-      if (session.profile.headers)
-        for (const [k, v] of Object.entries(session.profile.headers))
-          headers[k] = interpolateTokens(v, tokenMap);
-      const res = await fetch(url, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) throw new Error(`Archive URL returned HTTP ${res.status}`);
-    } else if (session.profile.archiveCommand) {
-      await this.runLauncherCommand(session, 'archive', {
-        command: session.profile.archiveCommand,
-        cwd: session.cwd,
-        profile: session.profile,
-        tokens: tokenMap,
-        payload,
-        timeoutSeconds: 10,
-      });
-    }
+  private requestLauncherStop(
+    ...args: Parameters<LauncherSupervisor['requestLauncherStop']>
+  ) {
+    return this.launcher.requestLauncherStop(...args);
   }
-  private requestLauncherStop(session: LauncherSession) {
-    const pending = this.launcherStops.get(session.workId);
-    if (pending) return pending;
-    const stop = this.stopLauncherSession(session);
-    this.launcherStops.set(session.workId, stop);
-    void stop
-      .finally(() => {
-        if (this.launcherStops.get(session.workId) === stop)
-          this.launcherStops.delete(session.workId);
-      })
-      .catch(() => {});
-    return stop;
-  }
-  private async stopLauncherSession(session: LauncherSession) {
-    const tokenMap = {
-      INTERLOCK_WORK_ID: session.workId,
-      INTERLOCK_RUN_ID: session.runId,
-      INTERLOCK_CWD: session.cwd,
-      INTERLOCK_CLAIM_TOKEN: session.claimTicket,
-      INTERLOCK_CLAIM_TICKET: session.claimTicket,
-      INTERLOCK_SESSION_ID: session.sessionId,
-    };
-    const payload = {
-      workId: session.workId,
-      runId: session.runId,
-      sessionId: session.sessionId,
-    };
-
-    if (session.profile.stopUrl) {
-      const url = interpolateTokens(session.profile.stopUrl, tokenMap);
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-      };
-      if (session.profile.headers)
-        for (const [k, v] of Object.entries(session.profile.headers))
-          headers[k] = interpolateTokens(v, tokenMap);
-      const response = await fetch(url, {
-        method: 'POST',
-        signal: AbortSignal.timeout(10000),
-        headers,
-        body: JSON.stringify(payload),
-      });
-      if (!response.ok)
-        throw new Error(`Launcher operation failed (${response.status})`);
-    } else if (session.profile.stopCommand) {
-      await this.runLauncherCommand(session, 'stop', {
-        command: session.profile.stopCommand,
-        cwd: session.cwd,
-        profile: session.profile,
-        tokens: tokenMap,
-        payload,
-        timeoutSeconds: 10,
-      });
-    }
+  private stopLauncherSession(
+    ...args: Parameters<LauncherSupervisor['stopLauncherSession']>
+  ) {
+    return this.launcher.stopLauncherSession(...args);
   }
   private recordRecoveryEvent(record: ManagedExecution, event: RecoveryEvent) {
     record.recoveryEvents = record.recoveryEvents ?? [];
