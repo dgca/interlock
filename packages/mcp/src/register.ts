@@ -2,7 +2,11 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { TRPCClientError } from '@interlock/client';
 import { ResultRejection } from '@interlock/core';
-import { inMcpProfile, type McpProfile } from './profiles.js';
+import {
+  inMcpProfile,
+  withProfileNextCall,
+  type McpProfile,
+} from './profiles.js';
 
 /** Creates the server and a tool registrar limited to one profile. */
 export function createProfileServer(profile: McpProfile, version: string) {
@@ -45,9 +49,9 @@ export function createProfileServer(profile: McpProfile, version: string) {
       },
       async (input, extra) => {
         try {
-          const result = await fn(
-            input as z.infer<z.ZodObject<S>>,
-            extra.signal,
+          const result = withProfileNextCall(
+            profile,
+            await fn(input as z.infer<z.ZodObject<S>>, extra.signal),
           );
           return {
             structuredContent:
