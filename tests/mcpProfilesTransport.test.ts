@@ -72,7 +72,7 @@ it('serves bounded tool profiles over MCP without changing the default tool set'
       names[profile] = discovery.tools.map((tool) => tool.name).sort();
       text[profile] = [
         client.getInstructions() ?? '',
-        ...discovery.tools.map((tool) => tool.description ?? ''),
+        ...discovery.tools.map((tool) => JSON.stringify(tool)),
       ].join('\n');
       if (profile !== 'execute') continue;
       // The execute profile completes the claim loop and rejects other tools.
@@ -99,8 +99,13 @@ it('serves bounded tool profiles over MCP without changing the default tool set'
         .sort()
         .join(),
     ).toBe(names.all.join());
-    // Bounded discovery text never points agents at tools outside the profile.
-    const known = new RegExp(`\\b(?:${names.all.join('|')})\\b`, 'g');
+    // Bounded discovery (instructions, descriptions, input and output schemas
+    // including enum values) never points agents at tools outside the profile.
+    // Longer names first, so a name never matches as a prefix of another.
+    const known = new RegExp(
+      `\\b(?:${[...names.all].sort((a, b) => b.length - a.length).join('|')})\\b`,
+      'g',
+    );
     for (const profile of ['execute', 'author', 'operate'])
       expect(
         [...new Set(text[profile].match(known))].filter(

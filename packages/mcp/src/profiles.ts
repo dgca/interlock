@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 // Tool profiles bound the MCP discovery an agent pays for. `all` keeps the
 // complete tool set so existing client configurations see the same tools.
 const mcpProfiles = ['all', 'execute', 'author', 'operate'] as const;
@@ -117,10 +119,8 @@ export function inMcpProfile(profile: McpProfile, name: string) {
   return profile === 'all' || members[profile].has(name);
 }
 
-const toolNames = new RegExp(
-  `\\b(?:${[...new Set([...execute, ...author, ...operate])].join('|')})\\b`,
-  'g',
-);
+const allTools = new Set([...execute, ...author, ...operate]);
+const toolNames = new RegExp(`\\b(?:${[...allTools].join('|')})\\b`, 'g');
 
 /**
  * Drops sentences and `;` clauses that name a tool outside a bounded profile,
@@ -147,16 +147,163 @@ export function profileText(profile: McpProfile, text: string) {
     .join(' ');
 }
 
+const outside = (profile: Exclude<McpProfile, 'all'>, value: unknown) =>
+  typeof value === 'string' &&
+  allTools.has(value) &&
+  !members[profile].has(value);
+
+/**
+ * Narrows a tool schema to a bounded profile: descriptions pass through
+ * profileText, enums drop out-of-profile tool names, and discriminated unions
+ * drop options keyed by them. Unchanged nodes keep their identity, and
+ * withProfileNextCall rewrites results so output validation still passes.
+ */
+export function profileSchema<T extends z.ZodTypeAny>(
+  profile: McpProfile,
+  schema: T,
+): T {
+  return profile === 'all' ? schema : (narrow(profile, schema) as T);
+}
+
+function narrow(
+  profile: Exclude<McpProfile, 'all'>,
+  schema: z.ZodTypeAny,
+): z.ZodTypeAny {
+  const rebuilt = rebuild(profile, schema);
+  const { description } = rebuilt;
+  if (description === undefined) return rebuilt;
+  const text = profileText(profile, description);
+  return text === description ? rebuilt : rebuilt.describe(text);
+}
+
+function rebuild(
+  profile: Exclude<McpProfile, 'all'>,
+  schema: z.ZodTypeAny,
+): z.ZodTypeAny {
+  // Recreates a node from its definition when any child changed.
+  const remake = (patch: Record<string, unknown>) => {
+    const Type = schema.constructor as new (def: unknown) => z.ZodTypeAny;
+    return new Type({ ...(schema._def as object), ...patch });
+  };
+  const child = (key: string) => {
+    const inner = (schema._def as Record<string, z.ZodTypeAny>)[key];
+    const next = narrow(profile, inner);
+    return next === inner ? schema : remake({ [key]: next });
+  };
+  if (schema instanceof z.ZodObject) {
+    const shape = schema.shape as z.ZodRawShape;
+    const next = profileShape(profile, shape);
+    return next === shape ? schema : remake({ shape: () => next });
+  }
+  if (schema instanceof z.ZodEnum) {
+    const all = schema.options as string[];
+    const values = all.filter((value) => !outside(profile, value));
+    return values.length === all.length ? schema : remake({ values });
+  }
+  if (schema instanceof z.ZodDiscriminatedUnion) {
+    const def = schema._def as {
+      discriminator: string;
+      options: z.ZodObject<Record<string, z.ZodTypeAny>>[];
+    };
+    let changed = false;
+    const options = def.options.flatMap((option) => {
+      const key = option.shape[def.discriminator];
+      if (key instanceof z.ZodLiteral && outside(profile, key.value)) {
+        changed = true;
+        return [];
+      }
+      const next = narrow(profile, option) as typeof option;
+      if (next !== option) changed = true;
+      return [next];
+    });
+    if (!changed) return schema;
+    return remake({
+      options,
+      optionsMap: new Map(
+        options.map((option) => [
+          (option.shape[def.discriminator] as z.ZodLiteral<unknown>).value,
+          option,
+        ]),
+      ),
+    });
+  }
+  if (schema instanceof z.ZodUnion) {
+    const original = schema.options as z.ZodTypeAny[];
+    const options = original.map((option) => narrow(profile, option));
+    return options.every((option, i) => option === original[i])
+      ? schema
+      : remake({ options });
+  }
+  if (
+    schema instanceof z.ZodOptional ||
+    schema instanceof z.ZodNullable ||
+    schema instanceof z.ZodDefault ||
+    schema instanceof z.ZodCatch ||
+    schema instanceof z.ZodReadonly
+  )
+    return child('innerType');
+  if (schema instanceof z.ZodArray || schema instanceof z.ZodBranded)
+    return child('type');
+  if (schema instanceof z.ZodEffects) return child('schema');
+  if (schema instanceof z.ZodRecord) return child('valueType');
+  if (schema instanceof z.ZodIntersection) {
+    const { left, right } = schema._def as {
+      left: z.ZodTypeAny;
+      right: z.ZodTypeAny;
+    };
+    const [l, r] = [narrow(profile, left), narrow(profile, right)];
+    return l === left && r === right ? schema : remake({ left: l, right: r });
+  }
+  return schema;
+}
+
+/** Narrows each property of a raw input shape; see profileSchema. */
+export function profileShape(profile: McpProfile, shape: z.ZodRawShape) {
+  if (profile === 'all') return shape;
+  let changed = false;
+  const next = Object.fromEntries(
+    Object.entries(shape).map(([key, value]) => {
+      const narrowed = narrow(profile, value);
+      if (narrowed !== value) changed = true;
+      return [key, narrowed];
+    }),
+  );
+  return changed ? next : shape;
+}
+
 /**
  * Compact mutations can suggest a follow-up tool outside the connected
  * profile; suggest the run briefing instead, which reports the same blockers.
+ * Claimable work becomes wait_for_worker where the profile cannot claim, as
+ * another worker must claim it. profileSchema advertises the same values.
  */
 export function withProfileNextCall(profile: McpProfile, result: unknown) {
   if (profile === 'all' || !result || typeof result !== 'object') return result;
-  const { nextCall, runId } = result as {
+  const { next, nextCall, runId, cursor } = result as {
+    next?: unknown;
     nextCall?: { tool?: string } | null;
     runId?: unknown;
+    cursor?: unknown;
   };
+  if (
+    next === 'claim_work' &&
+    !inMcpProfile(profile, 'claim_work') &&
+    typeof runId === 'string' &&
+    typeof cursor === 'string' &&
+    inMcpProfile(profile, 'wait_for_run_change')
+  )
+    return {
+      ...result,
+      next: 'wait_for_worker',
+      ...('nextCall' in result
+        ? {
+            nextCall: {
+              tool: 'wait_for_run_change',
+              arguments: { id: runId, cursor },
+            },
+          }
+        : {}),
+    };
   if (
     !nextCall?.tool ||
     inMcpProfile(profile, nextCall.tool) ||
