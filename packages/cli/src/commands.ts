@@ -309,7 +309,7 @@ export async function runCommand(argv: string[]) {
       const { assertLegacyVariableFree } =
         await import('../../core/src/importDocument.js');
       assertLegacyVariableFree(input);
-      return client.workflows.create.mutate(input);
+      return client.workflows.create.mutate({ ...input, imported: true });
     }
     case 'export':
       return client.workflows.export.query({ id: args[0] });
