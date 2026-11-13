@@ -1,6 +1,6 @@
 import { Hono, type Context } from 'hono';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
-import { createMcpServer } from '../../mcp/src/server.js';
+import { createMcpServer } from '@interlock/mcp';
 import { streamSSE } from 'hono/streaming';
 import { fetchRequestHandler } from '@trpc/server/adapters/fetch';
 import { bodyLimit } from 'hono/body-limit';
