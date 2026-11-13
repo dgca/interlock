@@ -18,7 +18,6 @@ import {
   parseReportArgs,
   formatWorkflowReport,
 } from './commands.js';
-import { runPricesCommand } from './prices.js';
 
 async function main() {
   const argv = process.argv.slice(2);
@@ -162,11 +161,7 @@ Commands and the mcp bridge read the token from the api-token file beside the ke
       }
       process.exit(report.status === 'fail' ? 1 : 0);
     }
-    const result =
-      argv[0] === 'prices'
-        ? await runPricesCommand(argv.slice(1))
-        : await runCommand(argv);
-    console.log(JSON.stringify(result, null, 2));
+    console.log(JSON.stringify(await runCommand(argv), null, 2));
     return;
   }
   const { values } = parseArgs({

@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { setPriceTableSchema } from '@interlock/core';
+export { pricingLines } from '@interlock/core';
 import { engineClient } from './engineClient.js';
 
 /** Read the price table, or replace it with {expectedId, table|null}. */
