@@ -194,6 +194,7 @@ export class ExecutorManager {
   }>();
   private running = false;
   private stopped = false;
+  mcpUrl?: string; // Execute-profile MCP endpoint offered to launched sessions.
   private scheduled = false;
   private scanning = false;
   private unsubscribe?: () => void;
@@ -1615,9 +1616,8 @@ export class ExecutorManager {
       claimTicket,
       sessionId: logicalSession,
       sessionName,
-      INTERLOCK_SESSION_NAME: sessionName,
+      ...(this.mcpUrl ? { INTERLOCK_MCP_URL: this.mcpUrl } : {}),
     });
-
     const launchPayload = {
       idempotencyKey,
       workId: work.id,
@@ -1633,8 +1633,8 @@ export class ExecutorManager {
       permissions: profile.permissions,
       sessionName,
       sessionId: logicalSession,
+      mcpUrl: this.mcpUrl,
     };
-
     const record: ManagedExecution = {
       id: `${work.id}:launch:${work.attempt}`,
       workId: work.id,

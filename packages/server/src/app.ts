@@ -55,10 +55,11 @@ export function createApp(engine: Engine, connection?: ConnectionConfig) {
     await next();
   });
   app.use('/mcp', requireApiToken(connection));
+  app.use('/mcp/*', requireApiToken(connection));
   app.use('/trpc/*', requireApiToken(connection));
   // EventSource cannot send headers, so the stream also accepts ?token=.
   app.use('/events', requireApiToken(connection, { query: true }));
-  app.all('/mcp', async (c) => {
+  app.all('/mcp/:profile?', async (c) => {
     // There are no server-initiated messages or transport sessions to retain.
     if (c.req.method !== 'POST') {
       c.header('Allow', 'POST');
@@ -71,18 +72,35 @@ export function createApp(engine: Engine, connection?: ConnectionConfig) {
         405,
       );
     }
+    const path = c.req.param('profile');
+    const header = c.req.header('x-interlock-mcp-profile');
+    let mcp: ReturnType<typeof createMcpServer>;
+    try {
+      if (path && header && path !== header)
+        throw new Error('The MCP profile path and header disagree.');
+      mcp = createMcpServer(
+        appRouter.createCaller({
+          engine,
+          connection,
+          signal: c.req.raw.signal,
+          author: 'agent',
+        }),
+        path ?? header,
+      );
+    } catch (error) {
+      return c.json(
+        {
+          jsonrpc: '2.0',
+          error: { code: -32000, message: (error as Error).message },
+          id: null,
+        },
+        path && !header ? 404 : 400,
+      );
+    }
     const transport = new WebStandardStreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
       enableJsonResponse: true,
     });
-    const mcp = createMcpServer(
-      appRouter.createCaller({
-        engine,
-        connection,
-        signal: c.req.raw.signal,
-        author: 'agent',
-      }),
-    );
     try {
       await mcp.connect(transport);
       return await transport.handleRequest(c.req.raw);

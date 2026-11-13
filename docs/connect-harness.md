@@ -88,6 +88,21 @@ Choose **Streamable HTTP**, enter `http://127.0.0.1:4310/mcp`, and send the `Aut
 
 Restart or reconnect your harness after changing configuration. Enable Interlock's tools in its approval settings. Interlock does not modify harness configuration for you.
 
+## Choose a tool profile
+
+Every tool definition a client lists costs context in each conversation. Profiles serve a smaller tool set:
+
+| Profile   | Tools                                                                                                    | Endpoint             |
+| --------- | -------------------------------------------------------------------------------------------------------- | -------------------- |
+| `all`     | Every tool. The default, so existing configurations keep the same tools.                                 | `/mcp` or `/mcp/all` |
+| `execute` | Assignment execution: list, claim, renew, preflight, submit and fail work, usage, resources, run reads.  | `/mcp/execute`       |
+| `author`  | Workflows, versions, ownership, prompts, variables, presets, triggers, boards and the testbench.         | `/mcp/author`        |
+| `operate` | Starting, inspecting, waiting on, pausing, holding, retrying and cancelling runs, executors and budgets. | `/mcp/operate`       |
+
+Select a profile with the URL path, such as `http://127.0.0.1:4310/mcp/execute`, or send the header `X-Interlock-Mcp-Profile: execute` to `/mcp`. Unknown profiles are rejected; a path and header that disagree are rejected. For the stdio bridge, use `interlock mcp --profile execute` or set `INTERLOCK_MCP_PROFILE`. Connect more than one profile under different names when an agent needs tools from several. A tool outside the connected profile is not found. When a compact mutation would suggest a `nextCall` tool outside the profile, it suggests `get_run_briefing` for the same run instead.
+
+Sessions launched by a custom harness in launcher mode receive the `execute` endpoint as `$INTERLOCK_MCP_URL` and the launch payload's `mcpUrl`. See [custom harnesses](managed-executors.md#custom-harnesses).
+
 ## Install workflow skills
 
 Run this from the project where your agent works.
@@ -125,7 +140,7 @@ For Claude Desktop, merge this into its MCP configuration:
 
 If your client cannot find the global command, select **Use absolute paths** in the dialog. For a server launched through npx, this fallback points to its cached installation. Regenerate stdio configuration when those paths change. Prefer HTTP for clients that support it.
 
-Set the bridge environment variable `INTERLOCK_URL` when using another port. This value is the engine address, such as `http://127.0.0.1:4400`, without `/mcp`. The connection dialog includes the correct environment settings. The bridge reads the [API token](#api-token) from disk.
+Add `--profile` and a [profile name](#choose-a-tool-profile) to the arguments, such as `["mcp", "--profile", "execute"]`, to serve fewer tools. Set the bridge environment variable `INTERLOCK_URL` when using another port. This value is the engine address, such as `http://127.0.0.1:4400`, without `/mcp`. The connection dialog includes the correct environment settings. The bridge reads the [API token](#api-token) from disk.
 
 ## Development configuration
 

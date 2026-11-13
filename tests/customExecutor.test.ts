@@ -291,12 +291,10 @@ it('dispatches delegated launcher mode, enforces claim ticket, supports idempote
     statusCommand: `node ${referenceFixture} status`,
     archiveCommand: `node ${referenceFixture} archive`,
   });
-
   e.executors.start(nativeAdapters);
 
   const w = workflow(e, 'custom-launcher');
   const run = e.start(w.id, { task: 'delegated work' }).run;
-
   // Wait until launcher runs and ticket is issued
   let availableWork: any;
   await vi.waitFor(
@@ -313,7 +311,6 @@ it('dispatches delegated launcher mode, enforces claim ticket, supports idempote
 
   const ticketRecord = (e.executors as any).claimTickets.get(availableWork.id);
   const legitimateTicket = ticketRecord.ticket;
-
   // Rogue claim attempt without ticket must be rejected
   expect(() =>
     e.claim(availableWork.id, {
@@ -399,7 +396,8 @@ it('blocks dynamic cwd binding if resolving outside profile allowedRoots', async
 });
 
 it('preserves delegated launch and one-time ticket rules across independent pause holds', async () => {
-  let launched: { workId: string; claimTicket: string } | undefined;
+  let launched:
+    { workId: string; claimTicket: string; mcpUrl?: string } | undefined;
   let launches = 0;
   const server = createServer((req, res) => {
     let body = '';
@@ -426,6 +424,7 @@ it('preserves delegated launch and one-time ticket rules across independent paus
       transport: 'http',
       launchUrl: `http://127.0.0.1:${address.port}/launch`,
     });
+    e.executors.mcpUrl = 'http://127.0.0.1:4310/mcp/execute';
     e.executors.start(nativeAdapters);
     const w = workflow(e, 'paused-launcher');
     const library = e.pauses.create({
@@ -442,6 +441,7 @@ it('preserves delegated launch and one-time ticket rules across independent paus
     await vi.waitFor(() => expect(launched?.claimTicket).toBeTruthy(), {
       timeout: 5000,
     });
+    expect(launched!.mcpUrl).toBe('http://127.0.0.1:4310/mcp/execute');
     const workId = launched!.workId,
       claimTicket = launched!.claimTicket;
     // Wait for the successful launch response to become claimable.

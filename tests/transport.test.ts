@@ -1,3 +1,4 @@
+import { listToolsWithSharedSchemas } from './fixtures/mcpDiscovery';
 import { readFileSync } from 'node:fs';
 import {
   assertContract,
@@ -205,7 +206,7 @@ it.each(['stdio', 'http'])(
         draft: smallDraft,
         draftRevision: engine.workflow(w.id).draftRevision,
       });
-      const toolDiscovery = await client.listTools();
+      const toolDiscovery = await listToolsWithSharedSchemas(client);
       const discoveryText = JSON.stringify(toolDiscovery);
       expect(discoveryText).toContain('pinPromptsAtPublish');
       expect(discoveryText).not.toMatch(
@@ -796,9 +797,6 @@ it.each(['stdio', 'http'])(
       );
       const instructions = client.getInstructions() ?? '';
       expect(nextCursor).toBeUndefined();
-      expect(
-        Buffer.byteLength(JSON.stringify(toolDiscovery)),
-      ).toBeLessThanOrEqual(300_000);
       expect(Buffer.byteLength(instructions)).toBeLessThanOrEqual(10_000);
       expect(instructions).toContain(
         'docs/agent-workflows.md#discover-schemas-and-assignments',

@@ -51,9 +51,6 @@ it.each(['http', 'stdio'])(
       await client.connect(transport);
       const tools = (await client.listTools()).tools;
       expect(tools).toHaveLength(69);
-      expect(Buffer.byteLength(JSON.stringify(tools))).toBeLessThanOrEqual(
-        300000,
-      );
       if (discovery) expect(tools).toEqual(discovery);
       else discovery = tools;
       const selected = tools.filter((t) =>

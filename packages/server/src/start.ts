@@ -84,6 +84,10 @@ export async function startServer(options: {
     engine = new Engine(store, options.workdir, {
       ...(allowedRoots ? { allowedRoots } : {}),
     });
+    engine.executors.mcpUrl = new URL(
+      '/mcp/execute',
+      options.connection.engineUrl,
+    ).href;
     engine.executors.errors.attach(
       new JsonLog(
         join(dirname(options.database), 'logs'),
