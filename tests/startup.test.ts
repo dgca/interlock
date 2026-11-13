@@ -1,7 +1,17 @@
 import { expect, it } from 'vitest';
 import { createServer } from 'node:net';
-import { checkPort, startupError } from '../packages/server/src/startup';
+import {
+  checkPort,
+  lockDatabase,
+  startupError,
+} from '../packages/server/src/startup';
 import { spawnSync } from 'node:child_process';
+import { Store } from '@interlock/storage';
+import { Engine } from '@interlock/runtime';
+import { createApp } from '../packages/server/src/app';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 it('suppresses only the SQLite experimental diagnostic in the CLI', () => {
   const cli = spawnSync(
@@ -39,6 +49,37 @@ it('identifies occupied ports with suspended-process recovery guidance', async (
     await new Promise<void>((resolve) => server.close(() => resolve()));
   }
 });
+it('refuses a second server on a locked database and releases the lock on close', async () => {
+  const database = join(mkdtempSync(join(tmpdir(), 'interlock-lock-')), 'db');
+  const unlock = lockDatabase(database);
+  const probe = createServer().listen(0, '127.0.0.1');
+  await new Promise<void>((resolve) => probe.once('listening', resolve));
+  const address = probe.address();
+  if (!address || typeof address === 'string') throw new Error('No port');
+  await new Promise<void>((resolve) => probe.close(() => resolve()));
+  try {
+    const second = spawnSync(
+      process.execPath,
+      [
+        '--import',
+        'tsx',
+        'packages/cli/src/bin.ts',
+        '--port',
+        String(address.port),
+        '--db',
+        database,
+      ],
+      { encoding: 'utf8', timeout: 20_000 },
+    );
+    expect(second.status).toBe(1);
+    expect(second.stderr).toContain(
+      `Another Interlock server is already using database ${database}`,
+    );
+  } finally {
+    unlock();
+  }
+  lockDatabase(database)();
+});
 it('adds database ownership guidance while preserving the original failure', () => {
   const cause = new Error('database is locked');
   const error = startupError(cause, '/tmp/test.db');
@@ -64,4 +105,42 @@ it('rejects removed hooks listener flags without creating a database', () => {
   );
   expect(help.status).toBe(0);
   expect(help.stdout).not.toContain('--hooks-port');
+});
+it('accepts Vite development origins only from a development server', async () => {
+  const store = new Store(':memory:');
+  const engine = new Engine(store, process.cwd());
+  const status = async (development: boolean, origin: string) =>
+    (
+      await createApp(engine, {
+        command: 'interlock',
+        args: ['mcp'],
+        engineUrl: 'http://127.0.0.1:4310',
+        development,
+      }).request('http://127.0.0.1:4310/health', { headers: { origin } })
+    ).status;
+  try {
+    expect(await status(false, 'http://localhost:5173')).toBe(403);
+    expect(await status(false, 'http://127.0.0.1:5173')).toBe(403);
+    expect(await status(false, 'http://127.0.0.1:4310')).toBe(200);
+    expect(await status(true, 'http://localhost:5173')).toBe(200);
+    // Servers on an ephemeral port set engineUrl after creating the app.
+    const connection = {
+      command: 'interlock',
+      args: ['mcp'],
+      engineUrl: 'http://127.0.0.1:4310',
+      development: false,
+    };
+    const app = createApp(engine, connection);
+    connection.engineUrl = 'http://127.0.0.1:4999';
+    expect(
+      (
+        await app.request('http://127.0.0.1:4999/health', {
+          headers: { origin: 'http://127.0.0.1:4999' },
+        })
+      ).status,
+    ).toBe(200);
+  } finally {
+    engine.stop();
+    store.close();
+  }
 });

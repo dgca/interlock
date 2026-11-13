@@ -90,11 +90,24 @@ export function ConnectDialog({ onClose }: { onClose: () => void }) {
         2,
       )
     : '';
+  // The stdio bridge reads the token from disk; HTTP clients send it as a header.
+  const authorization = config?.token ? `Bearer ${config.token}` : undefined;
   const httpSnippet = config
     ? tab === 'Codex'
-      ? `[mcp_servers.interlock]\nurl = ${JSON.stringify(config.mcpUrl)}`
+      ? `[mcp_servers.interlock]\nurl = ${JSON.stringify(config.mcpUrl)}${
+          authorization
+            ? `\nhttp_headers = { Authorization = ${JSON.stringify(authorization)} }`
+            : ''
+        }`
       : tab === 'Claude'
-        ? `claude mcp add --transport http --scope user interlock ${quote(config.mcpUrl)}`
+        ? [
+            'claude mcp add --transport http --scope user interlock',
+            quote(config.mcpUrl),
+            // --header takes several values, so it follows the name and URL.
+            ...(authorization
+              ? ['--header', quote(`Authorization: ${authorization}`)]
+              : []),
+          ].join(' ')
         : tab === 'OpenCode'
           ? JSON.stringify(
               {
@@ -105,6 +118,9 @@ export function ConnectDialog({ onClose }: { onClose: () => void }) {
                     url: config.mcpUrl,
                     enabled: true,
                     oauth: false,
+                    ...(authorization
+                      ? { headers: { Authorization: authorization } }
+                      : {}),
                   },
                 },
               },
@@ -133,6 +149,8 @@ export function ConnectDialog({ onClose }: { onClose: () => void }) {
           <p className="hint">
             MCP endpoint: <code>{config.mcpUrl}</code>. This URL stays the same
             when you upgrade and restart Interlock at the same address.
+            {authorization &&
+              ' The configuration includes the API token for this computer. Keep it private.'}
           </p>
         )}
         <Group justify="space-between" gap="sm" my="md">
@@ -214,7 +232,9 @@ export function ConnectDialog({ onClose }: { onClose: () => void }) {
           <p>
             {stdio
               ? 'Add a local MCP server using stdio transport and the command, arguments, and environment below. Your harness starts the bridge process.'
-              : 'Choose Streamable HTTP transport and use the endpoint URL below. No bridge command or authentication is required.'}
+              : authorization
+                ? 'Choose Streamable HTTP transport, use the endpoint URL below, and send the Authorization header shown under it.'
+                : 'Choose Streamable HTTP transport and use the endpoint URL below. No bridge command or authentication is required.'}
           </p>
         )}
         {stdio && config?.fallback && (
@@ -229,7 +249,12 @@ export function ConnectDialog({ onClose }: { onClose: () => void }) {
           />
         )}
         {config ? (
-          <pre>{snippet}</pre>
+          <>
+            <pre>{snippet}</pre>
+            {tab === 'Other' && !stdio && authorization && (
+              <pre>Authorization: {authorization}</pre>
+            )}
+          </>
         ) : !error ? (
           <Box bg="var(--canvas)" p={12} my="md" bdrs="sm">
             <LoadingSkeleton label="Loading configuration…" />

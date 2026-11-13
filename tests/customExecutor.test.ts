@@ -9,6 +9,7 @@ import { blankDefinition, definitionSchema } from '@interlock/core';
 import { nativeAdapters } from '../packages/runtime/src/executors/native';
 import * as customCommands from '../packages/runtime/src/executors/custom';
 import { HarnessCleanupError } from '../packages/runtime/src/executors/contracts';
+import { JsonLog } from '../packages/runtime/src/log';
 
 const engines: Engine[] = [];
 const dirs: string[] = [];
@@ -50,6 +51,30 @@ function workflow(
   const w = e.create('Custom Harness Workflow', '', definitionSchema.parse(d));
   e.publish(w.id);
   return w;
+}
+
+async function launched(id: string, commands: Record<string, unknown>) {
+  const e = create();
+  const profile = e.executors.saveProfile({
+    id,
+    harness: 'custom',
+    name: id,
+    enabled: true,
+    expectedRevision: 0,
+    mode: 'launcher',
+    transport: 'subprocess',
+    launchCommand: 'printf \'{"sessionId":"session"}\'',
+    ...commands,
+  });
+  const run = e.start(workflow(e, profile.id).id, {}).run;
+  const work = e.available(run.id)[0];
+  const session = (await (e.executors as any).launchCustom(
+    work,
+    profile,
+    process.cwd(),
+    'logical-session',
+  )) as { claimTicket: string; archived: boolean };
+  return { e, run, work, session };
 }
 
 it('saves and lists custom harness profiles with direct and launcher modes', async () => {
@@ -735,7 +760,9 @@ it.each(['status', 'archive', 'message', 'stop'] as const)(
     if (operation === 'status')
       await (e.executors as any).pollLauncherStatus(session);
     if (operation === 'archive')
-      await (e.executors as any).archiveLauncherSession(session);
+      await expect(
+        (e.executors as any).archiveLauncherSession(session),
+      ).rejects.toBeInstanceOf(HarnessCleanupError);
     if (operation === 'message')
       await expect(
         (e.executors as any).sendLauncherMessage(session, 'continue'),
@@ -763,27 +790,9 @@ it.each(['status', 'archive', 'message', 'stop'] as const)(
 );
 
 it('does not reconcile an interrupted launcher while another command is pending', async () => {
-  const e = create();
-  const profile = e.executors.saveProfile({
-    id: 'pending-launcher',
-    harness: 'custom',
-    name: 'Pending launcher',
-    enabled: true,
-    expectedRevision: 0,
-    mode: 'launcher',
-    transport: 'subprocess',
-    launchCommand: 'printf \'{"sessionId":"session"}\'',
+  const { e, work, session } = await launched('pending-launcher', {
     statusCommand: 'exit 0',
   });
-  const w = workflow(e, profile.id);
-  const run = e.start(w.id, {}).run;
-  const work = e.available(run.id)[0];
-  const session = await (e.executors as any).launchCustom(
-    work,
-    profile,
-    process.cwd(),
-    'logical-session',
-  );
   let resolveCommand!: (value: string) => void;
   vi.spyOn(customCommands, 'executeCustomCommand').mockImplementation(
     () =>
@@ -803,33 +812,32 @@ it('does not reconcile an interrupted launcher while another command is pending'
 });
 
 it('still requests remote stop after status-command cleanup becomes uncertain', async () => {
-  const e = create();
-  const profile = e.executors.saveProfile({
-    id: 'cancel-uncertain-launcher',
-    harness: 'custom',
-    name: 'Cancel uncertain launcher',
-    enabled: true,
-    expectedRevision: 0,
-    mode: 'launcher',
-    transport: 'subprocess',
-    launchCommand: 'printf \'{"sessionId":"session"}\'',
+  const { e, run, session } = await launched('cancel-uncertain-launcher', {
     statusCommand: 'exit 0',
     stopCommand: 'printf stopped',
+    archiveCommand: 'exit 0',
+    env: { API_KEY: 'sk-live-SECRET' },
   });
-  const w = workflow(e, profile.id);
-  const run = e.start(w.id, {}).run;
-  const work = e.available(run.id)[0];
-  const session = await (e.executors as any).launchCustom(
-    work,
-    profile,
-    process.cwd(),
-    'logical-session',
-  );
+  const cleanup = 'termination not confirmed: sk-live-SECRET token=abcdefgh12';
   const command = vi
     .spyOn(customCommands, 'executeCustomCommand')
-    .mockRejectedValueOnce(new HarnessCleanupError('termination not confirmed'))
+    .mockRejectedValueOnce(new HarnessCleanupError(cleanup))
     .mockResolvedValue('stopped');
+  const logDir = mkdtempSync(join(tmpdir(), 'interlock-log-'));
+  dirs.push(logDir);
+  e.executors.errors.attach(new JsonLog(logDir));
   await (e.executors as any).pollLauncherStatus(session);
+  // Previously discarded: the failure reaches doctor (with a time) and the log.
+  const { checks } = await e.doctor();
+  expect(checks.find((c) => c.name === 'Scheduler errors')).toMatchObject({
+    status: 'warn',
+    details: { source: 'launcher status', at: expect.any(String) },
+  });
+  const log = readFileSync(join(logDir, 'interlock.log'), 'utf8');
+  expect(log).toContain('"event":"scheduler.error"');
+  // Literal profile values and credential-shaped text never reach doctor or the log.
+  for (const text of [log, JSON.stringify(checks)])
+    expect(text).not.toMatch(/sk-live-SECRET|abcdefgh12/);
   e.cancel(run.id);
   (e.executors as any).checkJobs();
   await vi.waitFor(() =>
@@ -837,6 +845,11 @@ it('still requests remote stop after status-command cleanup becomes uncertain', 
       expect.objectContaining({ command: 'printf stopped' }),
     ),
   );
+  // The refused archive after uncertain cleanup used to be swallowed inside the archive step.
+  await vi.waitFor(() =>
+    expect(e.executors.errors.last?.message).toMatch(/cleanup/i),
+  );
+  expect(e.executors.errors.last?.source).toBe('launcher stop');
 });
 
 it('stops an in-flight launch process group before server shutdown finishes', async () => {
@@ -872,28 +885,10 @@ it('stops an in-flight launch process group before server shutdown finishes', as
 });
 
 it('does not turn a completed archived delegated session into an interruption on shutdown', async () => {
-  const e = create();
-  const profile = e.executors.saveProfile({
-    id: 'completed-launcher',
-    harness: 'custom',
-    name: 'Completed launcher',
-    enabled: true,
-    expectedRevision: 0,
-    mode: 'launcher',
-    transport: 'subprocess',
-    launchCommand: 'printf \'{"sessionId":"session"}\'',
+  const { e, work, session } = await launched('completed-launcher', {
     statusCommand: 'printf \'{"status":"ended"}\'',
     archiveCommand: 'exit 0',
   });
-  const w = workflow(e, profile.id);
-  const run = e.start(w.id, {}).run;
-  const work = e.available(run.id)[0];
-  const session = await (e.executors as any).launchCustom(
-    work,
-    profile,
-    process.cwd(),
-    'logical-session',
-  );
   const claimed = e.claim(work.id, {
     workerId: 'remote worker',
     freshContext: false,

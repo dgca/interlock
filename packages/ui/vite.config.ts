@@ -1,5 +1,16 @@
 import { readFileSync } from 'node:fs';
-import { defineConfig } from 'vite';
+import { defineConfig, type ProxyOptions } from 'vite';
+import { readApiToken } from '@interlock/core/apiToken';
+
+// The development page is not served by the engine, so the proxy adds its token.
+const engine: ProxyOptions = {
+  target: 'http://127.0.0.1:4310',
+  configure: (proxy) =>
+    proxy.on('proxyReq', (request) => {
+      const token = readApiToken();
+      if (token) request.setHeader('Authorization', `Bearer ${token}`);
+    }),
+};
 // The component gallery exists only in the dev server and in the separate
 // `gallery` mode build used by browser tests. Production builds drop it.
 export default defineConfig(({ command, mode }) => ({
@@ -30,9 +41,9 @@ export default defineConfig(({ command, mode }) => ({
     port: 5173,
     strictPort: true,
     proxy: {
-      '/trpc': 'http://127.0.0.1:4310',
-      '/events': 'http://127.0.0.1:4310',
-      '/health': 'http://127.0.0.1:4310',
+      '/trpc': engine,
+      '/events': engine,
+      '/health': engine,
     },
   },
   build: {

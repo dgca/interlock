@@ -47,9 +47,7 @@ import {
   workResourceRequestSchema,
   type WorkResourceRequest,
 } from '@interlock/core';
-import { tmpdir } from 'node:os';
-import { writeFileSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
+import { rmSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { Store, type ProjectionState } from '@interlock/storage';
@@ -68,7 +66,7 @@ import {
 import {
   calculateVisitCount,
   buildExecutionProvenance,
-  buildRunExecutionProvenanceFile,
+  writeExecutionProvenanceFile,
 } from './nodeData.js';
 export * from './nodeData.js';
 import {
@@ -129,7 +127,12 @@ import {
   type DraftLayout,
 } from '@interlock/core';
 import { assignmentInstructions } from './agentInstructions.js';
-import { executeFetch, UncertainFetch } from './fetch.js';
+import {
+  checkPrivateNetwork,
+  executeFetch,
+  redirectPolicy,
+  UncertainFetch,
+} from './fetch.js';
 import { executeScript, baseEnvironment, scriptFailure } from './scripts.js';
 import { RunStarts } from './runStarts.js';
 import { RunAdmission } from './runAdmission.js';
@@ -3574,18 +3577,6 @@ export class Engine {
     }
     return readPath(execution.input, path);
   }
-  private writeExecutionProvenanceFile(
-    run: Run,
-    execution: NodeExecution,
-  ): string {
-    const data = buildRunExecutionProvenanceFile(run);
-    const filePath = join(
-      tmpdir(),
-      `interlock-provenance-${run.id}-${execution.id}.json`,
-    );
-    writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
-    return filePath;
-  }
   private async localOperation(
     run: Run,
     operation: Extract<WorkflowNode, { kind: 'script' | 'fetch' }> | PollCheck,
@@ -3634,11 +3625,21 @@ export class Engine {
         }
         if (deliveredSecrets.size)
           redact = secretRedaction([...resolved.secrets, ...deliveredSecrets]);
+        const request = resolveFetch(operation, input, resolved.value);
+        await checkPrivateNetwork(operation, request.url, (target, text) => {
+          if (this.stopped) return;
+          const latest = this.run(run.id);
+          const step = latest.executions.find((e) => e.id === execution.id);
+          if (latest.status !== 'running' || !step) return;
+          step.privateNetwork = target;
+          this.save(latest);
+          this.event(latest, 'node.private_network', text);
+        });
         const response = await executeFetch(
-          resolveFetch(operation, input, resolved.value),
+          request,
           operation.timeoutMs,
           signal,
-          { allowRedirects: !resolved.secrets.length },
+          redirectPolicy(operation, resolved.secrets.length > 0),
         );
         const error = operation.failOnHttpError
           ? fetchHttpError(response.status)
@@ -3686,10 +3687,7 @@ export class Engine {
         if (launch)
           this.backgroundScripts.prepare(run, execution, operation.timeoutMs);
         if (launch) {
-          const provenanceFile = this.writeExecutionProvenanceFile(
-            run,
-            execution,
-          );
+          const provenanceFile = writeExecutionProvenanceFile(run, execution);
           this.backgroundScripts.launch(
             run,
             execution,
@@ -3704,6 +3702,7 @@ export class Engine {
               ...bindings,
             },
             resolved.secrets.length > 0,
+            provenanceFile,
           );
         }
         const output = await this.backgroundScripts.monitor(
@@ -3735,7 +3734,7 @@ export class Engine {
         );
         return { output, resolvedCwd: effectiveCwd };
       }
-      const provenanceFile = this.writeExecutionProvenanceFile(run, execution);
+      const provenanceFile = writeExecutionProvenanceFile(run, execution);
       const launch = (env: NodeJS.ProcessEnv) =>
         executeScript(
           operation.command,
