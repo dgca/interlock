@@ -1,5 +1,10 @@
 import { spawn } from 'node:child_process';
-import { jsonSchema, type Json, type WorkflowNode } from '@interlock/core';
+import {
+  jsonSchema,
+  type EnvironmentMode,
+  type Json,
+  type WorkflowNode,
+} from '@interlock/core';
 
 type ScriptLanguage = Extract<WorkflowNode, { kind: 'script' }>['language'];
 
@@ -22,6 +27,72 @@ execute(input, require)
   })
   .catch(error => { console.error(error); process.exitCode = 1; });
 `;
+}
+
+interface EnvironmentPolicy {
+  environmentMode?: EnvironmentMode;
+  environmentPassthrough?: string[];
+}
+const minimalName = /^(?:PATH|HOME|LANG|LANGUAGE|LC_\w+|INTERLOCK_\w*)$/;
+
+/** Server environment a Script or custom executor process starts from. */
+export function baseEnvironment(
+  policy: EnvironmentPolicy,
+  source: NodeJS.ProcessEnv = process.env,
+): NodeJS.ProcessEnv {
+  if (policy.environmentMode !== 'minimal') return { ...source };
+  const passthrough = new Set(policy.environmentPassthrough);
+  return Object.fromEntries(
+    Object.entries(source).filter(
+      ([name]) => minimalName.test(name) || passthrough.has(name),
+    ),
+  );
+}
+
+/**
+ * Server variables withheld in minimal mode that a failed process's source or
+ * error output mentions. Only names are reported, never values.
+ */
+export function withheldEnvironmentNames(
+  policy: EnvironmentPolicy,
+  texts: string[],
+  explicit: string[],
+  source: NodeJS.ProcessEnv = process.env,
+) {
+  if (policy.environmentMode !== 'minimal') return [];
+  const delivered = baseEnvironment(policy, source);
+  const text = texts.join('\n');
+  return Object.keys(source)
+    .filter(
+      (name) =>
+        /^[A-Za-z_]\w+$/.test(name) &&
+        !(name in delivered) &&
+        !explicit.includes(name) &&
+        new RegExp(`(?<!\\w)${name}(?!\\w)`).test(text),
+    )
+    .sort();
+}
+
+/** Appends the withheld variables and their fix to a failed Script's error. */
+export function scriptFailure(
+  operation: EnvironmentPolicy & {
+    kind: string;
+    command?: string;
+    environment?: { name: string }[];
+  },
+  error: string,
+  source?: NodeJS.ProcessEnv,
+) {
+  if (operation.kind !== 'script') return error;
+  const names = withheldEnvironmentNames(
+    operation,
+    [operation.command ?? '', error],
+    (operation.environment ?? []).map((entry) => entry.name),
+    source,
+  );
+  return names.length
+    ? `${error} Minimal environment mode did not pass ${names.join(', ')} from the server environment. Add ${names.length > 1 ? 'these names' : 'it'} to the Script's environmentPassthrough list, bind a saved variable, or set environmentMode to inherit.`
+    : error;
 }
 
 /** Scripts read JSON on stdin and return JSON on stdout. They are never retried automatically. */

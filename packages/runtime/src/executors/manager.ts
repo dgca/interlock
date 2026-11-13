@@ -1697,7 +1697,7 @@ export class ExecutorManager {
       const output = await this.runCustomCommand({
         command: invocation,
         cwd,
-        env: profile.env,
+        profile,
         tokens: tokenMap,
         payload: launchPayload,
         timeoutSeconds: profile.timeoutSeconds ?? 60,
@@ -1820,7 +1820,7 @@ export class ExecutorManager {
         const output = await this.runLauncherCommand(session, 'status', {
           command: session.profile.statusCommand,
           cwd: session.cwd,
-          env: session.profile.env,
+          profile: session.profile,
           tokens: tokenMap,
           timeoutSeconds: 10,
         });
@@ -2099,7 +2099,7 @@ export class ExecutorManager {
       await this.runLauncherCommand(session, 'message', {
         command: session.profile.messageCommand,
         cwd: session.cwd,
-        env: session.profile.env,
+        profile: session.profile,
         tokens: tokenMap,
         payload,
         timeoutSeconds: 10,
@@ -2141,7 +2141,7 @@ export class ExecutorManager {
       await this.runLauncherCommand(session, 'archive', {
         command: session.profile.archiveCommand,
         cwd: session.cwd,
-        env: session.profile.env,
+        profile: session.profile,
         tokens: tokenMap,
         payload,
         timeoutSeconds: 10,
@@ -2199,7 +2199,7 @@ export class ExecutorManager {
       await this.runLauncherCommand(session, 'stop', {
         command: session.profile.stopCommand,
         cwd: session.cwd,
-        env: session.profile.env,
+        profile: session.profile,
         tokens: tokenMap,
         payload,
         timeoutSeconds: 10,

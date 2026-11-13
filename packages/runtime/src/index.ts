@@ -130,7 +130,7 @@ import {
 } from '@interlock/core';
 import { assignmentInstructions } from './agentInstructions.js';
 import { executeFetch, UncertainFetch } from './fetch.js';
-import { executeScript } from './scripts.js';
+import { executeScript, baseEnvironment, scriptFailure } from './scripts.js';
 import { RunStarts } from './runStarts.js';
 import { RunAdmission } from './runAdmission.js';
 import { HistoryRetention } from './historyRetention.js';
@@ -3568,9 +3568,7 @@ export class Engine {
         if (propPath === 'visitCount') {
           return previous?.provenance?.visitCount ?? 0;
         }
-        if (!previous || !previous.provenance) {
-          return null;
-        }
+        if (!previous?.provenance) return null;
         return readPath(previous.provenance as unknown as Json, propPath);
       }
     }
@@ -3656,7 +3654,7 @@ export class Engine {
             `${label}: environment ${entry.name} cannot use variable ${variableName(entry.variableId)}. Replace its value with text that contains no NUL bytes.`,
           );
       }
-      const inherited = environment?.env ?? process.env;
+      const inherited = baseEnvironment(operation, environment?.env);
       const bindings = Object.fromEntries(
         (operation.environment ?? []).map((entry) => [
           entry.name,
@@ -3781,7 +3779,8 @@ export class Engine {
       if (error instanceof UncertainScript) throw error;
       if (error instanceof UncertainFetch)
         throw new UncertainFetch(redact.text(message(error)));
-      throw new InterlockError(redact.text(message(error)));
+      const text = scriptFailure(operation, message(error), environment?.env);
+      throw new InterlockError(redact.text(text));
     }
   }
   private markOperationStarted(run: Run, execution: NodeExecution) {

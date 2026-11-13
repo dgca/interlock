@@ -388,3 +388,54 @@ it.each([
   );
   expect(run.output).toEqual({ input: null, env });
 });
+
+const readServerKeys = {
+  javascript:
+    "const e = process.env; return [e.SERVER_ONLY_API_KEY ?? '', e.DECLARED_KEY ?? '', e.BOUND_KEY ?? '', !!e.PATH, e.INTERLOCK_RUN_ID === undefined ? '' : 'run'].join(':');",
+  bash: 'printf \'"%s:%s:%s:%s:%s"\' "${SERVER_ONLY_API_KEY-}" "${DECLARED_KEY-}" "${BOUND_KEY-}" "$([ -n "$PATH" ] && echo true || echo false)" "${INTERLOCK_RUN_ID:+run}"',
+};
+it.each([
+  ['javascript', undefined, 'server-key:declared:bound:true:run'],
+  ['bash', undefined, 'server-key:declared:bound:true:run'],
+  ['javascript', 'inherit', 'server-key:declared:bound:true:run'],
+  ['bash', 'inherit', 'server-key:declared:bound:true:run'],
+  ['javascript', 'minimal', ':declared:bound:true:run'],
+  ['bash', 'minimal', ':declared:bound:true:run'],
+] as const)(
+  'gives a %s Script in %s mode the expected server environment',
+  async (language, environmentMode, expected) => {
+    vi.stubEnv('SERVER_ONLY_API_KEY', 'server-key');
+    vi.stubEnv('DECLARED_KEY', 'declared');
+    const engine = setup();
+    const variable = engine.variables.mutate({
+      action: 'create',
+      name: 'bound',
+      kind: 'config',
+      value: 'bound',
+    }) as SavedVariable;
+    const definition = script(readServerKeys[language], language);
+    Object.assign(definition.nodes[1], {
+      environmentMode,
+      environmentPassthrough: ['DECLARED_KEY'],
+      environment: [{ name: 'BOUND_KEY', variableId: variable.id }],
+    });
+    const { id } = engine.start(publish(engine, definition), null).run;
+    expect((await waitForRun(engine, id)).output).toBe(expected);
+  },
+);
+
+it('names a server variable withheld from a failed minimal Script and its fix', async () => {
+  vi.stubEnv('SERVER_ONLY_API_KEY', 'server-secret-value');
+  const engine = setup();
+  const definition = script(
+    'test -n "$SERVER_ONLY_API_KEY" || { echo "token missing" >&2; exit 1; }',
+    'bash',
+  );
+  Object.assign(definition.nodes[1], { environmentMode: 'minimal' });
+  const { id } = engine.start(publish(engine, definition), null).run;
+  const run = await waitForRun(engine, id, 'failed');
+  expect(run.error).toMatch(
+    /did not pass SERVER_ONLY_API_KEY .*environmentPassthrough.*inherit/,
+  );
+  expect(run.error).not.toContain('server-secret-value');
+});

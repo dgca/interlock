@@ -3,7 +3,10 @@ import {
   Anchor,
   Code,
   Group,
+  Input,
+  SegmentedControl,
   Stack,
+  TagsInput,
   Text,
   TextInput,
   Button,
@@ -12,7 +15,7 @@ import {
 import { useEffect, useRef, useState } from 'react';
 
 import { Plus, RefreshCw, Trash2 } from 'lucide-react';
-import type { ScriptEnvironment } from '@interlock/core';
+import type { EnvironmentMode, ScriptEnvironment } from '@interlock/core';
 
 import { paths } from '../../routes/paths';
 import { refreshQueries, trpc, useQueryClient } from '../../lib/query';
@@ -128,17 +131,82 @@ function EnvironmentRow({
   );
 }
 
+// A type alias so node patch callbacks accepting records can receive it.
+export type ScriptEnvironmentSettings = {
+  environment?: ScriptEnvironment;
+  environmentMode?: EnvironmentMode;
+  environmentPassthrough?: string[];
+};
+
+function EnvironmentModeField({
+  value,
+  onChange,
+}: {
+  value: ScriptEnvironmentSettings;
+  onChange: (value: ScriptEnvironmentSettings) => void;
+}) {
+  const passthrough = value.environmentPassthrough ?? [];
+  const invalid = passthrough.filter((name) => !environmentName.test(name));
+  return (
+    <>
+      <Input.Wrapper
+        label="Server environment"
+        description={
+          value.environmentMode === 'minimal'
+            ? 'Passes only PATH, HOME, locale settings, INTERLOCK_ variables and the names below.'
+            : 'Passes every variable from the environment that started Interlock, including credentials.'
+        }
+      >
+        <SegmentedControl
+          mt={4}
+          style={{ display: 'flex', width: 'fit-content' }}
+          aria-label="Server environment"
+          value={value.environmentMode ?? 'inherit'}
+          data={[
+            { value: 'inherit', label: 'Inherit all' },
+            { value: 'minimal', label: 'Minimal' },
+          ]}
+          onChange={(mode) => onChange({ environmentMode: mode })}
+        />
+      </Input.Wrapper>
+      {value.environmentMode === 'minimal' && (
+        <TagsInput
+          label="Pass through from server"
+          description="Enter a name and press Enter."
+          placeholder="Add a name"
+          value={passthrough}
+          acceptValueOnBlur
+          error={
+            invalid.length
+              ? `${invalid.join(', ')}: use letters, digits and underscores. Start with a letter or underscore.`
+              : undefined
+          }
+          onChange={(names) => {
+            const next = [
+              ...new Set(names.map((name) => name.trim()).filter(Boolean)),
+            ];
+            onChange({
+              environmentPassthrough: next.length ? next : undefined,
+            });
+          }}
+        />
+      )}
+    </>
+  );
+}
+
 export function EnvironmentEditor({
-  value = [],
+  value: settings,
   language,
   polling = false,
   onChange,
 }: {
-  value?: ScriptEnvironment;
+  value: ScriptEnvironmentSettings;
   language?: 'javascript' | 'bash';
   polling?: boolean;
-  onChange: (value: ScriptEnvironment | undefined) => void;
+  onChange: (value: ScriptEnvironmentSettings) => void;
 }) {
+  const value = settings.environment ?? [];
   const client = useQueryClient();
   const keys = useRef(new WeakMap<Entry, number>());
   const nextKey = useRef(0);
@@ -147,9 +215,10 @@ export function EnvironmentEditor({
     return keys.current.get(entry)!;
   };
   const update = (next: ScriptEnvironment) =>
-    onChange(next.length ? next : undefined);
+    onChange({ environment: next.length ? next : undefined });
   return (
     <Stack gap="sm" mt="lg">
+      <EnvironmentModeField value={settings} onChange={onChange} />
       <Group justify="space-between" gap="xs">
         <Text size="sm" fw={550}>
           Environment variables

@@ -106,7 +106,7 @@ import Ajv, { type ValidateFunction } from 'ajv';
 import { bindingLeaves } from './valueBindings.js';
 import {
   variableReferenceSchema,
-  scriptEnvironmentSchema,
+  scriptEnvironmentFields,
   validateVariableReferences,
   checkVariableDelivery,
 } from './variables.js';
@@ -312,7 +312,7 @@ const pollCheckShapeSchema = z.discriminatedUnion('kind', [
     // Omitted language runs as Bash, like Script nodes saved before JavaScript existed.
     language: z.enum(['javascript', 'bash']).optional(),
     command: z.string().min(1),
-    environment: scriptEnvironmentSchema.optional(),
+    ...scriptEnvironmentFields,
     cwd: cwdBindingSchema
       .optional()
       .describe(
@@ -478,7 +478,7 @@ const nodeShapeSchema = z.discriminatedUnion('kind', [
       .describe(
         'Background opts into local supervision across server restarts. Uncertain outcomes require explicit stopped reconciliation before retry. Polling checks remain foreground.',
       ),
-    environment: scriptEnvironmentSchema.optional(),
+    ...scriptEnvironmentFields,
     // Older saved nodes omit language and must continue to run as Bash.
     language: z.enum(['javascript', 'bash']).optional(),
     command: z.string().min(1),

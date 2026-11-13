@@ -82,6 +82,11 @@ Set `timeoutMs` on a Script node to allow 100 to 3,600,000 milliseconds. Omissio
 Scripts and polling Script checks can read `INTERLOCK_RUN_ID` directly from
 their environment to inspect the current run. See [Script execution context](architecture.md#script-execution-context).
 
+Set `environmentMode: "minimal"` on new Script nodes and Script checks so they
+do not receive credentials from the server's environment. Bind saved variables
+through `environment` or list required server names in `environmentPassthrough`.
+Omitted mode keeps `inherit`. See [Scripts and interruptions](architecture.md#scripts-and-interruptions).
+
 Script, Fetch and waited Workflow calls support `onFailure: "route"` with `default` and `failed` edges through these same tools. Failed receives the fixed `{input,error,output}` contract described in [failure routes](failure-routes.md). The operation stays failed while its run continues. Workflow failures add `error.child` run/version/execution references. Cancelled children and caller input/dispatch errors remain terminal; a handled child cannot be retried independently. Earlier-node bindings select completed outputs only; read the incoming envelope for recovery. Removing the policy through MCP requires explicitly removing its edge. No automatic retry is added, and completed recovery runs cannot be retried.
 
 `start_run.input` and `submit_result.output` accept any JSON value matching the workflow or assignment contract, including objects, arrays, scalars, and null. Pass structured values directly. JSON-looking strings remain strings and are never implicitly parsed.
