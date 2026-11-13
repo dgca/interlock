@@ -4,10 +4,6 @@ import {
   modelReferences,
   agentAliasReference,
   selectsPreset,
-  usesDirectHarness,
-  eligiblePresetChoices,
-  inheritsWorkflowHarnessSettings,
-  presetPermissions,
 } from '@interlock/core';
 import { runDoctor } from './doctor.js';
 import { generateWorkflowReport } from './report.js';
@@ -28,7 +24,7 @@ import { Stalls } from './stalls.js';
 import { WorkflowTriggers } from './workflowTriggers.js';
 import { PauseHolds } from './pauseHolds.js';
 import { BackgroundScripts, UncertainScript } from './backgroundScripts.js';
-import { scriptOperationSchema, type ScriptOperation } from '@interlock/core';
+import type { ScriptOperation } from '@interlock/core';
 import { runAttention } from './runAttention.js';
 import { Requests } from './requests.js';
 import { WorkflowBoards } from './workflowBoards.js';
@@ -36,6 +32,13 @@ import { captureHumanInput } from './humanInput.js';
 import { RunInspection } from './runInspection.js';
 import { WorkflowAuthoring } from './workflowAuthoring.js';
 import { WorkflowDeletion } from './workflowDeletion.js';
+import { AgentExecutorSettings } from './agentExecutorSettings.js';
+import { BackgroundScriptControl } from './backgroundScriptControl.js';
+import {
+  fetchHttpError,
+  LocalOperations,
+  type LocalOperationResult,
+} from './localOperations.js';
 import { WorkResources } from './workResources.js';
 import { ExecutorManager } from './executors/manager.js';
 import { resolveAndValidateCwd } from './workingDirectory.js';
@@ -49,7 +52,6 @@ import {
   workResourceRequestSchema,
   type WorkResourceRequest,
 } from '@interlock/core';
-import { rmSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { Store } from '@interlock/storage';
@@ -58,7 +60,6 @@ import {
   calculateVisitCount,
   buildExecutionProvenance,
   readBranchValue,
-  writeExecutionProvenanceFile,
 } from './nodeData.js';
 export * from './nodeData.js';
 import {
@@ -108,13 +109,7 @@ import {
   modelSelectionSchema,
   type DraftLayout,
 } from '@interlock/core';
-import {
-  checkPrivateNetwork,
-  executeFetch,
-  redirectPolicy,
-  UncertainFetch,
-} from './fetch.js';
-import { executeScript, baseEnvironment, scriptFailure } from './scripts.js';
+import { UncertainFetch } from './fetch.js';
 import { ScriptApprovals } from './scriptApprovals.js';
 import { RunStarts } from './runStarts.js';
 import { RunAdmission } from './runAdmission.js';
@@ -131,9 +126,7 @@ import { Prompts } from './prompts.js';
 import { Variables } from './variables.js';
 import { ModelAliases } from './modelAliases.js';
 export { ModelAliases } from './modelAliases.js';
-import { secretRedaction } from './secretRedaction.js';
 import { variableReferences } from '@interlock/core';
-import type { PollCheck } from '@interlock/core';
 import { VersionCleanup } from './versionCleanup.js';
 import { Ownership } from './ownership.js';
 import { Testbench } from './testbench.js';
@@ -154,19 +147,6 @@ const terminal = (s: string) =>
   ['completed', 'failed', 'cancelled'].includes(s);
 const message = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
-const fetchHttpError = (status: number) =>
-  status < 200 || status >= 300 ? `Fetch returned HTTP ${status}` : undefined;
-function scriptEnvironmentId(id: string): string | undefined {
-  // Legacy definitions can contain IDs that exceed portable spawn limits
-  // or cannot be carried losslessly in a process environment.
-  if (id.includes('\0') || Buffer.byteLength(id) > 16 * 1024) return;
-  if (Buffer.from(id).toString() === id) return id;
-}
-type LocalOperationResult = {
-  output: Json;
-  httpError?: string;
-  resolvedCwd?: string;
-};
 export interface Worker {
   modelSelection?: ModelSelection;
   session?: SessionIdentity;
@@ -217,6 +197,9 @@ export class Engine {
   private readonly inspection: RunInspection;
   private readonly authoring: WorkflowAuthoring;
   private readonly deletion: WorkflowDeletion;
+  private readonly agentSettings: AgentExecutorSettings;
+  private readonly operations: LocalOperations;
+  private readonly scriptControl: BackgroundScriptControl;
   private localJobs = new Map<string, AbortController>();
   private backgroundScripts: BackgroundScripts;
   private stopped = false;
@@ -515,6 +498,39 @@ export class Engine {
       this.stalls,
       (id) => this.quiescence(id),
       (runId) => this.available(runId),
+    );
+    this.agentSettings = new AgentExecutorSettings(
+      this.modelAliases,
+      this.executors,
+      this.contextGroups,
+      options,
+    );
+    this.operations = new LocalOperations(
+      store,
+      (id) => this.run(id),
+      (run) => this.save(run),
+      (run, type, text) => this.event(run, type, text),
+      (run) => this.definition(run),
+      (run, input) => this.bindingSource(run, input),
+      () => this.getAllowedRoots(),
+      cwd,
+      this.scriptApprovals,
+      this.trials,
+      this.variables,
+      this.backgroundScripts,
+      () => this.stopped,
+    );
+    this.scriptControl = new BackgroundScriptControl(
+      store,
+      (id) => this.run(id),
+      (run) => this.save(run),
+      (run, type, text) => this.event(run, type, text),
+      (run) => this.definition(run),
+      (run, execution, error) => this.fail(run, execution, error),
+      (id) => this.cancelTree(id),
+      this.variables,
+      this.backgroundScripts,
+      this.resources,
     );
     this.deletion = new WorkflowDeletion(
       store,
@@ -1628,7 +1644,7 @@ export class Engine {
             cwdBlocked = undefined;
           }
         }
-        const executorSettings = this.agentExecutorSettings(
+        const executorSettings = this.agentSettings.resolve(
           run,
           definition,
           node,
@@ -2253,181 +2269,6 @@ export class Engine {
     this.save(run);
     return true;
   }
-  private agentExecutorSettings(
-    run: Run,
-    definition: WorkflowDefinition,
-    node: Extract<WorkflowDefinition['nodes'][number], { kind: 'agent' }>,
-  ): Partial<WorkRequest> | undefined {
-    if (node.executor === null) return {};
-    const captures = run.modelAliasCaptures;
-    const legacy = node.executorMode === undefined;
-    const direct = usesDirectHarness(node, definition);
-    const target = node.model ?? definition.agentModel;
-    const aliasRef = agentAliasReference(node, definition);
-    const alias = aliasRef
-      ? captures
-        ? this.modelAliases.capturedAlias(captures, aliasRef)
-        : this.modelAliases.get(aliasRef)
-      : undefined;
-    const workflowRef = definition.agentModel;
-    const workflowHasPreset =
-      definition.agentModelMode === 'preset' ||
-      (definition.agentModelMode !== 'literal' &&
-        !!workflowRef &&
-        (run.ignoredWorkflowModelAlias === workflowRef ||
-          !!(captures
-            ? this.modelAliases.capturedAlias(captures, workflowRef)
-            : this.modelAliases.get(workflowRef))));
-    const preset =
-      !this.options.substituteOperation &&
-      (selectsPreset(node, definition) ||
-        (captures !== undefined && alias?.permissions !== undefined));
-    const profiles = this.executors.profiles();
-    let executor = node.executor ?? definition.executor;
-    let model = target;
-    let effort =
-      node.effort !== undefined ? node.effort : definition.agentEffort;
-    let effortSource: WorkRequest['executorEffortSource'] =
-      node.effort === undefined ? 'workflow' : 'node';
-    let permissions = definition.agentPermissions;
-    let permissionSource: WorkRequest['executorPermissionsSource'] = direct
-      ? permissions
-        ? 'workflow'
-        : 'harness'
-      : undefined;
-    let selection: WorkRequest['modelAliasSelection'];
-
-    if (direct && node.executor) {
-      if (
-        !inheritsWorkflowHarnessSettings(
-          node.executor,
-          definition.executor,
-          workflowHasPreset,
-        )
-      ) {
-        model = node.model;
-        effort = node.effort;
-      }
-    } else if (aliasRef) {
-      const candidates = this.modelAliases.expandCandidates(captures, aliasRef);
-      if (preset) {
-        const override = presetPermissions(
-          alias?.permissions,
-          definition.agentPermissions,
-        );
-        const binding = node.context.continuityGroup
-          ? this.contextGroups.describe(run.id, node.context.continuityGroup)
-              .session
-          : undefined;
-        const choices = alias && [
-          ...eligiblePresetChoices(
-            candidates,
-            executor,
-            (id) =>
-              !binding || binding.executorId === id
-                ? this.executors.configuredPresetProfile(
-                    profiles.find((profile) => profile.id === id),
-                  )
-                : undefined,
-            override,
-          ),
-        ];
-        // Probe in parallel but never select a fallback before its predecessors resolve.
-        const readiness =
-          choices &&
-          choices.map((choice) =>
-            this.executors.presetProfileReady(choice.profile),
-          );
-        const first =
-          readiness && readiness.findIndex((ready) => ready !== false);
-        if (
-          typeof first === 'number' &&
-          first >= 0 &&
-          readiness &&
-          readiness[first] === undefined
-        )
-          return undefined;
-        const choice =
-          choices && typeof first === 'number' && first >= 0
-            ? choices[first]
-            : undefined;
-        if (!choice)
-          throw new InterlockError(
-            `Agent preset "${aliasRef}" has no eligible harness for ${node.label}.`,
-          );
-        executor = choice.executor;
-        model = choice.candidate.model;
-        selection = choice.candidate.modelAliasSelection;
-        permissions = override ?? choice.profile.permissions;
-        permissionSource = !override
-          ? 'harness'
-          : override === definition.agentPermissions
-            ? 'workflow'
-            : 'preset';
-        if (node.effort === undefined) {
-          const inheritEffort =
-            node.model === undefined ||
-            inheritsWorkflowHarnessSettings(
-              choice.executor,
-              definition.executor,
-              workflowHasPreset,
-            );
-          effort =
-            choice.candidate.effort !== undefined
-              ? choice.candidate.effort
-              : inheritEffort
-                ? definition.agentEffort
-                : undefined;
-          effortSource =
-            choice.candidate.effort !== undefined && node.model
-              ? 'node'
-              : 'workflow';
-        }
-      } else if (legacy) {
-        // Existing definitions keep alias-first routing, including the stored fallback
-        // to the first candidate when a profile is disabled after run start.
-        const candidate =
-          candidates.find(
-            (candidate) =>
-              !candidate.profileId ||
-              profiles.some(
-                (profile) =>
-                  profile.id === candidate.profileId && profile.enabled,
-              ),
-          ) ?? candidates[0];
-        executor = candidate?.profileId ?? executor;
-        model = candidate?.model ?? model;
-        selection = candidate?.modelAliasSelection;
-        if (candidate?.effort !== undefined) {
-          effort = candidate.effort;
-          effortSource = 'node';
-        }
-      }
-    }
-
-    return {
-      ...(selection ? { modelAliasSelection: selection } : {}),
-      ...(model
-        ? {
-            executorModel: model,
-            executorModelSource: node.model ? 'node' : 'workflow',
-          }
-        : {}),
-      ...(executor
-        ? {
-            executor,
-            ...(effort !== undefined
-              ? { executorEffort: effort, executorEffortSource: effortSource }
-              : {}),
-            ...(permissions ? { executorPermissions: permissions } : {}),
-            ...(permissionSource
-              ? { executorPermissionsSource: permissionSource }
-              : {}),
-          }
-        : {}),
-    };
-  }
-
   pump() {
     if (this.stopped) return;
     this.store.transaction(() => {
@@ -2569,7 +2410,12 @@ export class Engine {
                       ? fetchHttpError((output as { status: number }).status)
                       : undefined,
                 }))
-            : this.localOperation(run, node, execution, controller.signal);
+            : this.operations.localOperation(
+                run,
+                node,
+                execution,
+                controller.signal,
+              );
         } catch (error) {
           return Promise.reject(error);
         }
@@ -2765,245 +2611,6 @@ export class Engine {
     this.finish(run, execution, node, execution.input, 'timeout');
     return true;
   }
-  private scriptContextEnvironment(
-    run: Run,
-    execution: NodeExecution,
-  ): Record<`INTERLOCK_${string}`, string | undefined> {
-    const batchOwnerId = run.batchNodeId ? run.parentRunId : undefined;
-    let itemIndex = run.batchItemIndex;
-    if (batchOwnerId && itemIndex === undefined) {
-      // Older item runs only retain their position in the owning Batch execution.
-      const batch = this.run(batchOwnerId).executions.findLast(
-        (step) =>
-          step.nodeId === run.batchNodeId && step.childRunIds.includes(run.id),
-      );
-      itemIndex = batch?.childRunIds.indexOf(run.id);
-    }
-    return {
-      INTERLOCK_RUN_ID: run.id,
-      INTERLOCK_ROOT_RUN_ID: run.parentRunId
-        ? this.store.runAncestry(run.id).rootRunId
-        : run.id,
-      INTERLOCK_WORKFLOW_ID: scriptEnvironmentId(run.workflowId),
-      INTERLOCK_WORKFLOW_VERSION: String(run.version),
-      INTERLOCK_NODE_ID: scriptEnvironmentId(execution.nodeId),
-      INTERLOCK_EXECUTION_ID: execution.id,
-      INTERLOCK_ATTEMPT: String(execution.attempt ?? 1),
-      INTERLOCK_BATCH_OWNER_RUN_ID: batchOwnerId,
-      INTERLOCK_BATCH_ITEM_INDEX: itemIndex?.toString(),
-      INTERLOCK_POLL_CHECK_NUMBER:
-        execution.kind === 'wait'
-          ? String((execution.check?.count ?? 0) + 1)
-          : undefined,
-    };
-  }
-  private async localOperation(
-    run: Run,
-    operation: Extract<WorkflowNode, { kind: 'script' | 'fetch' }> | PollCheck,
-    execution: NodeExecution,
-    signal: AbortSignal,
-    label = 'label' in operation ? operation.label : 'Polling check',
-  ): Promise<LocalOperationResult> {
-    const { input } = execution;
-    if (operation.kind === 'script')
-      this.scriptApprovals.assertApproved(run, execution, operation);
-    const environment = this.trials.execution(run);
-    if (environment && operation.kind === 'fetch')
-      throw new InterlockError(
-        'Unsupported Fetch operation in a local Git trial',
-      );
-    const ids =
-      operation.kind === 'fetch'
-        ? operation.headers.flatMap((f) =>
-            f.value.kind === 'variable' ? [f.value.variableId] : [],
-          )
-        : (operation.environment ?? []).map((e) => e.variableId);
-    const resolved = this.variables.resolve(run, ids);
-    let redact = secretRedaction(resolved.secrets);
-    try {
-      const variableName = (id: string) =>
-        run.variableCaptures?.find((c) => c.referenceId === id)?.name ?? id;
-      if (operation.kind === 'fetch') {
-        const deliveredSecrets = new Set<string>();
-        for (const field of operation.headers) {
-          if (field.value.kind !== 'variable') continue;
-          const { variableId, prefix = '', suffix = '' } = field.value;
-          const value = resolved.value(variableId);
-          if (/[^\t\x20-\x7e\x80-\xff]/.test(prefix + value + suffix))
-            throw new InterlockError(
-              `${label}: header ${field.name} cannot use variable ${variableName(variableId)}. Replace its value with valid header text without control characters or non-Latin-1 characters.`,
-            );
-          if (resolved.secrets.includes(value)) {
-            // Headers trims only outer HTTP whitespace. Literal prefix and
-            // suffix text can keep one side of the secret away from the edge.
-            let delivered = value;
-            if (/^[ \t]*$/.test(prefix))
-              delivered = delivered.replace(/^[ \t]+/, '');
-            if (/^[ \t]*$/.test(suffix))
-              delivered = delivered.replace(/[ \t]+$/, '');
-            if (delivered && delivered !== value)
-              deliveredSecrets.add(delivered);
-          }
-        }
-        if (deliveredSecrets.size)
-          redact = secretRedaction([...resolved.secrets, ...deliveredSecrets]);
-        const request = resolveFetch(operation, input, resolved.value);
-        await checkPrivateNetwork(operation, request.url, (target, text) => {
-          if (this.stopped) return;
-          const latest = this.run(run.id);
-          const step = latest.executions.find((e) => e.id === execution.id);
-          if (latest.status !== 'running' || !step) return;
-          step.privateNetwork = target;
-          this.save(latest);
-          this.event(latest, 'node.private_network', text);
-        });
-        const response = await executeFetch(
-          request,
-          operation.timeoutMs,
-          signal,
-          redirectPolicy(operation, resolved.secrets.length > 0),
-        );
-        const error = operation.failOnHttpError
-          ? fetchHttpError(response.status)
-          : undefined;
-        return {
-          output: redact.json(response),
-          httpError: error ? redact.text(error) : undefined,
-        };
-      }
-      for (const entry of operation.environment ?? []) {
-        if (resolved.value(entry.variableId).includes('\0'))
-          throw new InterlockError(
-            `${label}: environment ${entry.name} cannot use variable ${variableName(entry.variableId)}. Replace its value with text that contains no NUL bytes.`,
-          );
-      }
-      const inherited = baseEnvironment(operation, environment?.env);
-      const bindings = Object.fromEntries(
-        (operation.environment ?? []).map((entry) => [
-          entry.name,
-          resolved.value(entry.variableId),
-        ]),
-      );
-      const definition = this.definition(run);
-      const cwdBinding = operation.cwd ?? definition.cwd;
-      let effectiveCwd = environment?.cwd ?? this.cwd;
-      if (cwdBinding !== undefined) {
-        const source = this.bindingSource(run, input);
-        const allowed = this.getAllowedRoots();
-        const result = resolveAndValidateCwd(
-          cwdBinding,
-          source,
-          allowed.length ? allowed : undefined,
-        );
-        if (result.error) {
-          throw new InterlockError(`${label}: ${result.error}`);
-        }
-        effectiveCwd = result.resolvedCwd!;
-      }
-      execution.resolvedCwd = effectiveCwd;
-      if (
-        'executionMode' in operation &&
-        operation.executionMode === 'background'
-      ) {
-        const launch = !execution.background;
-        if (launch)
-          this.backgroundScripts.prepare(run, execution, operation.timeoutMs);
-        if (launch) {
-          const provenanceFile = writeExecutionProvenanceFile(run, execution);
-          this.backgroundScripts.launch(
-            run,
-            execution,
-            operation.command,
-            input,
-            effectiveCwd,
-            operation.language,
-            {
-              ...inherited,
-              ...this.scriptContextEnvironment(run, execution),
-              INTERLOCK_EXECUTION_PROVENANCE_FILE: provenanceFile,
-              ...bindings,
-            },
-            resolved.secrets.length > 0,
-            provenanceFile,
-          );
-        }
-        const output = await this.backgroundScripts.monitor(
-          run,
-          execution,
-          resolved.secrets,
-          signal,
-          (receipt) => {
-            if (this.stopped) return;
-            const latest = this.run(run.id);
-            const current = latest.executions.find(
-              (step) => step.id === execution.id,
-            );
-            if (!current?.background || latest.status !== 'running') return;
-            const next = {
-              ...current.background,
-              state: receipt.outcome
-                ? ('completed' as const)
-                : ('running' as const),
-              supervisorPid: receipt.pid,
-              supervisorStart: receipt.start,
-              progress: receipt.progress,
-            };
-            if (JSON.stringify(next) !== JSON.stringify(current.background)) {
-              current.background = next;
-              this.save(latest);
-            }
-          },
-        );
-        return { output, resolvedCwd: effectiveCwd };
-      }
-      const provenanceFile = writeExecutionProvenanceFile(run, execution);
-      const launch = (env: NodeJS.ProcessEnv) =>
-        executeScript(
-          operation.command,
-          input,
-          operation.timeoutMs,
-          effectiveCwd,
-          signal,
-          operation.language,
-          env,
-          resolved.secrets.length ? redact.text : undefined,
-        );
-      let output: Json;
-      try {
-        output = await launch({
-          ...inherited,
-          ...this.scriptContextEnvironment(run, execution),
-          INTERLOCK_EXECUTION_PROVENANCE_FILE: provenanceFile,
-          ...bindings,
-        }).catch((error: unknown) => {
-          // E2BIG comes from spawn before the Script process can start.
-          if (
-            error instanceof Error &&
-            (error as NodeJS.ErrnoException).code === 'E2BIG'
-          )
-            return launch({
-              ...inherited,
-              INTERLOCK_EXECUTION_PROVENANCE_FILE: provenanceFile,
-              ...bindings,
-            });
-          throw error;
-        });
-      } finally {
-        try {
-          rmSync(provenanceFile, { force: true });
-        } catch {
-          /* ignore */
-        }
-      }
-      return { output: redact.json(output), resolvedCwd: effectiveCwd };
-    } catch (error) {
-      if (error instanceof UncertainScript) throw error;
-      if (error instanceof UncertainFetch)
-        throw new UncertainFetch(redact.text(message(error)));
-      const text = scriptFailure(operation, message(error), environment?.env);
-      throw new InterlockError(redact.text(text));
-    }
-  }
   private markOperationStarted(run: Run, execution: NodeExecution) {
     if (execution.resources?.length && execution.operationStartedAt) return;
     if (!execution.resources?.length)
@@ -3067,16 +2674,18 @@ export class Engine {
               return { output };
             });
         }
-        return this.localOperation(
-          run,
-          timing.check,
-          execution,
-          controller.signal,
-          node.label,
-        ).then(({ output, httpError, resolvedCwd }) => {
-          if (httpError) throw new InterlockError(httpError);
-          return { output, resolvedCwd };
-        });
+        return this.operations
+          .localOperation(
+            run,
+            timing.check,
+            execution,
+            controller.signal,
+            node.label,
+          )
+          .then(({ output, httpError, resolvedCwd }) => {
+            if (httpError) throw new InterlockError(httpError);
+            return { output, resolvedCwd };
+          });
       });
     const settle = (result: {
       output?: Json;
@@ -3619,97 +3228,7 @@ export class Engine {
     status: NodeExecution['status'];
     background: NonNullable<NodeExecution['background']>;
   } {
-    const input = scriptOperationSchema.parse(request);
-    const run = this.run(input.runId);
-    const execution = run.executions.find(
-      (step) => step.id === input.executionId,
-    );
-    if (!execution?.background)
-      throw new InterlockError('Background Script execution not found');
-    if (
-      input.action === 'inspect' &&
-      ['launching', 'running'].includes(execution.background.state)
-    ) {
-      try {
-        const node = this.definition(run).nodes.find(
-          (node) => node.id === execution.nodeId,
-        );
-        if (node?.kind !== 'script')
-          throw new InterlockError('Script node not found');
-        const resolved = this.variables.resolve(
-          run,
-          (node.environment ?? []).map((entry) => entry.variableId),
-        );
-        const snapshot = this.backgroundScripts.snapshot(
-          run,
-          execution,
-          resolved.secrets,
-        );
-        if (snapshot) {
-          execution.background = snapshot;
-          this.save(run);
-        }
-      } catch {
-        execution.background.state = 'uncertain';
-        if (!terminal(run.status))
-          this.fail(
-            run,
-            execution,
-            'Background supervisor or protected receipts cannot be verified. Inspect processes and reconcile stopped.',
-          );
-        else this.save(run);
-      }
-    }
-    if (
-      input.action === 'stop' &&
-      ['launching', 'running', 'uncertain'].includes(execution.background.state)
-    ) {
-      try {
-        this.backgroundScripts.stop(run.id, execution.id);
-        if (!terminal(run.status)) {
-          this.cancelTree(run.id);
-          return this.manageScript({
-            action: 'inspect',
-            runId: run.id,
-            executionId: execution.id,
-          });
-        }
-      } catch (error) {
-        execution.background.state = 'uncertain';
-        if (!terminal(run.status)) this.fail(run, execution, message(error));
-        else this.save(run);
-        throw new InterlockError(message(error));
-      }
-    }
-    const background = execution.background;
-    if (input.action === 'reconcile')
-      this.store.transaction(() => {
-        if (background.state !== 'uncertain')
-          throw new InterlockError(
-            'Only uncertain background Scripts can be reconciled',
-          );
-        background.state = 'reconciled';
-        this.resources.endExecution(run.id, execution, true);
-        this.resources.releaseExecution(
-          run.id,
-          execution.id,
-          execution.resourceAttempt ?? 1,
-          'script reconciliation',
-        );
-        this.save(run);
-        this.event(
-          run,
-          'script.reconciled',
-          'Original Script confirmed stopped and effects inspected: ' +
-            input.reason,
-        );
-      });
-    return {
-      runId: run.id,
-      executionId: execution.id,
-      status: execution.status,
-      background: execution.background,
-    };
+    return this.scriptControl.manageScript(request);
   }
   private cancelTree(id: string, afterCommit?: (() => void)[]) {
     const run = this.run(id);
