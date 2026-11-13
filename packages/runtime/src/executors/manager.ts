@@ -1,19 +1,13 @@
-import { randomUUID, createHash } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { ManagedTranscripts } from './transcripts.js';
-import { isDeepStrictEqual } from 'node:util';
-import { setTimeout as delay } from 'node:timers/promises';
 import {
   InterlockError,
-  executorResponseSchema,
   executorOperationSchema,
   resolveProvider,
-  elapsedExcludingPausesMs,
   type ExecutorModels,
   tokenFields,
   type ExecutorProfile,
   type ExecutorProfileUpdate,
-  type ExecutorRequest,
-  type ExecutorAnswer,
   type ManagedExecution,
   type ManagedWorkSummary,
   type WorkRequest,
@@ -21,11 +15,7 @@ import {
   type RecoveryEvent,
   type Run,
   type WorkflowDefinition,
-  type PauseHold,
   type UsageAttempt,
-  transcriptQuerySchema,
-  executorMessageSchema,
-  messageReceiptQuerySchema,
   type TranscriptPage,
   type MessageReceipt,
 } from '@interlock/core';
@@ -43,16 +33,23 @@ import {
   type ClaimTicket,
   type LauncherSession,
 } from './launcher.js';
-
+import { OperatorChannel } from './operator.js';
+import { RecoveryPolicies } from './recovery.js';
+import {
+  active,
+  attemptsCollection,
+  now,
+  sessionsCollection,
+  type Job,
+  type Session,
+} from './supervision.js';
 import {
   HarnessResultError,
   HarnessCleanupError,
   HarnessModelError,
-  HarnessRequestError,
   classifyHarnessError,
   isModelRefusal,
   type HarnessAdapter,
-  type HarnessRequest,
   type HarnessResult,
   assignmentPrompt,
 } from './contracts.js';
@@ -63,45 +60,6 @@ import {
   sanitizeMessage,
 } from './templates.js';
 
-const attemptsCollection = 'managedExecutions',
-  sessionsCollection = 'executorSessions';
-const now = () => new Date().toISOString();
-const active = (r: ManagedExecution) =>
-  ['starting', 'running', 'needs_human'].includes(r.state);
-interface Session {
-  id: string;
-  runId: string;
-  profile: ExecutorProfile;
-  permissionSource?: ManagedExecution['permissionSource'];
-  modelSource?: ManagedExecution['modelSource'];
-  effortSource?: ManagedExecution['effortSource'];
-  command: string;
-  cwd: string;
-  nativeId?: string;
-  sessionName?: string;
-  resumeCommand?: string;
-  deepLink?: string;
-  requestedModel?: string;
-  recoveryRequestedEffort?: ExecutorProfile['effort'];
-  usage?: ModelUsage[];
-  usageUncertain?: boolean;
-}
-interface Job {
-  record: ManagedExecution;
-  work: WorkRequest;
-  sessionKey: string;
-  abort: AbortController;
-  answers: Map<
-    string,
-    {
-      resolve: (answer: ExecutorAnswer) => void;
-      reject: (error: Error) => void;
-    }
-  >;
-  sendMessage?: (message: string) => Promise<void>;
-  done?: Promise<void>;
-}
-
 /** Queue and claim lifecycle are shared; adapters own native session protocols. */
 export class ExecutorManager {
   readonly errors = new SchedulerErrors(() => [
@@ -111,6 +69,8 @@ export class ExecutorManager {
   private transcripts: ManagedTranscripts;
   private config: ExecutorConfiguration;
   private launcher: LauncherSupervisor;
+  private operator: OperatorChannel;
+  private recovery: RecoveryPolicies;
   private adapters = new Map<string, HarnessAdapter>();
   private jobs = new Map<string, Job>();
   private claimTickets = new Map<string, ClaimTicket>();
@@ -162,6 +122,22 @@ export class ExecutorManager {
         customCommands: this.customCommands,
       },
     );
+    this.operator = new OperatorChannel(
+      engine,
+      this.transcripts,
+      this.jobs,
+      this.launchedWork,
+      {
+        stopped: () => this.stopped,
+        write: (record) => this.write(record),
+        checkJobs: () => this.checkJobs(),
+        sendLauncherMessage: (session, message) =>
+          this.sendLauncherMessage(session, message),
+      },
+    );
+    this.recovery = new RecoveryPolicies(engine, {
+      stopped: () => this.stopped,
+    });
     this.config = new ExecutorConfiguration(engine, defaultCwd, {
       adapters: () => this.adapters,
       running: () => this.running,
@@ -666,172 +642,17 @@ export class ExecutorManager {
       })),
     };
   }
-  private execution(id: string) {
-    const record = this.engine.store.get<ManagedExecution>(
-      attemptsCollection,
-      id,
-    );
-    if (!record) throw new InterlockError('Managed execution not found');
-    return record;
-  }
-  private channel(record: ManagedExecution) {
-    const work = this.engine.store.get<WorkRequest>('work', record.workId);
-    if (
-      this.stopped ||
-      !active(record) ||
-      record.endedAt ||
-      work?.status !== 'claimed' ||
-      work.attempt !== record.attempt ||
-      !work.token ||
-      Date.parse(work.leaseUntil ?? '') <= Date.now()
-    )
-      return undefined;
-    const job = this.jobs.get(record.workId);
-    if (
-      job?.record.id === record.id &&
-      !job.abort.signal.aborted &&
-      work.token === job.work.token
-    )
-      return job.sendMessage;
-    const launcher = this.launchedWork.get(record.workId);
-    if (
-      launcher &&
-      (launcher.profile.messageCommand || launcher.profile.messageUrl) &&
-      launcher.status !== 'ended'
-    )
-      return (message: string) => this.sendLauncherMessage(launcher, message);
-    return undefined;
-  }
   transcript(input: unknown): TranscriptPage {
-    const q = transcriptQuerySchema.parse(input),
-      record = this.execution(q.executionId);
-    return {
-      ...this.engine.store.transcripts.page(q),
-      messageAvailable: !!this.channel(record),
-      messageReason: this.channel(record)
-        ? undefined
-        : 'No supported live message channel for this execution',
-      ...(record.transcriptError ? { reason: record.transcriptError } : {}),
-    };
+    return this.operator.transcript(input);
   }
   messageReceipt(input: unknown) {
-    const q = messageReceiptQuerySchema.parse(input);
-    const record = this.execution(q.executionId);
-    return {
-      receiptsPruned: this.engine.store.transcripts.receiptsPruned(
-        q.executionId,
-      ),
-      canSend: !!this.channel(record),
-      receipt:
-        this.engine.store.transcripts.receipt(q.executionId, q.requestId)
-          ?.receipt ?? null,
-    };
+    return this.operator.messageReceipt(input);
   }
-  async message(input: unknown): Promise<MessageReceipt> {
-    const q = executorMessageSchema.parse(input);
-    const record = this.execution(q.executionId);
-    const currentWork = this.engine.store.get<WorkRequest>(
-      'work',
-      record.workId,
-    );
-    if (
-      !this.transcripts.safeMetadata(
-        record,
-        [q.operator, q.requestId],
-        [
-          currentWork?.token ?? '',
-          this.launchedWork.get(record.workId)?.claimTicket ?? '',
-        ],
-      )
-    )
-      throw new InterlockError(
-        'Message not sent: request ID or operator label contains protected data, or its protection is unavailable. Choose safe metadata.',
-      );
-    const hash = createHash('sha256')
-      .update(JSON.stringify([q.message, q.operator]))
-      .digest('hex');
-    const existing = this.engine.store.transcripts.receipt(
-      record.id,
-      q.requestId,
-    );
-    if (existing) {
-      if (existing.hash !== hash)
-        throw new InterlockError(
-          'Message request ID already has different content',
-        );
-      return existing.receipt;
-    }
-    const send = this.channel(record);
-    if (!send)
-      throw new InterlockError(
-        'Message not sent: execution has no supported active message channel',
-      );
-    this.transcripts.register(record);
-    const receipt: MessageReceipt = {
-      executionId: record.id,
-      requestId: q.requestId,
-      status: 'pending',
-      operator: q.operator,
-      source: q.source,
-      at: now(),
-      updatedAt: now(),
-    };
-    this.engine.store.transcripts.begin(receipt, hash);
-    const work = this.engine.store.get<WorkRequest>('work', record.workId);
-    this.transcripts.capture(
-      record,
-      { kind: 'operator', text: q.message, key: `operator:${q.requestId}` },
-      [
-        work?.token ?? '',
-        this.launchedWork.get(record.workId)?.claimTicket ?? '',
-      ],
-    );
-    try {
-      // No await separates the final ownership check from dispatch.
-      if (!this.channel(this.execution(record.id))) {
-        receipt.status = 'failed';
-        receipt.reason = 'Execution ended before message dispatch';
-      } else {
-        let timer: ReturnType<typeof setTimeout> | undefined;
-        try {
-          await Promise.race([
-            send(q.message),
-            new Promise<never>((_, reject) => {
-              timer = setTimeout(
-                () => reject(new Error('Delivery timeout')),
-                10000,
-              );
-            }),
-          ]);
-          receipt.status = 'accepted';
-        } finally {
-          clearTimeout(timer);
-        }
-      }
-    } catch (error) {
-      receipt.status =
-        error instanceof HarnessRequestError ? 'failed' : 'unknown';
-      receipt.reason =
-        receipt.status === 'failed'
-          ? 'Harness rejected the message before delivery'
-          : 'Delivery could not be confirmed; this request will not be resent';
-    }
-    receipt.updatedAt = now();
-    // A failed receipt write leaves durable pending, never permission to resend.
-    this.engine.store.transcripts.settle(receipt);
-    this.engine.store.put('events', {
-      id: randomUUID(),
-      runId: record.runId,
-      type: 'managed.message',
-      at: now(),
-      message: `Operator message ${receipt.status}`,
-      executionId: record.id,
-      requestId: q.requestId,
-      source: q.source,
-      operator: q.operator,
-    });
-    this.engine.store.touchRun(record.runId);
-    return receipt;
+  message(input: unknown): Promise<MessageReceipt> {
+    return this.operator.message(input);
+  }
+  respond(input: unknown) {
+    return this.operator.respond(input);
   }
   private managedOffer(id: string) {
     const work = this.engine.store.get<WorkRequest>('work', id);
@@ -1275,69 +1096,6 @@ export class ExecutorManager {
     this.write(record);
   }
 
-  private getPauseHolds(
-    workflowId?: string,
-    includeReleased = false,
-  ): PauseHold[] {
-    if (typeof (this.engine.store as any).pauseHolds === 'function') {
-      return (this.engine.store as any).pauseHolds(workflowId, includeReleased);
-    }
-    try {
-      const list = this.engine.store.list<PauseHold>('pauseHolds');
-      return list.filter((h) => {
-        if (!includeReleased && h.releasedAt) return false;
-        if (h.scope === 'library') return true;
-        return workflowId && h.workflowId === workflowId;
-      });
-    } catch {
-      return [];
-    }
-  }
-
-  private countTransientRetriesInWindow(
-    record: ManagedExecution,
-    windowMs: number,
-    runId: string,
-  ): number {
-    const events = record.recoveryEvents ?? [];
-    const retryEvents = events.filter(
-      (e) => e.errorClass === 'transient' && e.action === 'retry',
-    );
-    if (!retryEvents.length) return 0;
-    const nowMs = Date.now();
-    const run = this.engine.store.get<Run>('runs', runId);
-    const pauseHolds = run ? this.getPauseHolds(run.workflowId, true) : [];
-    let count = 0;
-    for (const event of retryEvents) {
-      const eventMs = Date.parse(event.at);
-      const { activeMs } = elapsedExcludingPausesMs(eventMs, nowMs, pauseHolds);
-      if (activeMs <= windowMs) {
-        count++;
-      }
-    }
-    return count;
-  }
-
-  private async sleepHonoringPauses(
-    delayMs: number,
-    runId: string,
-    signal: AbortSignal,
-  ): Promise<void> {
-    const stepMs = 50;
-    let remainingMs = delayMs;
-    while (remainingMs > 0) {
-      if (signal.aborted || this.stopped) return;
-      const run = this.engine.store.get<Run>('runs', runId);
-      const isPaused = run
-        ? this.getPauseHolds(run.workflowId, false).length > 0
-        : false;
-      if (!isPaused) {
-        remainingMs -= stepMs;
-      }
-      await delay(stepMs);
-    }
-  }
-
   private escalateTransientHold(
     job: Job,
     session: Session,
@@ -1394,72 +1152,11 @@ export class ExecutorManager {
     });
   }
 
-  private resolveRecoveryPolicies(work: WorkRequest, profile: ExecutorProfile) {
-    const run = this.engine.store.get<Run>('runs', work.runId);
-    let definition: WorkflowDefinition | undefined;
-    if (run) {
-      if (typeof (this.engine.store as any).getVersion === 'function') {
-        const versionRecord = (this.engine.store as any).getVersion(
-          run.workflowId,
-          run.version,
-        );
-        definition = versionRecord?.definition;
-      }
-      if (!definition) {
-        const wf = this.engine.store.get<{ draft?: WorkflowDefinition }>(
-          'workflows',
-          run.workflowId,
-        );
-        definition = wf?.draft;
-      }
-    }
-    const node = definition?.nodes?.find((n) => n.id === work.nodeId);
-    const workflow = definition;
-
-    const continueOnMissingResult = {
-      maxTurns:
-        node?.kind === 'agent' &&
-        node.continueOnMissingResult?.maxTurns !== undefined
-          ? node.continueOnMissingResult.maxTurns
-          : workflow?.continueOnMissingResult?.maxTurns !== undefined
-            ? workflow.continueOnMissingResult.maxTurns
-            : (profile.continueOnMissingResult?.maxTurns ?? 0),
-      message:
-        (node?.kind === 'agent' && node.continueOnMissingResult?.message) ||
-        workflow?.continueOnMissingResult?.message ||
-        profile.continueOnMissingResult?.message,
-    };
-
-    const transientRetry = {
-      maxRetries:
-        node?.kind === 'agent' && node.transientRetry?.maxRetries !== undefined
-          ? node.transientRetry.maxRetries
-          : workflow?.transientRetry?.maxRetries !== undefined
-            ? workflow.transientRetry.maxRetries
-            : (profile.transientRetry?.maxRetries ?? 0),
-      windowMs:
-        node?.kind === 'agent' && node.transientRetry?.windowMs !== undefined
-          ? node.transientRetry.windowMs
-          : workflow?.transientRetry?.windowMs !== undefined
-            ? workflow.transientRetry.windowMs
-            : (profile.transientRetry?.windowMs ?? 300_000),
-      initialBackoffMs:
-        node?.kind === 'agent' &&
-        node.transientRetry?.initialBackoffMs !== undefined
-          ? node.transientRetry.initialBackoffMs
-          : workflow?.transientRetry?.initialBackoffMs !== undefined
-            ? workflow.transientRetry.initialBackoffMs
-            : (profile.transientRetry?.initialBackoffMs ?? 1000),
-    };
-
-    return { continueOnMissingResult, transientRetry };
-  }
-
   private async execute(job: Job, adapter: HarnessAdapter, session: Session) {
     const r = job.record;
     this.transcripts.register(r);
     const { continueOnMissingResult, transientRetry } =
-      this.resolveRecoveryPolicies(job.work, r.profile);
+      this.recovery.resolveRecoveryPolicies(job.work, r.profile);
 
     try {
       while (!this.stopped && !job.abort.signal.aborted) {
@@ -1557,7 +1254,7 @@ export class ExecutorManager {
                     this.log(r, message);
                   }
                 },
-                request: (request) => this.request(job, request),
+                request: (request) => this.operator.request(job, request),
               });
               job.sendMessage = undefined;
               if (turnResult?.resumeCommand) {
@@ -1679,7 +1376,7 @@ export class ExecutorManager {
 
           if (classification.errorClass === 'transient') {
             if (transientRetry.maxRetries > 0) {
-              const recentRetries = this.countTransientRetriesInWindow(
+              const recentRetries = this.recovery.countTransientRetriesInWindow(
                 r,
                 transientRetry.windowMs,
                 job.work.runId,
@@ -1697,7 +1394,7 @@ export class ExecutorManager {
                   r,
                   `Transient error: ${classification.reason.slice(0, 100)}. Retrying with backoff in ${delayMs}ms (${recentRetries + 1}/${transientRetry.maxRetries})...`,
                 );
-                await this.sleepHonoringPauses(
+                await this.recovery.sleepHonoringPauses(
                   delayMs,
                   job.work.runId,
                   job.abort.signal,
@@ -1888,139 +1585,6 @@ export class ExecutorManager {
     });
     this.schedule();
     return result;
-  }
-  private request(job: Job, input: HarnessRequest): Promise<ExecutorAnswer> {
-    if (this.stopped || job.abort.signal.aborted)
-      return Promise.reject(new Error('Execution stopped'));
-    if (job.answers.size >= 10 || job.record.requests.length >= 100)
-      return Promise.reject(
-        new Error('Too many human requests in one execution'),
-      );
-    if (
-      JSON.stringify(input).length > 20000 ||
-      input.detail.length > 16384 ||
-      input.title.length > 200 ||
-      (input.questions?.length ?? 0) > 10
-    )
-      return Promise.reject(
-        new Error('Harness request is too large to present safely'),
-      );
-    if (
-      input.kind === 'question' &&
-      (!input.questions?.length ||
-        new Set(input.questions.map((q) => q.id)).size !==
-          input.questions.length ||
-        input.questions.some(
-          (q) =>
-            !q.id ||
-            !q.text ||
-            q.id.length > 1000 ||
-            q.text.length > 4000 ||
-            (q.options?.length ?? 0) > 20,
-        ))
-    )
-      return Promise.reject(new Error('Harness returned invalid questions'));
-    const request: ExecutorRequest = {
-      ...input,
-      id: randomUUID(),
-      createdAt: new Date().toISOString(),
-      state: 'pending',
-    };
-    job.record.requests.push(request);
-    job.record.state = 'needs_human';
-    this.write(job.record);
-    return new Promise((resolve, reject) => {
-      job.answers.set(request.id, { resolve, reject });
-    });
-  }
-  respond(input: unknown) {
-    const q = executorResponseSchema.parse(input);
-    this.checkJobs();
-    if (JSON.stringify(q.answer).length > 20000)
-      throw new InterlockError('Answer is too large');
-    const record = this.engine.store.get<ManagedExecution>(
-      attemptsCollection,
-      q.executionId,
-    );
-    const request = record?.requests.find((r) => r.id === q.requestId);
-    if (!record || !request)
-      throw new InterlockError('Execution request not found');
-    if (
-      request.state === 'answered' &&
-      isDeepStrictEqual(request.answer, q.answer)
-    )
-      return { applied: false };
-    const job = this.jobs.get(record.workId);
-    if (
-      !job ||
-      job.record.id !== record.id ||
-      job.abort.signal.aborted ||
-      request.state !== 'pending'
-    )
-      throw new InterlockError(
-        'This request is no longer active. Inspect the execution.',
-      );
-    const work = this.engine.store.get<WorkRequest>('work', record.workId);
-    if (
-      work?.status !== 'claimed' ||
-      work.token !== job.work.token ||
-      work.attempt !== record.attempt
-    )
-      throw new InterlockError('The assignment claim changed');
-    if (request.kind === 'permission') {
-      if (q.answer.allow === undefined || q.answer.answers)
-        throw new InterlockError(
-          'Answer this permission request with allow:true or allow:false',
-        );
-    } else {
-      const keys = request.questions?.map((v) => v.id) ?? [];
-      if (
-        q.answer.allow !== undefined ||
-        !q.answer.answers ||
-        Object.keys(q.answer.answers).length !== keys.length ||
-        keys.some((k) => !q.answer.answers![k]?.length)
-      )
-        throw new InterlockError(
-          'Answer every question using its exact question ID',
-        );
-      if (
-        request.questions?.some(
-          (question) =>
-            !question.multiple && q.answer.answers![question.id].length !== 1,
-        )
-      )
-        throw new InterlockError(
-          'Choose one answer for each single-choice question',
-        );
-    }
-    if (
-      request.kind === 'question' &&
-      request.questions?.some((question) => {
-        const values = q.answer.answers![question.id];
-        return (
-          new Set(values).size !== values.length ||
-          values.some(
-            (value) =>
-              !value.trim() ||
-              (question.options?.length &&
-                !question.allowOther &&
-                !question.options.includes(value)),
-          )
-        );
-      })
-    )
-      throw new InterlockError(
-        'Use the supplied choices unless the question allows another answer',
-      );
-    const live = job.record.requests.find((r) => r.id === request.id)!;
-    live.state = 'answered';
-    live.answer = q.answer;
-    const pending = job.answers.get(request.id)!;
-    job.answers.delete(request.id);
-    job.record.state = job.answers.size ? 'needs_human' : 'running';
-    this.write(job.record);
-    pending.resolve(q.answer);
-    return { applied: true };
   }
   deadlineRevoked(work: WorkRequest) {
     const record = this.latest(work.id);
