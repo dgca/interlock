@@ -1,0 +1,124 @@
+// ESLint flat config for `pnpm lint`.
+//
+// Layout:
+//   1. Type-aware base rules for every TypeScript source file.
+//   2. File-size budgets (`max-lines`) read from eslint-size-budgets.json.
+//   3. Scoped rule blocks: add one entry to `scopedRuleBlocks` per area with
+//      its own conventions (for example `packages/ui/src/**`).
+//
+// Existing violations of rules in (1) and (3) are recorded in
+// eslint-suppressions.json, ESLint's bulk-suppressions file. It lists every
+// suppressed file and rule with a count, so a new violation of a baselined
+// rule in a baselined file still fails. Remove entries by fixing the code
+// and running `pnpm lint --prune-suppressions`.
+import { readFileSync } from 'node:fs';
+import css from '@eslint/css';
+import js from '@eslint/js';
+import { defineConfig } from 'eslint/config';
+import tseslint from 'typescript-eslint';
+import designSystem from './scripts/eslint-design-system.js';
+
+const sourceFiles = ['packages/**/*.{ts,tsx}', 'tests/**/*.{ts,tsx}'];
+
+const sizeBudgets = JSON.parse(
+  readFileSync(new URL('./eslint-size-budgets.json', import.meta.url), 'utf8'),
+);
+
+for (const [file, ceiling] of Object.entries(sizeBudgets.ceilings)) {
+  if (!Number.isInteger(ceiling) || ceiling <= sizeBudgets.maxLines) {
+    throw new Error(
+      `eslint-size-budgets.json: ceiling for ${file} must be an integer above maxLines (${sizeBudgets.maxLines}); delete the entry once the file is within budget.`,
+    );
+  }
+}
+
+const sizeBudgetBlocks = [
+  {
+    name: 'interlock/size-budget',
+    files: sourceFiles,
+    rules: { 'max-lines': ['error', { max: sizeBudgets.maxLines }] },
+  },
+  ...Object.entries(sizeBudgets.ceilings).map(([file, ceiling]) => ({
+    name: `interlock/size-ceiling/${file}`,
+    files: [file],
+    rules: { 'max-lines': ['error', { max: ceiling }] },
+  })),
+];
+
+// Extension point: append `{ name, files, rules }` blocks for area-specific
+// rules. Record their existing violations with
+// `pnpm lint --suppress-rule <rule>` so they join eslint-suppressions.json.
+// These blocks come after the size-budget blocks and override them, so they
+// must not set `max-lines` or turn rules off.
+//
+// Design system (#438): application UI in packages/ui/src outside
+// design-system/ must use the design-system barrel, tokens and control sizes.
+// CSS files are linted with the @eslint/css language so TypeScript and CSS
+// share one run and one baseline; baseline entries are the `design-system/*`
+// rules in eslint-suppressions.json. See packages/ui/src/design-system/README.md.
+const applicationUi = {
+  ignores: ['packages/ui/src/design-system/**'],
+  plugins: { 'design-system': designSystem },
+};
+const scopedRuleBlocks = [
+  {
+    ...applicationUi,
+    name: 'interlock/design-system/typescript',
+    files: ['packages/ui/src/**/*.{ts,tsx}'],
+    rules: {
+      'design-system/no-mantine-import': 'error',
+      'design-system/no-raw-color': 'error',
+      'design-system/no-inline-style': 'error',
+      'design-system/control-height': 'error',
+    },
+  },
+  {
+    ...applicationUi,
+    name: 'interlock/design-system/css',
+    files: ['packages/ui/src/**/*.css'],
+    plugins: { ...applicationUi.plugins, css },
+    language: 'css/css',
+    languageOptions: { tolerant: true },
+    rules: {
+      'design-system/no-raw-color': 'error',
+      'design-system/control-height': 'error',
+    },
+  },
+];
+
+export default defineConfig(
+  {
+    name: 'interlock/ignores',
+    ignores: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '.interlock/**',
+      '.tasks/**',
+      '.site-build/**',
+      'website/**',
+      'coverage/**',
+    ],
+  },
+  {
+    // Inline directives (`eslint-disable`, `eslint max-lines: off`) are
+    // ignored so every exception goes through the baseline or size budgets.
+    name: 'interlock/linter-options',
+    linterOptions: {
+      noInlineConfig: true,
+      reportUnusedDisableDirectives: 'error',
+    },
+  },
+  {
+    name: 'interlock/typescript',
+    files: sourceFiles,
+    extends: [js.configs.recommended, tseslint.configs.recommendedTypeChecked],
+    languageOptions: {
+      parserOptions: {
+        projectService: true,
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+  },
+  ...sizeBudgetBlocks,
+  ...scopedRuleBlocks,
+);
