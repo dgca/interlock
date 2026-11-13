@@ -53,8 +53,6 @@ See [README.md](README.md) and the root `package.json` scripts for setup and com
 
 Connection configuration defaults to the running server's `/mcp` HTTP endpoint. The stdio fallback uses checkout paths in development and `interlock mcp` for installed copies, with optional absolute paths. Check which server is running before changing connection instructions.
 
-Run tests relevant to changed behavior and `pnpm build` for TypeScript and UI build checks. For packaging, CLI startup, or version changes, also run `pnpm test:package`. Check formatting with `pnpm format:check`.
-
-- Check for unused files, exports and dependencies with `pnpm lint:unused`. Configure new entry points in `knip.json`; after removing a finding listed in `knip-baseline.json`, refresh it with `pnpm lint:unused --update`.
+Run tests relevant to changed behavior and `pnpm build` for TypeScript and UI build checks. For packaging, CLI startup, or version changes, also run `pnpm test:package`. Check formatting with `pnpm format:check`. Check for unused files, exports and dependencies with `pnpm lint:unused`; configure new entry points in `knip.json`, and after removing a finding listed in `knip-baseline.json`, drop it with `pnpm lint:unused --update` (`--allow-new` baselines new findings).
 
 The package smoke test needs a completed build. It installs into a temporary prefix and exercises the bundled engine and MCP bridge. The separate `scripts/codex-smoke.ts` uses a real account and model, creates workflow data, and is not part of routine validation.

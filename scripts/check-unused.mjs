@@ -1,9 +1,10 @@
 // Runs Knip and compares its findings with knip-baseline.json.
 // Fails on findings missing from the baseline and on baseline entries that
 // no longer occur, so the baseline can only shrink.
-// `node scripts/check-unused.mjs --update` rewrites the baseline.
+// `--update` removes stale entries from the baseline. It refuses to add new
+// findings unless `--allow-new` is also passed.
 import { spawnSync } from 'node:child_process';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
@@ -11,6 +12,7 @@ const baselinePath = fileURLToPath(
   new URL('../knip-baseline.json', import.meta.url),
 );
 const update = process.argv.includes('--update');
+const allowNew = process.argv.includes('--allow-new');
 const started = performance.now();
 
 const knip = spawnSync(
@@ -38,37 +40,87 @@ function symbolName(item) {
   throw new Error(`Unrecognised Knip issue entry: ${JSON.stringify(item)}`);
 }
 
+// Knip issue types, as named in its JSON reporter. Listed explicitly so that
+// other array fields, such as `owners` from a CODEOWNERS file, are not
+// mistaken for findings.
+const issueTypes = [
+  'binaries',
+  'catalog',
+  'catalogReferences',
+  'cycles',
+  'dependencies',
+  'devDependencies',
+  'duplicates',
+  'enumMembers',
+  'exports',
+  'files',
+  'namespaceMembers',
+  'nsExports',
+  'nsTypes',
+  'optionalPeerDependencies',
+  'subpaths',
+  'types',
+  'unlisted',
+  'unresolved',
+];
+
+// Fail rather than silently skip issue types added by a newer Knip.
+const knownFields = new Set(['file', 'owners', ...issueTypes]);
+for (const field of new Set(report.issues.flatMap(Object.keys))) {
+  if (!knownFields.has(field)) {
+    console.error(`Unrecognised Knip issue type: ${field}`);
+    process.exit(1);
+  }
+}
+
 const key = (finding) => `${finding.file} ${finding.type} ${finding.symbol}`;
 const findings = report.issues
-  .flatMap(({ file, ...types }) =>
-    Object.entries(types).flatMap(([type, items]) =>
-      Array.isArray(items)
-        ? items.map((item) => ({ file, type, symbol: symbolName(item) }))
-        : [],
+  .flatMap((issue) =>
+    issueTypes.flatMap((type) =>
+      (issue[type] ?? []).map((item) => ({
+        file: issue.file,
+        type,
+        symbol: symbolName(item),
+      })),
     ),
   )
   .sort((a, b) => key(a).localeCompare(key(b)));
 
-if (update) {
-  writeFileSync(baselinePath, `${JSON.stringify({ findings }, null, 2)}\n`);
-  console.log(`Wrote ${findings.length} findings to knip-baseline.json.`);
-  process.exit(0);
-}
-
-const baseline = JSON.parse(readFileSync(baselinePath, 'utf8')).findings;
+const baseline = existsSync(baselinePath)
+  ? JSON.parse(readFileSync(baselinePath, 'utf8')).findings
+  : [];
 const baselineKeys = new Set(baseline.map(key));
 const currentKeys = new Set(findings.map(key));
 const added = findings.filter((finding) => !baselineKeys.has(key(finding)));
 const stale = baseline.filter((finding) => !currentKeys.has(key(finding)));
 const seconds = ((performance.now() - started) / 1000).toFixed(1);
+const describe = (finding) =>
+  `${finding.type}: ${finding.file}: ${finding.symbol}`;
+
+if (update) {
+  if (added.length && !allowNew) {
+    for (const finding of added) console.error(`New ${describe(finding)}`);
+    console.error(
+      '\nRefusing to add new findings to knip-baseline.json. Remove the ' +
+        'unused code, or pass --allow-new to baseline it deliberately.',
+    );
+    process.exit(1);
+  }
+  writeFileSync(baselinePath, `${JSON.stringify({ findings }, null, 2)}\n`);
+  for (const finding of added) console.log(`Added ${describe(finding)}`);
+  for (const finding of stale) console.log(`Removed ${describe(finding)}`);
+  console.log(
+    `Wrote ${findings.length} findings to knip-baseline.json ` +
+      `(${added.length} added, ${stale.length} removed).`,
+  );
+  process.exit(0);
+}
 
 for (const finding of added) {
-  console.error(`New ${finding.type}: ${finding.file}: ${finding.symbol}`);
+  console.error(`New ${describe(finding)}`);
 }
 for (const finding of stale) {
-  console.error(
-    `Stale baseline entry (${finding.type}): ${finding.file}: ${finding.symbol}`,
-  );
+  console.error(`Stale baseline entry ${describe(finding)}`);
 }
 if (added.length || stale.length) {
   console.error(
