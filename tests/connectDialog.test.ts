@@ -15,6 +15,7 @@ vi.mock('../packages/ui/src/design-system/Modal/Modal', () => ({
 }));
 let root: Root, container: HTMLDivElement;
 const url = 'http://127.0.0.1:4400/mcp';
+const token = 'test-token';
 const writeText = vi.fn().mockResolvedValue(undefined);
 beforeEach(async () => {
   (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
@@ -43,6 +44,8 @@ beforeEach(async () => {
     env: { INTERLOCK_URL: 'http://127.0.0.1:4400' },
     development: false,
     fallback: { command: '/node', args: ['/installed/interlock.js', 'mcp'] },
+    token,
+    requireToken: true,
   });
   container = document.createElement('div');
   document.body.append(container);
@@ -66,13 +69,15 @@ const click = async (text: string) =>
       .click();
   });
 const snippet = () => container.querySelector('pre')!.textContent!;
-it('defaults to the running HTTP URL and copies each client configuration', async () => {
-  expect(snippet()).toBe(`[mcp_servers.interlock]\nurl = "${url}"`);
+it('defaults to the running HTTP URL and copies each client configuration with the token header', async () => {
+  expect(snippet()).toBe(
+    `[mcp_servers.interlock]\nurl = "${url}"\nhttp_headers = { Authorization = "Bearer ${token}" }`,
+  );
   await click('Copy configuration');
   expect(writeText).toHaveBeenLastCalledWith(snippet());
   await click('Claude');
   expect(snippet()).toBe(
-    `claude mcp add --transport http --scope user interlock '${url}'`,
+    `claude mcp add --transport http --scope user interlock '${url}' --header 'Authorization: Bearer ${token}'`,
   );
   await click('Copy command');
   expect(writeText).toHaveBeenLastCalledWith(snippet());
@@ -82,9 +87,13 @@ it('defaults to the running HTTP URL and copies each client configuration', asyn
     url,
     enabled: true,
     oauth: false,
+    headers: { Authorization: `Bearer ${token}` },
   });
   await click('Other');
   expect(snippet()).toBe(url);
+  expect(container.querySelectorAll('pre')[1].textContent).toBe(
+    `Authorization: Bearer ${token}`,
+  );
   await click('Copy endpoint URL');
   expect(writeText).toHaveBeenLastCalledWith(url);
 });
@@ -96,6 +105,8 @@ it('retains stdio configuration and absolute paths without changing HTTP configu
   );
   expect(snippet()).toContain('command = "interlock"');
   expect(snippet()).toContain('INTERLOCK_URL = "http://127.0.0.1:4400"');
+  // The stdio bridge reads the token from disk.
+  expect(snippet()).not.toContain(token);
   await act(async () =>
     container
       .querySelector<HTMLInputElement>('input[type="checkbox"]')!
@@ -114,5 +125,5 @@ it('retains stdio configuration and absolute paths without changing HTTP configu
       .click(),
   );
   await click('Codex');
-  expect(snippet()).toBe(`[mcp_servers.interlock]\nurl = "${url}"`);
+  expect(snippet()).toContain(`url = "${url}"`);
 });
