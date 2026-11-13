@@ -17,8 +17,7 @@ import {
   executeCustomCommand,
 } from './custom.js';
 import { evaluateCommandOrUrlTemplate, sanitizeDeepLink } from './templates.js';
-
-const now = () => new Date().toISOString();
+import { now } from './supervision.js';
 
 export interface LauncherSession {
   idempotencyKey: string;
