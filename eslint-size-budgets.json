@@ -21,7 +21,7 @@
     "packages/ui/src/features/workflows/WorkflowEditor.tsx": 1650,
     "tests/agentHandoff.test.ts": 960,
     "tests/automationsUi.test.ts": 1110,
-    "tests/customExecutor.test.ts": 951,
+    "tests/customExecutor.test.ts": 933,
     "tests/doctor.test.ts": 931,
     "tests/editorDraftProtection.test.ts": 1121,
     "tests/eventQuiescence.test.ts": 827,

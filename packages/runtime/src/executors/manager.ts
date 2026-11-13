@@ -38,6 +38,7 @@ import {
 } from '@interlock/core';
 import type { Engine, Worker } from '../index.js';
 import { validateDirectoryContainment } from '../workingDirectory.js';
+import { SchedulerErrors } from '../log.js';
 
 // Inspection needs assignment identity and configuration, never task payloads.
 type ManagedAssignment = Pick<
@@ -150,6 +151,7 @@ interface Job {
 
 /** Queue and claim lifecycle are shared; adapters own native session protocols. */
 export class ExecutorManager {
+  readonly errors = new SchedulerErrors();
   private transcripts: ManagedTranscripts;
   private adapters = new Map<string, HarnessAdapter>();
   private jobs = new Map<string, Job>();
@@ -603,7 +605,7 @@ export class ExecutorManager {
     this.scheduled = true;
     queueMicrotask(() => {
       this.scheduled = false;
-      void this.scan().catch(() => {});
+      void this.scan().catch(this.errors.handler('executor scan'));
     });
   }
   private latest(workId: string) {
@@ -1550,6 +1552,7 @@ export class ExecutorManager {
         }
       }
     }
+    const failed = this.errors.handler;
     for (const [workId, session] of this.launchedWork.entries()) {
       const current = this.engine.store.get<WorkRequest>('work', workId);
       const run = this.engine.store.get<import('@interlock/core').Run>(
@@ -1562,10 +1565,12 @@ export class ExecutorManager {
         Date.now() - session.lastStatusAt > 2000
       ) {
         session.lastStatusAt = Date.now();
-        void this.pollLauncherStatus(session).catch(() => {});
+        void this.pollLauncherStatus(session).catch(failed('launcher status'));
       }
       if (!session.cleanupFailed && current?.status === 'claimed')
-        void this.recoverIdleLauncher(session, current).catch(() => {});
+        void this.recoverIdleLauncher(session, current).catch(
+          failed('recovery'),
+        );
       const runEnded =
         run && ['completed', 'failed', 'cancelled'].includes(run.status);
       const workEnded =
@@ -1583,9 +1588,9 @@ export class ExecutorManager {
             );
           void this.requestLauncherStop(session)
             .then(() => this.archiveLauncherSession(session))
-            .catch(() => {});
+            .catch(failed('launcher stop'));
         } else if (!session.cleanupFailed)
-          void this.archiveLauncherSession(session).catch(() => {});
+          void this.archiveLauncherSession(session).catch(failed('archive'));
       }
     }
   }
@@ -1797,26 +1802,19 @@ export class ExecutorManager {
     let newStatus: string | undefined;
     let parsedStatusData: any;
 
-    if (session.profile.statusUrl) {
-      const url = interpolateTokens(session.profile.statusUrl, tokenMap);
-      const headers: Record<string, string> = { Accept: 'application/json' };
-      if (session.profile.headers) {
-        for (const [k, v] of Object.entries(session.profile.headers)) {
-          headers[k] = interpolateTokens(v, tokenMap);
-        }
-      }
-      try {
+    try {
+      if (session.profile.statusUrl) {
+        const url = interpolateTokens(session.profile.statusUrl, tokenMap);
+        const headers: Record<string, string> = { Accept: 'application/json' };
+        if (session.profile.headers)
+          for (const [k, v] of Object.entries(session.profile.headers))
+            headers[k] = interpolateTokens(v, tokenMap);
         const res = await fetch(url, { method: 'GET', headers });
-        if (res.ok) {
-          const data = await res.json().catch(() => ({}));
-          parsedStatusData = data;
-          newStatus =
-            (data as any)?.status ??
-            (typeof data === 'string' ? data : undefined);
-        }
-      } catch {}
-    } else if (session.profile.statusCommand) {
-      try {
+        if (!res.ok) throw new Error(`Status URL returned HTTP ${res.status}`);
+        const data = await res.json().catch(() => ({}));
+        parsedStatusData = data;
+        newStatus = typeof data === 'string' ? data : (data as any)?.status;
+      } else if (session.profile.statusCommand) {
         const output = await this.runLauncherCommand(session, 'status', {
           command: session.profile.statusCommand,
           cwd: session.cwd,
@@ -1831,7 +1829,9 @@ export class ExecutorManager {
         } catch {
           newStatus = output;
         }
-      } catch {}
+      }
+    } catch (error) {
+      this.errors.record('launcher status', error);
     }
 
     if (this.stopped || this.launchedWork.get(session.workId) !== session)

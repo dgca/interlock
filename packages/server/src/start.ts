@@ -1,8 +1,9 @@
 import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
-import { resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { Store } from '@interlock/storage';
 import { Engine } from '@interlock/runtime';
+import { JsonLog, parseLogLevel } from '@interlock/runtime/log';
 import { createApp } from './app.js';
 import type { ConnectionConfig } from './connection.js';
 import { checkPort, startupError } from './startup.js';
@@ -56,6 +57,12 @@ export async function startServer(options: {
     engine = new Engine(store, options.workdir, {
       ...(allowedRoots ? { allowedRoots } : {}),
     });
+    engine.executors.errors.attach(
+      new JsonLog(
+        join(dirname(options.database), 'logs'),
+        parseLogLevel(process.env.INTERLOCK_LOG_LEVEL),
+      ),
+    );
     engine.executors.start(nativeAdapters);
     engine.pump();
   } catch (error) {

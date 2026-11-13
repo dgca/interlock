@@ -325,6 +325,8 @@ export async function runDoctor(
     });
   }
 
+  checks.push(engine.executors.errors.check());
+
   // ==========================================
   // 3. Active Triggers Checks
   // ==========================================
