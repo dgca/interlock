@@ -34,6 +34,8 @@ import { Requests } from './requests.js';
 import { WorkflowBoards } from './workflowBoards.js';
 import { captureHumanInput } from './humanInput.js';
 import { RunInspection } from './runInspection.js';
+import { WorkflowAuthoring } from './workflowAuthoring.js';
+import { WorkflowDeletion } from './workflowDeletion.js';
 import { WorkResources } from './workResources.js';
 import { ExecutorManager } from './executors/manager.js';
 import { resolveAndValidateCwd } from './workingDirectory.js';
@@ -51,18 +53,7 @@ import { rmSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { Store } from '@interlock/storage';
-import { tidyWorkflow } from '@interlock/core/layout';
-import {
-  applyWorkflowPositions,
-  sameWorkflowContent,
-  workflowPositions,
-  type WorkflowPositions,
-} from '@interlock/core';
-import {
-  persistWorkflowPositions,
-  readWorkflowLayout,
-  saveWorkflowLayout,
-} from './workflowLayouts.js';
+import type { WorkflowPositions } from '@interlock/core';
 import {
   calculateVisitCount,
   buildExecutionProvenance,
@@ -91,18 +82,10 @@ import {
   parallelBranchPort,
   type FailureCategory,
   blankDefinition,
-  definitionSchema,
   InterlockError,
   readPath,
   resolveFetch,
   resolveProvider,
-  validateDefinition,
-  applyWorkflowEdits,
-  diagnoseDraft,
-  summarizeDiagnostics,
-  draftChanges,
-  type DraftDiagnostic,
-  validateWorkflowReferences,
   type Json,
   type NodeExecution,
   type Run,
@@ -123,7 +106,6 @@ import {
   type SessionIdentity,
   type ModelSelection,
   modelSelectionSchema,
-  draftLayoutSchema,
   type DraftLayout,
 } from '@interlock/core';
 import {
@@ -150,7 +132,7 @@ import { Variables } from './variables.js';
 import { ModelAliases } from './modelAliases.js';
 export { ModelAliases } from './modelAliases.js';
 import { secretRedaction } from './secretRedaction.js';
-import { nodeVariableReferences, variableReferences } from '@interlock/core';
+import { variableReferences } from '@interlock/core';
 import type { PollCheck } from '@interlock/core';
 import { VersionCleanup } from './versionCleanup.js';
 import { Ownership } from './ownership.js';
@@ -233,6 +215,8 @@ export class Engine {
   private readonly starts: RunStarts;
   private readonly trials: TrialEnvironments;
   private readonly inspection: RunInspection;
+  private readonly authoring: WorkflowAuthoring;
+  private readonly deletion: WorkflowDeletion;
   private localJobs = new Map<string, AbortController>();
   private backgroundScripts: BackgroundScripts;
   private stopped = false;
@@ -321,6 +305,12 @@ export class Engine {
     );
     this.prompts = new Prompts(store);
     this.variables = new Variables(store);
+    this.authoring = new WorkflowAuthoring(
+      store,
+      this.variables,
+      this.prompts,
+      this.scriptApprovals,
+    );
     this.modelAliases = new ModelAliases(store, (id) =>
       this.executors.configuredPresetProfile(
         this.executors.profiles().find((profile) => profile.id === id),
@@ -526,6 +516,22 @@ export class Engine {
       (id) => this.quiescence(id),
       (runId) => this.available(runId),
     );
+    this.deletion = new WorkflowDeletion(
+      store,
+      (id) => this.workflow(id),
+      this.testbench,
+      this.simulations,
+      this.executors,
+      this.usage,
+      this.chains,
+      this.holds,
+      this.budgets,
+      this.contextGroups,
+      this.resources,
+      this.starts,
+      this.retention,
+      this.listeners,
+    );
     for (const id of this.trials.recover()) this.cancelTree(id);
     // Deterministic ownership survives a lost process outcome. Background supervisors
     // keep their reservation while authenticated recovery establishes their result.
@@ -634,40 +640,20 @@ export class Engine {
     ];
   }
   workflow(id: string) {
-    const w = this.store.get<Workflow>('workflows', id);
-    if (!w) throw new InterlockError('Workflow not found');
-    return { ...w, ownerWorkflowId: w.ownerWorkflowId ?? null };
+    return this.authoring.workflow(id);
   }
   describeWorkflow(workflow: Workflow) {
-    const latest = this.store.getVersion(workflow.id, workflow.latestVersion);
-    const layout = readWorkflowLayout(this.store, workflow.id);
-    return {
-      ...workflow,
-      draft: applyWorkflowPositions(workflow.draft, layout.positions),
-      layoutRevision: layout.revision,
-      draftMatchesLatest: latest
-        ? sameWorkflowContent(workflow.draft, latest.definition)
-        : null,
-    };
+    return this.authoring.describeWorkflow(workflow);
   }
   saveLayout(input: {
     id: string;
     expectedRevision: number;
     positions: WorkflowPositions;
   }) {
-    return saveWorkflowLayout(this.store, input);
+    return this.authoring.saveLayout(input);
   }
   authoringSummary(workflow: Workflow) {
-    const { id, draftRevision, latestVersion, draftMatchesLatest, archived } =
-      this.describeWorkflow(workflow);
-    return {
-      ok: true as const,
-      id,
-      draftRevision,
-      latestVersion,
-      draftMatchesLatest,
-      archived,
-    };
+    return this.authoring.authoringSummary(workflow);
   }
   run(id: string) {
     const run = this.store.get<Run>('runs', id);
@@ -680,13 +666,6 @@ export class Engine {
   report(filter: ReportFilter): WorkflowReport {
     return generateWorkflowReport(this.store, this, filter);
   }
-  private arrangeDraft(definition: WorkflowDefinition, layout?: DraftLayout) {
-    const parsed = definitionSchema.parse(definition);
-    if (layout === undefined) return parsed;
-    draftLayoutSchema.parse(layout);
-    if (layout === 'preserve') return parsed;
-    return definitionSchema.parse(tidyWorkflow(parsed));
-  }
   create(
     name: string,
     description = '',
@@ -694,33 +673,13 @@ export class Engine {
     ownerWorkflowId: string | null = null,
     layout?: DraftLayout,
   ): Workflow {
-    if (ownerWorkflowId) {
-      const owner = this.workflow(ownerWorkflowId);
-      if (owner.ownerWorkflowId)
-        throw new InterlockError('Children cannot own workflows');
-      if (owner.archived)
-        throw new InterlockError('Restore the parent before creating a child');
-    }
-    const time = now();
-    const workflow: Workflow = {
-      id: randomUUID(),
-      ownerWorkflowId,
+    return this.authoring.create(
       name,
       description,
-      archived: false,
-      draft: this.arrangeDraft(definition, layout),
-      draftRevision: 1,
-      latestVersion: 0,
-      createdAt: time,
-      updatedAt: time,
-    };
-    validateWorkflowReferences(
-      workflow.id,
-      workflow.draft,
-      this.store.workflows(),
+      definition,
+      ownerWorkflowId,
+      layout,
     );
-    this.store.put('workflows', workflow);
-    return workflow;
   }
   update(
     id: string,
@@ -733,150 +692,10 @@ export class Engine {
       layout?: DraftLayout;
     },
   ) {
-    return this.store.transaction(() => {
-      const w = this.workflow(id);
-      if (
-        (patch.draft || patch.layout !== undefined) &&
-        patch.draftRevision !== w.draftRevision
-      )
-        throw new InterlockError(
-          'Draft changed elsewhere. Reload before saving.',
-        );
-      const metadataChanged =
-        (patch.name !== undefined && patch.name !== w.name) ||
-        (patch.description !== undefined &&
-          patch.description !== w.description) ||
-        (patch.archived !== undefined && patch.archived !== w.archived);
-      if (patch.name !== undefined) w.name = patch.name;
-      if (patch.description !== undefined) w.description = patch.description;
-      if (patch.archived !== undefined) w.archived = patch.archived;
-      let contentChanged = false;
-      if (patch.draft || patch.layout !== undefined) {
-        const next = this.arrangeDraft(
-          patch.draft ?? this.describeWorkflow(w).draft,
-          patch.layout,
-        );
-        validateWorkflowReferences(w.id, next, this.store.workflows());
-        contentChanged = !sameWorkflowContent(w.draft, next);
-        const positions = workflowPositions(next);
-        const before = workflowPositions(this.describeWorkflow(w).draft);
-        const savedPositions = readWorkflowLayout(this.store, id).positions;
-        persistWorkflowPositions(
-          this.store,
-          id,
-          patch.layout === 'preserve'
-            ? Object.fromEntries(
-                Object.entries(positions).filter(
-                  ([nodeId]) =>
-                    !Object.hasOwn(before, nodeId) &&
-                    !Object.hasOwn(savedPositions, nodeId),
-                ),
-              )
-            : !contentChanged || patch.layout === 'tidy'
-              ? positions
-              : Object.fromEntries(
-                  Object.entries(positions).filter(
-                    ([nodeId, position]) =>
-                      !Object.hasOwn(before, nodeId) ||
-                      !isDeepStrictEqual(before[nodeId], position),
-                  ),
-                ),
-        );
-        if (contentChanged) {
-          w.draft =
-            patch.layout === 'preserve'
-              ? applyWorkflowPositions(next, workflowPositions(w.draft))
-              : next;
-          w.draftRevision++;
-        }
-      }
-      if (metadataChanged || contentChanged) {
-        w.updatedAt = now();
-        this.store.put('workflows', w);
-      }
-      return w;
-    });
+    return this.authoring.update(id, patch);
   }
   validateDraft(id: string, candidate?: unknown) {
-    const w = this.workflow(id);
-    const result = diagnoseDraft(candidate === undefined ? w.draft : candidate);
-    this.addReferenceDiagnostics(w.id, result.definition, result.diagnostics);
-    return {
-      draftRevision: w.draftRevision,
-      saveable: !result.diagnostics.some(
-        (d) => d.category === 'save' && d.severity === 'error',
-      ),
-      publishable: !result.diagnostics.some(
-        (d) => d.category !== 'contract' && d.severity === 'error',
-      ),
-      diagnostics: result.diagnostics,
-    };
-  }
-  private addReferenceDiagnostics(
-    id: string,
-    definition: WorkflowDefinition | undefined,
-    diagnostics: DraftDiagnostic[],
-  ) {
-    if (definition) {
-      const workflows = this.store.workflows();
-      for (const [i, node] of definition.nodes.entries()) {
-        for (const reference of nodeVariableReferences(node)) {
-          try {
-            this.variables.get(reference);
-          } catch {
-            diagnostics.push({
-              severity: 'error',
-              category: 'publication',
-              code: 'missing_variable',
-              nodeId: node.id,
-              path: `nodes.${i}`,
-              message: `Variable ${reference || '(not selected)'} is missing. Select or provision it in Variables.`,
-            });
-          }
-        }
-        if (node.kind === 'agent') {
-          for (const [j, promptId] of (node.promptIds ?? []).entries())
-            if (!this.store.get('prompts', promptId))
-              diagnostics.push({
-                severity: 'error',
-                category: 'publication',
-                code: 'missing_prompt',
-                nodeId: node.id,
-                path: `nodes.${i}.promptIds.${j}`,
-                message: `Saved prompt ${promptId} does not exist.`,
-              });
-        }
-        if (node.kind !== 'workflow') continue;
-        try {
-          validateWorkflowReferences(
-            id,
-            { ...definition, nodes: [node] },
-            workflows,
-          );
-        } catch (error) {
-          diagnostics.push({
-            severity: 'error',
-            category: 'save',
-            code: 'workflow_ownership',
-            nodeId: node.id,
-            path: `nodes.${i}.workflowId`,
-            message: (error as Error).message,
-          });
-        }
-        if (
-          node.version !== null &&
-          !this.store.getVersion(node.workflowId, node.version)
-        )
-          diagnostics.push({
-            severity: 'error',
-            category: 'publication',
-            code: 'missing_workflow_version',
-            nodeId: node.id,
-            path: `nodes.${i}.version`,
-            message: 'Referenced workflow version does not exist.',
-          });
-      }
-    }
+    return this.authoring.validateDraft(id, candidate);
   }
   editDraft(
     id: string,
@@ -885,104 +704,13 @@ export class Engine {
     diagnosticsMode: 'all' | 'summary' = 'all',
     layout?: DraftLayout,
   ) {
-    return this.store.transaction(() => {
-      const w = this.workflow(id);
-      const displayedDraft = this.describeWorkflow(w).draft;
-      const before =
-        diagnosticsMode === 'summary' ? this.validateDraft(id).diagnostics : [];
-      const project = (diagnostics: DraftDiagnostic[]) =>
-        diagnosticsMode === 'summary'
-          ? summarizeDiagnostics(before, diagnostics)
-          : { diagnostics };
-      const unchanged = draftChanges(w.draft, w.draft);
-      const failure = (diagnostics: DraftDiagnostic[]) => ({
-        applied: false,
-        draftRevision: w.draftRevision,
-        changes: unchanged,
-        ...project(diagnostics),
-      });
-      if (draftRevision !== w.draftRevision)
-        return failure([
-          {
-            severity: 'error',
-            category: 'save',
-            code: 'stale_revision',
-            path: 'draftRevision',
-            message: 'Draft changed elsewhere. Reload before editing.',
-          },
-        ]);
-      const result = applyWorkflowEdits(displayedDraft, edits);
-      if (!result.definition) return failure(result.diagnostics);
-      this.addReferenceDiagnostics(id, result.definition, result.diagnostics);
-      const validation = result;
-      if (
-        validation.diagnostics.some(
-          (d) => d.category === 'save' && d.severity === 'error',
-        )
-      ) {
-        // The latest node edit touching a rejected reference identifies its operation.
-        for (const diagnostic of validation.diagnostics) {
-          if (
-            diagnostic.category !== 'save' ||
-            !diagnostic.nodeId ||
-            !Array.isArray(edits)
-          )
-            continue;
-          for (let i = edits.length - 1; i >= 0; i--) {
-            const edit = edits[i] as {
-              op: string;
-              id?: string;
-              node?: { id?: string };
-            };
-            if (
-              (edit.op === 'update_node' && edit.id === diagnostic.nodeId) ||
-              (edit.op === 'add_node' && edit.node?.id === diagnostic.nodeId)
-            ) {
-              diagnostic.operationIndex = i;
-              break;
-            }
-          }
-        }
-        return failure(validation.diagnostics);
-      }
-      result.definition = this.arrangeDraft(result.definition, layout);
-      const changes = draftChanges(displayedDraft, result.definition);
-      const changed = !sameWorkflowContent(w.draft, result.definition);
-      const beforePositions = workflowPositions(displayedDraft);
-      const savedPositions = readWorkflowLayout(this.store, id).positions;
-      persistWorkflowPositions(
-        this.store,
-        id,
-        Object.fromEntries(
-          Object.entries(workflowPositions(result.definition)).filter(
-            ([nodeId, position]) =>
-              layout === 'preserve'
-                ? !Object.hasOwn(beforePositions, nodeId) &&
-                  !Object.hasOwn(savedPositions, nodeId)
-                : !Object.hasOwn(beforePositions, nodeId) ||
-                  !isDeepStrictEqual(beforePositions[nodeId], position),
-          ),
-        ),
-      );
-      if (changed) {
-        w.draft =
-          layout === 'preserve'
-            ? applyWorkflowPositions(
-                result.definition,
-                workflowPositions(w.draft),
-              )
-            : result.definition;
-        w.draftRevision++;
-        w.updatedAt = now();
-        this.store.put('workflows', w);
-      }
-      return {
-        applied: true,
-        draftRevision: w.draftRevision,
-        changes,
-        ...project(validation.diagnostics),
-      };
-    });
+    return this.authoring.editDraft(
+      id,
+      draftRevision,
+      edits,
+      diagnosticsMode,
+      layout,
+    );
   }
   createChild(input: {
     ownerWorkflowId: string;
@@ -995,30 +723,7 @@ export class Engine {
     };
     nodeId?: string;
   }) {
-    return this.store.transaction(() => {
-      const parent = this.workflow(input.ownerWorkflowId);
-      if (parent.draftRevision !== input.parentDraftRevision)
-        throw new InterlockError(
-          'Draft changed elsewhere. Reload before creating a child.',
-        );
-      const child = this.create(input.name, '', blankDefinition(), parent.id);
-      const draft = definitionSchema.parse(input.parent.definition);
-      if (input.nodeId) {
-        const node = draft.nodes.find((n) => n.id === input.nodeId);
-        if (!node || node.kind !== 'workflow')
-          throw new InterlockError('Workflow node not found');
-        node.workflowId = child.id;
-        node.version = null;
-      }
-      validateWorkflowReferences(parent.id, draft, this.store.workflows());
-      parent.draft = draft;
-      parent.name = input.parent.name;
-      parent.description = input.parent.description;
-      parent.draftRevision++;
-      parent.updatedAt = now();
-      this.store.put('workflows', parent);
-      return { parent, child };
-    });
+    return this.authoring.createChild(input);
   }
   useChildVersion(input: {
     id: string;
@@ -1027,320 +732,16 @@ export class Engine {
     version: number;
     draftRevision: number;
   }) {
-    return this.store.transaction(() => {
-      const parent = this.workflow(input.id);
-      const child = this.workflow(input.childId);
-      if (parent.draftRevision !== input.draftRevision)
-        throw new InterlockError(
-          'Draft changed elsewhere. Reload before selecting a version.',
-        );
-      if (child.ownerWorkflowId !== parent.id)
-        throw new InterlockError('Child does not belong to this workflow');
-      if (!this.store.getVersion(child.id, input.version))
-        throw new InterlockError('Workflow version not found');
-      const node = parent.draft.nodes.find((n) => n.id === input.nodeId);
-      if (!node || node.kind !== 'workflow' || node.workflowId !== child.id)
-        throw new InterlockError(
-          'The parent no longer references this child at that node',
-        );
-      node.version = input.version;
-      parent.draftRevision++;
-      parent.updatedAt = now();
-      this.store.put('workflows', parent);
-      return parent;
-    });
+    return this.authoring.useChildVersion(input);
   }
   deleteWorkflow(id: string) {
-    const result = this.store.transaction(() => {
-      this.workflow(id);
-      this.testbench.assertDeletable(id);
-      this.simulations.assertDeletable(id);
-      if (this.store.workflows().some((w) => w.ownerWorkflowId === id))
-        throw new InterlockError(
-          'Delete the children first. Parent deletion with children is not available yet.',
-        );
-      const references = (definition: WorkflowDefinition) =>
-        definition.nodes.some(
-          (node) => node.kind === 'workflow' && node.workflowId === id,
-        );
-      const versions =
-        this.store.list<import('@interlock/core').WorkflowVersion>('versions');
-      const blockers: string[] = [];
-      let hasPublishedReferences = false;
-      for (const workflow of this.store.workflows()) {
-        if (workflow.id === id) continue;
-        const referencedVersions = versions
-          .filter(
-            (version) =>
-              version.workflowId === workflow.id &&
-              references(version.definition),
-          )
-          .map((version) => version.version)
-          .sort((a, b) => a - b);
-        const locations: string[] = [];
-        if (references(workflow.draft)) locations.push('draft');
-        if (referencedVersions.length) {
-          hasPublishedReferences = true;
-          locations.push(
-            `published versions ${referencedVersions.map((version) => `v${version}${version === workflow.latestVersion ? ' (latest)' : ''}`).join(', ')}`,
-          );
-        }
-        if (!locations.length) continue;
-        const latest =
-          workflow.latestVersion > 0 &&
-          !referencedVersions.includes(workflow.latestVersion)
-            ? `; latest v${workflow.latestVersion} does not reference it`
-            : '';
-        blockers.push(
-          `"${workflow.name}" (${workflow.id}): ${locations.join('; ')}${latest}`,
-        );
-      }
-      if (blockers.length)
-        throw new InterlockError(
-          `Cannot delete: referenced by ${blockers.join('; ')}. ${
-            hasPublishedReferences
-              ? 'Published references are immutable. Preview explicit old-version cleanup to remove obsolete callers after reviewing history loss. Remove current draft references first, or archive this workflow to preserve its versions and history.'
-              : 'Remove these draft references first, or archive this workflow to preserve its history.'
-          }`,
-        );
-      const runs = this.store.runs();
-      const removed = new Set(
-        runs.filter((run) => run.workflowId === id).map((run) => run.id),
-      );
-      for (const run of runs)
-        if (
-          removed.has(run.id) &&
-          run.parentRunId &&
-          !removed.has(run.parentRunId)
-        )
-          throw new InterlockError(
-            'Cannot delete a workflow with runs belonging to another workflow.',
-          );
-      let changed = true;
-      while (changed) {
-        changed = false;
-        for (const run of runs)
-          if (
-            run.parentRunId &&
-            removed.has(run.parentRunId) &&
-            !removed.has(run.id)
-          ) {
-            removed.add(run.id);
-            changed = true;
-          }
-      }
-      if (runs.some((run) => removed.has(run.id) && !terminal(run.status)))
-        throw new InterlockError(
-          'Cancel or finish active runs before deleting this workflow.',
-        );
-      this.executors.assertDelete(removed);
-      for (const work of this.store.work())
-        if (removed.has(work.runId)) this.store.remove('work', work.id);
-      this.usage.removeRuns(removed);
-      this.chains.removeRuns(removed);
-      this.holds.removeRuns(removed);
-      this.budgets.removeRuns(removed);
-      this.contextGroups.removeRuns(removed);
-      this.executors.removeRuns(removed);
-      for (const event of this.store.list<import('@interlock/core').RunEvent>(
-        'events',
-      ))
-        if (removed.has(event.runId)) this.store.remove('events', event.id);
-      this.resources.assertDelete(removed);
-      if (
-        this.store.forRuns<UncertainClaim>(uncertainClaimCollection, removed)
-          .length ||
-        this.store.forRuns<UncertainOperation>(
-          uncertainOperationCollection,
-          removed,
-        ).length
-      )
-        throw new InterlockError(
-          'Uncertain claims or operations must be confirmed stopped before deleting workflow history.',
-        );
-      if (
-        this.store
-          .pendingEventDeliveries()
-          .some(
-            (delivery) =>
-              !delivery.runId &&
-              removed.has(delivery.sourceRunId) &&
-              delivery.workflowId !== id,
-          )
-      )
-        throw new InterlockError(
-          'Pending lifecycle deliveries retain this source history until dispatch or suppression.',
-        );
-      this.starts.deleted(removed);
-      for (const collection of [
-        'externalInputValues',
-        'externalInputReceipts',
-        'stalls',
-        'activeClockHolds',
-      ]) {
-        for (const record of this.store.forRuns<{ id: string }>(
-          collection,
-          removed,
-        ))
-          this.store.remove(collection, record.id);
-      }
-      for (const runId of removed) this.store.remove('runs', runId);
-      for (const version of this.store.list<
-        import('@interlock/core').WorkflowVersion & { id: string }
-      >('versions'))
-        if (version.workflowId === id)
-          this.store.remove('versions', version.id);
-      for (const version of this.store.list<
-        import('@interlock/core').DeletedWorkflowVersion & { id: string }
-      >('deletedVersions'))
-        if (version.workflowId === id)
-          this.store.remove('deletedVersions', version.id);
-      this.testbench.deleteWorkflow(id);
-      this.simulations.deleteWorkflow(id);
-      for (const trigger of this.store.workflowTriggers(id)) {
-        this.store.deleteScheduleFires(trigger.id);
-        this.store.remove('workflowTriggers', trigger.id);
-        this.store.deleteEventHistory(trigger.id);
-      }
-      this.retention.deleteWorkflow(id);
-      this.store.remove('workflowLayouts', id);
-      this.store.remove('workflows', id);
-      return { id };
-    });
-    queueMicrotask(() => this.listeners.forEach((listener) => listener()));
-    return result;
+    return this.deletion.deleteWorkflow(id);
   }
   clone(id: string) {
-    const w = this.workflow(id);
-    if (this.store.workflows().some((child) => child.ownerWorkflowId === id))
-      throw new InterlockError(
-        'Cloning a workflow with children is not available yet.',
-      );
-    return this.store.transaction(() => {
-      const copy = this.create(
-        `${w.name} copy`,
-        w.description,
-        this.describeWorkflow(w).draft,
-      );
-      // A copy keeps the source's unapproved imported content unapproved.
-      this.scriptApprovals.copyPending(id, copy.id);
-      return copy;
-    });
+    return this.authoring.clone(id);
   }
   publish(id: string | string[], cascade = false) {
-    const targetIds = Array.isArray(id) ? id : [id];
-    return this.store.transaction(() => {
-      if (!cascade && targetIds.length === 1)
-        return this.publishVersion(targetIds[0]);
-      const workflows = this.store.workflows();
-      const definitions = new Map(
-        workflows.map((w) => [
-          w.id,
-          targetIds.includes(w.id)
-            ? w.draft
-            : this.store.getVersion(w.id, w.latestVersion)?.definition,
-        ]),
-      );
-      for (const targetId of targetIds) this.workflow(targetId);
-      const affected = new Set(targetIds);
-      if (cascade) {
-        let changed = true;
-        while (changed) {
-          changed = false;
-          for (const w of workflows) {
-            if (
-              !affected.has(w.id) &&
-              definitions
-                .get(w.id)
-                ?.nodes.some(
-                  (n) => n.kind === 'workflow' && affected.has(n.workflowId),
-                )
-            ) {
-              affected.add(w.id);
-              changed = true;
-            }
-          }
-        }
-      }
-      const ordered: string[] = [];
-      const visiting = new Set<string>();
-      const visited = new Set<string>();
-      const visit = (workflowId: string) => {
-        if (visiting.has(workflowId))
-          throw new InterlockError(
-            'Cannot cascade publication through a dependency cycle. Publish versions explicitly.',
-          );
-        if (visited.has(workflowId)) return;
-        visiting.add(workflowId);
-        for (const node of definitions.get(workflowId)!.nodes)
-          if (node.kind === 'workflow' && affected.has(node.workflowId))
-            visit(node.workflowId);
-        visiting.delete(workflowId);
-        visited.add(workflowId);
-        ordered.push(workflowId);
-      };
-      for (const workflowId of affected) visit(workflowId);
-      for (const workflowId of ordered) {
-        const w = this.workflow(workflowId);
-        if (!targetIds.includes(workflowId)) {
-          if (!sameWorkflowContent(w.draft, definitions.get(workflowId)!))
-            throw new InterlockError(
-              `Cannot cascade: "${w.name}" has unpublished definition edits. Publish or discard them first.`,
-            );
-        }
-        if (cascade) {
-          let updated = false;
-          for (const node of w.draft.nodes) {
-            if (node.kind === 'workflow' && affected.has(node.workflowId)) {
-              node.version = this.workflow(node.workflowId).latestVersion;
-              updated = true;
-            }
-          }
-          if (updated) {
-            w.draftRevision++;
-            this.store.put('workflows', w);
-          }
-        }
-        this.publishVersion(workflowId);
-      }
-      return this.workflow(targetIds[targetIds.length - 1]);
-    });
-  }
-  private publishVersion(id: string) {
-    const w = this.workflow(id);
-    const definition = validateDefinition(this.describeWorkflow(w).draft);
-    for (const reference of variableReferences(definition))
-      this.variables.get(reference);
-    this.prompts.capture(definition);
-    validateWorkflowReferences(w.id, definition, this.store.workflows());
-    for (const n of definition.nodes) {
-      if (
-        n.kind === 'workflow' &&
-        (n.version === null || !this.store.getVersion(n.workflowId, n.version))
-      )
-        throw new InterlockError(
-          `${n.label}: referenced workflow version does not exist`,
-        );
-    }
-    const pinnedPromptRevisions = definition.pinPromptsAtPublish
-      ? Object.fromEntries(
-          promptIds(definition).map((promptId) => [
-            promptId,
-            this.prompts.get(promptId).revision,
-          ]),
-        )
-      : undefined;
-    w.latestVersion++;
-    w.updatedAt = now();
-    this.store.version({
-      workflowId: id,
-      version: w.latestVersion,
-      definition,
-      ...(pinnedPromptRevisions ? { pinnedPromptRevisions } : {}),
-      createdAt: now(),
-    });
-    this.store.put('workflows', w);
-    return w;
+    return this.authoring.publish(id, cascade);
   }
   private pinnedVersion(node: Extract<WorkflowNode, { kind: 'workflow' }>) {
     if (node.version === null)
