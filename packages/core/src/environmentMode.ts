@@ -1,13 +1,14 @@
 import { z } from 'zod';
 
+// Field guidance lives in the docs: these schemas repeat across MCP authoring
+// tools, so they carry no descriptions and keep bounds out of JSON Schema.
 /** Omission keeps the full server environment, as before modes existed. */
-export const environmentModeSchema = z
-  .enum(['inherit', 'minimal'])
-  .describe(
-    'Omitted/inherit: full server environment. minimal: only PATH, HOME, LANG, LANGUAGE, LC_*, INTERLOCK_*, configured values and environmentPassthrough.',
-  );
+export const environmentModeSchema = z.enum(['inherit', 'minimal']);
 export type EnvironmentMode = z.infer<typeof environmentModeSchema>;
+/** Server variable names also passed in minimal mode. */
 export const environmentPassthroughSchema = z
-  .array(z.string().max(120))
-  .max(64)
-  .describe('Server variable names added in minimal mode.');
+  .array(z.string())
+  .refine(
+    (names) => names.length <= 64 && names.every((name) => name.length <= 120),
+    'Pass through at most 64 names of up to 120 characters.',
+  );

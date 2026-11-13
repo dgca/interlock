@@ -315,9 +315,7 @@ const pollCheckShapeSchema = z.discriminatedUnion('kind', [
     ...scriptEnvironmentFields,
     cwd: cwdBindingSchema
       .optional()
-      .describe(
-        'Working directory or dynamic binding for this polling check. Overrides workflow cwd.',
-      ),
+      .describe('Working directory or binding; overrides workflow cwd.'),
     timeoutMs: z.number().int().min(100).max(120000).default(30000),
   }),
   z.object({ kind: z.literal('fetch'), ...fetchRequestFields }),
@@ -374,7 +372,7 @@ const onFailureSchema = z
   .enum(['fail', 'route'])
   .optional()
   .describe(
-    'Stop by default. route requires failed and success edges. Script, HTTP and output-contract failures send {input,error,output} with null for absent output. Validation, cancellation, limits, mapping and uncertain interruptions stay terminal. No automatic retry.',
+    'Stop by default. route needs failed and success edges; Script, HTTP and output-contract failures send {input,error,output} (null output if absent). Validation, cancellation, limits, mapping and uncertain interruptions stay terminal. No automatic retry.',
   );
 
 const nodeShapeSchema = z.discriminatedUnion('kind', [
@@ -428,7 +426,7 @@ const nodeShapeSchema = z.discriminatedUnion('kind', [
     resources: resourceBindingsSchema
       .optional()
       .describe(
-        'Exclusive library resource names. Bind distinct nonblank strings up to 120 characters. Applies to cooperating steps without OS isolation.',
+        'Exclusive library resource names: distinct nonblank strings up to 120 characters. Cooperative; no OS isolation.',
       ),
     resultRules: resultRulesSchema.optional(),
     prompt: z.string(),
@@ -468,15 +466,13 @@ const nodeShapeSchema = z.discriminatedUnion('kind', [
     resources: resourceBindingsSchema.optional(),
     cwd: cwdBindingSchema
       .optional()
-      .describe(
-        'Working directory or dynamic binding for this Script node. Overrides workflow cwd.',
-      ),
+      .describe('Working directory or binding; overrides workflow cwd.'),
     onFailure: onFailureSchema,
     executionMode: z
       .enum(['foreground', 'background'])
       .optional()
       .describe(
-        'Background opts into local supervision across server restarts. Uncertain outcomes require explicit stopped reconciliation before retry. Polling checks remain foreground.',
+        'Background survives server restarts; uncertain outcomes need stopped reconciliation before retry.',
       ),
     ...scriptEnvironmentFields,
     // Older saved nodes omit language and must continue to run as Bash.

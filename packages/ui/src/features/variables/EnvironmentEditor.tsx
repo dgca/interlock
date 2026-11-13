@@ -3,7 +3,6 @@ import {
   Anchor,
   Code,
   Group,
-  Input,
   SegmentedControl,
   Stack,
   TagsInput,
@@ -149,16 +148,16 @@ function EnvironmentModeField({
   const invalid = passthrough.filter((name) => !environmentName.test(name));
   return (
     <>
-      <Input.Wrapper
-        label="Server environment"
-        description={
-          value.environmentMode === 'minimal'
+      <Stack gap={4}>
+        <Text size="sm" fw={550}>
+          Server environment
+        </Text>
+        <Text size="xs" c="dimmed">
+          {value.environmentMode === 'minimal'
             ? 'Passes only PATH, HOME, locale settings, INTERLOCK_ variables and the names below.'
-            : 'Passes every variable from the environment that started Interlock, including credentials.'
-        }
-      >
+            : 'Passes every variable from the environment that started Interlock, including credentials.'}
+        </Text>
         <SegmentedControl
-          mt={4}
           style={{ display: 'flex', width: 'fit-content' }}
           aria-label="Server environment"
           value={value.environmentMode ?? 'inherit'}
@@ -168,7 +167,7 @@ function EnvironmentModeField({
           ]}
           onChange={(mode) => onChange({ environmentMode: mode })}
         />
-      </Input.Wrapper>
+      </Stack>
       {value.environmentMode === 'minimal' && (
         <TagsInput
           label="Pass through from server"

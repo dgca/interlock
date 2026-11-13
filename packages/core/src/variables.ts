@@ -58,7 +58,7 @@ const scriptEnvironmentSchema = z
         .string()
         .max(120)
         .describe(
-          'Stable library variable ID delivered only to this Script process. No plaintext in the definition.',
+          'Library variable ID delivered only to this process; no plaintext.',
         ),
     }),
   )

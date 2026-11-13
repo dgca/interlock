@@ -9,6 +9,7 @@ import {
 import { Engine } from '@interlock/runtime';
 import { Store } from '@interlock/storage';
 import * as scripts from '../packages/runtime/src/scripts';
+import { trialProcessEnvironment } from '../packages/runtime/src/localGitTrials';
 import { batchDefinition, itemScript, nestedBatches } from './fixtures/batch';
 import { workflowCall } from './fixtures/detached';
 
@@ -438,4 +439,19 @@ it('names a server variable withheld from a failed minimal Script and its fix', 
     /did not pass SERVER_ONLY_API_KEY .*environmentPassthrough.*inherit/,
   );
   expect(run.error).not.toContain('server-secret-value');
+});
+
+it('keeps a local Git trial hardened environment intact in minimal mode', () => {
+  vi.stubEnv('SERVER_ONLY_API_KEY', 'server-key');
+  const env = scripts.baseEnvironment(
+    { environmentMode: 'minimal' },
+    trialProcessEnvironment(),
+  );
+  expect(env).toMatchObject({
+    GIT_CONFIG_GLOBAL: '/dev/null',
+    GIT_CONFIG_NOSYSTEM: '1',
+    GIT_TERMINAL_PROMPT: '0',
+    GIT_NO_LAZY_FETCH: '1',
+  });
+  expect(env.SERVER_ONLY_API_KEY).toBeUndefined();
 });

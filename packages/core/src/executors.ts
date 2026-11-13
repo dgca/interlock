@@ -1,6 +1,9 @@
 import { z } from 'zod';
 import type { Json } from './index.js';
-import { environmentModeSchema } from './environmentMode.js';
+import {
+  environmentModeSchema,
+  environmentPassthroughSchema,
+} from './environmentMode.js';
 
 export const executorReferenceSchema = z
   .string()
@@ -202,16 +205,9 @@ export const executorProfileSchema = z
     timeoutSeconds: z.number().int().positive().optional(),
     env: z.record(z.string()).optional(),
     environmentMode: environmentModeSchema.optional(),
-    environmentPassthrough: z
-      .array(
-        z
-          .string()
-          .regex(/^[A-Za-z_][A-Za-z0-9_]*$/)
-          .max(120),
-      )
-      .max(64)
-      .optional()
-      .describe('Server variable names added in minimal mode.'),
+    environmentPassthrough: environmentPassthroughSchema
+      .refine((names) => names.every((name) => /^[A-Za-z_]\w*$/.test(name)))
+      .optional(),
     headers: z.record(z.string()).optional(),
     turnCommand: z.string().trim().min(1).max(4096).optional(),
     turnUrl: z.string().trim().min(1).max(4096).optional(),

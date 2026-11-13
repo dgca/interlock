@@ -35,15 +35,20 @@ interface EnvironmentPolicy {
 }
 const minimalName = /^(?:PATH|HOME|LANG|LANGUAGE|LC_\w+|INTERLOCK_\w*)$/;
 
-/** Server environment a Script or custom executor process starts from. */
+/**
+ * Server environment a Script or custom executor process starts from. Minimal
+ * mode filters only the server environment; a runtime-supplied environment,
+ * such as a local Git trial's hardened one, is already clean and kept intact.
+ */
 export function baseEnvironment(
   policy: EnvironmentPolicy,
-  source: NodeJS.ProcessEnv = process.env,
+  supplied?: NodeJS.ProcessEnv,
 ): NodeJS.ProcessEnv {
-  if (policy.environmentMode !== 'minimal') return { ...source };
+  if (supplied) return { ...supplied };
+  if (policy.environmentMode !== 'minimal') return { ...process.env };
   const passthrough = new Set(policy.environmentPassthrough);
   return Object.fromEntries(
-    Object.entries(source).filter(
+    Object.entries(process.env).filter(
       ([name]) => minimalName.test(name) || passthrough.has(name),
     ),
   );
@@ -57,12 +62,12 @@ export function withheldEnvironmentNames(
   policy: EnvironmentPolicy,
   texts: string[],
   explicit: string[],
-  source: NodeJS.ProcessEnv = process.env,
+  supplied?: NodeJS.ProcessEnv,
 ) {
-  if (policy.environmentMode !== 'minimal') return [];
-  const delivered = baseEnvironment(policy, source);
+  if (policy.environmentMode !== 'minimal' || supplied) return [];
+  const delivered = baseEnvironment(policy);
   const text = texts.join('\n');
-  return Object.keys(source)
+  return Object.keys(process.env)
     .filter(
       (name) =>
         /^[A-Za-z_]\w+$/.test(name) &&
@@ -81,14 +86,14 @@ export function scriptFailure(
     environment?: { name: string }[];
   },
   error: string,
-  source?: NodeJS.ProcessEnv,
+  supplied?: NodeJS.ProcessEnv,
 ) {
   if (operation.kind !== 'script') return error;
   const names = withheldEnvironmentNames(
     operation,
     [operation.command ?? '', error],
     (operation.environment ?? []).map((entry) => entry.name),
-    source,
+    supplied,
   );
   return names.length
     ? `${error} Minimal environment mode did not pass ${names.join(', ')} from the server environment. Add ${names.length > 1 ? 'these names' : 'it'} to the Script's environmentPassthrough list, bind a saved variable, or set environmentMode to inherit.`
