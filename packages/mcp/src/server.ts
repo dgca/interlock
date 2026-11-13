@@ -105,7 +105,7 @@ export function createMcpServer(
   publishSchemaResources(server, workflowBundleSchema);
   tool(
     'doctor',
-    'Read-only readiness: storage/disk/harnesses, disabled variables 0.3.0 deletes with their workflow references, enabled trigger failures/automatic pauses, active pauses/uncertain reservations, latest published variable/known-alias/prompt-pin dependencies. Optional live:true probes model connectivity.',
+    'Read-only readiness: storage/disk/harnesses, disabled variables 0.3.0 deletes, enabled trigger failures/automatic pauses, active pauses/uncertain reservations, latest published variable/known-alias/prompt-pin dependencies. Optional live:true probes model connectivity.',
     doctorOptionsSchema,
     (options) => client.system.doctor(options),
   );
