@@ -22,6 +22,7 @@ import {
   uncertainOperationCollection,
 } from './quiescence.js';
 import { upgradeChecks } from './doctorUpgrade.js';
+import { privateFetchCheck } from './fetch.js';
 
 export async function runDoctor(
   engine: Engine,
@@ -328,6 +329,8 @@ export async function runDoctor(
       message: `Failed to inspect harness profiles: ${err instanceof Error ? err.message : String(err)}`,
     });
   }
+
+  checks.push(engine.executors.errors.check());
 
   // ==========================================
   // 3. Active Triggers Checks
@@ -722,6 +725,12 @@ export async function runDoctor(
             }
           }
         }
+      }
+
+      const privateFetch = privateFetchCheck(workflow, engine.store);
+      if (privateFetch) {
+        workflowIssues++;
+        checks.push(privateFetch);
       }
 
       // Check unpublished drafts of active workflows

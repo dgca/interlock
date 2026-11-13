@@ -119,14 +119,7 @@ export {
   type PathBinding,
 } from './valueBindings.js';
 import { validateFetch, type FetchRequest } from './fetch.js';
-export {
-  resolveFetch,
-  validateFetch,
-  type FetchNode,
-  type FetchBinding,
-  type FetchField,
-  type FetchRequest,
-} from './fetch.js';
+export * from './fetch.js';
 import { validateBatchScopes } from './batchScopes.js';
 import {
   parallelBranchPort,
@@ -493,6 +486,7 @@ const nodeShapeSchema = z.discriminatedUnion('kind', [
     ...nodeBase(),
     kind: z.literal('fetch'),
     resources: resourceBindingsSchema.optional(),
+    blockPrivateNetwork: z.boolean().optional(),
     onFailure: onFailureSchema,
     outputSchema: contractSchema.default({
       type: 'object',
@@ -781,6 +775,7 @@ export interface NodeExecution {
   port?: WorkflowEdge['port'];
   resolvedCwd?: string;
   provenance?: ExecutionProvenance;
+  privateNetwork?: import('./fetch.js').PrivateNetworkTarget;
 }
 export interface PollCheckResult {
   count: number;

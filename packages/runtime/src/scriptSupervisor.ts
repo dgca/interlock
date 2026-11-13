@@ -47,6 +47,7 @@ process.stdin.on('end', () => {
     if (settled) return;
     settled = true;
     clearTimeout(timer); clearInterval(interval);
+    if (config.provenanceFile) { try { fs.rmSync(config.provenanceFile, {force:true}); } catch {} }
     write('result', {...identity, progress: stderr, outcome});
   };
   try {
