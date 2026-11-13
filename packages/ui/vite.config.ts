@@ -1,6 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { defineConfig } from 'vite';
-export default defineConfig({
+// The component gallery exists only in the dev server and in the separate
+// `gallery` mode build used by browser tests. Production builds drop it.
+export default defineConfig(({ command, mode }) => ({
+  define: {
+    'import.meta.env.INTERLOCK_GALLERY': JSON.stringify(
+      command === 'serve' || mode === 'gallery',
+    ),
+  },
   plugins: [
     {
       name: 'interlock-font-license',
@@ -49,4 +56,4 @@ export default defineConfig({
       },
     },
   },
-});
+}));
