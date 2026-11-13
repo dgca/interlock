@@ -123,6 +123,22 @@ it('accepts Vite development origins only from a development server', async () =
     expect(await status(false, 'http://127.0.0.1:5173')).toBe(403);
     expect(await status(false, 'http://127.0.0.1:4310')).toBe(200);
     expect(await status(true, 'http://localhost:5173')).toBe(200);
+    // Servers on an ephemeral port set engineUrl after creating the app.
+    const connection = {
+      command: 'interlock',
+      args: ['mcp'],
+      engineUrl: 'http://127.0.0.1:4310',
+      development: false,
+    };
+    const app = createApp(engine, connection);
+    connection.engineUrl = 'http://127.0.0.1:4999';
+    expect(
+      (
+        await app.request('http://127.0.0.1:4999/health', {
+          headers: { origin: 'http://127.0.0.1:4999' },
+        })
+      ).status,
+    ).toBe(200);
   } finally {
     engine.stop();
     store.close();

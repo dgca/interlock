@@ -16,7 +16,6 @@ const largeQueryPaths = largeQueryProcedures.map(
 export function createApp(engine: Engine, connection?: ConnectionConfig) {
   const app = new Hono();
   const trustedOrigins = [
-    connection?.engineUrl,
     'http://127.0.0.1:4310',
     'http://localhost:4310',
     // The Vite development server proxies the UI only from a checkout.
@@ -42,7 +41,12 @@ export function createApp(engine: Engine, connection?: ConnectionConfig) {
     if (!['127.0.0.1', 'localhost', '[::1]'].includes(host))
       return c.json({ error: 'Local requests only' }, 403);
     const origin = c.req.header('origin');
-    if (origin && !trustedOrigins.includes(origin))
+    // Read engineUrl per request: callers may set it after binding a port.
+    if (
+      origin &&
+      origin !== connection?.engineUrl &&
+      !trustedOrigins.includes(origin)
+    )
       return c.json({ error: 'Untrusted origin' }, 403);
     await next();
   });
