@@ -365,9 +365,10 @@ pnpm test
 pnpm build
 pnpm format:check
 pnpm test:package
+pnpm test:kill
 ```
 
-The build includes TypeScript checks. Tests cover workflow contracts, runtime behavior, and MCP over HTTP and stdio. The package test installs a local tarball into a temporary prefix and checks global and npx startup, the CLI, UI, both MCP transports, JavaScript execution, and claims across a restart. It does not publish anything.
+The build includes TypeScript checks. Tests cover workflow contracts, runtime behavior, and MCP over HTTP and stdio. The package test installs a local tarball into a temporary prefix and checks global and npx startup, the CLI, UI, both MCP transports, JavaScript execution, and claims across a restart. It does not publish anything. The kill test installs the tarball the same way, stops the server with SIGKILL while a foreground Script, a background Script and a managed Agent attempt are running, and checks their recovery after restart on the same temporary database. CI runs all of these on Linux and macOS for pull requests and pushes to `main`.
 
 After building, run the browser journeys against an isolated SQLite store:
 

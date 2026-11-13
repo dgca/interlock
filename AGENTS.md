@@ -33,6 +33,8 @@ Before changing a repeated interaction, compare the matching screens and identif
 
 Every UI element should provide useful information or help the user decide or act. Use existing titles and navigation for context instead of repeating them in subtitles or labels. Omit generic filler copy added to make a layout feel complete. Keep guidance that explains a non-obvious behavior, consequence, or next step, and place it where needed. Build visual hierarchy with spacing, typography, and grouping rather than extra copy.
 
+Before implementing a new screen, get a short written layout proposal approved. For changes under `packages/ui` other than Markdown files, complete the PR template's [UI evidence](.github/pull_request_template.md#ui-evidence) section and review its screenshots against the [UI review checklist](packages/ui/UI-REVIEW.md).
+
 ## Keep documentation and MCP definitions current
 
 After changes that could affect documented behavior or agent usage, check README.md, related docs, CLI help, and [MCP definitions](packages/mcp/src/server.ts) against the final implementation before declaring the task complete or opening or updating a PR. Update affected instructions, examples, UI labels, supported operations, and limits in the same change.
@@ -56,5 +58,7 @@ See [README.md](README.md) and the root `package.json` scripts for setup and com
 Connection configuration defaults to the running server's `/mcp` HTTP endpoint. The stdio fallback uses checkout paths in development and `interlock mcp` for installed copies, with optional absolute paths. Check which server is running before changing connection instructions.
 
 Run tests relevant to changed behavior and `pnpm build` for TypeScript and UI build checks. For packaging, CLI startup, or version changes, also run `pnpm test:package`. Check formatting with `pnpm format:check`.
+
+Run `pnpm lint` for type-aware ESLint rules and file-size budgets. New source files stay within 800 lines; files listed in `eslint-size-budgets.json` must not grow. Existing violations live in `eslint-suppressions.json`; after fixing some, run `pnpm lint --prune-suppressions`. Lower or remove a file's size ceiling when it shrinks.
 
 The package smoke test needs a completed build. It installs into a temporary prefix and exercises the bundled engine and MCP bridge. The separate `scripts/codex-smoke.ts` uses a real account and model, creates workflow data, and is not part of routine validation.
