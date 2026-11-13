@@ -17,3 +17,4 @@ packages/ui/.impeccable/*
 .site-build/
 website/.docusaurus/
 website/build/
+*.tsbuildinfo
