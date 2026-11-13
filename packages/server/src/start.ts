@@ -56,6 +56,10 @@ export async function startServer(options: {
     engine = new Engine(store, options.workdir, {
       ...(allowedRoots ? { allowedRoots } : {}),
     });
+    engine.executors.mcpUrl = new URL(
+      '/mcp/execute',
+      options.connection.engineUrl,
+    ).href;
     engine.executors.start(nativeAdapters);
     engine.pump();
   } catch (error) {

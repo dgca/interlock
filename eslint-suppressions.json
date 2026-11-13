@@ -101,12 +101,6 @@
     }
   },
   "packages/mcp/src/server.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 1
-    },
     "@typescript-eslint/no-unused-vars": {
       "count": 18
     }

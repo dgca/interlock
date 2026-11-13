@@ -1,3 +1,4 @@
+import { listToolsWithSharedSchemas } from './fixtures/mcpDiscovery';
 import { expect, it, vi } from 'vitest';
 import { serve } from '@hono/node-server';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -48,7 +49,7 @@ it.each(['http', 'stdio'])(
     };
     try {
       await client.connect(transport);
-      const tools = (await client.listTools()).tools;
+      const tools = (await listToolsWithSharedSchemas(client)).tools;
       const selected = tools.filter((t) =>
         [
           'manage_stalls',

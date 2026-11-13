@@ -1,3 +1,4 @@
+import { listToolsWithSharedSchemas } from './fixtures/mcpDiscovery';
 import { expect, it } from 'vitest';
 import { serve } from '@hono/node-server';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -39,7 +40,7 @@ it.each(['http', 'stdio'])(
           });
     try {
       await client.connect(transport);
-      const tools = (await client.listTools()).tools;
+      const tools = (await listToolsWithSharedSchemas(client)).tools;
       expect(tools).toHaveLength(69);
       const metadata = JSON.stringify(
         tools.find((t) => t.name === 'create_workflow')!.inputSchema,

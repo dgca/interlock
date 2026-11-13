@@ -3,7 +3,7 @@
   "ceilings": {
     "packages/cli/src/commands.ts": 985,
     "packages/core/src/index.ts": 1550,
-    "packages/mcp/src/server.ts": 955,
+    "packages/mcp/src/server.ts": 888,
     "packages/runtime/src/executors/manager.ts": 3228,
     "packages/runtime/src/index.ts": 4849,
     "packages/runtime/src/report.ts": 943,
@@ -34,7 +34,7 @@
     "tests/runVersions.test.ts": 1210,
     "tests/simulation.test.ts": 928,
     "tests/testbench.test.ts": 1161,
-    "tests/transport.test.ts": 4345,
+    "tests/transport.test.ts": 4343,
     "tests/trialEnvironments.test.ts": 1066,
     "tests/usage.test.ts": 896,
     "tests/variables.test.ts": 1131,
