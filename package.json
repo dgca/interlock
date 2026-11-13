@@ -23,6 +23,7 @@
     "format:check": "prettier --check .",
     "prepack": "pnpm build",
     "test:package": "node scripts/test-package.mjs",
+    "test:kill": "node scripts/test-kill-recovery.mjs",
     "release:status": "changeset status",
     "release:version": "changeset version && pnpm install --lockfile-only",
     "release": "pnpm test && pnpm build && pnpm test:package && changeset publish"
