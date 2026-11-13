@@ -71,7 +71,7 @@ it('excludes the gallery from the production build', async () => {
   const files = await readdir(ui, { recursive: true });
   expect(files.filter((file) => /gallery/i.test(file))).toEqual([]);
   for (const file of files.filter((name) => /\.(js|css|html)$/.test(name)))
-    expect(await readFile(join(ui, file), 'utf8')).not.toContain(galleryPath);
+    expect(await readFile(join(ui, file), 'utf8')).not.toContain('-/gallery');
   const app = await openBrowserApp();
   const page = await browser.newPage();
   page.setDefaultTimeout(5000);

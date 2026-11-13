@@ -1,0 +1,39 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "includeEntryExports": true,
+  "workspaces": {
+    ".": {
+      "entry": [
+        "scripts/*.{mjs,ts}",
+        "tests/**/*.test.ts",
+        "tests/browser/*.browser.ts",
+        "tests/fixtures/*.{mjs,ts}"
+      ],
+      "project": ["scripts/**/*.{mjs,ts}", "tests/**/*.{mjs,ts}"],
+      "ignoreBinaries": ["codex", "mkfifo"]
+    },
+    "packages/cli": {
+      "entry": ["src/bin.ts", "src/index.ts"]
+    },
+    "packages/mcp": {
+      "entry": ["src/index.ts"]
+    },
+    "packages/runtime": {
+      "entry": ["test/fixtures/*.js"]
+    },
+    "packages/server": {
+      "entry": ["src/index.ts"]
+    },
+    "packages/ui": {
+      "entry": ["src/main.tsx"]
+    },
+    "website": {
+      "entry": ["src/theme/**/index.{js,jsx}"],
+      "ignoreDependencies": [
+        "@easyops-cn/docusaurus-search-local",
+        "@easyops-cn/docusaurus-theme-docusaurus-search-local"
+      ],
+      "includeEntryExports": false
+    }
+  }
+}
