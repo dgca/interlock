@@ -13,6 +13,7 @@
 // and running `pnpm lint --prune-suppressions`.
 import { readFileSync } from 'node:fs';
 import js from '@eslint/js';
+import { defineConfig } from 'eslint/config';
 import tseslint from 'typescript-eslint';
 
 const sourceFiles = ['packages/**/*.{ts,tsx}', 'tests/**/*.{ts,tsx}'];
@@ -45,9 +46,11 @@ const sizeBudgetBlocks = [
 // Extension point: append `{ name, files, rules }` blocks for area-specific
 // rules. Record their existing violations with
 // `pnpm lint --suppress-rule <rule>` so they join eslint-suppressions.json.
+// These blocks come after the size-budget blocks and override them, so they
+// must not set `max-lines` or turn rules off.
 const scopedRuleBlocks = [];
 
-export default tseslint.config(
+export default defineConfig(
   {
     name: 'interlock/ignores',
     ignores: [
@@ -61,6 +64,15 @@ export default tseslint.config(
     ],
   },
   {
+    // Inline directives (`eslint-disable`, `eslint max-lines: off`) are
+    // ignored so every exception goes through the baseline or size budgets.
+    name: 'interlock/linter-options',
+    linterOptions: {
+      noInlineConfig: true,
+      reportUnusedDisableDirectives: 'error',
+    },
+  },
+  {
     name: 'interlock/typescript',
     files: sourceFiles,
     extends: [js.configs.recommended, tseslint.configs.recommendedTypeChecked],
@@ -70,7 +82,6 @@ export default tseslint.config(
         tsconfigRootDir: import.meta.dirname,
       },
     },
-    linterOptions: { reportUnusedDisableDirectives: 'error' },
   },
   ...sizeBudgetBlocks,
   ...scopedRuleBlocks,
