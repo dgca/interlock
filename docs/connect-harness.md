@@ -81,7 +81,7 @@ Every tool definition a client lists costs context in each conversation. Profile
 | `author`  | Workflows, versions, ownership, prompts, variables, presets, triggers, boards and the testbench.         | `/mcp/author`        |
 | `operate` | Starting, inspecting, waiting on, pausing, holding, retrying and cancelling runs, executors and budgets. | `/mcp/operate`       |
 
-Select a profile with the URL path, such as `http://127.0.0.1:4310/mcp/execute`, or send the header `X-Interlock-Mcp-Profile: execute` to `/mcp`. Unknown profiles are rejected; a path and header that disagree are rejected. For the stdio bridge, use `interlock mcp --profile execute` or set `INTERLOCK_MCP_PROFILE`. Connect more than one profile under different names when an agent needs tools from several. A tool outside the connected profile is not found.
+Select a profile with the URL path, such as `http://127.0.0.1:4310/mcp/execute`, or send the header `X-Interlock-Mcp-Profile: execute` to `/mcp`. Unknown profiles are rejected; a path and header that disagree are rejected. For the stdio bridge, use `interlock mcp --profile execute` or set `INTERLOCK_MCP_PROFILE`. Connect more than one profile under different names when an agent needs tools from several. A tool outside the connected profile is not found. When a compact mutation would suggest a `nextCall` tool outside the profile, it suggests `get_run_briefing` for the same run instead.
 
 Sessions launched by a custom harness in launcher mode receive the `execute` endpoint as `$INTERLOCK_MCP_URL` and the launch payload's `mcpUrl`. See [custom harnesses](managed-executors.md#custom-harnesses).
 

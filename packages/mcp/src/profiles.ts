@@ -114,3 +114,26 @@ export function inMcpProfile(profile: McpProfile, name: string) {
     throw new Error(`Tool ${name} is not assigned to an MCP profile`);
   return profile === 'all' || members[profile].has(name);
 }
+
+/**
+ * Compact mutations can suggest a follow-up tool outside the connected
+ * profile; suggest the run briefing instead, which reports the same blockers.
+ */
+export function withProfileNextCall(profile: McpProfile, result: unknown) {
+  if (profile === 'all' || !result || typeof result !== 'object') return result;
+  const { nextCall, runId } = result as {
+    nextCall?: { tool?: string } | null;
+    runId?: unknown;
+  };
+  if (
+    !nextCall?.tool ||
+    inMcpProfile(profile, nextCall.tool) ||
+    typeof runId !== 'string' ||
+    !inMcpProfile(profile, 'get_run_briefing')
+  )
+    return result;
+  return {
+    ...result,
+    nextCall: { tool: 'get_run_briefing', arguments: { id: runId } },
+  };
+}
