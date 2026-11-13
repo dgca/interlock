@@ -1,4 +1,31 @@
 import { createServer } from 'node:net';
+import { mkdirSync } from 'node:fs';
+import { dirname } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
+
+/**
+ * Hold an exclusive SQLite lock on a sidecar file for the server's lifetime.
+ * The operating system releases it when the process exits, so a crashed
+ * server never leaves a stale lock behind.
+ */
+export function lockDatabase(database: string): () => void {
+  if (database === ':memory:') return () => {};
+  const path = `${database}.lock`;
+  mkdirSync(dirname(path), { recursive: true });
+  const lock = new DatabaseSync(path);
+  try {
+    lock.exec('PRAGMA busy_timeout = 0; BEGIN EXCLUSIVE');
+  } catch (error) {
+    lock.close();
+    if (!/locked|busy/i.test(error instanceof Error ? error.message : ''))
+      throw error;
+    throw new Error(
+      `Another Interlock server is already using database ${database}. Stop that server before starting another one, or choose a different --db. Use lsof ${JSON.stringify(path)} to find the process.`,
+      { cause: error },
+    );
+  }
+  return () => lock.close();
+}
 
 export function checkPort(port: number): Promise<void> {
   return new Promise((resolve, reject) => {

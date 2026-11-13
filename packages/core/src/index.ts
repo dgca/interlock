@@ -91,6 +91,7 @@ export * from './workHolds.js';
 export * from './externalInput.js';
 export * from './workflowBoards.js';
 export * from './humanInput.js';
+export * from './scriptApprovals.js';
 export * from './requests.js';
 import { humanInputSchema } from './humanInput.js';
 import { resultRulesSchema, resultRuleProblems } from './resultRules.js';
@@ -106,7 +107,7 @@ import Ajv, { type ValidateFunction } from 'ajv';
 import { bindingLeaves } from './valueBindings.js';
 import {
   variableReferenceSchema,
-  scriptEnvironmentSchema,
+  scriptEnvironmentFields,
   validateVariableReferences,
   checkVariableDelivery,
 } from './variables.js';
@@ -119,14 +120,7 @@ export {
   type PathBinding,
 } from './valueBindings.js';
 import { validateFetch, type FetchRequest } from './fetch.js';
-export {
-  resolveFetch,
-  validateFetch,
-  type FetchNode,
-  type FetchBinding,
-  type FetchField,
-  type FetchRequest,
-} from './fetch.js';
+export * from './fetch.js';
 import { validateBatchScopes } from './batchScopes.js';
 import {
   parallelBranchPort,
@@ -312,12 +306,10 @@ const pollCheckShapeSchema = z.discriminatedUnion('kind', [
     // Omitted language runs as Bash, like Script nodes saved before JavaScript existed.
     language: z.enum(['javascript', 'bash']).optional(),
     command: z.string().min(1),
-    environment: scriptEnvironmentSchema.optional(),
+    ...scriptEnvironmentFields,
     cwd: cwdBindingSchema
       .optional()
-      .describe(
-        'Working directory or dynamic binding for this polling check. Overrides workflow cwd.',
-      ),
+      .describe('Working directory or binding; overrides workflow cwd.'),
     timeoutMs: z.number().int().min(100).max(120000).default(30000),
   }),
   z.object({ kind: z.literal('fetch'), ...fetchRequestFields }),
@@ -374,7 +366,7 @@ const onFailureSchema = z
   .enum(['fail', 'route'])
   .optional()
   .describe(
-    'Stop by default. route requires failed and success edges. Script, HTTP and output-contract failures send {input,error,output} with null for absent output. Validation, cancellation, limits, mapping and uncertain interruptions stay terminal. No automatic retry.',
+    'Stop by default. route needs failed and success edges; Script, HTTP and output-contract failures send {input,error,output} (null output if absent). Validation, cancellation, limits, mapping and uncertain interruptions stay terminal. No automatic retry.',
   );
 
 const nodeShapeSchema = z.discriminatedUnion('kind', [
@@ -428,7 +420,7 @@ const nodeShapeSchema = z.discriminatedUnion('kind', [
     resources: resourceBindingsSchema
       .optional()
       .describe(
-        'Exclusive library resource names. Bind distinct nonblank strings up to 120 characters. Applies to cooperating steps without OS isolation.',
+        'Exclusive library resource names: distinct nonblank strings up to 120 characters. Cooperative; no OS isolation.',
       ),
     resultRules: resultRulesSchema.optional(),
     prompt: z.string(),
@@ -468,17 +460,15 @@ const nodeShapeSchema = z.discriminatedUnion('kind', [
     resources: resourceBindingsSchema.optional(),
     cwd: cwdBindingSchema
       .optional()
-      .describe(
-        'Working directory or dynamic binding for this Script node. Overrides workflow cwd.',
-      ),
+      .describe('Working directory or binding; overrides workflow cwd.'),
     onFailure: onFailureSchema,
     executionMode: z
       .enum(['foreground', 'background'])
       .optional()
       .describe(
-        'Background opts into local supervision across server restarts. Uncertain outcomes require explicit stopped reconciliation before retry. Polling checks remain foreground.',
+        'Background survives server restarts; uncertain outcomes need stopped reconciliation before retry.',
       ),
-    environment: scriptEnvironmentSchema.optional(),
+    ...scriptEnvironmentFields,
     // Older saved nodes omit language and must continue to run as Bash.
     language: z.enum(['javascript', 'bash']).optional(),
     command: z.string().min(1),
@@ -493,6 +483,7 @@ const nodeShapeSchema = z.discriminatedUnion('kind', [
     ...nodeBase(),
     kind: z.literal('fetch'),
     resources: resourceBindingsSchema.optional(),
+    blockPrivateNetwork: z.boolean().optional(),
     onFailure: onFailureSchema,
     outputSchema: contractSchema.default({
       type: 'object',
@@ -773,6 +764,8 @@ export interface NodeExecution {
   background?: import('./backgroundScripts.js').BackgroundScript;
   externalInput?: import('./externalInput.js').ExternalInputMetadata;
   humanInput?: import('./humanInput.js').HumanInputCapture;
+  /** Waiting for a person to approve this imported Script content. */
+  scriptApproval?: { hash: string; since: string };
   resumeAt?: string;
   /** Polling Wait: when the next check runs, the deadline, and the latest check. */
   nextCheckAt?: string;
@@ -781,6 +774,7 @@ export interface NodeExecution {
   port?: WorkflowEdge['port'];
   resolvedCwd?: string;
   provenance?: ExecutionProvenance;
+  privateNetwork?: import('./fetch.js').PrivateNetworkTarget;
 }
 export interface PollCheckResult {
   count: number;

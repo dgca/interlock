@@ -358,6 +358,8 @@ function IntegrationEditor({
         skills: profile?.skills,
         continueOnMissingResult: profile?.continueOnMissingResult,
         transientRetry: profile?.transientRetry,
+        environmentMode: profile?.environmentMode,
+        environmentPassthrough: profile?.environmentPassthrough,
         ...(concurrency === '' ? {} : { concurrency: Number(concurrency) }),
         ...(timeoutSeconds !== ''
           ? { timeoutSeconds: Number(timeoutSeconds) }

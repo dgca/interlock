@@ -1,5 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { migrateCurrentState } from './currentState.js';
+import { approveExistingScripts } from './scriptApprovals.js';
 import {
   closeSync,
   mkdirSync,
@@ -352,6 +353,17 @@ export const migrations: readonly Migration[] = [
     },
   },
   { version: 19, up: migrateCurrentState },
+  {
+    version: 20,
+    up(db) {
+      db.exec(`
+        CREATE INDEX script_approval_waiting ON documents(id)
+          WHERE collection = 'runs' AND json_extract(value, '$.status') = 'waiting'
+            AND json_type(value, '$.executions[#-1].scriptApproval') = 'object';
+      `);
+      approveExistingScripts(db);
+    },
+  },
 ];
 
 type Migration = { version: number; up: (db: DatabaseSync) => void };

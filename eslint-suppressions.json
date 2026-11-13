@@ -212,9 +212,6 @@
     "@typescript-eslint/no-unsafe-return": {
       "count": 1
     },
-    "@typescript-eslint/no-unused-expressions": {
-      "count": 1
-    },
     "@typescript-eslint/require-await": {
       "count": 2
     },
@@ -251,7 +248,7 @@
       "count": 8
     },
     "no-empty": {
-      "count": 6
+      "count": 4
     }
   },
   "packages/runtime/src/executors/pi.ts": {
@@ -1259,7 +1256,7 @@
   },
   "tests/customExecutor.test.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 33
+      "count": 31
     },
     "@typescript-eslint/no-misused-promises": {
       "count": 2
@@ -1268,13 +1265,13 @@
       "count": 5
     },
     "@typescript-eslint/no-unsafe-assignment": {
-      "count": 21
+      "count": 18
     },
     "@typescript-eslint/no-unsafe-call": {
-      "count": 25
+      "count": 23
     },
     "@typescript-eslint/no-unsafe-member-access": {
-      "count": 45
+      "count": 41
     },
     "@typescript-eslint/no-unsafe-return": {
       "count": 1

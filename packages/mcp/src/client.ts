@@ -1,8 +1,13 @@
 import { createClient } from '@interlock/client';
+import { readApiToken } from '@interlock/core/apiToken';
 
 // Match the server caller so both transports use the same tool registrations.
 export function createMcpClient(url?: string) {
-  const client = createClient(url);
+  // The stdio bridge sends the token from disk, so its configuration needs no secret.
+  const client = createClient(url, {
+    token: readApiToken(),
+    headers: { 'x-interlock-author': 'agent' },
+  });
   return {
     report: { summary: client.report.summary.query },
     system: {

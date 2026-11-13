@@ -36,7 +36,7 @@ export const waitQuerySchema = briefingQuerySchema.extend({
     .string()
     .max(2048)
     .describe(
-      'Opaque cursor from a briefing, wait, or summary-mode mutation for this runId. Invalid or restarted cursors recover with reset:true.',
+      'Opaque cursor from a briefing, wait or summary-mode mutation for this runId. Invalid or restarted cursors return reset:true.',
     ),
   timeoutMs: z
     .number()

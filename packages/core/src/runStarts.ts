@@ -48,7 +48,7 @@ export const runTitleSchema = z
   .min(1)
   .max(200)
   .describe(
-    'Optional run title displayed in Runs and Boards, ahead of the external task title and workflow name.',
+    'Optional run title, shown before the external task title and workflow name.',
   );
 export function runDisplayTitle(run: {
   title?: string;
