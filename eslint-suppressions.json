@@ -191,6 +191,11 @@
       "count": 1
     }
   },
+  "packages/runtime/src/executors/configuration.ts": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 2
+    }
+  },
   "packages/runtime/src/executors/contracts.ts": {
     "@typescript-eslint/no-base-to-string": {
       "count": 2
@@ -245,7 +250,7 @@
       "count": 1
     },
     "@typescript-eslint/no-unused-vars": {
-      "count": 8
+      "count": 6
     },
     "no-empty": {
       "count": 4
