@@ -298,6 +298,7 @@ export class GithubImporter {
           workflows: inspected.workflows,
           prompts: inspected.prompts,
           variables: inspected.variables,
+          scripts: inspected.scripts,
           boardSetup: board && {
             suggestions: board.suggestions,
             unresolved: board.unresolved,
@@ -315,6 +316,7 @@ export class GithubImporter {
           workflows: [],
           prompts: [],
           variables: [],
+          scripts: [],
           boardSetup: undefined,
           error: importErrorMessage(error),
         });

@@ -308,7 +308,7 @@ it('requires a JSON preview before mutating and preserves the exact input', asyn
   expect(calls.create).not.toHaveBeenCalled();
   expect(document.body.textContent).toContain('Added as a draft');
   await click('Import workflow');
-  expect(calls.create).toHaveBeenCalledWith(data);
+  expect(calls.create).toHaveBeenCalledWith({ ...data, imported: true });
   expect(imported).toHaveBeenCalledWith(['created']);
 });
 it('keeps the file picker inside the dialog and previews before importing', async () => {
@@ -322,7 +322,10 @@ it('keeps the file picker inside the dialog and previews before importing', asyn
   expect(calls.create).not.toHaveBeenCalled();
   expect(document.body.textContent).toContain('File workflow');
   await click('Import workflow');
-  expect(calls.create).toHaveBeenCalledWith({ name: 'File workflow' });
+  expect(calls.create).toHaveBeenCalledWith({
+    name: 'File workflow',
+    imported: true,
+  });
 });
 it('keeps invalid JSON editable and shows an inline error', async () => {
   await click('Paste JSON');
@@ -356,7 +359,10 @@ it('keeps the latest selected file when an earlier file finishes reading late', 
   expect(document.body.textContent).toContain('Latest choice');
   expect(document.body.textContent).not.toContain('Old choice');
   await click('Import workflow');
-  expect(calls.create).toHaveBeenCalledWith({ name: 'Latest choice' });
+  expect(calls.create).toHaveBeenCalledWith({
+    name: 'Latest choice',
+    imported: true,
+  });
 });
 it('previews portable bundle imports without changing replacement flags', async () => {
   const data = {

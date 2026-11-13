@@ -1,3 +1,5 @@
+import { apiToken } from './apiToken';
+
 const eventChannel = 'interlock-engine-events';
 // The engine sends a heartbeat every 15 seconds. Allow one missed heartbeat.
 const heartbeatTimeout = 35_000;
@@ -51,7 +53,10 @@ export function subscribeToEngineEvents({
   void navigator.locks
     .request(eventChannel, { signal }, async () => {
       if (signal.aborted) return;
-      stream = new EventSource('/events');
+      // EventSource cannot send an Authorization header.
+      stream = new EventSource(
+        apiToken ? `/events?token=${encodeURIComponent(apiToken)}` : '/events',
+      );
       const heartbeat = () => {
         heardFromStream();
         channel?.postMessage('heartbeat');

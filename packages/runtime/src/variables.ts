@@ -116,6 +116,17 @@ export class Variables {
       .map((c) => c.id);
     return { workflows, runs, comparisons };
   }
+  /** Disabled variables with the workflows (drafts and retained versions) that reference them. */
+  disabledReferences() {
+    return this.store
+      .list<SavedVariable>('variables')
+      .filter((v) => !v.enabled)
+      .map((v) => ({
+        id: v.id,
+        name: v.name,
+        workflows: this.dependencies(v.id).workflows,
+      }));
+  }
   read(input: VariableRead) {
     const parsed = variableReadSchema.safeParse(input);
     if (!parsed.success)

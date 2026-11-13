@@ -30,6 +30,9 @@ export async function importWorkflowJson(
   if (boardSetup)
     throw new Error('Board setup requires a portable workflow bundle.');
   assertLegacyVariableFree(data);
-  const workflow = await api.workflows.create.mutate(data);
+  const workflow = await api.workflows.create.mutate({
+    ...data,
+    imported: true,
+  });
   return workflow.id;
 }

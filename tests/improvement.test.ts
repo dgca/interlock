@@ -107,6 +107,8 @@ function setup(extra: Record<string, unknown> = {}) {
     });
   const tuning = suite('tuning'),
     acceptance = suite('heldout');
+  // A person reviews and approves the bundle's Scripts; approval itself is covered elsewhere.
+  e.scriptApprovals.saveSettings('off');
   importWorkflows(e.store, bundle);
   e.publish(bundle.rootId);
   const { overlapCases: _overlap, ...requestExtra } = extra;

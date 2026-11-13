@@ -1,5 +1,6 @@
 import { createClient } from '@interlock/client';
-export const api = createClient(window.location.origin);
+import { apiToken } from './apiToken';
+export const api = createClient(window.location.origin, { token: apiToken });
 export const errorMessage = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
 export function download(name: string, value: unknown) {

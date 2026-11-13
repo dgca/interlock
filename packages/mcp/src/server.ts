@@ -105,7 +105,7 @@ export function createMcpServer(
   publishSchemaResources(server, workflowBundleSchema);
   tool(
     'doctor',
-    'Read-only readiness: storage/disk/harnesses, enabled trigger failures/automatic pauses, active pauses/uncertain reservations, latest published variable/known-alias/prompt-pin dependencies. Optional live:true probes model connectivity.',
+    'Read-only readiness: storage/disk/harnesses, disabled variables 0.3.0 deletes with their workflow references, enabled trigger failures/automatic pauses, active pauses/uncertain reservations, latest published variable/known-alias/prompt-pin dependencies. Optional live:true probes model connectivity.',
     doctorOptionsSchema,
     (options) => client.system.doctor(options),
   );
@@ -385,7 +385,7 @@ export function createMcpServer(
   );
   tool(
     'workflow_requests',
-    'Find individual Human input, managed-agent, recovery, and stall requests, including runs without boards. list filters by boardId or runId and returns oldest first, exact total and nextOffset (25 default, 100 max). Discover board IDs with read_workflow_boards list. get takes the exact request target and loads captured context, state and answer. For Human input, answer uses a stable submissionId and current expectedRevision, initially 0. Repeat identical arguments after uncertain delivery. A saved answer under a pause or hold stays open. Release an acceptance hold through external_input using holding.runId/revision, then accept the saved revision. Use get.actions to select the operation. For managed requests use manage_executors with managedExecutionId and requestId when needed. For resource or Script recovery use manage_work_resources or manage_script with the exact returned target. Inspect stalls in the run.',
+    'Find individual Human input, managed-agent, recovery, and stall requests. list filters by boardId or runId and returns oldest first, exact total and nextOffset (25 default, 100 max). Discover board IDs with read_workflow_boards list. get takes the exact request target and loads captured context, state and answer. For Human input, answer uses a stable submissionId and current expectedRevision, initially 0. Repeat identical arguments after uncertain delivery. A saved answer under a pause or hold stays open. Release an acceptance hold through external_input using holding.runId/revision, then accept the saved revision. Use get.actions to select the operation. For managed requests use manage_executors with managedExecutionId and requestId when needed. Script approval items need a person, not manage_script. For resource or Script recovery use manage_work_resources or manage_script with the exact target. Inspect stalls in the run.',
     { request: workflowRequestSchema },
     ({ request }) => {
       if (request.action === 'list') {

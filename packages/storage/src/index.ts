@@ -5,6 +5,8 @@ import {
   uncertainResourceAttempts,
   uncertainBackgroundSteps,
 } from './runAttention.js';
+import { waitingScriptApprovals } from './scriptApprovals.js';
+export * from './scriptApprovals.js';
 import { ProtectedValues } from './protectedValues.js';
 import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
@@ -19,7 +21,11 @@ import {
   type WorkflowCatalogQuery,
 } from '@interlock/core';
 import { migrate, type MigrationResult } from './migrations.js';
-import { continuationState, type ExecutionMetadata } from './continuation.js';
+import {
+  continuationState,
+  touchRunRevision,
+  type ExecutionMetadata,
+} from './continuation.js';
 import {
   currentProjection,
   type CurrentRun,
@@ -89,25 +95,7 @@ export class Store {
   /** Advance a run cursor for state retained outside run/work documents. */
   touchRun(id: string) {
     this.transaction(() => {
-      if (
-        !this.db
-          .prepare(
-            "SELECT id FROM documents WHERE collection = 'runs' AND id = ?",
-          )
-          .get(id)
-      )
-        return;
-      this.db
-        .prepare(
-          'UPDATE continuation_sequence SET revision = revision + 1 WHERE id = 1',
-        )
-        .run();
-      this.db
-        .prepare(
-          'INSERT INTO run_revisions(run_id, revision) SELECT ?, revision FROM continuation_sequence WHERE id = 1 ON CONFLICT(run_id) DO UPDATE SET revision = excluded.revision',
-        )
-        .run(id);
-      this.changed('runs');
+      if (touchRunRevision(this.db, id)) this.changed('runs');
     });
   }
   currentStalls(runId?: string): import('@interlock/core').StallRecord[] {
@@ -174,6 +162,9 @@ export class Store {
   }
   uncertainBackgroundSteps() {
     return uncertainBackgroundSteps(this.db);
+  }
+  waitingScriptApprovals() {
+    return waitingScriptApprovals(this.db);
   }
   historyRuns() {
     return historyRuns(this.db);

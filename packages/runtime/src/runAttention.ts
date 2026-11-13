@@ -7,10 +7,10 @@ import type {
 /** The legacy run summary retains a representative step for existing callers. */
 export function runAttention(requests: RequestSummary[]): RunAttention[] {
   const result = new Map<string, RunAttention>();
-  for (const { cardId, target } of requests) {
+  for (const { cardId, target, reason: stated } of requests) {
     if (!target.executionId) continue;
     const reason: RunAttentionReason =
-      target.kind === 'permission'
+      (stated ?? target.kind === 'permission')
         ? 'approval'
         : target.kind === 'resource' || target.kind === 'script'
           ? 'recovery'

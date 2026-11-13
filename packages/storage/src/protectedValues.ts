@@ -15,8 +15,8 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { dirname, isAbsolute, join } from 'node:path';
-import { homedir } from 'node:os';
 import { InterlockError, type VariableKind } from '@interlock/core';
+import { interlockConfigDir } from '@interlock/core/apiToken';
 
 interface Documents {
   get<T>(collection: string, id: string): T | undefined;
@@ -52,14 +52,10 @@ export class ProtectedValues {
     );
   }
   private keyPath(vaultId: string) {
-    const base =
-      process.platform === 'darwin'
-        ? join(homedir(), 'Library/Application Support/Interlock')
-        : join(
-            process.env.XDG_CONFIG_HOME || join(homedir(), '.config'),
-            'interlock',
-          );
-    return this.configuredKeyFile ?? join(base, 'keys', `${vaultId}.key`);
+    return (
+      this.configuredKeyFile ??
+      join(interlockConfigDir(), 'keys', `${vaultId}.key`)
+    );
   }
   info() {
     const vault = this.documents.get<{ vaultId: string }>(
