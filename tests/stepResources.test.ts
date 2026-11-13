@@ -491,7 +491,9 @@ it.each([
           'inspect_resources',
         );
       }
-      const other = start(e, { ...script });
+      // This step only has to wait for the resource; a 100 ms budget is too
+      // tight for a Script start on a loaded CI runner.
+      const other = start(e, { ...script, timeoutMs: 5000 });
       await new Promise((r) => setTimeout(r, 1100));
       e.pump();
       expect(requests).toBe(1);
