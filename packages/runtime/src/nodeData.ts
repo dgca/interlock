@@ -1,12 +1,14 @@
 import { rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type {
-  ExecutionProvenance,
-  ModelUsage,
-  NodeExecution,
-  Run,
-  WorkflowNode,
+import {
+  readPath,
+  type ExecutionProvenance,
+  type Json,
+  type ModelUsage,
+  type NodeExecution,
+  type Run,
+  type WorkflowNode,
 } from '@interlock/core';
 
 interface NodeProvenanceHistory {
@@ -101,6 +103,35 @@ function buildRunExecutionProvenanceFile(
     };
   }
   return result;
+}
+
+export function readBranchValue(
+  run: Run,
+  execution: NodeExecution,
+  path: string,
+): Json {
+  const normalized = path.replace(/^\$\./, '');
+  if (normalized.startsWith('execution.')) {
+    const hasInputExecution =
+      execution.input !== null &&
+      typeof execution.input === 'object' &&
+      Object.hasOwn(execution.input, 'execution');
+    if (!hasInputExecution) {
+      const parts = normalized.split('.');
+      const targetNodeId = parts[1];
+      const propPath = parts.slice(2).join('.');
+      const previous = run.executions.findLast(
+        (candidate) =>
+          candidate.nodeId === targetNodeId && candidate.status === 'completed',
+      );
+      if (propPath === 'visitCount') {
+        return previous?.provenance?.visitCount ?? 0;
+      }
+      if (!previous?.provenance) return null;
+      return readPath(previous.provenance as unknown as Json, propPath);
+    }
+  }
+  return readPath(execution.input, path);
 }
 
 /** Write an owner-only provenance file for one Script launch. */

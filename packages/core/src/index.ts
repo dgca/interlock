@@ -91,6 +91,7 @@ export * from './workHolds.js';
 export * from './externalInput.js';
 export * from './workflowBoards.js';
 export * from './humanInput.js';
+export * from './scriptApprovals.js';
 export * from './requests.js';
 import { humanInputSchema } from './humanInput.js';
 import { resultRulesSchema, resultRuleProblems } from './resultRules.js';
@@ -763,6 +764,8 @@ export interface NodeExecution {
   background?: import('./backgroundScripts.js').BackgroundScript;
   externalInput?: import('./externalInput.js').ExternalInputMetadata;
   humanInput?: import('./humanInput.js').HumanInputCapture;
+  /** Waiting for a person to approve this imported Script content. */
+  scriptApproval?: { hash: string; since: string };
   resumeAt?: string;
   /** Polling Wait: when the next check runs, the deadline, and the latest check. */
   nextCheckAt?: string;

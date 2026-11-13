@@ -10,9 +10,15 @@ import { largeQueryProcedures } from '@interlock/server/transport';
 /** Pass `token` to authenticate when the engine requires its API token. */
 export function createClient(
   url = 'http://127.0.0.1:4310',
-  { token }: { token?: string } = {},
+  {
+    token,
+    headers: extraHeaders = {},
+  }: { token?: string; headers?: Record<string, string> } = {},
 ) {
-  const headers = token ? { Authorization: `Bearer ${token}` } : {};
+  const headers = {
+    ...extraHeaders,
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
   // Body-limit and token rejections arrive before tRPC and are not tRPC responses.
   const fetchChecked: typeof fetch = async (input, init) => {
     const response = await fetch(input, init);

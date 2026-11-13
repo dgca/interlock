@@ -11,11 +11,6 @@ import {
   type DiffItem,
   type BoardImportSetup,
   type BoardImportResult,
-} from '@interlock/core';
-import { isDeepStrictEqual } from 'node:util';
-import type { Store } from '@interlock/storage';
-import { Engine } from './index.js';
-import {
   InterlockError,
   validateDefinition,
   validateWorkflowReferences,
@@ -26,19 +21,21 @@ import {
   samePromptContent,
   type PromptSnapshot,
   type DeletedWorkflowVersion,
-} from '@interlock/core';
-import { definitionHash } from './versionIdentity.js';
-import { Variables } from './variables.js';
-import { ModelAliases } from './modelAliases.js';
-import {
-  readWorkflowLayout,
-  persistWorkflowPositions,
-} from './workflowLayouts.js';
-import {
   variableReferences,
   modelReferences,
   type VariableImportBindings,
 } from '@interlock/core';
+import { isDeepStrictEqual } from 'node:util';
+import type { Store } from '@interlock/storage';
+import { Engine } from './index.js';
+import { definitionHash } from './versionIdentity.js';
+import { Variables } from './variables.js';
+import { ModelAliases } from './modelAliases.js';
+import { ScriptApprovals } from './scriptApprovals.js';
+import {
+  readWorkflowLayout,
+  persistWorkflowPositions,
+} from './workflowLayouts.js';
 import {
   workflowBundleSchema,
   type WorkflowBundle,
@@ -459,6 +456,7 @@ export function importWorkflows(
       throw new InterlockError(
         'Bundle must contain unique workflow IDs and its root',
       );
+    const scripts = new ScriptApprovals(store).importing(bundle.workflows);
     const now = new Date().toISOString();
     const includedPrompts = bundle.prompts ?? [];
     if (
@@ -741,6 +739,7 @@ export function importWorkflows(
             );
       }
     }
+    scripts();
     let published: { id: string; version: number }[] | undefined;
     if (options.publish) {
       const engine = options.engine ?? new Engine(store, process.cwd());

@@ -66,6 +66,7 @@ import {
 import {
   calculateVisitCount,
   buildExecutionProvenance,
+  readBranchValue,
   writeExecutionProvenanceFile,
 } from './nodeData.js';
 export * from './nodeData.js';
@@ -134,6 +135,7 @@ import {
   UncertainFetch,
 } from './fetch.js';
 import { executeScript, baseEnvironment, scriptFailure } from './scripts.js';
+import { ScriptApprovals } from './scriptApprovals.js';
 import { RunStarts } from './runStarts.js';
 import { RunAdmission } from './runAdmission.js';
 import { HistoryRetention } from './historyRetention.js';
@@ -227,6 +229,7 @@ export class Engine {
   readonly holds: WorkHolds;
   readonly externalInputs: ExternalInputs;
   readonly requests: Requests;
+  readonly scriptApprovals: ScriptApprovals;
   readonly boards: WorkflowBoards;
   private readonly resources: WorkResources;
   readonly contextGroups: ContextContinuityGroups;
@@ -266,6 +269,10 @@ export class Engine {
       ),
     );
     this.backgroundScripts = new BackgroundScripts(store);
+    this.scriptApprovals = new ScriptApprovals(store, {
+      save: (run) => this.save(run),
+      event: (run, message) => this.event(run, 'node.waiting', message),
+    });
     this.executors = new ExecutorManager(this, cwd);
     this.simulations = new Simulations(store, cwd);
     this.chains = new RunChains(store);
@@ -1289,11 +1296,16 @@ export class Engine {
       throw new InterlockError(
         'Cloning a workflow with children is not available yet.',
       );
-    return this.create(
-      `${w.name} copy`,
-      w.description,
-      this.describeWorkflow(w).draft,
-    );
+    return this.store.transaction(() => {
+      const copy = this.create(
+        `${w.name} copy`,
+        w.description,
+        this.describeWorkflow(w).draft,
+      );
+      // A copy keeps the source's unapproved imported content unapproved.
+      this.scriptApprovals.copyPending(id, copy.id);
+      return copy;
+    });
   }
   publish(id: string | string[], cascade = false) {
     const targetIds = Array.isArray(id) ? id : [id];
@@ -2520,6 +2532,11 @@ export class Engine {
         return true;
       }
       if (node.kind === 'script' || node.kind === 'fetch') {
+        const held =
+          node.kind === 'script'
+            ? this.scriptApprovals.hold(run, execution, node)
+            : undefined;
+        if (held !== undefined) return held;
         let changed = starting;
         if (node.kind === 'fetch' && !execution.request) {
           execution.request = resolveFetch(node, execution.input);
@@ -2812,7 +2829,7 @@ export class Engine {
         return changed;
       }
       if (node.kind === 'switch') {
-        const value = this.readBranchValue(run, execution, node.path);
+        const value = readBranchValue(run, execution, node.path);
         const port =
           node.cases.find((entry) => isDeepStrictEqual(value, entry.equals))
             ?.port ?? node.default;
@@ -2836,7 +2853,7 @@ export class Engine {
         execution.input,
         node.kind === 'condition'
           ? isDeepStrictEqual(
-              this.readBranchValue(run, execution, node.path),
+              readBranchValue(run, execution, node.path),
               node.equals,
             )
             ? 'true'
@@ -3548,35 +3565,6 @@ export class Engine {
           : undefined,
     };
   }
-  private readBranchValue(
-    run: Run,
-    execution: NodeExecution,
-    path: string,
-  ): Json {
-    const normalized = path.replace(/^\$\./, '');
-    if (normalized.startsWith('execution.')) {
-      const hasInputExecution =
-        execution.input !== null &&
-        typeof execution.input === 'object' &&
-        Object.hasOwn(execution.input, 'execution');
-      if (!hasInputExecution) {
-        const parts = normalized.split('.');
-        const targetNodeId = parts[1];
-        const propPath = parts.slice(2).join('.');
-        const previous = run.executions.findLast(
-          (candidate) =>
-            candidate.nodeId === targetNodeId &&
-            candidate.status === 'completed',
-        );
-        if (propPath === 'visitCount') {
-          return previous?.provenance?.visitCount ?? 0;
-        }
-        if (!previous?.provenance) return null;
-        return readPath(previous.provenance as unknown as Json, propPath);
-      }
-    }
-    return readPath(execution.input, path);
-  }
   private async localOperation(
     run: Run,
     operation: Extract<WorkflowNode, { kind: 'script' | 'fetch' }> | PollCheck,
@@ -3585,6 +3573,8 @@ export class Engine {
     label = 'label' in operation ? operation.label : 'Polling check',
   ): Promise<LocalOperationResult> {
     const { input } = execution;
+    if (operation.kind === 'script')
+      this.scriptApprovals.assertApproved(run, execution, operation);
     const environment = this.trials.execution(run);
     if (environment && operation.kind === 'fetch')
       throw new InterlockError(
@@ -3812,6 +3802,11 @@ export class Engine {
     )
       return;
     const { timing } = node;
+    if (
+      timing.check.kind === 'script' &&
+      this.scriptApprovals.hold(run, execution, timing.check) !== undefined
+    )
+      return;
     this.markOperationStarted(run, execution);
     const controller = new AbortController();
     this.localJobs.set(execution.id, controller);

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { jsonSchema, type Json } from './index.js';
 import { startRequestIdSchema } from './runStarts.js';
+import type { RunAttentionReason } from './runAttention.js';
 
 const id = z.string().min(1).max(300);
 const step = { runId: id, executionId: id };
@@ -100,4 +101,6 @@ export type RequestSummary = {
   target: RequestTarget;
   label: string;
   since: string;
+  /** Attention reason when the target kind serves more than one purpose. */
+  reason?: RunAttentionReason;
 };
