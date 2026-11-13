@@ -326,6 +326,8 @@ export async function runDoctor(
     });
   }
 
+  checks.push(engine.executors.errors.check());
+
   // ==========================================
   // 3. Active Triggers Checks
   // ==========================================
@@ -721,7 +723,6 @@ export async function runDoctor(
         }
       }
 
-      // Fetch steps that call loopback, private or link-local hosts
       const privateFetch = privateFetchCheck(workflow, engine.store);
       if (privateFetch) {
         workflowIssues++;

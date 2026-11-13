@@ -1,6 +1,8 @@
 import { serve } from '@hono/node-server';
+import { dirname, join } from 'node:path';
 import { Store } from '@interlock/storage';
 import { Engine } from '@interlock/runtime';
+import { JsonLog, parseLogLevel } from '@interlock/runtime/log';
 import { createApp, serveUi } from './app.js';
 import { isLoopback, parseRequireToken } from './apiToken.js';
 import { apiTokenPath, ensureApiToken } from '@interlock/core/apiToken';
@@ -82,6 +84,12 @@ export async function startServer(options: {
     engine = new Engine(store, options.workdir, {
       ...(allowedRoots ? { allowedRoots } : {}),
     });
+    engine.executors.errors.attach(
+      new JsonLog(
+        join(dirname(options.database), 'logs'),
+        parseLogLevel(process.env.INTERLOCK_LOG_LEVEL),
+      ),
+    );
     engine.executors.start(nativeAdapters);
     engine.pump();
   } catch (error) {
