@@ -22,6 +22,6 @@ On a Linux machine with the same Playwright Chromium, `INTERLOCK_UPDATE_SNAPSHOT
 
 ## Accessibility checks
 
-The same tests run [axe](https://github.com/dequelabs/axe-core) on each gallery section, each gallery dialog, and each main screen at both widths, on every platform. A serious or critical violation fails the test, unless its rule is listed for that screen in `accessibility-baseline.json`. Keys have the form `<screen>@<width>`. The failure message names the rule, its help link, and the affected elements.
+The same tests run [axe](https://github.com/dequelabs/axe-core) on each gallery section, each gallery dialog, and each main screen at both widths, on every platform. `accessibility-baseline.json` records the existing serious and critical violations as the number of affected elements per rule for each `<screen>@<width>` key. Counts are used instead of selectors because selectors contain hashed CSS module class names. A test fails when a rule's count rises above the baseline, including a new element for a rule that is already baselined. The failure message names the rule, its help link, and the affected elements.
 
-The baseline records violations that existed when the check was introduced. Do not add entries to it for new work. When a fix removes a violation, the check fails until you delete the rule from the baseline, so the baseline can only shrink.
+The baseline only shrinks. When a fix lowers a count, the test fails until you lower or remove that entry. Do not add or raise entries for new work. After all checks run, the suite also fails if any baseline key was never checked, which catches mistyped or orphaned keys. Running a subset of tests with `-t` reports the keys it skipped.

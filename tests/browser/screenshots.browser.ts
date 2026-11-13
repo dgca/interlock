@@ -6,7 +6,7 @@ import {
 } from 'playwright';
 import { afterAll, beforeAll, describe, inject, it, vi } from 'vitest';
 import { paths } from '../../packages/ui/src/routes/paths';
-import { expectAccessible } from './accessibility';
+import { expectAccessible, expectBaselineVisited } from './accessibility';
 import { openBrowserApp } from './app';
 import {
   comparesScreenshots,
@@ -86,6 +86,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await browser?.close();
+  expectBaselineVisited();
 });
 
 async function open(width: number, ui?: string) {
