@@ -15,6 +15,8 @@ Interlock is a local workflow engine and editor. The public npm package is `@typ
 
 Keep execution rules in `packages/runtime`, contracts and graph validation in `packages/core`, and persistence in `packages/storage`. UI, CLI, and MCP callers share the server API.
 
+`pnpm lint:deps` enforces these boundaries with dependency-cruiser ([.dependency-cruiser.mjs](.dependency-cruiser.mjs)): each package imports only the lower layers its `allowedPackages` entry lists (from the bottom: `core`, `storage`, `runtime`, `server`, `client`, then `mcp`, `ui`, and `cli`), crosses packages through `@interlock/*` names rather than relative paths, forms no package cycle, and `packages/ui/src/design-system` imports no feature, route, API client, or domain code. Known violations are baselined in `.dependency-cruiser-known-violations.json` and the config's `knownPackageCycleEdges`; remove entries as they are fixed and never add new ones.
+
 New script nodes default to JavaScript. Definitions that omit `language` retain legacy Bash behavior. Preserve both paths when changing script execution or serialization.
 
 Prefix every new environment variable defined by Interlock with `INTERLOCK_`. Preserve names supplied by users or required by external tools.
