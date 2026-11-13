@@ -125,21 +125,25 @@ describe.each(widths)('gallery at %dpx', (width) => {
     );
   });
 
-  it('matches hover and focus states', async (ctx) => {
+  it('matches a hovered button', async (ctx) => {
     ctx.skip(!comparesScreenshots, screenshotSkipReason);
-    const buttons = page.locator('[data-gallery-section="buttons"]');
     await page.locator('[data-gallery-hover="button"]').hover();
-    await expectScreenshot(buttons, `gallery-hover-${width}`);
-    await page.mouse.move(0, 0);
-    await page.keyboard.press('Tab');
-    await page.locator('[data-gallery-focus="button"]').focus();
-    await expectScreenshot(buttons, `gallery-focus-button-${width}`);
-    await page.locator('[data-gallery-focus="input"]').focus();
     await expectScreenshot(
-      page.locator('[data-gallery-section="inputs"]'),
-      `gallery-focus-input-${width}`,
+      page.locator('[data-gallery-section="buttons"]'),
+      `gallery-hover-${width}`,
     );
-    await page.locator('[data-gallery-focus="input"]').blur();
+    await page.mouse.move(0, 0);
+  });
+
+  it.for(['button', 'input'])('matches a focused %s', async (kind, ctx) => {
+    ctx.skip(!comparesScreenshots, screenshotSkipReason);
+    const target = page.locator(`[data-gallery-focus="${kind}"]`);
+    await target.focus();
+    await expectScreenshot(
+      page.locator('[data-gallery-section]').filter({ has: target }),
+      `gallery-focus-${kind}-${width}`,
+    );
+    await target.blur();
   });
 
   it.for(['modal', 'busy', 'discard'])(
