@@ -163,6 +163,7 @@ Subprocess commands receive Interlock token values through the environment. HTTP
 - `$INTERLOCK_SESSION_NAME`
 - `$INTERLOCK_INPUT`
 - `$INTERLOCK_MCP_URL` (launch only): the running server's `execute` [tool profile](connect-harness.md#choose-a-tool-profile) endpoint, also sent as `mcpUrl` in the launch payload. Configure the launched session's MCP client with it to claim and submit with fewer tools in context.
+- `$INTERLOCK_API_TOKEN` (launch only, set only when the server requires the [API token](connect-harness.md#api-token)): send it as `Authorization: Bearer $INTERLOCK_API_TOKEN` from the launched session's MCP client. It is not included in the launch payload.
 
 Commands use normal shell quoting. Double-quote token arguments, such as `agent --session "$INTERLOCK_SESSION_NAME"`, to preserve spaces and special characters as data. Single quotes keep token names literal. Token values never become shell source. Identity tokens are also available to scripts through their environment. Turn and launch commands receive the full assignment payload as JSON on stdin. Their `$INTERLOCK_INPUT` token exposes the assignment input; message commands use that token for the recovery message. Status, stop, and archive commands have no input token. The input token enters the subprocess environment only when explicitly referenced in the command. Use stdin for large inputs because operating systems limit environment and argument sizes.
 

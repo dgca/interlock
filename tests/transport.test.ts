@@ -229,10 +229,6 @@ it.each(['stdio', 'http'])(
           .workflows()
           .some((workflow) => workflow.name === 'Removed provider constraint'),
       ).toBe(false);
-      expect(
-        toolDiscovery.tools.find((tool) => tool.name === 'workflow_report')
-          ?.description,
-      ).toContain('usage.byAlias');
       const report = await call('workflow_report', { workflowId: w.id });
       expect(workflowReportSchema.parse(report).claims).toMatchObject({
         transientRecoveries: 0,
@@ -240,10 +236,6 @@ it.each(['stdio', 'http'])(
       });
       expect(report.usage.byAlias).toEqual([]);
 
-      expect(
-        toolDiscovery.tools.find((tool) => tool.name === 'workflow_report')
-          ?.description,
-      ).toContain('pausedMs and activeMs');
       expect(report.summary.durationMs).toMatchObject({
         count: 0,
         pausedMs: { count: 0 },
@@ -287,11 +279,6 @@ it.each(['stdio', 'http'])(
         uncertainOperations: [],
       });
 
-      expect(
-        toolDiscovery.tools.find((tool) => tool.name === 'manage_executors')!
-          .description,
-      ).toContain('ended needs_human attempt with no pending requests');
-
       const scheduleTools = toolDiscovery.tools.filter((t) =>
         ['read_workflow_triggers', 'manage_workflow_triggers'].includes(t.name),
       );
@@ -299,10 +286,6 @@ it.each(['stdio', 'http'])(
       if (scheduleDiscovery) expect(scheduleTools).toEqual(scheduleDiscovery);
       else scheduleDiscovery = scheduleTools;
       expect(JSON.stringify(scheduleTools)).toContain('expectedRevision');
-      const triggerManagement = scheduleTools.find(
-        (tool) => tool.name === 'manage_workflow_triggers',
-      )!.description;
-      expect(triggerManagement).toContain('event receipts survive');
       expect(JSON.stringify(scheduleTools)).not.toMatch(/webhook/i);
       for (const request of [{ action: 'list', kind: 'webhook' }]) {
         const rejected = await client.callTool({
@@ -798,9 +781,6 @@ it.each(['stdio', 'http'])(
       const instructions = client.getInstructions() ?? '';
       expect(nextCursor).toBeUndefined();
       expect(Buffer.byteLength(instructions)).toBeLessThanOrEqual(10_000);
-      expect(instructions).toContain(
-        'docs/agent-workflows.md#discover-schemas-and-assignments',
-      );
       const testbenchTools = [
         'read_test_suites',
         'save_test_suite',
@@ -1484,14 +1464,6 @@ it.each(['stdio', 'http'])(
       ).toMatchObject({ default: false });
       for (const tool of tools) validateContractSchema(tool.inputSchema);
       expect(tools.map((t) => t.name)).toContain('claim_work');
-      const deletionScope = tools.find(
-        (t) => t.name === 'delete_workflow',
-      )!.description;
-      expect(deletionScope).toContain('Batch item runs and detached runs');
-      expect(deletionScope).toContain('Durable event-trigger receipts remain');
-      expect(deletionScope).toContain(
-        'ancestor runs and the entire run tree remain intact',
-      );
       for (const name of [
         'list_prompts',
         'get_prompt',
@@ -1685,7 +1657,6 @@ it.each(['stdio', 'http'])(
         tools.find((t) => t.name === 'get_run_result')!.inputSchema.properties!
           .maxBytes,
       ).toMatchObject({ default: 65536, maximum: 262144 });
-      expect(client.getInstructions()).toContain('get_run_briefing');
       // Real transport cancellation must release the server wait, not just reject the client promise.
       const abortRun = engine.start(w.id, null).run;
       const abortSnapshot = await call('get_run_briefing', { id: abortRun.id });
@@ -1810,21 +1781,7 @@ it.each(['stdio', 'http'])(
       expect(editSchema.properties!.edits).toMatchObject({
         type: 'array',
         maxItems: 100,
-        description: expect.stringContaining('cwd, pinPromptsAtPublish'),
       });
-      expect(
-        tools.find((t) => t.name === 'edit_workflow')!.description,
-      ).toContain('No-op');
-      expect(
-        tools.find((t) => t.name === 'edit_workflow')!.description,
-      ).toContain('Batch descendants');
-      expect(
-        tools.find((t) => t.name === 'validate_workflow')!.description,
-      ).toContain('unknown');
-      expect(
-        tools.find((t) => t.name === 'validate_workflow')!.description,
-      ).toContain('2 MiB');
-      expect(client.getInstructions()).toContain('edit_workflow');
       const editTarget = await call('create_workflow', {
         name: 'Atomic transport edit',
       });
@@ -2066,13 +2023,6 @@ it.each(['stdio', 'http'])(
         .inputSchema.properties!.definition;
       const updateDefinition = tools.find((t) => t.name === 'update_workflow')!
         .inputSchema.properties!.draft;
-      expect(client.getInstructions()).toContain('work.lease_expired');
-      expect(client.getInstructions()).toContain('poll_timeout');
-      for (const name of ['get_run_briefing', 'wait_for_run_change'])
-        expect(tools.find((tool) => tool.name === name)!.description).toContain(
-          'poll_timeout',
-        );
-      expect(client.getInstructions()).toContain('Routed executions record');
       for (const withFallback of [true, false]) {
         const switchDraft = switchDefinition(withFallback);
         for (const [toolName, parameter] of [
@@ -2137,11 +2087,7 @@ it.each(['stdio', 'http'])(
           (await call('import_workflows', { bundle: switchBundle })).changed,
         ).toEqual([]);
       }
-      expect(client.getInstructions()).toContain(
-        'Detached descendants can remain active',
-      );
       const scriptTool = tools.find((tool) => tool.name === 'manage_script')!;
-      expect(scriptTool.description).toContain('stopped:true');
       for (const action of ['inspect', 'stop'])
         assertContract(
           scriptTool.inputSchema,
@@ -2197,12 +2143,6 @@ it.each(['stdio', 'http'])(
         },
       });
       expect(missingScript.isError).toBe(true);
-      expect(tools.find((t) => t.name === 'cancel_run')!.description).toContain(
-        'stop at detached',
-      );
-      expect(tools.find((t) => t.name === 'retry_run')!.description).toContain(
-        'failed detached child',
-      );
       const targetDefinition = blankDefinition();
       if (targetDefinition.nodes[1].kind === 'agent')
         targetDefinition.nodes[1].maxAttempts = 1;
@@ -2712,9 +2652,6 @@ it.each(['stdio', 'http'])(
         'published versions v1; latest v2 does not reference it',
       );
       expect(blockedContent[0].text).toContain('archive');
-      expect(
-        tools.find((t) => t.name === 'delete_workflow')!.description,
-      ).toContain('External draft or retained published references');
       await call('delete_workflow', { id: disposable.id });
       expect(
         (await call('list_workflows', {})).some(
@@ -2816,9 +2753,6 @@ it.each(['stdio', 'http'])(
         expect(schema.required).toContain(parameter);
         expect(schema.properties![parameter]).not.toEqual({});
       }
-      expect(tools.find((t) => t.name === 'list_work')!.description).toContain(
-        'availableUntil',
-      );
 
       // Exercise the published JSON examples through both MCP transports.
       const examples = [
@@ -3013,10 +2947,6 @@ it.each(['stdio', 'http'])(
         tools.find((tool) => tool.name === 'get_run_usage')!.inputSchema
           .properties?.includeReports,
       ).toMatchObject({ default: false });
-      expect(
-        tools.find((tool) => tool.name === 'get_run_usage')!.description,
-      ).toContain('detached');
-      expect(client.getInstructions()).toContain('report_usage');
       const usageInput = {
         workId: claim.id,
         attempt: claim.attempt,

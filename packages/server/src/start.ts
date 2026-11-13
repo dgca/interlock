@@ -88,6 +88,7 @@ export async function startServer(options: {
       '/mcp/execute',
       options.connection.engineUrl,
     ).href;
+    if (connection.requireToken) engine.executors.apiToken = connection.token;
     engine.executors.errors.attach(
       new JsonLog(
         join(dirname(options.database), 'logs'),

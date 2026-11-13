@@ -154,7 +154,7 @@ export function createMcpServer(
   );
   tool(
     'start_workflow_comparison',
-    'Start a previewed paired live comparison. Rechecks confirmation, suite revision and model aliases transactionally; aliases stay captured across samples and descendants. Max 4 active comparisons and 10 active execution trees. Concurrency counts root plus active descendants. Captured sampleBudget policies install on each root. Returns compact progress with configurationIds. Use list_work/claim_work/submit_result to execute Agent work, and read_workflow_comparisons action:report to inspect results.',
+    'Start a previewed paired live comparison. Rechecks confirmation, suite revision and model aliases transactionally; aliases stay captured across samples and descendants. Max 4 active comparisons and 10 active execution trees. Concurrency counts root plus active descendants. Captured sampleBudget policies install on each root. Returns compact progress with configurationIds. Inspect results with read_workflow_comparisons action:report. Execute Agent work with list_work/claim_work/submit_result.',
     comparisonStartSchema,
     (input) => client.testbench.start(input),
   );
@@ -425,7 +425,7 @@ export function createMcpServer(
   );
   tool(
     'list_workflows',
-    'List compact workflow summaries. Use source:starters for bundled choices and board setup, get_workflow for one draft, or includeDraft:true for full records. ownerWorkflowId:null lists library workflows, a parent ID lists its children, and omission lists all. draftRevision ignores layout-only edits; draftMatchesLatest is null before publication. latestVersion is a publication counter; retained versions can have gaps.',
+    'List compact workflow summaries. Use source:starters for bundled choices and board setup or includeDraft:true for full records; get_workflow reads one draft. ownerWorkflowId:null lists library workflows, a parent ID lists its children, and omission lists all. draftRevision ignores layout-only edits; draftMatchesLatest is null before publication. latestVersion is a publication counter; retained versions can have gaps.',
     {
       source: z.enum(['library', 'starters']).default('library'),
       includeDraft: z.boolean().default(false),
@@ -738,7 +738,7 @@ export function createMcpServer(
   );
   tool(
     'list_work',
-    'Discover available Agent assignments. runId includes all of its descendants, including detached work after the parent completes; omit it to list all work. Summary fields return identity, ancestry, context, counts and lease policy without payloads; fields:"full" or claim_work returns the captured assignment. Version moves keep existing work unchanged. availableUntil is the unclaimed deadline, and executor and managedExecution show automatic dispatch. An empty list is not completion: inspect get_run_briefing blockers and lifecycles and wait. Timers advance independently.',
+    'Discover available Agent assignments. runId includes all of its descendants, including detached work after the parent completes; omit it to list all work. Summary fields return identity, ancestry, context, counts and lease policy without payloads; fields:"full" returns the captured assignment. claim_work also returns it. Version moves keep existing work unchanged. availableUntil is the unclaimed deadline, and executor and managedExecution show automatic dispatch. An empty list is not completion: inspect get_run_briefing blockers and lifecycles and wait. Timers advance independently.',
     {
       runId: z.string().optional(),
       fields: z

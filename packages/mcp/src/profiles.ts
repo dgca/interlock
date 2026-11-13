@@ -18,6 +18,7 @@ const execute = [
   'preflight_result',
   'submit_result',
   'fail_work',
+  'manage_work_hold',
   'report_usage',
   'inspect_assignment_size',
   'manage_work_resources',
@@ -84,6 +85,7 @@ const operate = [
   'cancel_run_tree',
   'manage_pause',
   'manage_work_hold',
+  'manage_work_resources',
   'manage_stalls',
   'manage_executors',
   'manage_script',
@@ -113,6 +115,36 @@ export function inMcpProfile(profile: McpProfile, name: string) {
   if (owners.length === 0)
     throw new Error(`Tool ${name} is not assigned to an MCP profile`);
   return profile === 'all' || members[profile].has(name);
+}
+
+const toolNames = new RegExp(
+  `\\b(?:${[...new Set([...execute, ...author, ...operate])].join('|')})\\b`,
+  'g',
+);
+
+/**
+ * Drops sentences and `;` clauses that name a tool outside a bounded profile,
+ * so discovery text never points agents at tools they cannot call.
+ */
+export function profileText(profile: McpProfile, text: string) {
+  if (profile === 'all') return text;
+  const served = (part: string) =>
+    [...part.matchAll(toolNames)].every(([name]) => members[profile].has(name));
+  return text
+    .split(/(?<=\.) +/)
+    .map((sentence) => {
+      const clauses = sentence.replace(/\.$/, '').split('; ');
+      const kept = clauses.filter(served);
+      if (kept.length === clauses.length) return sentence;
+      if (!kept.length) return '';
+      const joined = kept.join('; ');
+      // A dropped leading clause can leave a lowercase word; identifiers stay.
+      return kept[0] !== clauses[0] && /^[a-z]+ /.test(joined)
+        ? `${joined[0].toUpperCase()}${joined.slice(1)}.`
+        : `${joined}.`;
+    })
+    .filter(Boolean)
+    .join(' ');
 }
 
 /**

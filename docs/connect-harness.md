@@ -92,16 +92,16 @@ Restart or reconnect your harness after changing configuration. Enable Interlock
 
 Every tool definition a client lists costs context in each conversation. Profiles serve a smaller tool set:
 
-| Profile   | Tools                                                                                                    | Endpoint             |
-| --------- | -------------------------------------------------------------------------------------------------------- | -------------------- |
-| `all`     | Every tool. The default, so existing configurations keep the same tools.                                 | `/mcp` or `/mcp/all` |
-| `execute` | Assignment execution: list, claim, renew, preflight, submit and fail work, usage, resources, run reads.  | `/mcp/execute`       |
-| `author`  | Workflows, versions, ownership, prompts, variables, presets, triggers, boards and the testbench.         | `/mcp/author`        |
-| `operate` | Starting, inspecting, waiting on, pausing, holding, retrying and cancelling runs, executors and budgets. | `/mcp/operate`       |
+| Profile   | Tools                                                                                                                      | Endpoint             |
+| --------- | -------------------------------------------------------------------------------------------------------------------------- | -------------------- |
+| `all`     | Every tool. The default, so existing configurations keep the same tools.                                                   | `/mcp` or `/mcp/all` |
+| `execute` | Assignment execution: list, claim, renew, preflight, submit, fail and hold work, usage, resources, run reads.              | `/mcp/execute`       |
+| `author`  | Workflows, versions, ownership, prompts, variables, presets, triggers, boards and the testbench.                           | `/mcp/author`        |
+| `operate` | Starting, inspecting, waiting on, pausing, holding, retrying and cancelling runs, resource release, executors and budgets. | `/mcp/operate`       |
 
-Select a profile with the URL path, such as `http://127.0.0.1:4310/mcp/execute`, or send the header `X-Interlock-Mcp-Profile: execute` to `/mcp`. Unknown profiles are rejected; a path and header that disagree are rejected. For the stdio bridge, use `interlock mcp --profile execute` or set `INTERLOCK_MCP_PROFILE`. Connect more than one profile under different names when an agent needs tools from several. A tool outside the connected profile is not found. When a compact mutation would suggest a `nextCall` tool outside the profile, it suggests `get_run_briefing` for the same run instead.
+Select a profile with the URL path, such as `http://127.0.0.1:4310/mcp/execute`, or send the header `X-Interlock-Mcp-Profile: execute` to `/mcp`. Unknown profiles are rejected; a path and header that disagree are rejected. For the stdio bridge, use `interlock mcp --profile execute` or set `INTERLOCK_MCP_PROFILE`. Connect more than one profile under different names when an agent needs tools from several. A tool outside the connected profile is not found, and the profile's server instructions and tool descriptions omit guidance that names one. When a compact mutation would suggest a `nextCall` tool outside the profile, it suggests `get_run_briefing` for the same run instead.
 
-Sessions launched by a custom harness in launcher mode receive the `execute` endpoint as `$INTERLOCK_MCP_URL` and the launch payload's `mcpUrl`. See [custom harnesses](managed-executors.md#custom-harnesses).
+Sessions launched by a custom harness in launcher mode receive the `execute` endpoint as `$INTERLOCK_MCP_URL` and the launch payload's `mcpUrl`. When the server requires the [API token](#api-token), they also receive it as `$INTERLOCK_API_TOKEN`. See [custom harnesses](managed-executors.md#custom-harnesses).
 
 ## Install workflow skills
 
