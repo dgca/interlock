@@ -19,6 +19,8 @@ const allowedPackages = {
 const allowedFiles = {
   // The packaged executable's composition root starts the server and MCP server.
   'packages/cli/src/bin.ts': ['client', 'core', 'mcp', 'server'],
+  // The HTTP app mounts the MCP server at /mcp.
+  'packages/server/src/app.ts': ['core', 'mcp', 'runtime', 'storage'],
 };
 
 const escape = (path) => path.replace(/[.]/g, '\\.');
@@ -62,13 +64,16 @@ const packageDirection = [
   ),
 ];
 
-// Baseline for the folder-scoped cycle rule. dependency-cruiser applies
-// --ignore-known only to module-level violations, so known package cycles are
-// listed here as exact folder edges instead. Remove an entry once fixed.
-const knownPackageCycleEdges = {
-  // server -> mcp -> client -> server: server/src/app.ts mounts the MCP server
-  // (createMcpServer), which calls the server through @interlock/client. #418.
-  'packages/server/src': ['packages/mcp/src'],
+// Folder edges exempt from the package-cycle rule in this config only, because
+// the cycle through them exists only in types. server/src/app.ts mounts the
+// MCP server (mcp/src/tools); its createMcpServer takes the client type from
+// mcp/src/client.ts through a type-only import, and the client imports the
+// server's router type. Folder-scoped rules cannot filter by dependency type,
+// so .dependency-cruiser-runtime.mjs runs the same cycle rule, without these
+// exemptions, on a graph without type-only imports: a runtime cycle through
+// these edges still fails `pnpm lint:deps`. Add no entries. #472.
+const typeOnlyCycleEdges = {
+  'packages/server/src': ['packages/mcp/src/tools'],
   'packages/mcp/src': ['packages/client/src'],
   'packages/client/src': ['packages/server/src'],
 };
@@ -84,31 +89,27 @@ const cycleRule = (from, to) => ({
   to: { circular: true, path: '^packages/', ...to },
 });
 const exact = (folders) => folders.map((folder) => `^${folder}$`);
-const packageCycles = Object.keys(allowedPackages).flatMap((name) => {
-  const known = Object.keys(knownPackageCycleEdges).filter((folder) =>
-    folder.startsWith(`packages/${name}/`),
-  );
-  return [
-    cycleRule(
-      { path: `^packages/${name}/`, pathNot: exact(known) },
-      { pathNot: `^packages/${name}/` },
-    ),
-    ...known.map((folder) =>
+export const packageCycles = (exempt) =>
+  Object.keys(allowedPackages).flatMap((name) => {
+    const exempted = Object.keys(exempt).filter((folder) =>
+      folder.startsWith(`packages/${name}/`),
+    );
+    return [
       cycleRule(
-        { path: exact([folder]) },
-        {
-          pathNot: [
-            `^packages/${name}/`,
-            ...exact(knownPackageCycleEdges[folder]),
-          ],
-        },
+        { path: `^packages/${name}/`, pathNot: exact(exempted) },
+        { pathNot: `^packages/${name}/` },
       ),
-    ),
-  ];
-});
+      ...exempted.map((folder) =>
+        cycleRule(
+          { path: exact([folder]) },
+          { pathNot: [`^packages/${name}/`, ...exact(exempt[folder])] },
+        ),
+      ),
+    ];
+  });
 
 /** @type {import('dependency-cruiser').IConfiguration} */
-export default {
+const config = {
   forbidden: [
     ...packageDirection,
     {
@@ -123,7 +124,7 @@ export default {
         dependencyTypes: ['local'],
       },
     },
-    ...packageCycles,
+    ...packageCycles(typeOnlyCycleEdges),
     {
       name: 'client-server-type-only',
       comment:
@@ -168,3 +169,4 @@ export default {
     },
   },
 };
+export default config;

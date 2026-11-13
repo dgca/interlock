@@ -1,6 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { TRPCClientError } from '@interlock/client';
+import { TRPCClientError } from '@trpc/client';
 import { ResultRejection } from '@interlock/core';
 import {
   inMcpProfile,

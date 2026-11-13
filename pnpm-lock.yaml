@@ -170,6 +170,9 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.25.0
         version: 1.30.0(zod@3.25.76)
+      '@trpc/client':
+        specifier: ^11.7.0
+        version: 11.18.0(@trpc/server@11.18.0(typescript@5.9.3))(typescript@5.9.3)
       zod:
         specifier: ^3.25.76
         version: 3.25.76
@@ -191,6 +194,9 @@ importers:
       '@interlock/core':
         specifier: workspace:*
         version: link:../core
+      '@interlock/mcp':
+        specifier: workspace:*
+        version: link:../mcp
       '@interlock/runtime':
         specifier: workspace:*
         version: link:../runtime
