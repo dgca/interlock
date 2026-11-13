@@ -53,7 +53,7 @@ function workflow(
   return w;
 }
 
-async function launched(id: string, commands: Record<string, string>) {
+async function launched(id: string, commands: Record<string, unknown>) {
   const e = create();
   const profile = e.executors.saveProfile({
     id,
@@ -760,7 +760,9 @@ it.each(['status', 'archive', 'message', 'stop'] as const)(
     if (operation === 'status')
       await (e.executors as any).pollLauncherStatus(session);
     if (operation === 'archive')
-      await (e.executors as any).archiveLauncherSession(session);
+      await expect(
+        (e.executors as any).archiveLauncherSession(session),
+      ).rejects.toBeInstanceOf(HarnessCleanupError);
     if (operation === 'message')
       await expect(
         (e.executors as any).sendLauncherMessage(session, 'continue'),
@@ -813,10 +815,13 @@ it('still requests remote stop after status-command cleanup becomes uncertain', 
   const { e, run, session } = await launched('cancel-uncertain-launcher', {
     statusCommand: 'exit 0',
     stopCommand: 'printf stopped',
+    archiveCommand: 'exit 0',
+    env: { API_KEY: 'sk-live-SECRET' },
   });
+  const cleanup = 'termination not confirmed: sk-live-SECRET token=abcdefgh12';
   const command = vi
     .spyOn(customCommands, 'executeCustomCommand')
-    .mockRejectedValueOnce(new HarnessCleanupError('termination not confirmed'))
+    .mockRejectedValueOnce(new HarnessCleanupError(cleanup))
     .mockResolvedValue('stopped');
   const logDir = mkdtempSync(join(tmpdir(), 'interlock-log-'));
   dirs.push(logDir);
@@ -830,6 +835,9 @@ it('still requests remote stop after status-command cleanup becomes uncertain', 
   });
   const log = readFileSync(join(logDir, 'interlock.log'), 'utf8');
   expect(log).toContain('"event":"scheduler.error"');
+  // Literal profile values and credential-shaped text never reach doctor or the log.
+  for (const text of [log, JSON.stringify(checks)])
+    expect(text).not.toMatch(/sk-live-SECRET|abcdefgh12/);
   e.cancel(run.id);
   (e.executors as any).checkJobs();
   await vi.waitFor(() =>
@@ -837,6 +845,11 @@ it('still requests remote stop after status-command cleanup becomes uncertain', 
       expect.objectContaining({ command: 'printf stopped' }),
     ),
   );
+  // The refused archive after uncertain cleanup used to be swallowed inside the archive step.
+  await vi.waitFor(() =>
+    expect(e.executors.errors.last?.message).toMatch(/cleanup/i),
+  );
+  expect(e.executors.errors.last?.source).toBe('launcher stop');
 });
 
 it('stops an in-flight launch process group before server shutdown finishes', async () => {

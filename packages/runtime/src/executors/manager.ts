@@ -151,7 +151,9 @@ interface Job {
 
 /** Queue and claim lifecycle are shared; adapters own native session protocols. */
 export class ExecutorManager {
-  readonly errors = new SchedulerErrors();
+  readonly errors = new SchedulerErrors(() =>
+    this.profiles().flatMap((p) => [p.headers, p.env]),
+  );
   private transcripts: ManagedTranscripts;
   private adapters = new Map<string, HarnessAdapter>();
   private jobs = new Map<string, Job>();
@@ -2127,16 +2129,15 @@ export class ExecutorManager {
         'Content-Type': 'application/json',
         Accept: 'application/json',
       };
-      if (session.profile.headers) {
-        for (const [k, v] of Object.entries(session.profile.headers)) {
+      if (session.profile.headers)
+        for (const [k, v] of Object.entries(session.profile.headers))
           headers[k] = interpolateTokens(v, tokenMap);
-        }
-      }
-      await fetch(url, {
+      const res = await fetch(url, {
         method: 'POST',
         headers,
         body: JSON.stringify(payload),
-      }).catch(() => {});
+      });
+      if (!res.ok) throw new Error(`Archive URL returned HTTP ${res.status}`);
     } else if (session.profile.archiveCommand) {
       await this.runLauncherCommand(session, 'archive', {
         command: session.profile.archiveCommand,
@@ -2145,7 +2146,7 @@ export class ExecutorManager {
         tokens: tokenMap,
         payload,
         timeoutSeconds: 10,
-      }).catch(() => {});
+      });
     }
   }
   private requestLauncherStop(session: LauncherSession) {
@@ -2182,11 +2183,9 @@ export class ExecutorManager {
         'Content-Type': 'application/json',
         Accept: 'application/json',
       };
-      if (session.profile.headers) {
-        for (const [k, v] of Object.entries(session.profile.headers)) {
+      if (session.profile.headers)
+        for (const [k, v] of Object.entries(session.profile.headers))
           headers[k] = interpolateTokens(v, tokenMap);
-        }
-      }
       const response = await fetch(url, {
         method: 'POST',
         signal: AbortSignal.timeout(10000),

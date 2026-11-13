@@ -8,6 +8,7 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 import type { DiagnosticCheck } from '@interlock/core';
+import { sanitizeMessage } from './executors/templates.js';
 
 const levels = ['debug', 'info', 'warn', 'error'] as const;
 type LogLevel = (typeof levels)[number];
@@ -65,21 +66,35 @@ type SchedulerError = {
 };
 // Claim tickets and assignment tokens are UUIDs; adapter output may echo them.
 const uuid = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
+// URL query strings often carry credentials, e.g. in an unparseable status URL.
+const query = /\?[^\s'"]+/g;
 const repeatMs = 60_000;
 
 /** Background scheduler failures are logged and kept for doctor instead of discarded. */
 export class SchedulerErrors {
   last?: SchedulerError;
   private log?: JsonLog;
+  /** `secrets` lists literal profile header and env maps whose values error text may echo. */
+  constructor(
+    private secrets: () => (Record<string, unknown> | undefined)[] = () => [],
+  ) {}
   private logged = new Map<string, number>();
   attach(log: JsonLog) {
     this.log = log;
   }
   handler = (source: string) => (error: unknown) => this.record(source, error);
   record(source: string, error: unknown) {
-    const text = error instanceof Error ? error.message : String(error);
-    const message = text.replace(uuid, '[redacted]').slice(0, 500);
-    const count = (this.last?.count ?? 0) + 1;
+    let text = error instanceof Error ? error.message : String(error);
+    for (const values of this.secrets())
+      for (const value of Object.values(values ?? {}))
+        if (typeof value === 'string' && value.length >= 4)
+          text = text.replaceAll(value, '[redacted]');
+    const message = sanitizeMessage(
+      text.replace(uuid, '[redacted]').replace(query, '?[redacted]'),
+    );
+    const same = this.last?.source === source && this.last.message === message;
+    // count is consecutive occurrences of this same error.
+    const count = same ? this.last!.count + 1 : 1;
     this.last = { at: new Date().toISOString(), source, message, count };
     // A failing status poll repeats every few seconds; log each distinct error once a minute.
     const key = `${source}\n${message}`;
