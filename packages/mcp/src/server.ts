@@ -172,7 +172,7 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
   }
   tool(
     'doctor',
-    'Read-only readiness: storage/disk/harnesses, enabled trigger failures/automatic pauses, active pauses/uncertain reservations, latest published variable/known-alias/prompt-pin dependencies. Optional live:true probes model connectivity.',
+    'Read-only readiness: storage/disk/harnesses, disabled variables 0.3.0 deletes, enabled trigger failures/automatic pauses, active pauses/uncertain reservations, latest published variable/known-alias/prompt-pin dependencies. Optional live:true probes model connectivity.',
     doctorOptionsSchema,
     (options) => client.system.doctor(options),
   );

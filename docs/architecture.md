@@ -650,7 +650,7 @@ Interlock provides a unified read-only readiness and health check via `interlock
 
 Core owns the diagnostic schemas (`diagnosticCategorySchema`, `diagnosticStatusSchema`, `diagnosticCheckSchema`, `doctorReportSchema`, and `doctorOptionsSchema`). Diagnostics evaluate five categories without mutating state or starting workflow runs:
 
-1. **System**: Checks engine version match, SQLite database integrity (`PRAGMA quick_check`), schema migration version, database file size and run history count, and available disk space (`statfsSync`).
+1. **System**: Checks engine version match, SQLite database integrity (`PRAGMA quick_check`), schema migration version, database file size and run history count, and available disk space (`statfsSync`). It also warns about each disabled variable, naming the workflow drafts and retained versions that reference it, because upgrading to 0.3.0 deletes disabled variables; with none disabled it reports that the upgrade needs no manual variable step.
 2. **Harnesses**: Verifies enabled harness profiles, binary detection, version discovery, `cwd` and `allowedRoots` existence, and optional live single-turn auth/model verification (`--live`).
 3. **Triggers**: Checks schedule execution lag (>60s), consecutive failures and automatic pauses across enabled schedule and lifecycle event triggers.
 4. **Blockers**: Inspects active library and workflow pause holds (`pauseHolds`), uncertain resource and executor holds (`uncertainClaims`, `uncertainOperations`, and uncertain `workResources` reservations), active stalled work items (`currentStalls`), and `needs_model` execution holds (`managedExecutions`).
