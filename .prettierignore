@@ -7,3 +7,4 @@ dist
 .site-build/
 website/.docusaurus/
 website/build/
+eslint-suppressions.json

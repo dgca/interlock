@@ -1,6 +1,8 @@
 name: CI
 
 on:
+  push:
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
@@ -9,7 +11,18 @@ permissions:
 
 jobs:
   validate:
-    runs-on: ubuntu-latest
+    # Check names are "validate (linux)" and "validate (macos)"; keep the
+    # platform labels stable because branch protection refers to them.
+    name: validate (${{ matrix.platform }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux
+            runner: ubuntu-latest
+          - platform: macos
+            runner: macos-latest
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -18,9 +31,13 @@ jobs:
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
       - run: pnpm install --frozen-lockfile
       - run: pnpm format:check
+      - run: pnpm lint
+      - run: pnpm lint:deps
+      - run: pnpm lint:unused
       - run: pnpm test
       - run: pnpm build
       - run: pnpm exec playwright install --with-deps --only-shell chromium
       - run: pnpm test:browser
       - run: pnpm site:build
       - run: pnpm test:package
+      - run: pnpm test:kill
