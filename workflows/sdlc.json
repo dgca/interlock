@@ -201,7 +201,7 @@
           }
         },
         "kind": "agent",
-        "prompt": "Work in root.repoPath. Check that root.taskDir is a project-relative directory inside this Git repository.\nRead the request and enough repository guidance to understand constraints. Preserve unrelated files.\nDraft or revise root.taskDir/intent.md. This document owns the problem, desired outcome, affected users or systems, scope, constraints, and unresolved questions about intent. Record the source request and settled human decisions with their source.\nDescribe success at the outcome level. Leave detailed observable requirements and acceptance criteria to spec.md, and implementation steps and verification methods to plan.md.\nOn revision, apply the incoming feedback and retain settled decisions. Separate material decisions needing human input from technical questions the agent can investigate.\nKeep draft changes uncommitted until this stage can proceed. Implementation starts after the plan can proceed.\nReturn artifactPath, summary, and openQuestions.",
+        "prompt": "Work in root.repoPath. Check that root.taskDir is a project-relative directory inside this Git repository.\nRead the request and enough repository guidance to understand constraints. Preserve unrelated files.\nDraft or revise root.taskDir/intent.md. This document owns the problem, desired outcome, affected users or systems, scope, constraints, and unresolved questions about intent. Record the source request and settled human decisions with their source.\nDescribe success at the outcome level. Leave detailed observable requirements and acceptance criteria to spec.md, and implementation steps and verification methods to plan.md.\nOn revision, apply the incoming feedback and retain settled decisions. Separate material decisions needing human input from technical questions the agent can investigate.\nKeep draft changes uncommitted until this stage can proceed. Implementation starts after the plan can proceed.\nReturn artifactPath, summary, and openQuestions.\nWrite durable task facts and decisions with their sources. Keep assignment-local root/previous envelopes, incoming route values, and current drafting status in the returned summary, outside the planning artifact. On revision, edit the affected passages without retelling the sequence of agent turns.",
         "context": {
           "mode": "current",
           "instructions": "Read root for repoPath, request, taskDir, and the effective reviewPolicy.\nRead previous for the latest stage result or revision feedback. A policy envelope contains reviewPolicy and review; use previous.review as the stage result in that case.\nAn agent_review result with route proceed means progression under existing authorization. A human result with decision approved records explicit approval.\nFor revisions, apply feedback and preserve prior human decisions recorded in the artifacts and run. Ask again only about new material decisions.\nVerify current repository facts and follow its instructions. Report blockers rather than inventing results.",
@@ -369,7 +369,7 @@
           }
         },
         "kind": "agent",
-        "prompt": "Read root.taskDir/intent.md and its source request and prior decisions. Check the problem, intended outcome, users, scope, and constraints against the original request and repository facts.\nCheck that intent.md defines intent clearly and leaves detailed behavior and acceptance criteria to spec.md, and implementation and verification methods to plan.md. Outcome-level success statements belong here.\nCheck cross-document references and any changed upstream decisions against their authoritative definitions and recorded authorization. Where earlier artifacts exist, check for contradictions, repeated definitions that could drift, and decisions placed in the wrong document. Brief orientation summaries are acceptable. Correct mechanical duplication or misplaced content through revise; escalate only when resolving the underlying decision needs human input.\nAssess the artifact before choosing a route. Length or apparent detail alone does not establish authorization.\nReturn proceed when behavior and scope are settled, acceptance criteria follow from the request, and repository inspection reveals no conflict requiring a change to the requested outcome.\nFor proceed, provide concrete authorizationBasis entries and an empty decisions list. Record minor assumptions in the artifact. Report progression under existing authorization.\nReturn needs_human when a consequential product, scope, architectural, or policy decision is unresolved, when authorization conflicts, or when only the person can supply necessary information. Uncertainty about a material decision takes this route.\nIf the person explicitly requested human review of this stage, return needs_human with that approval question even when reviewPolicy is auto. List focused questions in decisions and explain why each matters. Cite the request and recorded decisions already available.\nReturn revise for corrections the agent can make from existing evidence. Supply located feedback. Investigate ordinary technical unknowns before escalating.\nPreserve settled decisions. Review never invents a human approval. The graph separately enforces reviewPolicy always after proceed.\nLeave implementation to the build stage. Return the output contract with decisionSource agent_review.",
+        "prompt": "Read root.taskDir/intent.md and its source request and prior decisions. Check the problem, intended outcome, users, scope, and constraints against the original request and repository facts.\nCheck that intent.md defines intent clearly and leaves detailed behavior and acceptance criteria to spec.md, and implementation and verification methods to plan.md. Outcome-level success statements belong here.\nCheck cross-document references and any changed upstream decisions against their authoritative definitions and recorded authorization. Where earlier artifacts exist, check for contradictions, repeated definitions that could drift, and decisions placed in the wrong document. Brief orientation summaries are acceptable. Correct mechanical duplication or misplaced content through revise; escalate only when resolving the underlying decision needs human input.\nAssess the artifact before choosing a route. Length or apparent detail alone does not establish authorization.\nReturn proceed when behavior and scope are settled, acceptance criteria follow from the request, and repository inspection reveals no conflict requiring a change to the requested outcome.\nFor proceed, provide concrete authorizationBasis entries and an empty decisions list. Record minor assumptions in the artifact. Report progression under existing authorization.\nReturn needs_human when a consequential product, scope, architectural, or policy decision is unresolved, when authorization conflicts, or when only the person can supply necessary information. Uncertainty about a material decision takes this route.\nIf the person explicitly requested human review of this stage, return needs_human with that approval question even when reviewPolicy is auto. List focused questions in decisions and explain why each matters. Cite the request and recorded decisions already available.\nReturn revise for corrections the agent can make from existing evidence. Supply located feedback. Investigate ordinary technical unknowns before escalating.\nPreserve settled decisions. Review never invents a human approval. The graph separately enforces reviewPolicy always after proceed.\nLeave implementation to the build stage. Return the output contract with decisionSource agent_review.\nReview the artifact against the source request, repository rules, and recorded decisions. Your previous input is the latest draft result, not the input the writer received. Stage instructions require drafts to remain uncommitted until the stage can proceed; that is a workflow instruction, not a restriction added by the user. Treat obsolete execution narration as removable editorial text rather than an authorization conflict. Correct harmless wording in place and proceed when substantive requirements are satisfied; reserve revise for a defect affecting implementation, verification, scope, or authorization. Keep changes within this artifact and report any editorial correction in summary.",
         "context": {
           "mode": "current",
           "instructions": "Read root for repoPath, request, taskDir, and the effective reviewPolicy.\nRead previous for the latest stage result or revision feedback. A policy envelope contains reviewPolicy and review; use previous.review as the stage result in that case.\nAn agent_review result with route proceed means progression under existing authorization. A human result with decision approved records explicit approval.\nFor revisions, apply feedback and preserve prior human decisions recorded in the artifacts and run. Ask again only about new material decisions.\nVerify current repository facts and follow its instructions. Report blockers rather than inventing results.",
@@ -1269,7 +1269,7 @@
           }
         },
         "kind": "agent",
-        "prompt": "On first entry to this stage, confirm intent.md can proceed. The incoming stage result, unwrapped from a policy envelope when present, must be agent_review with route proceed, or human with decision approved, and apply to the current intent artifact.\nOn a revision, previous is this spec stage's review feedback or human revision decision. Apply that feedback and preserve the already accepted intent and recorded authorization; do not treat this revision result as a new intent approval requirement. If feedback changes an upstream decision, follow the authorization and artifact ownership rules below.\nRead the intent and relevant repository architecture, product, security, and UX guidance.\nBefore the first task commit, create or reuse the task branch under repository and harness conventions. Verify that it belongs to this task. Preserve unrelated changes and use a separate checkout when needed.\nRecord the task branch and exact full Git baseCommit in intent.md before committing any task artifact. For a resumed task, reuse its recorded original baseline and verify it against task history. Ask only if the task branch or baseline remains materially ambiguous.\nCommit the accepted intent artifact to that task branch if still uncommitted.\nDraft or revise root.taskDir/spec.md. This document owns required observable behavior, acceptance criteria, and the product or design decisions needed to define that behavior, including relevant alternatives, risks, and unresolved questions.\nGive acceptance criteria stable identifiers such as AC1 and AC2. Preserve identifiers across revisions; do not renumber existing criteria.\nFor UI changes, include a brief UI proposal in spec.md before implementation. Describe the user flow, layout and action placement, relevant loading/empty/error/success states, keyboard and focus behavior, and narrow-screen behavior. Reuse the repository's existing components and interaction patterns. Cover only states the change affects; a short sketch or text is sufficient. Resolve consequential design choices through the existing spec review.\nReference intent.md for the problem, outcome, scope, and constraints instead of reproducing those definitions. Use relative links and specific headings or decision references where useful. Brief summaries that orient the reader are welcome; each decision or requirement has one authoritative definition.\nTrace requirements to the request and prior human decisions. Flag conflicts or proposed changes to upstream decisions rather than silently redefining them here. Keep code areas, implementation sequence, and verification methods in plan.md.\nOn revision, apply feedback and retain settled human decisions with their source in the document that owns them. Keep references aligned when an authorized decision changes.\nKeep the draft spec uncommitted until this stage can proceed. Return artifactPath, summary, and openQuestions.",
+        "prompt": "On first entry to this stage, confirm intent.md can proceed. The incoming stage result, unwrapped from a policy envelope when present, must be agent_review with route proceed, or human with decision approved, and apply to the current intent artifact.\nOn a revision, previous is this spec stage's review feedback or human revision decision. Apply that feedback and preserve the already accepted intent and recorded authorization; do not treat this revision result as a new intent approval requirement. If feedback changes an upstream decision, follow the authorization and artifact ownership rules below.\nRead the intent and relevant repository architecture, product, security, and UX guidance.\nBefore the first task commit, create or reuse the task branch under repository and harness conventions. Verify that it belongs to this task. Preserve unrelated changes and use a separate checkout when needed.\nRecord the task branch and exact full Git baseCommit in intent.md before committing any task artifact. For a resumed task, reuse its recorded original baseline and verify it against task history. Ask only if the task branch or baseline remains materially ambiguous.\nCommit the accepted intent artifact to that task branch if still uncommitted.\nDraft or revise root.taskDir/spec.md. This document owns required observable behavior, acceptance criteria, and the product or design decisions needed to define that behavior, including relevant alternatives, risks, and unresolved questions.\nGive acceptance criteria stable identifiers such as AC1 and AC2. Preserve identifiers across revisions; do not renumber existing criteria.\nFor UI changes, include a brief UI proposal in spec.md before implementation. Describe the user flow, layout and action placement, relevant loading/empty/error/success states, keyboard and focus behavior, and narrow-screen behavior. Reuse the repository's existing components and interaction patterns. Cover only states the change affects; a short sketch or text is sufficient. Resolve consequential design choices through the existing spec review.\nReference intent.md for the problem, outcome, scope, and constraints instead of reproducing those definitions. Use relative links and specific headings or decision references where useful. Brief summaries that orient the reader are welcome; each decision or requirement has one authoritative definition.\nTrace requirements to the request and prior human decisions. Flag conflicts or proposed changes to upstream decisions rather than silently redefining them here. Keep code areas, implementation sequence, and verification methods in plan.md.\nOn revision, apply feedback and retain settled human decisions with their source in the document that owns them. Keep references aligned when an authorized decision changes.\nKeep the draft spec uncommitted until this stage can proceed. Return artifactPath, summary, and openQuestions.\nWrite durable task facts and decisions with their sources. Keep assignment-local root/previous envelopes, incoming route values, and current drafting status in the returned summary, outside the planning artifact. On revision, edit the affected passages without retelling the sequence of agent turns.",
         "context": {
           "mode": "current",
           "instructions": "Read root for repoPath, request, taskDir, and the effective reviewPolicy.\nRead previous for the latest stage result or revision feedback. A policy envelope contains reviewPolicy and review; use previous.review as the stage result in that case.\nAn agent_review result with route proceed means progression under existing authorization. A human result with decision approved records explicit approval.\nFor revisions, apply feedback and preserve prior human decisions recorded in the artifacts and run. Ask again only about new material decisions.\nVerify current repository facts and follow its instructions. Report blockers rather than inventing results.",
@@ -1437,7 +1437,7 @@
           }
         },
         "kind": "agent",
-        "prompt": "Read root.taskDir/spec.md and its source request and prior decisions. Check requirements and observable acceptance criteria against the accepted intent, request, prior decisions, and repository guidance. Inspect proposed behavior, alternatives, risks, and unresolved product or scope choices.\nFor UI changes, check the brief proposal follows existing patterns and makes affected states, actions, keyboard/focus, and narrow-screen behavior clear. Request corrections only for material gaps.\nCheck that spec.md owns behavior and acceptance criteria, gives criteria stable identifiers, and references intent.md for scope and constraints. Ensure implementation steps and verification methods are left to plan.md.\nCheck cross-document references and any changed upstream decisions against their authoritative definitions and recorded authorization. Where earlier artifacts exist, check for contradictions, repeated definitions that could drift, and decisions placed in the wrong document. Brief orientation summaries are acceptable. Correct mechanical duplication or misplaced content through revise; escalate only when resolving the underlying decision needs human input.\nAssess the artifact before choosing a route. Length or apparent detail alone does not establish authorization.\nReturn proceed when behavior and scope are settled, acceptance criteria follow from the request, and repository inspection reveals no conflict requiring a change to the requested outcome.\nFor proceed, provide concrete authorizationBasis entries and an empty decisions list. Record minor assumptions in the artifact. Report progression under existing authorization.\nReturn needs_human when a consequential product, scope, architectural, or policy decision is unresolved, when authorization conflicts, or when only the person can supply necessary information. Uncertainty about a material decision takes this route.\nIf the person explicitly requested human review of this stage, return needs_human with that approval question even when reviewPolicy is auto. List focused questions in decisions and explain why each matters. Cite the request and recorded decisions already available.\nReturn revise for corrections the agent can make from existing evidence. Supply located feedback. Investigate ordinary technical unknowns before escalating.\nPreserve settled decisions. Review never invents a human approval. The graph separately enforces reviewPolicy always after proceed.\nLeave implementation to the build stage. Return the output contract with decisionSource agent_review.",
+        "prompt": "Read root.taskDir/spec.md and its source request and prior decisions. Check requirements and observable acceptance criteria against the accepted intent, request, prior decisions, and repository guidance. Inspect proposed behavior, alternatives, risks, and unresolved product or scope choices.\nFor UI changes, check the brief proposal follows existing patterns and makes affected states, actions, keyboard/focus, and narrow-screen behavior clear. Request corrections only for material gaps.\nCheck that spec.md owns behavior and acceptance criteria, gives criteria stable identifiers, and references intent.md for scope and constraints. Ensure implementation steps and verification methods are left to plan.md.\nCheck cross-document references and any changed upstream decisions against their authoritative definitions and recorded authorization. Where earlier artifacts exist, check for contradictions, repeated definitions that could drift, and decisions placed in the wrong document. Brief orientation summaries are acceptable. Correct mechanical duplication or misplaced content through revise; escalate only when resolving the underlying decision needs human input.\nAssess the artifact before choosing a route. Length or apparent detail alone does not establish authorization.\nReturn proceed when behavior and scope are settled, acceptance criteria follow from the request, and repository inspection reveals no conflict requiring a change to the requested outcome.\nFor proceed, provide concrete authorizationBasis entries and an empty decisions list. Record minor assumptions in the artifact. Report progression under existing authorization.\nReturn needs_human when a consequential product, scope, architectural, or policy decision is unresolved, when authorization conflicts, or when only the person can supply necessary information. Uncertainty about a material decision takes this route.\nIf the person explicitly requested human review of this stage, return needs_human with that approval question even when reviewPolicy is auto. List focused questions in decisions and explain why each matters. Cite the request and recorded decisions already available.\nReturn revise for corrections the agent can make from existing evidence. Supply located feedback. Investigate ordinary technical unknowns before escalating.\nPreserve settled decisions. Review never invents a human approval. The graph separately enforces reviewPolicy always after proceed.\nLeave implementation to the build stage. Return the output contract with decisionSource agent_review.\nReview the artifact against the source request, repository rules, and recorded decisions. Your previous input is the latest draft result, not the input the writer received. Stage instructions require drafts to remain uncommitted until the stage can proceed; that is a workflow instruction, not a restriction added by the user. Treat obsolete execution narration as removable editorial text rather than an authorization conflict. Correct harmless wording in place and proceed when substantive requirements are satisfied; reserve revise for a defect affecting implementation, verification, scope, or authorization. Keep changes within this artifact and report any editorial correction in summary.",
         "context": {
           "mode": "current",
           "instructions": "Read root for repoPath, request, taskDir, and the effective reviewPolicy.\nRead previous for the latest stage result or revision feedback. A policy envelope contains reviewPolicy and review; use previous.review as the stage result in that case.\nAn agent_review result with route proceed means progression under existing authorization. A human result with decision approved records explicit approval.\nFor revisions, apply feedback and preserve prior human decisions recorded in the artifacts and run. Ask again only about new material decisions.\nVerify current repository facts and follow its instructions. Report blockers rather than inventing results.",
@@ -2337,7 +2337,7 @@
           }
         },
         "kind": "agent",
-        "prompt": "On first entry to this stage, confirm spec.md can proceed. The incoming stage result, unwrapped from a policy envelope when present, must be agent_review with route proceed, or human with decision approved, and apply to the current spec artifact.\nOn a revision, previous is this plan stage's review feedback or human revision decision. Apply that feedback and preserve the already accepted spec and recorded authorization; do not treat this revision result as a new spec approval requirement. If feedback changes an upstream decision, follow the authorization and artifact ownership rules below.\nRead intent.md, spec.md, current code, and repository instructions. Commit the accepted spec artifact to the task branch if still uncommitted. Preserve unrelated changes.\nDraft or revise root.taskDir/plan.md. This document owns the implementation approach, intended code areas, implementation sequence, repository-specific tests and build or visual checks, implementation risks, and how completion will be demonstrated.\nMap implementation steps and verification checks to the stable acceptance criterion identifiers in spec.md. Reference those criteria instead of copying their requirement text. Reference intent.md for scope and constraints. Use relative links and specific headings or decision references where useful.\nIdentify the change's highest-risk failure cases and pair each with a direct check and expected outcome. Choose cases from the actual change, such as missing references in each supported format/entry point, partial writes, stale responses, or a lost response after a successful mutation. A negative check must reach the claimed boundary and include a valid control; rollback checks compare complete protected state after an injected write failure.\nAssign planned checks to build or independent review in plan.md. Build owns implementation tests and repository-required checks. Review owns independent diff review and targeted boundary verification. Completion and PR delivery belong to preparePr. Keep ownership in this existing plan; use existing output contracts and evidence rather than adding reports or roles.\nFor an interactive UI change, plan one short representative user journey through the changed behavior, with steps, expected visible results, and the relevant spec.md criterion identifiers. Choose interactions the change could affect, such as text entry, clipboard shortcuts, focus, save and reopen, or dragging; do not turn these examples into a universal checklist. For a copy-only or static visual change, a rendered inspection is sufficient. Non-UI changes need no UI journey.\nReuse existing interaction tests, automation, and verification evidence. A brief manual check through actual controls is acceptable. This workflow does not require new UI automation infrastructure or a separate UI verification document. Expand beyond the representative journey only for a concrete failure, uncovered required behavior, or broader impact from the change; record the reason.\nBrief summaries that orient the reader are welcome; do not create a second authoritative definition of behavior, scope, or product decisions.\nDistinguish verified repository facts from assumptions. Keep implementation choices within the authorized scope. Flag conflicts or proposed changes to upstream decisions rather than silently redefining them here.\nOn revision, apply feedback and retain settled human decisions with their source in the document that owns them. Keep references aligned when an authorized decision changes.\nKeep the draft plan uncommitted until this stage can proceed. Return artifactPath, summary, and openQuestions.",
+        "prompt": "On first entry to this stage, confirm spec.md can proceed. The incoming stage result, unwrapped from a policy envelope when present, must be agent_review with route proceed, or human with decision approved, and apply to the current spec artifact.\nOn a revision, previous is this plan stage's review feedback or human revision decision. Apply that feedback and preserve the already accepted spec and recorded authorization; do not treat this revision result as a new spec approval requirement. If feedback changes an upstream decision, follow the authorization and artifact ownership rules below.\nRead intent.md, spec.md, current code, and repository instructions. Commit the accepted spec artifact to the task branch if still uncommitted. Preserve unrelated changes.\nDraft or revise root.taskDir/plan.md. This document owns the implementation approach, intended code areas, implementation sequence, repository-specific tests and build or visual checks, implementation risks, and how completion will be demonstrated.\nMap implementation steps and verification checks to the stable acceptance criterion identifiers in spec.md. Reference those criteria instead of copying their requirement text. Reference intent.md for scope and constraints. Use relative links and specific headings or decision references where useful.\nIdentify the change's highest-risk failure cases and pair each with a direct check and expected outcome. Choose cases from the actual change, such as missing references in each supported format/entry point, partial writes, stale responses, or a lost response after a successful mutation. A negative check must reach the claimed boundary and include a valid control; rollback checks compare complete protected state after an injected write failure.\nAssign planned checks to build or independent review in plan.md. Build owns implementation tests and repository-required checks. Review owns independent diff review and targeted boundary verification. Completion and PR delivery belong to preparePr. Keep ownership in this existing plan; use existing output contracts and evidence rather than adding reports or roles.\nFor an interactive UI change, plan one short representative user journey through the changed behavior, with steps, expected visible results, and the relevant spec.md criterion identifiers. Choose interactions the change could affect, such as text entry, clipboard shortcuts, focus, save and reopen, or dragging; do not turn these examples into a universal checklist. For a copy-only or static visual change, a rendered inspection is sufficient. Non-UI changes need no UI journey.\nReuse existing interaction tests, automation, and verification evidence. A brief manual check through actual controls is acceptable. This workflow does not require new UI automation infrastructure or a separate UI verification document. Expand beyond the representative journey only for a concrete failure, uncovered required behavior, or broader impact from the change; record the reason.\nBrief summaries that orient the reader are welcome; do not create a second authoritative definition of behavior, scope, or product decisions.\nDistinguish verified repository facts from assumptions. Keep implementation choices within the authorized scope. Flag conflicts or proposed changes to upstream decisions rather than silently redefining them here.\nOn revision, apply feedback and retain settled human decisions with their source in the document that owns them. Keep references aligned when an authorized decision changes.\nKeep the draft plan uncommitted until this stage can proceed. Return artifactPath, summary, and openQuestions.\nWrite durable task facts and decisions with their sources. Keep assignment-local root/previous envelopes, incoming route values, and current drafting status in the returned summary, outside the planning artifact. On revision, edit the affected passages without retelling the sequence of agent turns.",
         "context": {
           "mode": "current",
           "instructions": "Read root for repoPath, request, taskDir, and the effective reviewPolicy.\nRead previous for the latest stage result or revision feedback. A policy envelope contains reviewPolicy and review; use previous.review as the stage result in that case.\nAn agent_review result with route proceed means progression under existing authorization. A human result with decision approved records explicit approval.\nFor revisions, apply feedback and preserve prior human decisions recorded in the artifacts and run. Ask again only about new material decisions.\nVerify current repository facts and follow its instructions. Report blockers rather than inventing results.",
@@ -2505,7 +2505,7 @@
           }
         },
         "kind": "agent",
-        "prompt": "Read root.taskDir/plan.md and its source request and prior decisions. Check implementation sequence, code areas, tests, builds, visual checks, risks, and completion evidence against the accepted spec and current repository. Verify technical assumptions the agent can investigate.\nCheck that the highest-risk failures have direct checks, expected outcomes, and a valid control. Verify each check belongs to the stage that can perform it. Require only material missing coverage.\nCheck that plan.md owns implementation and verification, references intent.md for scope and constraints, and maps steps and checks to spec.md criterion identifiers without copying their definitions.\nFor interactive UI changes, check that the plan includes one short representative user journey with expected results and criterion references. For copy-only or static visual changes, accept rendered inspection; non-UI changes need no UI journey. Keep the check bounded: reuse existing tests or brief manual verification, and require a concrete reason for broader interaction coverage. Do not require new automation infrastructure or a separate verification document.\nCheck cross-document references and any changed upstream decisions against their authoritative definitions and recorded authorization. Where earlier artifacts exist, check for contradictions, repeated definitions that could drift, and decisions placed in the wrong document. Brief orientation summaries are acceptable. Correct mechanical duplication or misplaced content through revise; escalate only when resolving the underlying decision needs human input.\nAssess the artifact before choosing a route. Length or apparent detail alone does not establish authorization.\nReturn proceed when behavior and scope are settled, acceptance criteria follow from the request, and repository inspection reveals no conflict requiring a change to the requested outcome.\nFor proceed, provide concrete authorizationBasis entries and an empty decisions list. Record minor assumptions in the artifact. Report progression under existing authorization.\nReturn needs_human when a consequential product, scope, architectural, or policy decision is unresolved, when authorization conflicts, or when only the person can supply necessary information. Uncertainty about a material decision takes this route.\nIf the person explicitly requested human review of this stage, return needs_human with that approval question even when reviewPolicy is auto. List focused questions in decisions and explain why each matters. Cite the request and recorded decisions already available.\nReturn revise for corrections the agent can make from existing evidence. Supply located feedback. Investigate ordinary technical unknowns before escalating.\nPreserve settled decisions. Review never invents a human approval. The graph separately enforces reviewPolicy always after proceed.\nLeave implementation to the build stage. Return the output contract with decisionSource agent_review.",
+        "prompt": "Read root.taskDir/plan.md and its source request and prior decisions. Check implementation sequence, code areas, tests, builds, visual checks, risks, and completion evidence against the accepted spec and current repository. Verify technical assumptions the agent can investigate.\nCheck that the highest-risk failures have direct checks, expected outcomes, and a valid control. Verify each check belongs to the stage that can perform it. Require only material missing coverage.\nCheck that plan.md owns implementation and verification, references intent.md for scope and constraints, and maps steps and checks to spec.md criterion identifiers without copying their definitions.\nFor interactive UI changes, check that the plan includes one short representative user journey with expected results and criterion references. For copy-only or static visual changes, accept rendered inspection; non-UI changes need no UI journey. Keep the check bounded: reuse existing tests or brief manual verification, and require a concrete reason for broader interaction coverage. Do not require new automation infrastructure or a separate verification document.\nCheck cross-document references and any changed upstream decisions against their authoritative definitions and recorded authorization. Where earlier artifacts exist, check for contradictions, repeated definitions that could drift, and decisions placed in the wrong document. Brief orientation summaries are acceptable. Correct mechanical duplication or misplaced content through revise; escalate only when resolving the underlying decision needs human input.\nAssess the artifact before choosing a route. Length or apparent detail alone does not establish authorization.\nReturn proceed when behavior and scope are settled, acceptance criteria follow from the request, and repository inspection reveals no conflict requiring a change to the requested outcome.\nFor proceed, provide concrete authorizationBasis entries and an empty decisions list. Record minor assumptions in the artifact. Report progression under existing authorization.\nReturn needs_human when a consequential product, scope, architectural, or policy decision is unresolved, when authorization conflicts, or when only the person can supply necessary information. Uncertainty about a material decision takes this route.\nIf the person explicitly requested human review of this stage, return needs_human with that approval question even when reviewPolicy is auto. List focused questions in decisions and explain why each matters. Cite the request and recorded decisions already available.\nReturn revise for corrections the agent can make from existing evidence. Supply located feedback. Investigate ordinary technical unknowns before escalating.\nPreserve settled decisions. Review never invents a human approval. The graph separately enforces reviewPolicy always after proceed.\nLeave implementation to the build stage. Return the output contract with decisionSource agent_review.\nReview the artifact against the source request, repository rules, and recorded decisions. Your previous input is the latest draft result, not the input the writer received. Stage instructions require drafts to remain uncommitted until the stage can proceed; that is a workflow instruction, not a restriction added by the user. Treat obsolete execution narration as removable editorial text rather than an authorization conflict. Correct harmless wording in place and proceed when substantive requirements are satisfied; reserve revise for a defect affecting implementation, verification, scope, or authorization. Keep changes within this artifact and report any editorial correction in summary.",
         "context": {
           "mode": "current",
           "instructions": "Read root for repoPath, request, taskDir, and the effective reviewPolicy.\nRead previous for the latest stage result or revision feedback. A policy envelope contains reviewPolicy and review; use previous.review as the stage result in that case.\nAn agent_review result with route proceed means progression under existing authorization. A human result with decision approved records explicit approval.\nFor revisions, apply feedback and preserve prior human decisions recorded in the artifacts and run. Ask again only about new material decisions.\nVerify current repository facts and follow its instructions. Report blockers rather than inventing results.",
@@ -5758,6 +5758,489 @@
         "inputSchema": {},
         "outputSchema": {},
         "kind": "exit"
+      },
+      {
+        "id": "intentReviewLimit",
+        "label": "Bound intent revisions",
+        "kind": "script",
+        "language": "javascript",
+        "inputSchema": {},
+        "outputSchema": {
+          "type": "object",
+          "required": [
+            "artifactPath",
+            "summary",
+            "route",
+            "decisionSource",
+            "reason",
+            "authorizationBasis",
+            "decisions",
+            "feedback"
+          ],
+          "properties": {
+            "artifactPath": {
+              "type": "string",
+              "minLength": 1
+            },
+            "summary": {
+              "type": "string",
+              "minLength": 1
+            },
+            "route": {
+              "type": "string",
+              "enum": ["proceed", "revise", "needs_human"]
+            },
+            "decisionSource": {
+              "type": "string",
+              "const": "agent_review"
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1
+            },
+            "authorizationBasis": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["source", "evidence"],
+                "properties": {
+                  "source": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Request passage or recorded prior human decision that authorizes the behavior."
+                  },
+                  "evidence": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Specific authorized behavior and its supporting text."
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "decisions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["question", "whyItMatters"],
+                "properties": {
+                  "question": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "whyItMatters": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "feedback": {
+              "type": "string",
+              "description": "Concrete corrections for revise. Empty for proceed."
+            }
+          },
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "route": {
+                    "const": "proceed"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "authorizationBasis": {
+                    "minItems": 1
+                  },
+                  "decisions": {
+                    "maxItems": 0
+                  },
+                  "feedback": {
+                    "maxLength": 0
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "route": {
+                    "const": "needs_human"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "decisions": {
+                    "minItems": 1
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "route": {
+                    "const": "revise"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "feedback": {
+                    "minLength": 1
+                  },
+                  "decisions": {
+                    "maxItems": 0
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "inputBindings": {
+          "review": {
+            "source": "input",
+            "path": ""
+          },
+          "count": {
+            "source": "execution",
+            "nodeId": "intentReview",
+            "path": "visitCount"
+          }
+        },
+        "command": "const review = input.review;\nif (review.route !== 'revise' || input.count < 3) return review;\nreturn { ...review, route: 'needs_human', reason: 'Planning still needs corrections after ' + input.count + ' reviews. ' + review.reason, decisions: [{ question: 'Review the outstanding findings and choose whether to revise the artifact, approve it explicitly, or stop.', whyItMatters: 'The automatic planning revision limit has been reached. Further unresolved reviews require a human decision; findings remain in feedback.' }] };",
+        "timeoutMs": 10000,
+        "position": {
+          "x": 1050,
+          "y": 530
+        }
+      },
+      {
+        "id": "specReviewLimit",
+        "label": "Bound spec revisions",
+        "kind": "script",
+        "language": "javascript",
+        "inputSchema": {},
+        "outputSchema": {
+          "type": "object",
+          "required": [
+            "artifactPath",
+            "summary",
+            "route",
+            "decisionSource",
+            "reason",
+            "authorizationBasis",
+            "decisions",
+            "feedback"
+          ],
+          "properties": {
+            "artifactPath": {
+              "type": "string",
+              "minLength": 1
+            },
+            "summary": {
+              "type": "string",
+              "minLength": 1
+            },
+            "route": {
+              "type": "string",
+              "enum": ["proceed", "revise", "needs_human"]
+            },
+            "decisionSource": {
+              "type": "string",
+              "const": "agent_review"
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1
+            },
+            "authorizationBasis": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["source", "evidence"],
+                "properties": {
+                  "source": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Request passage or recorded prior human decision that authorizes the behavior."
+                  },
+                  "evidence": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Specific authorized behavior and its supporting text."
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "decisions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["question", "whyItMatters"],
+                "properties": {
+                  "question": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "whyItMatters": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "feedback": {
+              "type": "string",
+              "description": "Concrete corrections for revise. Empty for proceed."
+            }
+          },
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "route": {
+                    "const": "proceed"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "authorizationBasis": {
+                    "minItems": 1
+                  },
+                  "decisions": {
+                    "maxItems": 0
+                  },
+                  "feedback": {
+                    "maxLength": 0
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "route": {
+                    "const": "needs_human"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "decisions": {
+                    "minItems": 1
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "route": {
+                    "const": "revise"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "feedback": {
+                    "minLength": 1
+                  },
+                  "decisions": {
+                    "maxItems": 0
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "inputBindings": {
+          "review": {
+            "source": "input",
+            "path": ""
+          },
+          "count": {
+            "source": "execution",
+            "nodeId": "specReview",
+            "path": "visitCount"
+          }
+        },
+        "command": "const review = input.review;\nif (review.route !== 'revise' || input.count < 3) return review;\nreturn { ...review, route: 'needs_human', reason: 'Planning still needs corrections after ' + input.count + ' reviews. ' + review.reason, decisions: [{ question: 'Review the outstanding findings and choose whether to revise the artifact, approve it explicitly, or stop.', whyItMatters: 'The automatic planning revision limit has been reached. Further unresolved reviews require a human decision; findings remain in feedback.' }] };",
+        "timeoutMs": 10000,
+        "position": {
+          "x": 2550,
+          "y": 530
+        }
+      },
+      {
+        "id": "planReviewLimit",
+        "label": "Bound plan revisions",
+        "kind": "script",
+        "language": "javascript",
+        "inputSchema": {},
+        "outputSchema": {
+          "type": "object",
+          "required": [
+            "artifactPath",
+            "summary",
+            "route",
+            "decisionSource",
+            "reason",
+            "authorizationBasis",
+            "decisions",
+            "feedback"
+          ],
+          "properties": {
+            "artifactPath": {
+              "type": "string",
+              "minLength": 1
+            },
+            "summary": {
+              "type": "string",
+              "minLength": 1
+            },
+            "route": {
+              "type": "string",
+              "enum": ["proceed", "revise", "needs_human"]
+            },
+            "decisionSource": {
+              "type": "string",
+              "const": "agent_review"
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1
+            },
+            "authorizationBasis": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["source", "evidence"],
+                "properties": {
+                  "source": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Request passage or recorded prior human decision that authorizes the behavior."
+                  },
+                  "evidence": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Specific authorized behavior and its supporting text."
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "decisions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["question", "whyItMatters"],
+                "properties": {
+                  "question": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "whyItMatters": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "feedback": {
+              "type": "string",
+              "description": "Concrete corrections for revise. Empty for proceed."
+            }
+          },
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "route": {
+                    "const": "proceed"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "authorizationBasis": {
+                    "minItems": 1
+                  },
+                  "decisions": {
+                    "maxItems": 0
+                  },
+                  "feedback": {
+                    "maxLength": 0
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "route": {
+                    "const": "needs_human"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "decisions": {
+                    "minItems": 1
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "route": {
+                    "const": "revise"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "feedback": {
+                    "minLength": 1
+                  },
+                  "decisions": {
+                    "maxItems": 0
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "inputBindings": {
+          "review": {
+            "source": "input",
+            "path": ""
+          },
+          "count": {
+            "source": "execution",
+            "nodeId": "planReview",
+            "path": "visitCount"
+          }
+        },
+        "command": "const review = input.review;\nif (review.route !== 'revise' || input.count < 3) return review;\nreturn { ...review, route: 'needs_human', reason: 'Planning still needs corrections after ' + input.count + ' reviews. ' + review.reason, decisions: [{ question: 'Review the outstanding findings and choose whether to revise the artifact, approve it explicitly, or stop.', whyItMatters: 'The automatic planning revision limit has been reached. Further unresolved reviews require a human decision; findings remain in feedback.' }] };",
+        "timeoutMs": 10000,
+        "position": {
+          "x": 4050,
+          "y": 530
+        }
       }
     ],
     "edges": [
@@ -5782,7 +6265,7 @@
       {
         "id": "intentReview-default-intentReviewRoute",
         "source": "intentReview",
-        "target": "intentReviewRoute",
+        "target": "intentReviewLimit",
         "port": "default"
       },
       {
@@ -5848,7 +6331,7 @@
       {
         "id": "specReview-default-specReviewRoute",
         "source": "specReview",
-        "target": "specReviewRoute",
+        "target": "specReviewLimit",
         "port": "default"
       },
       {
@@ -5914,7 +6397,7 @@
       {
         "id": "planReview-default-planReviewRoute",
         "source": "planReview",
-        "target": "planReviewRoute",
+        "target": "planReviewLimit",
         "port": "default"
       },
       {
@@ -6006,6 +6489,21 @@
         "source": "reviewContext",
         "target": "build",
         "port": "default"
+      },
+      {
+        "id": "intentReviewLimit-route",
+        "source": "intentReviewLimit",
+        "target": "intentReviewRoute"
+      },
+      {
+        "id": "specReviewLimit-route",
+        "source": "specReviewLimit",
+        "target": "specReviewRoute"
+      },
+      {
+        "id": "planReviewLimit-route",
+        "source": "planReviewLimit",
+        "target": "planReviewRoute"
       }
     ],
     "maxSteps": 100

@@ -62,7 +62,7 @@ An `external_input` blocker identifies the exact run and execution waiting for a
 
 ## Answer a workflow request
 
-1. Call `workflow_requests` with `request.action: "list"`. Scope the search with `runId` or `boardId` when you have one. The response gives the exact unresolved count and a `nextOffset` for another page. The default page has 25 items and the maximum is 100.
+1. Call `workflow_requests` with `request.action: "list"`. Scope the search with `runId` or `boardId` when you have one. Discover board IDs with `read_workflow_boards` action `list`. The response from `workflow_requests` gives the exact unresolved count and a `nextOffset` for another page. The default page has 25 items and the maximum is 100.
 2. Call `workflow_requests` with `action: "get"` and the item's `target`. Present the question, relevant evidence, and supported actions to the person.
 3. For Human input, call `workflow_requests` with `action: "answer"`, the same `target`, the current `expectedRevision`, and a caller-generated `submissionId`. Send a string for a text answer. For single choice, send `{"choice":"approve"}` using the configured value and include `comment` if the choice requires it.
 4. Read the receipt. If delivery is uncertain, read the request again or replay the same submission ID and value. If a hold saved the answer without accepting it, wait for release and call `action: "accept"` with the saved revision.

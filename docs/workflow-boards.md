@@ -26,6 +26,20 @@ Interlock saves the workflow and selected board setup together. Board setup does
 
 A stage mapping applies when a step enters the stage. Existing stage entries keep the column they recorded. Moving a workflow to another board clears its previous mappings. To replace mappings without changing the workflow's published definition, reimport the bundle and choose **Use existing board** again.
 
+## Manage boards through MCP
+
+Use `read_workflow_boards` with `request.action: "list"` to find board IDs, workflow counts, and attention counts. The response includes `total` and `nextOffset`. Use `action: "settings"` with the board's `id` to read its revision, columns, protected column IDs, and workflow membership.
+
+Use `manage_workflow_boards` with `request.action: "save"` to save the board name, ordered columns, and complete list of member workflow IDs.
+
+- To create a board, omit `id` and `expectedRevision`. If the response is lost, inspect the board list before retrying. Repeating the create can add a duplicate.
+- To update a board, pass its `id` and current `expectedRevision`. Keep the IDs of existing columns and omit the IDs of new columns.
+- Supply `expectedBoards` to guard membership changes. Map each selected workflow ID to its observed board ID or to `null` if it is unassigned. A save moves selected workflows from their previous boards and unassigns current members omitted from the list.
+
+To move or remove one workflow, use `action: "assign"` with `workflowId`, `boardId`, and `expectedBoardId`. Use `null` for either board ID when it represents no board. If a revision or membership check fails, read the current state before saving again. Moving or unassigning a workflow clears its imported stage mappings. To map its stages on another board, reimport the bundle with board setup or select local columns in the workflow draft and publish it.
+
+To see run cards, call `read_workflow_boards` with `action: "get"`, the board `id`, and a `column` ID. Use `queued` or `unstaged` for the corresponding built-in columns. Filter by `workflowId` or `status`. The response shows totals for the filtered columns and cards for the requested column. The page defaults to 30 cards and accepts up to 100. Pass a card's `request` as the `target` to `workflow_requests` with `action: "get"` to read the captured question and evidence.
+
 ## Find work and answer a request
 
 The **Boards** page lists each board's assigned workflows and shows a badge when it has unresolved requests. Select a board name to see its runs. Search by name and use **Clear search** to restore the full library.

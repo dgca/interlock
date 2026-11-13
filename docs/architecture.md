@@ -282,6 +282,8 @@ Portable bundle format 11 carries optional board suggestions with ordered column
 
 Board reads use the workflow, chain, parent, and event indexes to scope placement to the board's matching lifecycles. SQLite ranks cards and applies the terminal cap before calculating column totals and selecting pages. The runtime projects progress and attaches request summaries only for selected cards. Totals still require metadata and placement for matching candidates, and a terminal status filter may read the last terminal event across the selected workflow's retained history. Attention counts use the selected workflow scope independently of status and column filters.
 
+MCP board tools reuse the shared board queries and mutations. Listing pages the board summaries after computing library-wide membership and current attention counts. The board query scopes placement to member workflows and visible runs before projecting cards. MCP requests one column per page. The query still computes placement and totals across the requested workflow scope. Board settings check column references in drafts, retained versions, and retained events.
+
 Human input uses the External input wait with a per-visit capture of the question, context, evidence, and answer contract. The shared response transaction checks the visit and revision, validates the answer, and records the receipt. It accepts the answer in that transaction when no pause or hold applies. A held answer requires a separate acceptance after release. Only the request targeted by the answer resolves.
 
 ## External input

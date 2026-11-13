@@ -10,6 +10,12 @@ The final reviewer must use a new session or an isolated subagent without inheri
 
 The starter names no model, provider, required tool implementation, or external skill. Its inline prompts discover repository instructions and relevant checks. Use your agent's normal permissions and model settings.
 
+## Run SDLC in a software factory
+
+Set up the managed executor, model and repository before starting a run. Supply `repoPath` when the starter is called from a separate intake workflow. Use `reviewPolicy: "auto"` to advance settled planning decisions. With Codex **Standard** permissions, local commands may still need approval. Provide an operator who can answer requests on the run or board. For unattended execution, choose an executor and permission policy appropriate for a trusted, isolated checkout. See [managed permissions](managed-executors.md#sessions-and-permissions).
+
+Use deterministic checks for known acceptance criteria. For a live comparison, start with one run and inspect usage between stages. A claim limit bounds assignments, and a single assignment can still consume many tokens.
+
 ## Start a change
 
 Ask your connected agent:
@@ -44,6 +50,8 @@ Defaults guide the executing agent during setup. The workflow still requires tha
 Reuse the existing run and recorded task directory when continuing a change. Do not start a duplicate. Your agent can inspect run summaries and briefings through MCP, claim available assignments, and continue the [assignment loop](connect-harness.md#complete-a-run).
 
 Human decisions pause the workflow. The agent shows the artifact and focused questions, leaves the decision assignment unclaimed, and continues after your explicit answer. Automatic planning review does not invent human approval.
+
+Planning artifacts record durable task facts, decisions, and their sources. Assignment-local inputs and drafting status belong in the returned stage summary. Reviewers can correct harmless editorial text in place; substantive gaps return to drafting. After three reviews of an intent, specification, or plan, any remaining revision request goes to the human decision gate with its findings preserved. Further unresolved reviews of that artifact also require a decision. A passing review still advances normally; the limit never accepts unresolved findings automatically.
 
 Final review checks the complete task diff, observable acceptance evidence, and repository standards at the exact committed candidate. The reviewer inspects actual saved proof and checks a relevant boundary independently. Valid proof can be reused after inspection; affected behavior, unreliable proof, material gaps, or suspected failures require further checks. Findings return to implementation. Later review can focus on localized fixes while preserving verified evidence with its original commit; broader changes require a full review. Delivery checks that the branch still matches the reviewed commit.
 

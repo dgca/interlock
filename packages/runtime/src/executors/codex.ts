@@ -1,12 +1,11 @@
 import { VERSION } from '../../../core/src/version.js';
-import { jsonSchema, type ModelUsage } from '@interlock/core';
+import { type ModelUsage } from '@interlock/core';
 import {
   HarnessResultError,
   HarnessModelError,
   HarnessRequestError,
   isModelRefusal,
   assignmentPrompt,
-  resultEnvelope,
   type HarnessAdapter,
   type HarnessRun,
 } from './contracts.js';
@@ -16,6 +15,7 @@ import {
   JsonLinesProcess,
 } from './process.js';
 import { transcriptText } from './transcriptEvents.js';
+import { codexResult } from './codexResult.js';
 
 export const codexAdapter: HarnessAdapter = {
   id: 'codex',
@@ -78,6 +78,7 @@ export const codexAdapter: HarnessAdapter = {
     }
   },
   async run(input: HarnessRun) {
+    const resultFormat = codexResult(input.work);
     let taskStarted = false;
     const rpc = new JsonLinesProcess(
       input.command,
@@ -357,12 +358,12 @@ export const codexAdapter: HarnessAdapter = {
         input: [
           {
             type: 'text',
-            text: assignmentPrompt(input.work),
+            text: assignmentPrompt(input.work, resultFormat.instructions),
             text_elements: [],
           },
         ],
         ...(input.profile.effort ? { effort: input.profile.effort } : {}),
-        outputSchema: resultEnvelope(input.work),
+        outputSchema: resultFormat.schema,
       });
       turnId = turn.turn.id;
       input.onMessageChannel?.(async (message) => {
@@ -400,7 +401,7 @@ export const codexAdapter: HarnessAdapter = {
         throw new HarnessResultError(
           'Codex returned an invalid result envelope',
         );
-      return { output: jsonSchema.parse(envelope.result), usage };
+      return { output: resultFormat.decode(envelope.result), usage };
     } catch (error) {
       if (
         !taskStarted &&

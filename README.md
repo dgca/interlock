@@ -53,7 +53,7 @@ Use a coding agent with access to your Git checkout, files, and development comm
 
 5. Open **Runs → Active** in the default List view and select the execution to follow its steps. Overview shows active runs alongside bounded attention and completed-run previews, with links to the full lists. Completed, failed, and cancelled executions appear in List → **History**.
 
-Replace the example request with the change you want. The workflow resolves the target repository and artifact directory, follows that repository's instructions, and asks when a consequential decision remains unresolved. Set `reviewPolicy` to `always` to approve each planning artifact, or `createPr` to `true` to request PR delivery. Your agent's tool approval settings still apply. See [Use the SDLC workflow](docs/sdlc-workflow.md) for inputs, executor requirements, and resuming work.
+Replace the example request with the change you want. The workflow resolves the target repository and artifact directory, follows that repository's instructions, and asks when a consequential decision remains unresolved or planning repeatedly fails review. Set `reviewPolicy` to `always` to approve each planning artifact, or `createPr` to `true` to request PR delivery. Your agent's tool approval settings still apply. See [Use the SDLC workflow](docs/sdlc-workflow.md) for inputs, executor requirements, and resuming work.
 
 The connection uses Streamable HTTP at `http://127.0.0.1:4310/mcp`, served by the same process as the UI and engine. Keep that process running. Upgrading and restarting at the same address preserves your agent configuration. The dialog also provides a stdio fallback for clients that need it. See [Connect a harness](docs/connect-harness.md) for configuration and the assignment loop.
 
@@ -236,7 +236,7 @@ Individual body fields with a fixed value have typed controls, so text needs no 
 
 ### Workflow Boards
 
-Use **Boards** to track runs across workflows by stage. The **Needs attention** filter keeps requests in their stage columns. **Human input** steps let people answer in the browser or through MCP, with the question and evidence captured for each visit. See [Use Workflow Boards](docs/workflow-boards.md).
+Use **Boards** to track runs across workflows by stage. The **Needs attention** filter keeps requests in their stage columns. **Human input** steps let people answer in the browser or through MCP, with the question and evidence captured for each visit. MCP can also inspect boards, save their settings, and assign workflows. See [Use Workflow Boards](docs/workflow-boards.md).
 
 ### External input
 
