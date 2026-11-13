@@ -89,6 +89,8 @@ describe('doctor health and readiness check', () => {
           (c) => c.name === 'Free disk space' && c.status === 'ok',
         ),
       ).toBe(true);
+      const upgrade = sysChecks.find((c) => c.name.startsWith('0.3.0'));
+      expect(upgrade?.status === 'ok' && upgrade.message).toMatch(/no manual/);
     });
 
     it('detects SQLite integrity failures', async () => {
@@ -604,21 +606,18 @@ describe('doctor health and readiness check', () => {
       },
     );
 
-    it('detects disabled variables referenced by published workflows', async () => {
+    it('detects disabled variables and lists each one before the 0.3.0 upgrade', async () => {
       const { engine } = createEnv();
-      const savedVar = engine.variables.mutate({
-        action: 'create',
-        name: 'API_KEY',
-        value: 'initial_value',
-        kind: 'config',
-      }) as { id: string; revision: number };
-      engine.variables.mutate({
-        action: 'update',
-        id: savedVar.id,
-        expectedRevision: savedVar.revision,
-        enabled: false,
+      const [savedVar] = ['API_KEY', 'UNUSED_KEY'].map((name) => {
+        const v = engine.variables.mutate({
+          ...{ action: 'create', name, value: 'value', kind: 'config' },
+        }) as { id: string; revision: number };
+        engine.variables.mutate({
+          ...{ action: 'update', id: v.id, expectedRevision: v.revision },
+          enabled: false,
+        });
+        return v;
       });
-
       const def: WorkflowDefinition = blankDefinition();
       def.nodes[1] = nodeSchema.parse({
         id: 'agent',
@@ -632,14 +631,14 @@ describe('doctor health and readiness check', () => {
 
       const report = await engine.doctor();
       expect(report.status).toBe('fail');
-      const varCheck = report.checks.find((c) =>
-        c.name.includes('Disabled variable'),
-      );
-      expect(varCheck).toBeDefined();
-      expect(varCheck!.status).toBe('fail');
-      expect(varCheck!.message).toContain(
-        'references disabled variable "API_KEY"',
-      );
+      const text = formatDoctorReport(report);
+      for (const line of [
+        '✗ Disabled variable in workflow: Production Pipeline',
+        '⚠ 0.3.0 upgrade: disabled variable API_KEY: Variable "API_KEY" is disabled and referenced by "Production Pipeline" (draft, v1)',
+        'Remediation: Enable "API_KEY" in Variables to keep it, or leave it disabled and upgrading to 0.3.0 deletes it.',
+        '⚠ 0.3.0 upgrade: disabled variable UNUSED_KEY: Variable "UNUSED_KEY" is disabled and not referenced by any workflow',
+      ])
+        expect(text).toContain(line);
     });
 
     it('reports deleted aliases and unavailable pinned prompts while retaining literal model support', async () => {

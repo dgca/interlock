@@ -21,6 +21,7 @@ import {
   uncertainClaimCollection,
   uncertainOperationCollection,
 } from './quiescence.js';
+import { upgradeChecks } from './doctorUpgrade.js';
 
 export async function runDoctor(
   engine: Engine,
@@ -167,6 +168,9 @@ export async function runDoctor(
       message: `Could not check filesystem free space: ${err instanceof Error ? err.message : String(err)}`,
     });
   }
+
+  // 1f. 0.3.0 upgrade readiness
+  checks.push(...upgradeChecks(engine));
 
   // ==========================================
   // 2. Harness Profiles Checks
