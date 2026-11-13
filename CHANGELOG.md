@@ -1,5 +1,29 @@
 # @type_of/interlock
 
+## 0.2.18
+
+### Patch Changes
+
+- 3f1ab53: Ship the Claude Agent SDK's license in `dist/licenses/claude-agent-sdk.md`, since `dist/cli.js` bundles part of the SDK and that code is not covered by Interlock's MIT license.
+- 55fd0f4: Inspect workflow boards and run cards, save board settings, and assign workflows through MCP.
+- d1bd43e: Bounded MCP tool profiles now omit server instructions and tool guidance that name tools outside the profile. The `execute` profile adds `manage_work_hold`, and `operate` adds `manage_work_resources`, so the hold and resource-release steps their tools describe are available. Custom launcher sessions receive `$INTERLOCK_API_TOKEN` when the server requires the API token. A failure while recording a background scheduler error no longer stops the server.
+- f999e13: `interlock doctor`, MCP `doctor` and Diagnostics now list each disabled variable with the workflows that reference it. Upgrading to 0.3.0 deletes disabled variables, so enable any you want to keep first.
+- b71a0c6: Protect harness defaults while saves are pending and confirm before discarding edits. Show consistent run status across Runs, Boards, and the inspector. Open the inspector from anywhere on a run row or card, with separate links for requests and external tasks. Automatically arrange run graphs whose nodes have only default positions.
+- a627518: Require one-time approval before imported Script code runs. Import previews list each Script, and a run that reaches an unapproved imported Script waits on a Needs attention request that shows the code. Approve it in the UI or with `interlock approve-script`. Existing workflows stay approved after upgrading, and Scripts you or an agent write run without approval. Execution settings can extend approval to agent-authored Scripts or turn it off.
+- 03c1da4: Add an opt-in local API token. Interlock creates an owner-only `api-token` file in its key folder; the UI, the `interlock` CLI and the stdio bridge send it automatically, and **Connect with MCP** includes it as an `Authorization` header in HTTP client configuration. Set `INTERLOCK_REQUIRE_TOKEN=1` to reject `/trpc`, `/mcp` and `/events` requests without it. The token is not required by default, so existing client configurations keep working.
+- eba2195: Refuse to start a second server on a database that another server is using. Write Script provenance files with owner-only permissions and remove them when background Scripts end. Accept the Vite development origins only in development. Record Fetch requests to loopback, private and link-local addresses in the run and in `interlock doctor`, with an optional per-step `blockPrivateNetwork` setting.
+- c18cc1f: Bounded MCP profiles no longer name out-of-profile tools in tool input or output schemas, and the `operate` profile reports `wait_for_worker` instead of `claim_work`.
+- 658f95f: Document which MCP protocol revisions Interlock serves and the remaining gaps against the `2026-07-28` revision.
+- 34ffa73: Serve smaller MCP tool profiles. Connect to `/mcp/execute`, `/mcp/author` or `/mcp/operate`, send `X-Interlock-Mcp-Profile`, or run `interlock mcp --profile <name>`; `/mcp` keeps every tool. Workflow definition and bundle schemas are published once as MCP resources instead of being repeated in tool definitions, reducing the full tool list from about 300 KB to about 185 KB. Custom launcher sessions receive the execute endpoint as `$INTERLOCK_MCP_URL` and `mcpUrl`.
+- 2ff7933: Add a minimal server environment mode for Script nodes, polling Script checks and custom executor subprocesses. Minimal mode passes only `PATH`, `HOME`, locale and `INTERLOCK_*` variables, bound variables and declared passthrough names, and failures name a withheld variable with its fix. Existing workflows and profiles keep inheriting the full environment; Scripts added in the editor start in minimal mode.
+- f23bdd3: Use a charcoal hover fill for ghost buttons, including destructive actions. Keep AI Settings row actions inset from the table edge and Board pagination labels short enough for narrow columns.
+- 9eaf5a7: Carry workflow stages and board suggestions in portable bundles. During import, create a suggested board or map stages to an existing board. Reimport keeps local board configuration by default.
+- 25f45e6: Keep a workflow on its assigned board when reimporting a portable bundle.
+- 55fd0f4: Bound repeated SDLC planning revisions with a human checkpoint and clarify how writers and reviewers record decisions. Support Codex assignments with output contracts outside its native structured-output subset while retaining full Interlock validation. Recover complete encoded Codex results followed by short stray prose without repeating the assignment.
+- ba805ba: Rewrite compressed MCP tool descriptions as readable sentences.
+- 9ad4d76: Rewrite the README opening around what Interlock is for, a demo run that needs no agent, the SDLC workflow and a short security section. Split the scope document into a feature index grouped by area (`docs/features.md`) and a one-page list of current limits (`docs/v1.md`).
+- 37529b8: Record background scheduler failures, such as a failing launcher status command, instead of discarding them. The engine writes leveled JSON lines to a rotating `logs/interlock.log` beside its database, `INTERLOCK_LOG_LEVEL` selects the minimum level, and `interlock doctor` reports the last scheduler error with its time.
+
 ## 0.2.17
 
 ### Patch Changes
