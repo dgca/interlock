@@ -176,7 +176,7 @@ try {
   const backgroundRunId = await scriptWorkflow(
     'Kill background',
     'background',
-    `const fs = require('node:fs'); fs.appendFileSync(${JSON.stringify(files.backgroundStarts)}, process.pid + '\\n'); while (!fs.existsSync(${JSON.stringify(files.backgroundRelease)})) await new Promise((r) => setTimeout(r, 50)); return { recovered: true };`,
+    `const fs = require('node:fs'); fs.appendFileSync(${JSON.stringify(files.backgroundStarts)}, process.pid + ' ' + process.ppid + '\\n'); while (!fs.existsSync(${JSON.stringify(files.backgroundRelease)})) await new Promise((r) => setTimeout(r, 50)); return { recovered: true };`,
   );
   // Managed attempt: a fake claude-code harness whose turn never ends.
   await call('manage_executors', {
@@ -238,8 +238,9 @@ try {
   );
   const [backgroundPid] = (
     await until('background Script start', () => lines(files.backgroundStarts))
-  ).map(Number);
-  orphans.add(backgroundPid);
+  )[0]
+    .split(' ')
+    .map(Number);
   const managedBefore = await until('managed attempt', async () => {
     const [item] = await inspectManaged(managedWork.id);
     if (item?.state === 'needs_human' && item.requests?.[0]) {
@@ -362,10 +363,27 @@ try {
   if (server && server.exitCode === null && server.signalCode === null) {
     const exited = once(server, 'exit');
     killQuietly(-server.pid, 'SIGTERM');
-    await exited;
+    const stopped = await Promise.race([
+      exited.then(() => true),
+      delay(10000).then(() => false),
+    ]);
+    if (!stopped) killQuietly(-server.pid, 'SIGKILL');
   }
-  for (const pid of orphans) killQuietly(pid);
-  for (const entry of await lines(files.harnessLog).catch(() => []))
-    killQuietly(JSON.parse(entry).pid);
+  // Every Script, supervisor and harness PID recorded on disk, so processes
+  // started before an early failure are still stopped.
+  const recorded = async (path) =>
+    (await lines(path).catch(() => [])).flatMap((line) =>
+      line.split(' ').map(Number),
+    );
+  for (const pid of await recorded(files.foregroundStarts)) orphans.add(pid);
+  // Background lines hold the Script PID and its supervisor's PID.
+  for (const pid of await recorded(files.backgroundStarts)) orphans.add(pid);
+  for (const entry of await lines(files.harnessLog).catch(() => [])) {
+    try {
+      orphans.add(JSON.parse(entry).pid);
+    } catch {}
+  }
+  for (const pid of orphans)
+    if (Number.isInteger(pid) && pid > 1) killQuietly(pid);
   await rm(temp, { recursive: true, force: true });
 }
