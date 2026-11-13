@@ -2,7 +2,7 @@ import { serve } from '@hono/node-server';
 import { Store } from '@interlock/storage';
 import { Engine } from '@interlock/runtime';
 import { createApp, serveUi } from './app.js';
-import { parseRequireToken } from './apiToken.js';
+import { isLoopback, parseRequireToken } from './apiToken.js';
 import { apiTokenPath, ensureApiToken } from '@interlock/core/apiToken';
 import type { ConnectionConfig } from './connection.js';
 import { checkPort, lockDatabase, startupError } from './startup.js';
@@ -29,9 +29,16 @@ export function parseAllowedRoots(value?: string): string[] | undefined {
     .filter(Boolean);
 }
 
-/** Adds the per-install token. A token that cannot be created only fails startup when required. */
-function withApiToken(connection: ConnectionConfig): ConnectionConfig {
-  const requireToken = parseRequireToken();
+/**
+ * Adds the per-install token. It is required when INTERLOCK_REQUIRE_TOKEN is set
+ * or the server listens beyond loopback; a token that cannot be created only
+ * fails startup when required.
+ */
+export function withApiToken(
+  connection: ConnectionConfig,
+  hostname = '127.0.0.1',
+): ConnectionConfig {
+  const requireToken = parseRequireToken() || !isLoopback(hostname);
   try {
     return { ...connection, token: ensureApiToken(), requireToken };
   } catch (error) {
@@ -49,9 +56,12 @@ export async function startServer(options: {
   port: number;
   connection: ConnectionConfig;
   allowedRoots?: string[];
+  /** Listen address. Not user-configurable yet; a non-loopback address requires the API token. */
+  hostname?: string;
 }) {
+  const hostname = options.hostname ?? '127.0.0.1';
   await checkPort(options.port);
-  const connection = withApiToken(options.connection);
+  const connection = withApiToken(options.connection, hostname);
   const unlock = lockDatabase(options.database);
   let store: Store;
   try {
@@ -83,14 +93,12 @@ export async function startServer(options: {
   const app = createApp(engine, connection);
   serveUi(app, options.ui, connection);
   const timer = setInterval(() => engine.pump(), 1000);
-  const server = serve(
-    { fetch: app.fetch, hostname: '127.0.0.1', port: options.port },
-    () =>
-      console.log(
-        connection.requireToken
-          ? `Interlock is running at ${connection.engineUrl}/?token=${connection.token}\nAPI token required. Open this link to use the UI.`
-          : `Interlock is running at ${connection.engineUrl}`,
-      ),
+  const server = serve({ fetch: app.fetch, hostname, port: options.port }, () =>
+    console.log(
+      connection.requireToken
+        ? `Interlock is running at ${connection.engineUrl}/?token=${connection.token}\nAPI token required. Open this link to use the UI.`
+        : `Interlock is running at ${connection.engineUrl}`,
+    ),
   );
   const onError =
     (port: number, option: string) => (error: NodeJS.ErrnoException) => {
