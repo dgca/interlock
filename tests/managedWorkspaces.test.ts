@@ -243,3 +243,84 @@ it('reconciles after a restart without touching directories Interlock did not cr
   expect(existsSync(join(workspaces, 'foreign'))).toBe(true);
   f.git('rev-parse', '--verify', 'orphan');
 });
+
+it('runs hooks in the checkout and keeps a failed run’s checkout when asked', async () => {
+  const f = setup();
+  const engine = f.open();
+  const log = join(f.root, 'removed.log');
+  const id = publish(engine, {
+    workspace: {
+      repository: f.repository,
+      retention: 'keep_on_failure',
+      hooks: {
+        afterCreate: { command: 'echo created > hook.txt' },
+        beforeRemove: {
+          command: `echo "$INTERLOCK_WORKSPACE_PATH $(cat hook.txt)" >> ${JSON.stringify(log)}`,
+        },
+      },
+    },
+    nodes: [
+      { id: 'entry', kind: 'entry', label: 'In' },
+      {
+        id: 'script',
+        kind: 'script',
+        label: 'Check',
+        language: 'javascript',
+        command:
+          "if (input.fail) throw new Error('fail'); return require('node:fs').readFileSync('hook.txt', 'utf8');",
+      },
+      { id: 'exit', kind: 'exit', label: 'Out' },
+    ],
+    edges: [
+      { id: 'a', source: 'entry', target: 'script' },
+      { id: 'b', source: 'script', target: 'exit' },
+    ],
+  });
+  const failed = engine.start(id, { fail: true }).run.id;
+  const passed = engine.start(id, {}).run.id;
+  await until(
+    engine,
+    () =>
+      engine.workspaces.get(failed)?.state === 'retained' &&
+      engine.workspaces.get(passed)?.state === 'removed',
+  );
+  expect(engine.run(passed).output).toBe('created\n');
+  expect(existsSync(engine.workspaces.get(failed)!.path)).toBe(true);
+  expect(readFileSync(log, 'utf8')).toBe(
+    `${engine.workspaces.get(passed)!.path} created\n`,
+  );
+});
+
+it('holds a run until a person approves an imported workspace hook', async () => {
+  const f = setup();
+  const engine = f.open();
+  const definition = definitionSchema.parse({
+    workspace: {
+      repository: f.repository,
+      hooks: { afterCreate: { command: 'touch approved.txt' } },
+    },
+    nodes: [
+      { id: 'entry', kind: 'entry', label: 'In' },
+      agent('work'),
+      { id: 'exit', kind: 'exit', label: 'Out' },
+    ],
+    edges: [
+      { id: 'a', source: 'entry', target: 'work' },
+      { id: 'b', source: 'work', target: 'exit' },
+    ],
+  });
+  const workflow = engine.create('Imported', '', definition);
+  engine.scriptApprovals.record(workflow.id, [], [workflow.draft]);
+  engine.publish(workflow.id);
+  const runId = engine.start(workflow.id, {}).run.id;
+  engine.pump();
+  const run = engine.run(runId);
+  expect(run.status).toBe('waiting');
+  expect(engine.workspaces.get(runId)).toBeUndefined();
+  engine.scriptApprovals.approve({
+    runId,
+    executionId: run.executions[0].id,
+  });
+  const work = await until(engine, () => engine.available(runId)[0]);
+  expect(existsSync(join(work.resolvedCwd!, 'approved.txt'))).toBe(true);
+});

@@ -38,32 +38,54 @@ type ScriptSource = {
       check?: { kind: string } & Partial<ScriptContent>;
     };
   }[];
+  workspace?: {
+    hooks?: { afterCreate?: ScriptContent; beforeRemove?: ScriptContent };
+  };
+};
+const hookLabels = {
+  afterCreate: 'Workspace hook after create',
+  beforeRemove: 'Workspace hook before remove',
 };
 
-/** Every Script a definition can run: Script nodes and polling Wait checks. */
+/** Every Script a definition can run: Script nodes, polling Wait checks and workspace hooks. */
 export function definitionScripts(
   definition: ScriptSource,
 ): DefinitionScript[] {
-  return definition.nodes.flatMap((node) => {
-    const content =
-      node.kind === 'script'
-        ? node
-        : node.kind === 'wait' &&
-            node.timing?.kind === 'poll' &&
-            node.timing.check?.kind === 'script'
-          ? node.timing.check
-          : undefined;
-    return typeof content?.command === 'string'
-      ? [
-          {
-            nodeId: node.id,
-            label: node.label,
-            ...(content.language ? { language: content.language } : {}),
-            command: content.command,
-          },
-        ]
-      : [];
-  });
+  const hooks = Object.entries(definition.workspace?.hooks ?? {}).flatMap(
+    ([name, hook]) =>
+      typeof hook?.command === 'string'
+        ? [
+            {
+              nodeId: `workspace.${name}`,
+              label: hookLabels[name as keyof typeof hookLabels] ?? name,
+              ...(hook.language ? { language: hook.language } : {}),
+              command: hook.command,
+            },
+          ]
+        : [],
+  );
+  return definition.nodes
+    .flatMap((node) => {
+      const content =
+        node.kind === 'script'
+          ? node
+          : node.kind === 'wait' &&
+              node.timing?.kind === 'poll' &&
+              node.timing.check?.kind === 'script'
+            ? node.timing.check
+            : undefined;
+      return typeof content?.command === 'string'
+        ? [
+            {
+              nodeId: node.id,
+              label: node.label,
+              ...(content.language ? { language: content.language } : {}),
+              command: content.command,
+            },
+          ]
+        : [];
+    })
+    .concat(hooks);
 }
 
 /** Distinct Scripts per workflow in an import, for review before importing. */

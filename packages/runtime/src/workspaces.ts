@@ -20,6 +20,8 @@ import {
 } from './gitWorktrees.js';
 import type { ContextContinuityGroups } from './contextContinuity.js';
 import { sourceQuiescence } from './quiescence.js';
+import type { ScriptApprovals } from './scriptApprovals.js';
+import { executeScript } from './scripts.js';
 import type { TrialEnvironments } from './trialEnvironments.js';
 import {
   resolveAndValidateCwd,
@@ -29,11 +31,15 @@ import {
 const collection = 'workspaces';
 const terminal = (run: Run) =>
   ['completed', 'failed', 'cancelled'].includes(run.status);
+const usable = (w?: ManagedWorkspace) =>
+  (w?.state === 'ready' || w?.state === 'retained') && existsSync(w.path);
 const errorText = (error: unknown) =>
   (error instanceof Error ? error.message : String(error)).slice(0, 512);
+type Settings = NonNullable<WorkflowDefinition['workspace']>;
 type Host = {
   readonly store: Store;
   readonly contextGroups: ContextContinuityGroups;
+  readonly scriptApprovals: ScriptApprovals;
   getAllowedRoots(): string[];
   pump(): void;
 };
@@ -65,7 +71,8 @@ export class ManagedWorkspaces {
       root ?? join(dirname(resolve(store.path)), 'workspaces'),
     );
     for (const workspace of store.list<ManagedWorkspace>(collection)) {
-      if (workspace.state === 'removed') continue;
+      if (workspace.state === 'removed' || workspace.state === 'retained')
+        continue;
       this.active.add(workspace.id);
       // A process interruption leaves no evidence of how far Git got.
       if (workspace.state === 'preparing')
@@ -133,7 +140,7 @@ export class ManagedWorkspaces {
     const id = this.ownerId(run, definition);
     if (!id) return undefined;
     const workspace = this.get(id);
-    if (workspace?.state !== 'ready' || !existsSync(workspace.path))
+    if (!workspace || !usable(workspace))
       throw new InterlockError(
         `The run's workspace is ${workspace?.state ?? 'missing'}; no work runs outside it`,
       );
@@ -146,9 +153,22 @@ export class ManagedWorkspaces {
   gate(run: Run, definition: WorkflowDefinition): boolean | string | undefined {
     if (!this.owns(run, definition)) return undefined;
     const settings = definition.workspace!;
+    const held = run.executions.at(-1);
+    if (held?.scriptApproval && held.kind === 'entry') {
+      if (this.pendingHook(run, settings)) return false;
+      return this.host.scriptApprovals.releaseRun(run, held);
+    }
     const existing = this.get(run.id);
-    if (existing?.state === 'ready' && existsSync(existing.path))
+    if (usable(existing)) {
+      // A retried run takes its kept checkout back.
+      if (existing?.state === 'retained') {
+        this.update(run.id, (w) => {
+          w.state = 'ready';
+        });
+        this.active.add(run.id);
+      }
       return undefined;
+    }
     if (existing?.state === 'preparing' || existing?.state === 'removing')
       return false;
     if (existing?.state === 'failed' && !existing.reported) {
@@ -159,6 +179,14 @@ export class ManagedWorkspaces {
     }
     if (!this.configured)
       return 'Workspace: managed workspaces need a data folder';
+    // Hooks are Scripts: imported ones wait for a person before anything runs.
+    const hash = this.pendingHook(run, settings);
+    if (hash) {
+      const entry = definition.nodes.find((n) => n.id === run.cursor);
+      if (run.executions.length || entry?.kind !== 'entry')
+        return 'Workspace: an imported workspace hook needs approval';
+      return this.host.scriptApprovals.holdRun(run, entry, hash);
+    }
     let branch: string;
     try {
       branch = workspaceBranch(settings.branch, run.id);
@@ -194,20 +222,65 @@ export class ManagedWorkspaces {
             w.branchClaimed = true;
           }),
         signal,
-      ).then(
-        ({ baseCommit }) =>
+      )
+        .then(async ({ baseCommit }) => {
           this.update(run.id, (w) => {
-            w.state = 'ready';
             w.baseCommit = baseCommit;
-          }),
-        (error: unknown) =>
-          this.update(run.id, (w) => {
-            w.state = 'failed';
-            w.error = errorText(error);
-          }),
-      ),
+          });
+          const created = { ...workspace, baseCommit };
+          await this.hook('afterCreate', created, settings, signal);
+        })
+        .then(
+          () =>
+            this.update(run.id, (w) => {
+              w.state = 'ready';
+            }),
+          (error: unknown) =>
+            this.update(run.id, (w) => {
+              w.state = 'failed';
+              w.error = errorText(error);
+            }),
+        ),
     );
     return false;
+  }
+  private pendingHook(run: Run, settings: Settings) {
+    for (const hook of Object.values(settings.hooks ?? {})) {
+      const hash = this.host.scriptApprovals.required(run.workflowId, hook);
+      if (hash) return hash;
+    }
+    return undefined;
+  }
+  /** Run a hook in the checkout like a Script; its output is ignored. */
+  private async hook(
+    name: 'afterCreate' | 'beforeRemove',
+    workspace: ManagedWorkspace,
+    settings: Settings,
+    signal: AbortSignal,
+  ) {
+    const hook = settings.hooks?.[name];
+    if (!hook) return;
+    if (this.host.scriptApprovals.required(workspace.workflowId, hook))
+      throw new InterlockError(`The ${name} hook needs approval`);
+    const context = {
+      INTERLOCK_RUN_ID: workspace.runId,
+      INTERLOCK_WORKSPACE_PATH: workspace.path,
+      INTERLOCK_WORKSPACE_BRANCH: workspace.branch,
+      INTERLOCK_WORKSPACE_REPOSITORY: workspace.repository,
+      INTERLOCK_WORKSPACE_BASE_COMMIT: workspace.baseCommit ?? '',
+    };
+    await executeScript(
+      hook.command,
+      context,
+      hook.timeoutMs,
+      workspace.path,
+      signal,
+      hook.language,
+      { ...process.env, ...context },
+    ).catch((error: Error) => {
+      if (error.message !== 'Script stdout must contain one JSON value')
+        throw new InterlockError(`The ${name} hook failed: ${error.message}`);
+    });
   }
   private job(id: string, work: (signal: AbortSignal) => Promise<unknown>) {
     const controller = new AbortController();
@@ -272,7 +345,7 @@ export class ManagedWorkspaces {
       this.job('reconcile', () =>
         reconcileWorktrees(
           this.root,
-          (id) => this.active.has(id),
+          (id) => ![undefined, 'removed'].includes(this.get(id)?.state),
           repositories,
         ),
       );
@@ -296,15 +369,36 @@ export class ManagedWorkspaces {
           !sourceQuiescence(this.store, owner.id, localJobs).quiescent)
       )
         continue;
+      const settings = owner && this.definition(owner).workspace;
+      if (settings && this.retained(owner, settings)) {
+        this.update(id, (w) => {
+          w.state = 'retained';
+        });
+        this.active.delete(id);
+        continue;
+      }
       this.update(id, (w) => {
         w.state = 'removing';
       });
-      this.job(id, () =>
-        removeWorktree(this.root, workspace).then(
+      this.job(id, async (signal) => {
+        let hookError: string | undefined;
+        if (
+          settings &&
+          workspace.state === 'ready' &&
+          existsSync(workspace.path)
+        )
+          await this.hook('beforeRemove', workspace, settings, signal).catch(
+            (error: unknown) => {
+              // Never run unapproved content; keep the checkout instead.
+              if (/needs approval/.test(errorText(error))) throw error;
+              hookError = errorText(error);
+            },
+          );
+        return removeWorktree(this.root, workspace).then(
           () =>
             this.update(id, (w) => {
               w.state = 'removed';
-              delete w.error;
+              w.error = hookError;
             }),
           (error: unknown) => {
             this.retryAt.set(id, Date.now() + 60_000);
@@ -314,8 +408,19 @@ export class ManagedWorkspaces {
               w.error = `Removal failed: ${errorText(error)}`;
             });
           },
-        ),
-      );
+        );
+      });
     }
+  }
+  private retained(owner: Run, settings: Settings) {
+    if (settings.retention === 'keep') return true;
+    if (settings.retention !== 'keep_on_failure') return false;
+    // A continue-as-new chain ends with its latest run.
+    const last =
+      this.store
+        .sourceRunTree(owner.id)
+        .find((r) => r.chain?.rootRunId === owner.id && !r.chain.nextRunId) ??
+      owner;
+    return last.status === 'failed';
   }
 }
