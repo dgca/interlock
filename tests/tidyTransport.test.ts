@@ -183,6 +183,15 @@ it.each(['http', 'stdio'])(
         JSON.stringify({ name: 'CLI tidy', definition: d, layout: 'tidy' }),
       ])) as any;
       expect(imported.draft).toEqual(tidyWorkflow(d));
+      // Legacy single-file imports hold their Scripts for one-time approval.
+      const scripted = (await runCommand([
+        'import',
+        JSON.stringify({
+          name: 'CLI script',
+          definition: { ...d, nodes: [...d.nodes, added] },
+        }),
+      ])) as { id: string };
+      expect(engine.scriptApprovals.required(scripted.id, added)).toBeDefined();
       const cliUpdated = (await runCommand([
         'update',
         imported.id,
