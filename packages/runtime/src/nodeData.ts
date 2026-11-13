@@ -1,3 +1,6 @@
+import { rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type {
   ExecutionProvenance,
   ModelUsage,
@@ -6,7 +9,7 @@ import type {
   WorkflowNode,
 } from '@interlock/core';
 
-export interface NodeProvenanceHistory {
+interface NodeProvenanceHistory {
   visitCount: number;
   latest: ExecutionProvenance;
   history: ExecutionProvenance[];
@@ -83,7 +86,7 @@ export function buildExecutionProvenance(
   };
 }
 
-export function buildRunExecutionProvenanceFile(
+function buildRunExecutionProvenanceFile(
   run: Run,
 ): Record<string, NodeProvenanceHistory> {
   const result: Record<string, NodeProvenanceHistory> = {};
@@ -98,4 +101,27 @@ export function buildRunExecutionProvenanceFile(
     };
   }
   return result;
+}
+
+/** Write an owner-only provenance file for one Script launch. */
+export function writeExecutionProvenanceFile(
+  run: Run,
+  execution: NodeExecution,
+): string {
+  const path = join(
+    tmpdir(),
+    `interlock-provenance-${run.id}-${execution.id}.json`,
+  );
+  // Replace rather than follow an existing file or link at the path.
+  rmSync(path, { force: true });
+  writeFileSync(
+    path,
+    JSON.stringify(buildRunExecutionProvenanceFile(run), null, 2),
+    {
+      encoding: 'utf8',
+      flag: 'wx',
+      mode: 0o600,
+    },
+  );
+  return path;
 }

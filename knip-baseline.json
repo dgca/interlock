@@ -223,11 +223,6 @@
     {
       "file": "packages/core/src/index.ts",
       "type": "exports",
-      "symbol": "validateFetch"
-    },
-    {
-      "file": "packages/core/src/index.ts",
-      "type": "exports",
       "symbol": "validateParallelScopes"
     },
     {
