@@ -243,7 +243,7 @@ it.each(['stdio', 'http'])(
       expect(
         toolDiscovery.tools.find((tool) => tool.name === 'workflow_report')
           ?.description,
-      ).toContain('pausedMs/activeMs');
+      ).toContain('pausedMs and activeMs');
       expect(report.summary.durationMs).toMatchObject({
         count: 0,
         pausedMs: { count: 0 },
@@ -290,7 +290,7 @@ it.each(['stdio', 'http'])(
       expect(
         toolDiscovery.tools.find((tool) => tool.name === 'manage_executors')!
           .description,
-      ).toContain('ended needs_human with no pending requests');
+      ).toContain('ended needs_human attempt with no pending requests');
 
       const scheduleTools = toolDiscovery.tools.filter((t) =>
         ['read_workflow_triggers', 'manage_workflow_triggers'].includes(t.name),
@@ -2198,7 +2198,7 @@ it.each(['stdio', 'http'])(
       });
       expect(missingScript.isError).toBe(true);
       expect(tools.find((t) => t.name === 'cancel_run')!.description).toContain(
-        'stops at detached',
+        'stop at detached',
       );
       expect(tools.find((t) => t.name === 'retry_run')!.description).toContain(
         'failed detached child',
