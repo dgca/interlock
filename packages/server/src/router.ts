@@ -30,13 +30,13 @@ import {
   executorOperationSchema,
   executorModelsQuerySchema,
 } from '@interlock/core';
-import { initTRPC, TRPCError } from '@trpc/server';
 import { z } from 'zod';
-import { developmentConnection, type ConnectionConfig } from './connection.js';
+import { developmentConnection } from './connection.js';
 import {
   externalInputMutationSchema,
   externalInputStatusSchema,
   blankDefinition,
+  importedScripts,
   boardMembershipSchema,
   boardImportSetupSchema,
   boardQuerySchema,
@@ -68,9 +68,7 @@ import {
   cancelRunSchema,
   previewRunCancellationSchema,
   cancelRunTreeSchema,
-  ExternalInputConflict,
   InterlockError,
-  ResultRejection,
   briefingQuerySchema,
   waitQuerySchema,
   resultQuerySchema,
@@ -103,7 +101,6 @@ import {
   modelAliasReadSchema,
   modelAliasMutationSchema,
 } from '@interlock/core';
-import type { Engine } from '@interlock/runtime';
 import {
   exportWorkflows,
   importWorkflows,
@@ -117,62 +114,19 @@ import {
 import { GithubImporter, githubSourceSchema } from './githubImport.js';
 const githubImporter = new GithubImporter();
 
-const t = initTRPC
-  .context<{
-    engine: Engine;
-    connection?: ConnectionConfig;
-    signal?: AbortSignal;
-  }>()
-  .create({
-    errorFormatter({ shape, error }) {
-      return {
-        ...shape,
-        data: {
-          ...shape.data,
-          ...(error.cause instanceof InterlockError
-            ? { domainRejection: true as const }
-            : {}),
-          ...(error.cause instanceof ResultRejection
-            ? { resultCheck: error.cause.resultCheck }
-            : {}),
-        },
-      };
-    },
-  });
-const p = t.procedure.use(async ({ next }) => {
-  try {
-    return await next();
-  } catch (error) {
-    if (error instanceof InterlockError)
-      throw new TRPCError({
-        code: 'BAD_REQUEST',
-        message: error.message,
-        cause: error,
-      });
-    throw error;
-  }
-});
-const id = z.object({ id: z.string() });
-function inputMutation<T>(action: () => T) {
-  try {
-    return action();
-  } catch (error) {
-    if (error instanceof InterlockError)
-      throw new TRPCError({
-        code:
-          error instanceof ExternalInputConflict ? 'CONFLICT' : 'BAD_REQUEST',
-        message: error.message,
-        cause: error,
-      });
-    throw error;
-  }
-}
+import { id, inputMutation, p, t } from './trpc.js';
+import {
+  agentDraftEdit,
+  createWorkflow,
+  scriptRouter,
+} from './scriptApprovals.js';
 const createWorkflowInput = z.object({
   layout: draftLayoutSchema.optional(),
   name: z.string().trim().min(1).max(120),
   description: z.string().default(''),
   definition: definitionSchema.optional(),
   ownerWorkflowId: z.string().min(1).nullable().optional(),
+  imported: z.boolean().optional(),
 });
 const updateWorkflowInput = id.extend({
   layout: draftLayoutSchema.optional(),
@@ -184,6 +138,7 @@ const updateWorkflowInput = id.extend({
 });
 const claim = z.object({ workId: z.string(), token: z.string() });
 export const appRouter = t.router({
+  scripts: scriptRouter,
   triggers: t.router({
     read: p
       .input(scheduleReadSchema)
@@ -448,6 +403,12 @@ export const appRouter = t.router({
             prompts: [] as { id: string; name: string }[],
             published: false,
             variables: [],
+            scripts: importedScripts([
+              {
+                name: doc.workflow.name,
+                draft: doc.workflow.definition ?? blankDefinition(),
+              },
+            ]),
             boardSetup: previewLegacyBoardImport(
               doc.workflow.name,
               doc.workflow.definition ?? blankDefinition(),
@@ -473,6 +434,7 @@ export const appRouter = t.router({
             name: p.name,
           })),
           published: root.versions.length > 0,
+          scripts: importedScripts(doc.bundle.workflows),
           variables: ctx.engine.variables.previewRequirements(
             doc.bundle.variables ?? [],
           ),
@@ -580,20 +542,16 @@ export const appRouter = t.router({
     createSummary: p
       .input(createWorkflowInput)
       .mutation(({ ctx, input }) =>
-        ctx.engine.authoringSummary(
-          ctx.engine.create(
-            input.name,
-            input.description,
-            input.definition,
-            input.ownerWorkflowId,
-            input.layout,
-          ),
-        ),
+        ctx.engine.authoringSummary(createWorkflow(ctx, input)),
       ),
     updateSummary: p
       .input(updateWorkflowInput)
       .mutation(({ ctx, input }) =>
-        ctx.engine.authoringSummary(ctx.engine.update(input.id, input)),
+        ctx.engine.authoringSummary(
+          agentDraftEdit(ctx, input.id, () =>
+            ctx.engine.update(input.id, input),
+          ),
+        ),
       ),
     publishSummary: p
       .input(id.extend({ cascade: z.boolean().optional() }))
@@ -605,15 +563,7 @@ export const appRouter = t.router({
     create: p
       .input(createWorkflowInput)
       .mutation(({ ctx, input }) =>
-        ctx.engine.describeWorkflow(
-          ctx.engine.create(
-            input.name,
-            input.description,
-            input.definition,
-            input.ownerWorkflowId,
-            input.layout,
-          ),
-        ),
+        ctx.engine.describeWorkflow(createWorkflow(ctx, input)),
       ),
     previewOwnership: p
       .input(ownershipPreviewSchema)
@@ -638,12 +588,14 @@ export const appRouter = t.router({
           .strict(),
       )
       .mutation(({ ctx, input }) =>
-        ctx.engine.editDraft(
-          input.id,
-          input.draftRevision,
-          input.edits,
-          input.diagnostics,
-          input.layout,
+        agentDraftEdit(ctx, input.id, () =>
+          ctx.engine.editDraft(
+            input.id,
+            input.draftRevision,
+            input.edits,
+            input.diagnostics,
+            input.layout,
+          ),
         ),
       ),
     validate: p
@@ -695,7 +647,11 @@ export const appRouter = t.router({
     update: p
       .input(updateWorkflowInput)
       .mutation(({ ctx, input }) =>
-        ctx.engine.describeWorkflow(ctx.engine.update(input.id, input)),
+        ctx.engine.describeWorkflow(
+          agentDraftEdit(ctx, input.id, () =>
+            ctx.engine.update(input.id, input),
+          ),
+        ),
       ),
     delete: p
       .input(id)

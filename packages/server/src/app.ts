@@ -64,7 +64,12 @@ export function createApp(engine: Engine, connection?: ConnectionConfig) {
       enableJsonResponse: true,
     });
     const mcp = createMcpServer(
-      appRouter.createCaller({ engine, connection, signal: c.req.raw.signal }),
+      appRouter.createCaller({
+        engine,
+        connection,
+        signal: c.req.raw.signal,
+        author: 'agent',
+      }),
     );
     try {
       await mcp.connect(transport);
@@ -82,7 +87,15 @@ export function createApp(engine: Engine, connection?: ConnectionConfig) {
       router: appRouter,
       // Keep the query contract and legacy GET callers while accepting large bodies.
       allowMethodOverride: largeQueryPaths.includes(c.req.path),
-      createContext: () => ({ engine, connection, signal: c.req.raw.signal }),
+      createContext: () => ({
+        engine,
+        connection,
+        signal: c.req.raw.signal,
+        // The stdio MCP bridge identifies itself; other callers are people.
+        ...(c.req.header('x-interlock-author') === 'agent'
+          ? { author: 'agent' as const }
+          : {}),
+      }),
     }),
   );
   app.get('/events', (c) =>

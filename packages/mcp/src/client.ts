@@ -2,7 +2,7 @@ import { createClient } from '@interlock/client';
 
 // Match the server caller so both transports use the same tool registrations.
 export function createMcpClient(url?: string) {
-  const client = createClient(url);
+  const client = createClient(url, { 'x-interlock-author': 'agent' });
   return {
     report: { summary: client.report.summary.query },
     system: {

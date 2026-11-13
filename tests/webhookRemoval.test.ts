@@ -17,6 +17,9 @@ import {
 } from '../packages/runtime/src/transfer';
 import { migrate, migrations } from '../packages/storage/src/migrations';
 import published from './fixtures/published-0.2.13.json';
+// Schema 20 adds approval records for stored Scripts; other documents stay as written.
+const existingDocuments =
+  "SELECT * FROM documents WHERE collection != 'scriptApprovals' ORDER BY rowid";
 
 const directories: string[] = [];
 const engines: Engine[] = [];
@@ -59,12 +62,10 @@ it('upgrades the published 0.2.13 database unchanged and executes both published
     const e = engine(file);
     expect(e.store.migration).toMatchObject({
       from: 7,
-      to: 19,
+      to: 20,
       backup: expect.any(String),
     });
-    expect(db.prepare('SELECT * FROM documents ORDER BY rowid').all()).toEqual(
-      before,
-    );
+    expect(db.prepare(existingDocuments).all()).toEqual(before);
     const backup = new DatabaseSync(e.store.migration.backup!);
     try {
       expect(
@@ -80,6 +81,8 @@ it('upgrades the published 0.2.13 database unchanged and executes both published
       const bundle = exportWorkflows(e.store, workflow.id);
       expect(bundle.formatVersion).toBe(1);
       const target = engine();
+      // This checks bundle compatibility; approval of imported Scripts is covered separately.
+      target.scriptApprovals.saveSettings('off');
       importWorkflows(target.store, bundle);
       const run = target.start(workflow.id, {}).run;
       await vi.waitFor(() =>
@@ -87,9 +90,7 @@ it('upgrades the published 0.2.13 database unchanged and executes both published
       );
       expect(target.run(run.id).output).toEqual({ answer: 42 });
     }
-    expect(db.prepare('SELECT * FROM documents ORDER BY rowid').all()).toEqual(
-      before,
-    );
+    expect(db.prepare(existingDocuments).all()).toEqual(before);
   } finally {
     db.close();
   }
@@ -168,7 +169,7 @@ it.each([12, 13, 14])(
       const upgrade = migrate(db, file);
       expect(upgrade).toMatchObject({
         from: version,
-        to: 19,
+        to: 20,
         backup: expect.any(String),
       });
       expect(
@@ -181,7 +182,7 @@ it.each([12, 13, 14])(
           )
           .all(),
       ).toEqual([]);
-      expect(migrate(db, file)).toEqual({ from: 19, to: 19 });
+      expect(migrate(db, file)).toEqual({ from: 20, to: 20 });
     } finally {
       db.close();
     }

@@ -13,6 +13,7 @@ export function aiSettingsTab(location: { search: string; hash: string }) {
       'concurrency',
       'stall-settings',
       'history-retention',
+      'script-approval',
     ].includes(anchor)
   )
     return 'execution';

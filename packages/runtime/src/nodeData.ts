@@ -1,12 +1,17 @@
-import type {
-  ExecutionProvenance,
-  ModelUsage,
-  NodeExecution,
-  Run,
-  WorkflowNode,
+import { writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import {
+  readPath,
+  type ExecutionProvenance,
+  type Json,
+  type ModelUsage,
+  type NodeExecution,
+  type Run,
+  type WorkflowNode,
 } from '@interlock/core';
 
-export interface NodeProvenanceHistory {
+interface NodeProvenanceHistory {
   visitCount: number;
   latest: ExecutionProvenance;
   history: ExecutionProvenance[];
@@ -83,7 +88,7 @@ export function buildExecutionProvenance(
   };
 }
 
-export function buildRunExecutionProvenanceFile(
+function buildRunExecutionProvenanceFile(
   run: Run,
 ): Record<string, NodeProvenanceHistory> {
   const result: Record<string, NodeProvenanceHistory> = {};
@@ -98,4 +103,45 @@ export function buildRunExecutionProvenanceFile(
     };
   }
   return result;
+}
+
+export function readBranchValue(
+  run: Run,
+  execution: NodeExecution,
+  path: string,
+): Json {
+  const normalized = path.replace(/^\$\./, '');
+  if (normalized.startsWith('execution.')) {
+    const hasInputExecution =
+      execution.input !== null &&
+      typeof execution.input === 'object' &&
+      Object.hasOwn(execution.input, 'execution');
+    if (!hasInputExecution) {
+      const parts = normalized.split('.');
+      const targetNodeId = parts[1];
+      const propPath = parts.slice(2).join('.');
+      const previous = run.executions.findLast(
+        (candidate) =>
+          candidate.nodeId === targetNodeId && candidate.status === 'completed',
+      );
+      if (propPath === 'visitCount') {
+        return previous?.provenance?.visitCount ?? 0;
+      }
+      if (!previous?.provenance) return null;
+      return readPath(previous.provenance as unknown as Json, propPath);
+    }
+  }
+  return readPath(execution.input, path);
+}
+export function writeExecutionProvenanceFile(
+  run: Run,
+  execution: NodeExecution,
+): string {
+  const data = buildRunExecutionProvenanceFile(run);
+  const filePath = join(
+    tmpdir(),
+    `interlock-provenance-${run.id}-${execution.id}.json`,
+  );
+  writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
+  return filePath;
 }

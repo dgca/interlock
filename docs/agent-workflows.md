@@ -87,6 +87,8 @@ do not receive credentials from the server's environment. Bind saved variables
 through `environment` or list required server names in `environmentPassthrough`.
 Omitted mode keeps `inherit`. See [Scripts and interruptions](architecture.md#scripts-and-interruptions).
 
+Imported Script content waits for a person's approval before its first run. The run waits with `waiting.kind: "human_request"` and `workflow_requests` lists an `Approve imported Script` request whose detail shows the code. Agents cannot approve it. Scripts you create or edit over MCP run without approval unless the person extends approval to agent-authored Scripts. See [approve imported Scripts](reuse-work.md#approve-imported-scripts).
+
 Script, Fetch and waited Workflow calls support `onFailure: "route"` with `default` and `failed` edges through these same tools. Failed receives the fixed `{input,error,output}` contract described in [failure routes](failure-routes.md). The operation stays failed while its run continues. Workflow failures add `error.child` run/version/execution references. Cancelled children and caller input/dispatch errors remain terminal; a handled child cannot be retried independently. Earlier-node bindings select completed outputs only; read the incoming envelope for recovery. Removing the policy through MCP requires explicitly removing its edge. No automatic retry is added, and completed recovery runs cannot be retried.
 
 `start_run.input` and `submit_result.output` accept any JSON value matching the workflow or assignment contract, including objects, arrays, scalars, and null. Pass structured values directly. JSON-looking strings remain strings and are never implicitly parsed.

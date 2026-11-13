@@ -19,6 +19,7 @@ import { BookOpen, Braces, FileJson, FolderGit2, Upload } from 'lucide-react';
 import { api, errorMessage } from '../../lib/api';
 import type { Action } from '../../lib/useActionFeedback';
 import { importWorkflowJson } from './importWorkflowJson';
+import { Details } from './ImportDetails';
 import {
   BoardImportEditor,
   boardImportChoices,
@@ -48,51 +49,6 @@ type LocalDocument = {
   generation: number;
 };
 const emptyBoardDrafts: BoardImportDrafts = new Map();
-function Details({
-  item,
-  filename,
-  commit,
-}: {
-  item: Pick<DocumentPreview, 'workflows' | 'prompts'>;
-  filename?: string;
-  commit?: string;
-}) {
-  const included = [
-    item.workflows.length
-      ? `${item.workflows.length} included workflow${item.workflows.length === 1 ? '' : 's'}`
-      : '',
-    item.prompts.length
-      ? `${item.prompts.length} saved prompt${item.prompts.length === 1 ? '' : 's'}`
-      : '',
-  ]
-    .filter(Boolean)
-    .join(' · ');
-  if (!included && !filename && !commit) return null;
-  return (
-    <details className={styles.details}>
-      <summary>{included || 'File details'}</summary>
-      {item.workflows.map((w) => (
-        <p key={w.id}>
-          {w.name}
-          {w.owned ? ' · owned child' : ''}
-          <code>{w.id}</code>
-        </p>
-      ))}
-      {item.prompts.map((p) => (
-        <p key={p.id}>
-          {p.name}
-          <code>{p.id}</code>
-        </p>
-      ))}
-      {filename && <p>{filename}</p>}
-      {commit && (
-        <p>
-          Source revision <code>{commit}</code>
-        </p>
-      )}
-    </details>
-  );
-}
 export function ImportWorkflowDialog({
   onClose,
   onImported,
