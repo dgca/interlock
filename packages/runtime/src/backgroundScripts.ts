@@ -108,6 +108,8 @@ export class BackgroundScripts {
     language: 'bash' | 'javascript' | undefined,
     env: NodeJS.ProcessEnv,
     hasSecrets: boolean,
+    /** Removed by the supervisor when the Script ends. */
+    provenanceFile?: string,
   ) {
     const job = this.job(run.id, execution.id);
     const key = this.files.key(job);
@@ -141,6 +143,7 @@ export class BackgroundScripts {
         input,
         env,
         hasSecrets,
+        provenanceFile,
       }),
     );
     child.unref();
