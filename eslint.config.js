@@ -12,9 +12,11 @@
 // rule in a baselined file still fails. Remove entries by fixing the code
 // and running `pnpm lint --prune-suppressions`.
 import { readFileSync } from 'node:fs';
+import css from '@eslint/css';
 import js from '@eslint/js';
 import { defineConfig } from 'eslint/config';
 import tseslint from 'typescript-eslint';
+import designSystem from './scripts/eslint-design-system.js';
 
 const sourceFiles = ['packages/**/*.{ts,tsx}', 'tests/**/*.{ts,tsx}'];
 
@@ -48,7 +50,41 @@ const sizeBudgetBlocks = [
 // `pnpm lint --suppress-rule <rule>` so they join eslint-suppressions.json.
 // These blocks come after the size-budget blocks and override them, so they
 // must not set `max-lines` or turn rules off.
-const scopedRuleBlocks = [];
+//
+// Design system (#438): application UI in packages/ui/src outside
+// design-system/ must use the design-system barrel, tokens and control sizes.
+// CSS files are linted with the @eslint/css language so TypeScript and CSS
+// share one run and one baseline; baseline entries are the `design-system/*`
+// rules in eslint-suppressions.json. See packages/ui/src/design-system/README.md.
+const applicationUi = {
+  ignores: ['packages/ui/src/design-system/**'],
+  plugins: { 'design-system': designSystem },
+};
+const scopedRuleBlocks = [
+  {
+    ...applicationUi,
+    name: 'interlock/design-system/typescript',
+    files: ['packages/ui/src/**/*.{ts,tsx}'],
+    rules: {
+      'design-system/no-mantine-import': 'error',
+      'design-system/no-raw-color': 'error',
+      'design-system/no-inline-style': 'error',
+      'design-system/control-height': 'error',
+    },
+  },
+  {
+    ...applicationUi,
+    name: 'interlock/design-system/css',
+    files: ['packages/ui/src/**/*.css'],
+    plugins: { ...applicationUi.plugins, css },
+    language: 'css/css',
+    languageOptions: { tolerant: true },
+    rules: {
+      'design-system/no-raw-color': 'error',
+      'design-system/control-height': 'error',
+    },
+  },
+];
 
 export default defineConfig(
   {

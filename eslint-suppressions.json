@@ -568,6 +568,16 @@
       "count": 1
     }
   },
+  "packages/ui/src/components/Sidebar/Sidebar.module.css": {
+    "design-system/no-raw-color": {
+      "count": 1
+    }
+  },
+  "packages/ui/src/components/Sidebar/Sidebar.tsx": {
+    "design-system/control-height": {
+      "count": 1
+    }
+  },
   "packages/ui/src/design-system/JsonEditor/JsonEditor.tsx": {
     "@typescript-eslint/no-explicit-any": {
       "count": 1
@@ -599,6 +609,9 @@
     },
     "@typescript-eslint/no-unused-vars": {
       "count": 1
+    },
+    "design-system/no-inline-style": {
+      "count": 3
     }
   },
   "packages/ui/src/features/boards/BoardSettings.tsx": {
@@ -628,6 +641,9 @@
   "packages/ui/src/features/executors/AgentPresets.tsx": {
     "@typescript-eslint/no-unused-vars": {
       "count": 2
+    },
+    "design-system/control-height": {
+      "count": 3
     }
   },
   "packages/ui/src/features/executors/ExecutionSettings.tsx": {
@@ -659,9 +675,17 @@
       "count": 1
     }
   },
+  "packages/ui/src/features/executors/ModelPicker.tsx": {
+    "design-system/control-height": {
+      "count": 1
+    }
+  },
   "packages/ui/src/features/executors/StallSettings.tsx": {
     "@typescript-eslint/no-misused-promises": {
       "count": 2
+    },
+    "design-system/no-inline-style": {
+      "count": 3
     }
   },
   "packages/ui/src/features/prompts/Prompts.tsx": {
@@ -719,6 +743,11 @@
       "count": 5
     }
   },
+  "packages/ui/src/features/variables/VariableImportBindings.tsx": {
+    "design-system/no-inline-style": {
+      "count": 3
+    }
+  },
   "packages/ui/src/features/variables/Variables.tsx": {
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 2
@@ -752,6 +781,11 @@
       "count": 1
     }
   },
+  "packages/ui/src/features/workflows/FlowNode.tsx": {
+    "design-system/no-inline-style": {
+      "count": 3
+    }
+  },
   "packages/ui/src/features/workflows/ImportWorkflowDialog.tsx": {
     "@typescript-eslint/no-unsafe-argument": {
       "count": 3
@@ -774,9 +808,19 @@
       "count": 2
     }
   },
+  "packages/ui/src/features/workflows/NodeResultEditor.tsx": {
+    "design-system/no-inline-style": {
+      "count": 1
+    }
+  },
   "packages/ui/src/features/workflows/ResourceBindingsEditor.tsx": {
     "@typescript-eslint/no-unsafe-member-access": {
       "count": 1
+    }
+  },
+  "packages/ui/src/features/workflows/ResultRulesEditor.tsx": {
+    "design-system/no-inline-style": {
+      "count": 2
     }
   },
   "packages/ui/src/features/workflows/ScriptCode.tsx": {
@@ -795,6 +839,11 @@
       "count": 1
     }
   },
+  "packages/ui/src/features/workflows/TidyControl.tsx": {
+    "design-system/no-inline-style": {
+      "count": 1
+    }
+  },
   "packages/ui/src/features/workflows/TypedValueEditor.tsx": {
     "@typescript-eslint/no-base-to-string": {
       "count": 1
@@ -808,6 +857,11 @@
   },
   "packages/ui/src/features/workflows/WorkflowChildren.tsx": {
     "@typescript-eslint/no-misused-promises": {
+      "count": 1
+    }
+  },
+  "packages/ui/src/features/workflows/WorkflowEditor.module.css": {
+    "design-system/control-height": {
       "count": 1
     }
   },
@@ -873,6 +927,11 @@
       "count": 1
     },
     "@typescript-eslint/no-unsafe-member-access": {
+      "count": 1
+    }
+  },
+  "packages/ui/src/styles.css": {
+    "design-system/no-raw-color": {
       "count": 1
     }
   },
