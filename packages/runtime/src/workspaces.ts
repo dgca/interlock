@@ -285,10 +285,16 @@ export class ManagedWorkspaces {
   private job(id: string, work: (signal: AbortSignal) => Promise<unknown>) {
     const controller = new AbortController();
     this.jobs.set(id, controller);
-    void work(controller.signal).finally(() => {
-      this.jobs.delete(id);
-      if (!this.stopped) this.host.pump();
-    });
+    void work(controller.signal)
+      .catch(() => undefined)
+      .finally(() => {
+        this.jobs.delete(id);
+        try {
+          if (!this.stopped) this.host.pump();
+        } catch {
+          // The store may close without stopping the engine.
+        }
+      });
   }
   /** Agent working directory: node cwd, then the workspace, then workflow cwd. */
   agentCwd(
@@ -342,13 +348,15 @@ export class ManagedWorkspaces {
       const repositories = [...this.active].flatMap(
         (id) => this.get(id)?.repository ?? [],
       );
-      this.job('reconcile', () =>
-        reconcileWorktrees(
-          this.root,
-          (id) => ![undefined, 'removed'].includes(this.get(id)?.state),
-          repositories,
-        ),
-      );
+      // Nothing to reconcile when no workspace was ever created here.
+      if (existsSync(this.root) || repositories.length)
+        this.job('reconcile', () =>
+          reconcileWorktrees(
+            this.root,
+            (id) => ![undefined, 'removed'].includes(this.get(id)?.state),
+            repositories,
+          ),
+        );
     }
     for (const id of this.active) {
       const workspace = this.get(id);
