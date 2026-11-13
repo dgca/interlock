@@ -326,7 +326,9 @@ export class Requests {
         kind: 'scriptApproval' as const,
         question: 'Approve imported Script',
         context:
-          'This Script came from an imported workflow and runs as your user with your files and network access. Review the code before approving. Approval applies to this exact code in this workflow; a person must approve it in the Interlock UI or CLI.',
+          'This Script came from an imported workflow and runs as your user with your files and network access. Review the code before approving. Approval applies to this exact code in this workflow.',
+        agentNote:
+          'A person must approve this in the Interlock UI or CLI; agents cannot approve it.',
         state: (active
           ? 'open'
           : script.record.state === 'approved'

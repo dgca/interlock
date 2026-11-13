@@ -5,7 +5,7 @@
     "packages/core/src/index.ts": 1549,
     "packages/mcp/src/server.ts": 955,
     "packages/runtime/src/executors/manager.ts": 3228,
-    "packages/runtime/src/index.ts": 4821,
+    "packages/runtime/src/index.ts": 4826,
     "packages/runtime/src/report.ts": 943,
     "packages/runtime/src/testbench.ts": 1032,
     "packages/runtime/src/transfer.ts": 806,

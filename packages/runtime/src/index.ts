@@ -1291,11 +1291,16 @@ export class Engine {
       throw new InterlockError(
         'Cloning a workflow with children is not available yet.',
       );
-    return this.create(
-      `${w.name} copy`,
-      w.description,
-      this.describeWorkflow(w).draft,
-    );
+    return this.store.transaction(() => {
+      const copy = this.create(
+        `${w.name} copy`,
+        w.description,
+        this.describeWorkflow(w).draft,
+      );
+      // A copy keeps the source's unapproved imported content unapproved.
+      this.scriptApprovals.copyPending(id, copy.id);
+      return copy;
+    });
   }
   publish(id: string | string[], cascade = false) {
     const targetIds = Array.isArray(id) ? id : [id];

@@ -139,6 +139,17 @@ export class ScriptApprovals {
       );
   }
 
+  /** Carry unapproved content to a workflow copied from another one. */
+  copyPending(fromId: string, toId: string) {
+    for (const record of this.store.list<ScriptApproval>(collection))
+      if (record.workflowId === fromId && record.state === 'pending')
+        this.store.put<ScriptApproval>(collection, {
+          ...record,
+          id: scriptApprovalId(toId, record.hash),
+          workflowId: toId,
+        });
+  }
+
   /** Gate an agent's draft change when the library extends approval to agents. */
   recordAgentEdit(workflowId: string, previous: WorkflowDefinition[]) {
     if (this.settings().mode !== 'imports_and_agents') return;
@@ -148,10 +159,8 @@ export class ScriptApprovals {
 
   /** The Script a waiting step runs, with its approval record. */
   step(run: Run, execution: NodeExecution) {
-    const version = this.store.getVersion(
-      run.workflowId,
-      execution.version ?? run.version,
-    );
+    // The same definition the engine gates: the run's current version.
+    const version = this.store.getVersion(run.workflowId, run.version);
     const node = version?.definition.nodes.find(
       (n) => n.id === execution.nodeId,
     );

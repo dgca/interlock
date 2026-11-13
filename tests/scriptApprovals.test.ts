@@ -245,3 +245,12 @@ it('gates agent-authored Scripts only when the library extends approval to agent
   const third = engine.start(created.id, { marker }).run;
   await vi.waitFor(() => expect(engine.run(third.id).status).toBe('completed'));
 });
+
+it('keeps imported Script content held in a duplicated workflow', async () => {
+  const { engine, marker, person } = setup();
+  const copy = await person.workflows.clone({ id: imported(engine) });
+  engine.publish(copy.id);
+  const run = engine.start(copy.id, { marker }).run;
+  await vi.waitFor(() => expect(engine.run(run.id).status).toBe('waiting'));
+  expect(existsSync(marker)).toBe(false);
+});
