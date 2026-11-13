@@ -368,7 +368,7 @@ The shared API exposes `report.summary` (with `system.report` as an alias), the 
 
 ## Local interfaces
 
-The main service binds to `127.0.0.1` and rejects unexpected request hosts and browser origins. It is a single-user local service without authentication. Local processes can invoke its interfaces. It must not be exposed through a public tunnel.
+The main service binds to `127.0.0.1` and rejects unexpected request hosts and browser origins. It is a single-user local service. A per-install [API token](connect-harness.md#api-token) is sent by first-party clients; it is required on `/trpc`, `/mcp` and `/events` only when `INTERLOCK_REQUIRE_TOKEN` is set, so by default local processes can invoke its interfaces. The check lives in `packages/server/src/apiToken.ts`. It must not be exposed through a public tunnel.
 
 Installed copies use `~/.interlock/interlock.db`; development uses `.interlock/interlock.db` inside the checkout. `interlock` starts the engine and built UI in the foreground. Its `--port`, `--db`, and `--workdir` flags override defaults. Development uses `pnpm dev` for the engine and Vite UI, or `pnpm start` for the engine and previously built UI.
 

@@ -1,9 +1,9 @@
 import { serve } from '@hono/node-server';
-import { serveStatic } from '@hono/node-server/serve-static';
-import { resolve } from 'node:path';
 import { Store } from '@interlock/storage';
 import { Engine } from '@interlock/runtime';
-import { createApp } from './app.js';
+import { createApp, serveUi } from './app.js';
+import { parseRequireToken } from './apiToken.js';
+import { apiTokenPath, ensureApiToken } from '@interlock/core/apiToken';
 import type { ConnectionConfig } from './connection.js';
 import { checkPort, lockDatabase, startupError } from './startup.js';
 import { nativeAdapters } from '../../runtime/src/executors/native.js';
@@ -29,6 +29,19 @@ export function parseAllowedRoots(value?: string): string[] | undefined {
     .filter(Boolean);
 }
 
+/** Adds the per-install token. A token that cannot be created only fails startup when required. */
+function withApiToken(connection: ConnectionConfig): ConnectionConfig {
+  const requireToken = parseRequireToken();
+  try {
+    return { ...connection, token: ensureApiToken(), requireToken };
+  } catch (error) {
+    const message = `Cannot use the API token file ${apiTokenPath()}: ${error instanceof Error ? error.message : String(error)}`;
+    if (requireToken) throw new Error(message, { cause: error });
+    console.warn(`${message} Continuing without a token.`);
+    return { ...connection, requireToken };
+  }
+}
+
 export async function startServer(options: {
   database: string;
   workdir: string;
@@ -38,6 +51,7 @@ export async function startServer(options: {
   allowedRoots?: string[];
 }) {
   await checkPort(options.port);
+  const connection = withApiToken(options.connection);
   const unlock = lockDatabase(options.database);
   let store: Store;
   try {
@@ -66,14 +80,17 @@ export async function startServer(options: {
     unlock();
     throw startupError(error, options.database);
   }
-  const app = createApp(engine, options.connection);
-  app.get('*', serveStatic({ root: options.ui }));
-  app.get('*', serveStatic({ path: resolve(options.ui, 'index.html') }));
+  const app = createApp(engine, connection);
+  serveUi(app, options.ui, connection);
   const timer = setInterval(() => engine.pump(), 1000);
   const server = serve(
     { fetch: app.fetch, hostname: '127.0.0.1', port: options.port },
     () =>
-      console.log(`Interlock is running at ${options.connection.engineUrl}`),
+      console.log(
+        connection.requireToken
+          ? `Interlock is running at ${connection.engineUrl}/?token=${connection.token}\nAPI token required. Open this link to use the UI.`
+          : `Interlock is running at ${connection.engineUrl}`,
+      ),
   );
   const onError =
     (port: number, option: string) => (error: NodeJS.ErrnoException) => {

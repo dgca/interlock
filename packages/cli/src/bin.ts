@@ -55,8 +55,10 @@ Report dates must be valid ISO datetimes whose rounded UTC bounds stay within ye
 System readiness check: doctor [--live] [--json]
 Run 'interlock commands' for argument syntax.
 
-Environment: INTERLOCK_DB, INTERLOCK_WORKDIR, INTERLOCK_URL, INTERLOCK_SECRET_KEY_FILE
-Variable encryption keys are held separately from the database. Back up keys separately.`);
+Environment: INTERLOCK_DB, INTERLOCK_WORKDIR, INTERLOCK_URL, INTERLOCK_SECRET_KEY_FILE, INTERLOCK_REQUIRE_TOKEN
+Variable encryption keys are held separately from the database. Back up keys separately.
+INTERLOCK_REQUIRE_TOKEN=1 rejects API, MCP and event requests without the API token.
+Commands and the mcp bridge read the token from the api-token file beside the key folder.`);
     return;
   }
   if (argv[0] === 'mcp') {
