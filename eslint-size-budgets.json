@@ -1,7 +1,7 @@
 {
   "maxLines": 800,
   "ceilings": {
-    "packages/cli/src/commands.ts": 985,
+    "packages/cli/src/commands.ts": 984,
     "packages/core/src/index.ts": 1550,
     "packages/mcp/src/server.ts": 955,
     "packages/runtime/src/executors/manager.ts": 3227,

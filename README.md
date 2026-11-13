@@ -339,6 +339,8 @@ interlock doctor --live
 
 Interlock is a local, single-user application. Agent steps use connected executors, manual submission, or opt-in managed Claude Code, Codex, and Pi sessions; script steps run in the engine. Managed harnesses use their native account and permission configuration.
 
+The server listens only on loopback and rejects requests with other hosts or untrusted browser origins. On loopback the [API token](docs/connect-harness.md#api-token) is accepted when sent and required only with `INTERLOCK_REQUIRE_TOKEN=1`. A server listening on any other address always requires the token on `/trpc`, `/mcp` and `/events` and refuses to start without one. Interlock does not offer a non-loopback listen address yet; do not expose it through a tunnel or proxy.
+
 Agent nodes can opt into [context continuity groups](docs/context-continuity.md) to declare a shared session within a run, with recorded handoffs when the session must change.
 
 A connected executor supplies the tools, skills, and context isolation requested by a workflow. Interlock checks the executor's declared capabilities but does not install or provide them.
@@ -354,7 +356,7 @@ pnpm install
 pnpm dev
 ```
 
-The development UI runs on [port 5173](http://127.0.0.1:5173), with the engine on port 4310. `pnpm dev` waits for the engine's `/health` endpoint before starting Vite. If the engine does not become healthy within 30 seconds, development startup stops; check the server output for the cause. Stop any installed Interlock server using port 4310 before starting development.
+The development UI runs on [port 5173](http://127.0.0.1:5173), with the engine on port 4310. `pnpm dev` waits for the engine's `/health` endpoint before starting Vite. If the engine does not become healthy within 30 seconds, development startup stops; check the server output for the cause. Stop any installed Interlock server using port 4310 before starting development. The engine accepts browser requests from the Vite origin only in development; an installed copy rejects them.
 
 Development stores data in `.interlock/interlock.db` inside the checkout. Installed copies use a separate database unless you pass `--db` explicitly. Run `pnpm build` followed by `pnpm start` to serve the built UI on port 4310 with the development database.
 
