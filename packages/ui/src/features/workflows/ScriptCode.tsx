@@ -16,11 +16,15 @@ export function ScriptCode({
   value,
   onChange,
   polling = false,
+  title,
 }: {
   value: Code;
   onChange: (value: Code) => void;
   polling?: boolean;
+  /** Names this code when a form holds more than one, as in workspace hooks. */
+  title?: string;
 }) {
+  const prefix = title ? `${title} ` : polling ? 'Check ' : '';
   const drafts = useRef<
     Partial<Record<Language, { code: Code; carriedFrom?: Language }>>
   >({});
@@ -53,11 +57,11 @@ export function ScriptCode({
   };
   return (
     <>
-      <Input.Wrapper label="Language" mb="md">
+      <Input.Wrapper label={title ? `${title} language` : 'Language'} mb="md">
         <SegmentedControl
           mt={4}
           style={{ display: 'flex', width: 'fit-content' }}
-          aria-label={polling ? 'Check language' : 'Language'}
+          aria-label={prefix ? `${prefix}language` : 'Language'}
           value={language}
           data={[
             { value: 'javascript', label: 'JavaScript' },
@@ -84,7 +88,7 @@ export function ScriptCode({
         </div>
       )}
       <CodeEditor
-        label={`${polling ? 'Check ' : ''}${language === 'javascript' ? 'JavaScript code' : 'Bash command'}`}
+        label={`${prefix}${language === 'javascript' ? 'JavaScript code' : 'Bash command'}`}
         language={language}
         value={value.command}
         onChange={(command) => onChange({ language: value.language, command })}

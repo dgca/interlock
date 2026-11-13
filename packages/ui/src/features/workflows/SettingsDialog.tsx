@@ -37,6 +37,7 @@ import {
 import { workflowTargets } from './workflowTargets';
 import type { WorkspaceRead } from '../../components/WorkspaceReads';
 import { NodeInspector } from './NodeInspector';
+import { WorkspaceSettings } from './WorkspaceSettings';
 import { nodeDescriptions } from './nodeDescriptions';
 import type { NodeSectionName } from './NodeSettingsSections';
 import { api, download } from '../../lib/api';
@@ -609,6 +610,10 @@ export function SettingsDialog({
                           pinPromptsAtPublish: event.currentTarget.checked,
                         })
                       }
+                    />
+                    <WorkspaceSettings
+                      value={settings.definition.workspace}
+                      onChange={(workspace) => patchDefinition({ workspace })}
                     />
                     <StallPolicyEditor
                       value={settings.definition}

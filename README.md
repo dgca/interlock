@@ -406,6 +406,7 @@ Browse the [documentation site](https://dgca.github.io/interlock/docs/) or start
 - [Lifecycle event triggers and quiescent teardown](docs/events.md)
 - [Agent workflow operations, original-input and node-output bindings, and portable bundles](docs/agent-workflows.md)
 - [Fetch requests](docs/fetch.md)
+- [Give each run its own Git worktree](docs/managed-workspaces.md)
 - [Upgrade and restore a database](docs/upgrading.md)
 - [Release process](docs/releases.md)
 
