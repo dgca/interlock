@@ -227,6 +227,8 @@ Set Agent `promptIds` to distinct IDs in the desired order, alongside the node `
 | `preview_workflow_ownership`, `set_workflow_owner`                              | Preview and move existing workflows while preserving identity and history.                        |
 | `delete_workflow`                                                               | Permanently remove an unreferenced workflow and its inactive history.                             |
 
+Use `read_workflow_boards` and `manage_workflow_boards` to inspect run cards, save board settings, and assign workflows. See [Manage boards through MCP](workflow-boards.md#manage-boards-through-mcp).
+
 `list_work` returns available assignments, excluding claimed, held, resource-blocked and budget-blocked work. An empty list does not mean the execution has completed. A queued start has no assignment until admission; inspect its admission_queue waiting projection and dependency/capacity blockers. Use `get_run_briefing` for its status, claimed assignments, blockers, and detached progress. When given an existing run ID, resume it rather than calling `start_run` again.
 
 `retry_run` retries the failed step of a failed run. Inspect its error first, since Script and Fetch retries can repeat external side effects. Failed Batch retries preserve successful items. Retry a failed parent when an ordinary child belongs to a terminal parent. Failed detached children can be retried directly after their parent ends. A child already handled through a Workflow Failed route cannot be retried independently; inspect the current parent recovery. Completed and cancelled runs cannot be retried. The CLI equivalent is `interlock retry RUN_ID`.

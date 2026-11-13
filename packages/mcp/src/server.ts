@@ -20,6 +20,9 @@ import { TRPCClientError } from '@interlock/client';
 import {
   simulationToolSchema,
   externalInputRequestSchema,
+  boardMembershipSchema,
+  boardQuerySchema,
+  saveBoardSchema,
   workflowRequestSchema,
   workHoldRequestSchema,
   contextGroupQuerySchema,
@@ -389,8 +392,67 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
     (input) => client.runs.usage(input),
   );
   tool(
+    'read_workflow_boards',
+    'List board IDs, names and counts (offset 0, limit 30, max 100, total and nextOffset). settings reads revision, ordered columns, workflowIds and protectedColumnIds. get pages one column, including queued or unstaged, with per-column totals and optional workflowId/status filters. Pass card.request to workflow_requests get.',
+    {
+      request: z.discriminatedUnion('action', [
+        boardQuerySchema
+          .pick({ offset: true, limit: true })
+          .extend({ action: z.literal('list') }),
+        boardQuerySchema.pick({ id: true }).extend({
+          action: z.literal('settings'),
+        }),
+        boardQuerySchema.extend({
+          action: z.literal('get'),
+          column: boardQuerySchema.shape.id,
+        }),
+      ]),
+    },
+    async ({ request }) => {
+      if (request.action === 'list') {
+        const { offset, limit } = request;
+        const boards = await client.boards.list();
+        return {
+          items: boards
+            .slice(offset, offset + limit)
+            .map(({ id, name, workflowIds, attentionCount }) => ({
+              id,
+              name,
+              workflowCount: workflowIds.length,
+              attentionCount,
+            })),
+          total: boards.length,
+          nextOffset: offset + limit < boards.length ? offset + limit : null,
+        };
+      }
+      if (request.action === 'settings')
+        return client.boards.settings({ id: request.id });
+      const { action: _action, ...query } = request;
+      return client.boards.get(query);
+    },
+  );
+  tool(
+    'manage_workflow_boards',
+    'save replaces ordered columns and workflowIds. Update with id and expectedRevision from settings. Keep existing column IDs. Omit IDs for new columns. Protected columns cannot be removed. Guard moves with expectedBoards mapping each selected workflow to its current board ID or null. Create without id or expectedRevision. Check the list before retrying. assign uses workflowId, boardId and expectedBoardId (null means unassigned). Membership applies immediately. Moving clears imported stage mappings.',
+    {
+      request: z.discriminatedUnion('action', [
+        saveBoardSchema.extend({ action: z.literal('save') }),
+        boardMembershipSchema.extend({ action: z.literal('assign') }),
+      ]),
+    },
+    async ({ request }) => {
+      if (request.action === 'save') {
+        const { action: _action, ...settings } = request;
+        return client.boards.save(settings);
+      }
+      const { action: _action, ...assignment } = request;
+      const workflow = await client.boards.assign(assignment);
+      return { workflowId: workflow.id, boardId: workflow.boardId ?? null };
+    },
+  );
+  tool(
     'workflow_requests',
-    'Find individual Human input, managed-agent, recovery, and stall requests, including runs without boards. list filters by boardId or runId and returns oldest first, exact total and nextOffset (25 default, 100 max). get takes the exact returned target and loads captured context, state and answer. For Human input, answer uses a stable submissionId and current expectedRevision, initially 0. Repeat identical arguments after uncertain delivery. A saved answer under a pause or hold stays open; release an acceptance hold through external_input using holding.runId/revision, then accept the saved revision. Use get.actions to select the operation. For managed requests use manage_executors with managedExecutionId and requestId when needed. For resource or Script recovery use manage_work_resources or manage_script with the exact returned target. Inspect stalls in the run.',
+    'Find individual Human input, managed-agent, recovery, and stall requests, including runs without boards. list filters by boardId or runId and returns oldest first, exact total and nextOffset (25 default, 100 max). Discover board IDs with read_workflow_boards list. get takes the exact request target and loads captured context, state and answer. For Human input, answer uses a stable submissionId and current expectedRevision, initially 0. Repeat identical arguments after uncertain delivery. A saved answer under a pause or hold stays open. Release an acceptance hold through external_input using holding.runId/revision, then accept the saved revision. Use get.actions to select the operation. For managed requests use manage_executors with managedExecutionId and requestId when needed. For resource or Script recovery use manage_work_resources or manage_script with the exact returned target. Inspect stalls in the run.',
     { request: workflowRequestSchema },
     ({ request }) => {
       if (request.action === 'list') {
@@ -403,7 +465,7 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
   );
   tool(
     'external_input',
-    'Inspect, submit, or accept integration-owned External input. Use workflow_requests to answer Human input. Hold/release applies to both kinds across the run and attached descendants. Briefing input blockers identify runId/executionId even when paused. Status without executionId reads holds; includeValue with executionId reads pending JSON. Submit stable requestId, optional expectedRevision initially 0; identical retries recover receipts. Accept the exact current revision. Run input holds and library/workflow pauses block acceptance; status returns 20 applicable pauses plus pauseCount, manage_pause reads more. Submissions can replace values; release never accepts. Detached runs have independent holds.',
+    'Inspect, submit or accept integration-owned External input. Use workflow_requests for Human input. Hold/release applies to both across attached descendants. Status without executionId reads holds. includeValue reads pending JSON. Submit with stable requestId and optional expectedRevision (initially 0). Identical retries recover receipts. Accept the current revision. Pauses and holds block acceptance. Release never accepts. Detached runs have independent holds.',
     { request: externalInputRequestSchema },
     ({ request }) =>
       request.action === 'status'
@@ -412,13 +474,13 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
   );
   tool(
     'get_run_briefing',
-    'Read bounded stage/waiting/actor,tags,lifecycle/independent progress,work/blockers,failures,deadlines/result refs. parallels counts named branch runs per group execution; descendants identify parallelBranch and parentExecutionId. Lists20/max100,total/truncated; no payloads/tokens. Queued admission has no work. Follow pause/hold/budget/resource/cwd recovery. Quiescence includes resource-free revoked Agents; reconcile exact stopped attempts via manage_work_resources. Resource blockers name executions/owners; queueing excludes timeouts. Input blockers identify execution/revision. humanRequest:true points to workflow_requests. Poll lastCheck caps512 chars; poll_check/poll_timeout deadlines. manage_stalls and manage_run_version read details. Empty work is not completion.',
+    'Read bounded progress, available work, blockers, failures, deadlines (including poll_check/poll_timeout) and result refs. Lists default 20/max 100 and report total/truncated. parallels counts named branches. Descendants include parallelBranch and parentExecutionId. humanRequest:true points to workflow_requests. Use manage_stalls or manage_run_version for details.',
     briefingQuerySchema.shape,
     (input) => client.runs.briefing(input),
   );
   tool(
     'wait_for_run_change',
-    'Read-only wait for run/descendant changes using continuation runId/cursor from briefing/wait/summary. timeoutMs:30000 default,60000 max,0 immediate. Bounded briefing adds changed/timedOut/reset and poll_check/poll_timeout deadlines. Restart/invalid cursor returns reset:true/changed:true; keep new cursor, infer no completion. Missing/deleted run errors; unrelated runs/workflow edits do not wake. No claims/timers advance. HTTP disconnect, stdio cancellation/shutdown release wait; cancelled local HTTP POST may persist until timeout. Client timeout must exceed wait. Detached IDs select independent lifecycles.',
+    'Read-only wait scoped to runId/cursor from briefing, wait or summary. timeoutMs defaults to 30000, max 60000, 0 immediate. Returns briefing with changed/timedOut/reset and poll_check/poll_timeout deadlines. On reset, keep the new cursor without inferring completion. Detached run IDs select independent lifecycles. Client timeout must exceed wait.',
     waitQuerySchema.shape,
     (input, signal) => client.runs.wait(input, { signal }),
   );
@@ -607,13 +669,13 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
   );
   tool(
     'preview_workflow_ownership',
-    'Read-only preview of adopting or reparenting an existing workflow under a library owner, or releasing it with ownerWorkflowId:null. Returns id, name, currentOwnerWorkflowId, proposed ownerWorkflowId, unchanged, canSetOwner and blockers. Blockers name invalid owners, owned children, and all foreign draft/retained published references with caller IDs/names, node IDs/labels, version and latest flags. Only the proposed owner may reference a child, including inside grouped paths; children cannot own workflows. Historical blockers require explicit version cleanup after informed agreement. No data changes.',
+    'Preview adoption, reparenting or release (ownerWorkflowId:null). Returns current/proposed owners and blockers with exact foreign draft and retained version reference locations. Historical blockers need explicit version cleanup after human agreement.',
     ownershipPreviewSchema.shape,
     (input) => client.workflows.previewOwnership(input),
   );
   tool(
     'set_workflow_owner',
-    'Adopt, reparent or release an existing workflow while preserving its ID, draft/revision, published versions, cleanup identities and all execution history. Use preview_workflow_ownership first. Require expectedOwnerWorkflowId from the current record or preview, with explicit null for library workflows. Rechecks ownership and every draft/retained published reference transactionally; stale ownership or any blocker rejects without changes. A new owner must be an unarchived library workflow different from the target; a target with children cannot become a child. Archived targets retain their archive flag. Release uses ownerWorkflowId:null and permits library reuse. Same-owner calls are no-ops, including an archived existing parent. Returns applied and workflow; effective moves update only ownerWorkflowId and updatedAt. Does not publish, execute, rewrite definitions or delete history. Generic update, raw definitions and forced imports cannot change ownership.',
+    'Adopt, reparent or release (ownerWorkflowId:null). Preview first and supply expectedOwnerWorkflowId, null for a library workflow. Stale ownership or reference blockers reject atomically. New owners must be active library workflows. A workflow with children cannot become a child. Same-owner calls are no-ops. Effective moves preserve identity, definitions and runs.',
     ownershipChangeSchema.shape,
     (input) => client.workflows.setOwner(input),
   );
@@ -625,7 +687,7 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
   );
   tool(
     'delete_workflow_versions',
-    'Atomically delete only previewed definitions after human agreement. Requires confirmation and acknowledgeHistoryLoss:true; stale impact/blockers reject without changes. Records/ancestry remain. Runs bound to deleted versions lose graph inspection/retry until original definitions are restored. Earlier execution graphs can become unavailable after a run moves; its current retained binding remains usable. Retained numbers/definitions stay unchanged. Ordinary import and force cannot restore deleted versions. Workflow/run records and ownership remain; selected callers never expand automatically. Returns deleted identities/affectedRuns.',
+    'After human agreement, delete only reviewed versions using confirmation and acknowledgeHistoryLoss:true. Stale impact or blockers reject atomically. Retained run records lose graph inspection and retry for deleted bindings until restored. Earlier execution graphs can become unavailable after a version move. Returns deleted identities and affectedRuns.',
     versionDeletionSchema.shape,
     (input) => client.workflows.deleteVersions(input),
   );
@@ -651,7 +713,7 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
   );
   tool(
     'get_workflow',
-    'Inspect one workflow, draft and input contract. draftRevision counts content changes; latestVersion is the highest published number, with possible gaps. draftMatchesLatest ignores node positions, null if unpublished. Full drafts include current saved positions and layoutRevision. Use current revision with edit_workflow for small changes or validate_workflow for read-only preflight.',
+    'Read one workflow, full draft with saved positions, and input contract. draftRevision tracks content. draftMatchesLatest ignores positions and is null if unpublished. Published version numbers can have gaps. Use edit_workflow with the current revision or validate_workflow for read-only diagnostics.',
     { id: z.string() },
     (input) => client.workflows.get(input),
   );
@@ -672,7 +734,7 @@ export function createMcpServer(client: ReturnType<typeof createMcpClient>) {
   );
   tool(
     'get_run',
-    'Inspect run/descendants: bound definition, per-execution versions/events, captured prompts/variable refs, token-free work. manage_run_version reads bounded move history, policy and compatibility blockers. Prefer briefing for continuation, result for selected payloads. Queued:admission_queue metadata. Removed version:definitionAvailable:false/definition:null; restore before retry. Rollover:chain.nextRunId; detached children independent. Holds:20 recent intervals; manage_work_hold reads more. manage_script uses supervisor/progress. Wait deadlines/checks may be historical. Routed failures retain port:failed/handledFailure. Quiescence:detached/continued blockers,uncertainClaims. New events snapshot projections; old may omit them.',
+    'Inspect a run and descendants with definitions, execution versions, events, prompt captures, variable refs and token-free work. Prefer briefing for continuation and get_run_result for selected payloads. Removed versions report definitionAvailable:false and require restoration before retry. Follow chain.nextRunId for rollover. Detached runs are independent. Use manage_run_version for moves, manage_work_hold for older holds, and manage_script for Script progress.',
     { id: z.string() },
     (input) => client.runs.get(input),
   );

@@ -58,12 +58,16 @@ export interface HarnessAdapter {
   }>;
   run: (input: HarnessRun) => Promise<HarnessResult>;
 }
-export function assignmentPrompt(work: WorkRequest) {
+export function assignmentPrompt(
+  work: WorkRequest,
+  resultInstructions?: string,
+) {
   return [
     work.prompt,
     work.context.instructions,
     assignmentInstructions(work, { managedSession: true }),
-    'Complete this one Interlock assignment. Return a JSON object with one field, result, whose value matches the supplied result schema. The host unwraps result and owns claim, renewal and submission; do not claim or submit this assignment yourself.',
+    resultInstructions ??
+      'Complete this one Interlock assignment. Return a JSON object with one field, result, whose value matches the supplied result schema. The host unwraps result and owns claim, renewal and submission; do not claim or submit this assignment yourself.',
     'Before returning, stop background commands and subprocesses you started. Do not detach daemons or leave work running after this assignment.',
     `Assignment input:\n${JSON.stringify(work.input)}`,
   ]

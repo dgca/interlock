@@ -50,7 +50,7 @@ it.each(['http', 'stdio'])(
     try {
       await client.connect(transport);
       const tools = (await client.listTools()).tools;
-      expect(tools).toHaveLength(67);
+      expect(tools).toHaveLength(69);
       expect(Buffer.byteLength(JSON.stringify(tools))).toBeLessThanOrEqual(
         300000,
       );

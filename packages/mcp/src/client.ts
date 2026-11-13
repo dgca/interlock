@@ -28,6 +28,13 @@ export function createMcpClient(url?: string) {
       mutate: client.modelAliases.mutate.mutate,
     },
     executors: { manage: client.executors.manage.mutate },
+    boards: {
+      list: client.boards.list.query,
+      get: client.boards.get.query,
+      settings: client.boards.settings.query,
+      save: client.boards.save.mutate,
+      assign: client.boards.assign.mutate,
+    },
     requests: {
       list: client.requests.list.query,
       get: client.requests.get.query,

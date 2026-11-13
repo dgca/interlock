@@ -27,6 +27,7 @@ if (flag('--model') === 'diagnostic-flood') await diagnostics();
 let waiting = false,
   model = 'test-model';
 let awaitingGuidance = false;
+let encodedResult = false;
 const end = (allowed) => {
   if (model === 'wait') return;
   if (model === 'model-refusal' || model === 'late-model-refusal') {
@@ -74,6 +75,10 @@ const end = (allowed) => {
     return;
   }
   const result = { result: { ok: allowed } };
+  if (codex && encodedResult) {
+    result.result = JSON.stringify(result.result);
+    if (model === 'schema-fallback') result.result += ' take';
+  }
   if (codex) {
     send({
       method: 'thread/tokenUsage/updated',
@@ -185,6 +190,17 @@ for await (const line of createInterface({ input: process.stdin })) {
       });
     }
     if (message.method === 'turn/start') {
+      encodedResult =
+        message.params.outputSchema?.properties?.result?.type === 'string' &&
+        message.params.input[0].text.includes(
+          'JSON-encoded string of your assignment result',
+        );
+      if (model === 'schema-fallback') {
+        if (!encodedResult || !message.params.input[0].text.includes('"allOf"'))
+          throw Error(
+            'Unsupported contract was not retained in the encoded-result prompt',
+          );
+      }
       if (model === 'effort-check' && message.params.effort !== 'high')
         throw Error('Missing native Codex effort');
       if (message.params.outputSchema?.properties?.result === undefined)

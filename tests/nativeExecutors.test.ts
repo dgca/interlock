@@ -8,6 +8,8 @@ import {
   HarnessModelError,
   HarnessResultError,
 } from '../packages/runtime/src/executors/contracts';
+import { codexResult } from '../packages/runtime/src/executors/codexResult';
+import { assertOwnPropertyContract } from '@interlock/core';
 
 const command = fileURLToPath(
   new URL('./fixtures/managed-harness.mjs', import.meta.url),
@@ -32,6 +34,70 @@ const work: WorkRequest = {
     required: ['ok'],
   },
 };
+
+it('recovers a Codex result with trailing prose without changing the contract', async () => {
+  const contract = {
+    type: 'object',
+    properties: {
+      ok: { type: 'boolean' },
+      path: { type: 'string', pattern: '^(?!/).+' },
+    },
+    required: ['ok'],
+    additionalProperties: false,
+    allOf: [{ properties: { ok: { const: false } } }],
+  };
+  const assignment = { ...work, outputSchema: contract };
+  const result = await codexAdapter.run({
+    command,
+    cwd: process.cwd(),
+    work: assignment,
+    profile: executorProfileSchema.parse({
+      id: 'codex',
+      harness: 'codex',
+      name: 'Codex',
+      model: 'schema-fallback',
+    }),
+    signal: new AbortController().signal,
+    onSession() {},
+    onProgress() {},
+    request: async () => ({ allow: true }),
+  });
+  expect(result.output).toEqual({ ok: true });
+  // Transport must not weaken runtime acceptance or require the optional path.
+  expect(() =>
+    assertOwnPropertyContract(contract, result.output, 'Result'),
+  ).toThrow();
+  expect(() =>
+    assertOwnPropertyContract(contract, { ok: false }, 'Result'),
+  ).not.toThrow();
+  expect(assignment.outputSchema).toBe(contract);
+});
+
+it('uses native schemas for strict contracts and preserves arbitrary JSON through fallback', () => {
+  const strict = {
+    type: 'object',
+    properties: { ok: { type: 'boolean' } },
+    required: ['ok'],
+    additionalProperties: false,
+  };
+  expect(
+    codexResult({ ...work, outputSchema: strict }).schema.properties.result,
+  ).toBe(strict);
+  const fallback = codexResult({ ...work, outputSchema: {} });
+  for (const value of [null, false, 12, 'text', { extra: 1 }, [1, 2]])
+    expect(fallback.decode(JSON.stringify(value))).toEqual(value);
+  expect(fallback.decode('[1,2] stray prose')).toEqual([1, 2]);
+  expect(fallback.decode('{"ok":true} take')).toEqual({ ok: true });
+  for (const malformed of [
+    '{bad',
+    '{"ok":} take',
+    '{"ok":true} {"ok":false}',
+    '{"ok":true} true',
+    '42 extra',
+  ])
+    expect(() => fallback.decode(malformed)).toThrow(/invalid encoded/);
+  expect(() => fallback.decode({ ok: true })).toThrow(/JSON string/);
+});
 it.each([claudeAdapter, codexAdapter])(
   'classifies an early $id model refusal but preserves ordinary failure after task actions',
   async (adapter) => {

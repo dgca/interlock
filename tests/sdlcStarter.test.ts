@@ -47,7 +47,7 @@ function start(engine: Engine, reviewPolicy = 'auto') {
   });
   return run;
 }
-function draftAndReview(engine: Engine, runId: string, stage: string) {
+async function draftAndReview(engine: Engine, runId: string, stage: string) {
   submit(engine, runId, stage, {
     artifactPath: `.tasks/change/${stage}.md`,
     summary: 'Synthetic accepted artifact',
@@ -63,6 +63,7 @@ function draftAndReview(engine: Engine, runId: string, stage: string) {
     decisions: [],
     feedback: '',
   });
+  await vi.waitFor(() => expect(engine.available(runId)).toHaveLength(1));
 }
 
 it('explicitly adds a published self-contained SDLC without starting runs', () => {
@@ -100,7 +101,7 @@ it('routes automatic planning to construction and requires a fresh final reviewe
   const engine = setup();
   const run = start(engine);
   for (const stage of ['intent', 'spec', 'plan'])
-    draftAndReview(engine, run.id, stage);
+    await draftAndReview(engine, run.id, stage);
   await vi.waitFor(() =>
     expect(engine.available(run.id)[0]?.nodeId).toBe('build'),
   );
@@ -160,12 +161,60 @@ it('routes automatic planning to construction and requires a fresh final reviewe
   expect(engine.run(run.id).output).toMatchObject({ prUrl: null });
 });
 
-it('keeps the human approval assignment available under the always policy', () => {
+it('keeps the human approval assignment available under the always policy', async () => {
   const engine = setup();
   const run = start(engine, 'always');
-  draftAndReview(engine, run.id, 'intent');
+  await draftAndReview(engine, run.id, 'intent');
   expect(engine.available(run.id)).toMatchObject([
     { nodeId: 'intentGate', status: 'available' },
   ]);
   expect(engine.run(run.id).status).toBe('waiting');
 });
+
+it.each(['intent', 'spec', 'plan'])(
+  'bounds %s revisions without losing findings or inventing approval',
+  async (stage) => {
+    const engine = setup();
+    const run = start(engine);
+    for (const prior of ['intent', 'spec', 'plan']) {
+      if (prior === stage) break;
+      await draftAndReview(engine, run.id, prior);
+    }
+    for (let round = 1; round <= 4; round++) {
+      submit(engine, run.id, stage, {
+        artifactPath: `.tasks/change/${stage}.md`,
+        summary: 'Fixture draft',
+        openQuestions: [],
+      });
+      submit(engine, run.id, stage + 'Review', {
+        artifactPath: `.tasks/change/${stage}.md`,
+        summary: 'Still missing acceptance evidence',
+        route: 'revise',
+        decisionSource: 'agent_review',
+        reason: 'A substantive gap remains',
+        authorizationBasis: [],
+        decisions: [],
+        feedback: 'Preserve and resolve finding F1',
+      });
+      await vi.waitFor(() => expect(engine.available(run.id)).toHaveLength(1));
+      const work = engine.available(run.id)[0];
+      expect(work.nodeId).toBe(round < 3 ? stage : stage + 'Gate');
+      if (round >= 3) {
+        expect(work.input).toMatchObject({
+          previous: {
+            route: 'needs_human',
+            feedback: 'Preserve and resolve finding F1',
+          },
+        });
+        submit(engine, run.id, stage + 'Gate', {
+          artifactPath: `.tasks/change/${stage}.md`,
+          summary: 'Fixture human answer',
+          decision: 'revise',
+          decisionSource: 'human',
+          humanResponse: 'Make one more correction',
+          feedback: 'Address F1',
+        });
+      }
+    }
+  },
+);
