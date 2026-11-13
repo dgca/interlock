@@ -19,3 +19,9 @@ Update baselines only for a visual change you intend, and review every changed i
 3. Replace each matching file in `tests/browser/__screenshots__/` with its `-actual.png`, dropping the `-actual` suffix. A new screenshot has no baseline yet, so its `-actual.png` becomes the new baseline the same way.
 
 On a Linux machine with the same Playwright Chromium, `INTERLOCK_UPDATE_SNAPSHOTS=1 pnpm test:browser` rewrites the baselines that differ instead. It refuses to run when `CI` is set. Compare the result with CI before committing, because local Linux font packages can still differ from the runner.
+
+## Accessibility checks
+
+The same tests run [axe](https://github.com/dequelabs/axe-core) on each gallery section, each gallery dialog, and each main screen at both widths, on every platform. `accessibility-baseline.json` records the existing serious and critical violations as the number of affected elements per rule for each `<screen>@<width>` key. Counts are used instead of selectors because selectors contain hashed CSS module class names. A test fails when a rule's count rises above the baseline, including a new element for a rule that is already baselined. The failure message names the rule, its help link, and the affected elements.
+
+The baseline only shrinks. When a fix lowers a count, the test fails until you lower or remove that entry. Do not add or raise entries for new work. After all checks run, the suite also fails if any baseline key was never checked, which catches mistyped or orphaned keys. Running a subset of tests with `-t` reports the keys it skipped.
