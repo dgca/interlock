@@ -3,6 +3,11 @@ import { serve } from '@hono/node-server';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import {
+  Client as CurrentClient,
+  StreamableHTTPClientTransport as CurrentHttpTransport,
+} from '@modelcontextprotocol/client';
+import { StdioClientTransport as CurrentStdioTransport } from '@modelcontextprotocol/client/stdio';
 import { blankDefinition } from '@interlock/core';
 import { Engine } from '@interlock/runtime';
 import { Store } from '@interlock/storage';
@@ -141,6 +146,62 @@ it.each(['http', 'stdio'])(
       }
     } finally {
       await Promise.all(clients.map((client) => client.close()));
+      server.close();
+      engine.stop();
+    }
+  },
+);
+
+// A 2026-07-28 client probes with server/discover and falls back to the
+// initialize handshake when the server answers like a 2025-era server.
+it.each(['http', 'stdio'])(
+  'serves a current dual-era MCP client over %s through the legacy handshake',
+  async (mode) => {
+    const engine = new Engine(new Store(':memory:'), process.cwd());
+    const server = serve({
+      fetch: createApp(engine).fetch,
+      hostname: '127.0.0.1',
+      port: 0,
+    });
+    await new Promise<void>((r) =>
+      server.listening ? r() : server.once('listening', r),
+    );
+    const address = server.address();
+    if (!address || typeof address === 'string') throw Error('No listener');
+    const url = `http://127.0.0.1:${address.port}`;
+    const client = new CurrentClient(
+      { name: 'conformance', version: '1' },
+      { versionNegotiation: { mode: 'auto', probe: { timeoutMs: 10_000 } } },
+    );
+    try {
+      await client.connect(
+        mode === 'http'
+          ? new CurrentHttpTransport(new URL(`${url}/mcp/execute`))
+          : new CurrentStdioTransport({
+              command: process.execPath,
+              args: ['--import', 'tsx', 'packages/mcp/src/index.ts'],
+              cwd: process.cwd(),
+              env: {
+                ...(process.env as Record<string, string>),
+                INTERLOCK_URL: url,
+                INTERLOCK_MCP_PROFILE: 'execute',
+              },
+              stderr: 'pipe',
+            }),
+      );
+      expect(client.getProtocolEra()).toBe('legacy');
+      expect(client.getNegotiatedProtocolVersion()).toBe('2025-11-25');
+      expect(client.getServerVersion()?.name).toBe('interlock');
+      const { tools } = await client.listTools();
+      expect(tools.map((tool) => tool.name)).toContain('list_work');
+      const listed = await client.callTool({
+        name: 'list_work',
+        arguments: {},
+      });
+      expect(listed.isError).not.toBe(true);
+      expect(listed.structuredContent).toEqual({ items: [] });
+    } finally {
+      await client.close();
       server.close();
       engine.stop();
     }
