@@ -70,3 +70,11 @@ Keep the existing version when retrying a failed publish. Changesets skips versi
 Keep the curated set small and self-contained. Add its template and a permanent identity in `packages/server/src/starters.ts`. Catalog additions make a choice available; they never install or execute it. Keep specialized examples in optional workflow files. Preserve catalog identities when a template changes so existing copies retain their provenance.
 
 Test catalog discovery, explicit imports, existing/customized copies, another-copy intent, keyed retries, failure rollback and the packed installation. Update the picker copy, [starter guide](starter-workflows.md) and affected examples. Shipped template changes never overwrite user copies.
+
+## Bundled third-party code
+
+`scripts/build-package.mjs` bundles runtime dependencies into `dist/cli.js`, so the published package declares no `dependencies`. esbuild writes their license comments to `dist/cli.js.LEGAL.txt`.
+
+The bundle includes the `/core` entry of `@anthropic-ai/claude-agent-sdk`, which the Claude Code executor uses. It does not include the Claude Code CLI: the native binary ships in the SDK's optional platform packages, and Interlock runs the user's own `claude` command instead. The SDK is not MIT licensed. Its `LICENSE.md` reserves all rights and makes use subject to Anthropic's [legal agreements](https://code.claude.com/docs/en/legal-and-compliance). Its README documents the `/core` entry as the one "for apps that bundle the SDK".
+
+Decision: keep bundling `/core` and ship the SDK's license text unchanged in `dist/licenses/claude-agent-sdk.md`, which the build writes from the installed SDK version. Declaring the SDK as a dependency instead would make every install download its native Claude Code binary (about 300 MB) that Interlock never runs. Loading the user's own SDK install would add an installation step. Revisit this if Anthropic publishes different redistribution terms for the SDK, and check the generated notice when upgrading the SDK.
