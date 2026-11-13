@@ -151,9 +151,10 @@ interface Job {
 
 /** Queue and claim lifecycle are shared; adapters own native session protocols. */
 export class ExecutorManager {
-  readonly errors = new SchedulerErrors(() =>
-    this.profiles().flatMap((p) => [p.headers, p.env]),
-  );
+  readonly errors = new SchedulerErrors(() => [
+    { apiToken: this.apiToken },
+    ...this.profiles().flatMap((p) => [p.headers, p.env]),
+  ]);
   private transcripts: ManagedTranscripts;
   private adapters = new Map<string, HarnessAdapter>();
   private jobs = new Map<string, Job>();
@@ -195,6 +196,7 @@ export class ExecutorManager {
   private running = false;
   private stopped = false;
   mcpUrl?: string; // Execute-profile MCP endpoint offered to launched sessions.
+  apiToken?: string; // Required API token offered to launched sessions; never in the payload.
   private scheduled = false;
   private scanning = false;
   private unsubscribe?: () => void;
@@ -1609,7 +1611,6 @@ export class ExecutorManager {
       this.launchedWork.set(work.id, existing);
       return existing;
     }
-
     const sessionName = this.resolveSessionName(work, profile);
     const claimTicket = randomUUID();
     const tokenMap = buildTokenMap(work, cwd, {
@@ -1617,6 +1618,7 @@ export class ExecutorManager {
       sessionId: logicalSession,
       sessionName,
       ...(this.mcpUrl ? { INTERLOCK_MCP_URL: this.mcpUrl } : {}),
+      ...(this.apiToken ? { INTERLOCK_API_TOKEN: this.apiToken } : {}),
     });
     const launchPayload = {
       idempotencyKey,
@@ -1658,11 +1660,9 @@ export class ExecutorManager {
       logCount: 1,
     };
     this.write(record);
-
     let remoteSessionId: string | undefined;
     let remoteResumeCommand: string | undefined;
     let remoteDeepLink: string | undefined;
-
     const invocation = customInvocation(profile, 'launcher');
     if (profile.transport === 'http') {
       if (!invocation) {

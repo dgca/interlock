@@ -9,7 +9,7 @@ import { blankDefinition, definitionSchema } from '@interlock/core';
 import { nativeAdapters } from '../packages/runtime/src/executors/native';
 import * as customCommands from '../packages/runtime/src/executors/custom';
 import { HarnessCleanupError } from '../packages/runtime/src/executors/contracts';
-import { JsonLog } from '../packages/runtime/src/log';
+import { JsonLog, SchedulerErrors } from '../packages/runtime/src/log';
 
 const engines: Engine[] = [];
 const dirs: string[] = [];
@@ -136,16 +136,11 @@ it('executes direct turn mode via subprocess CLI and submits result envelope', a
   const w = workflow(e, 'custom-cli');
   const run = e.start(w.id, { testInput: 'hello from interlock' }).run;
 
-  await vi.waitFor(
-    () => {
-      const currentRun = e.run(run.id);
-      expect(currentRun.status).toBe('completed');
-    },
-    { timeout: 8000 },
-  );
+  await vi.waitFor(() => expect(e.run(run.id).status).toBe('completed'), {
+    timeout: 8000,
+  });
 
   const finalRun = e.run(run.id);
-  expect(finalRun.status).toBe('completed');
   const agentExecution = finalRun.executions.find((x) => x.nodeId === 'agent');
   expect(agentExecution?.output).toBeDefined();
   const output = agentExecution?.output as any;
@@ -206,13 +201,9 @@ it('executes direct turn mode via HTTP POST and handles result envelope', async 
     const w = workflow(e, 'custom-http');
     const run = e.start(w.id, { payloadMsg: 'network agent test' }).run;
 
-    await vi.waitFor(
-      () => {
-        const currentRun = e.run(run.id);
-        expect(currentRun.status).toBe('completed');
-      },
-      { timeout: 8000 },
-    );
+    await vi.waitFor(() => expect(e.run(run.id).status).toBe('completed'), {
+      timeout: 8000,
+    });
 
     expect(receivedPayload).toBeDefined();
     expect(receivedPayload.input).toEqual({
@@ -399,7 +390,9 @@ it('preserves delegated launch and one-time ticket rules across independent paus
   let launched:
     { workId: string; claimTicket: string; mcpUrl?: string } | undefined;
   let launches = 0;
+  let authorization: string | undefined;
   const server = createServer((req, res) => {
+    authorization = req.headers.authorization;
     let body = '';
     req.on('data', (chunk) => (body += chunk));
     req.on('end', () => {
@@ -423,8 +416,10 @@ it('preserves delegated launch and one-time ticket rules across independent paus
       mode: 'launcher',
       transport: 'http',
       launchUrl: `http://127.0.0.1:${address.port}/launch`,
+      headers: { Authorization: 'Bearer $INTERLOCK_API_TOKEN' },
     });
     e.executors.mcpUrl = 'http://127.0.0.1:4310/mcp/execute';
+    e.executors.apiToken = 'required-api-token';
     e.executors.start(nativeAdapters);
     const w = workflow(e, 'paused-launcher');
     const library = e.pauses.create({
@@ -442,6 +437,7 @@ it('preserves delegated launch and one-time ticket rules across independent paus
       timeout: 5000,
     });
     expect(launched!.mcpUrl).toBe('http://127.0.0.1:4310/mcp/execute');
+    expect(authorization).toBe('Bearer required-api-token');
     const workId = launched!.workId,
       claimTicket = launched!.claimTicket;
     // Wait for the successful launch response to become claimable.
@@ -850,6 +846,10 @@ it('still requests remote stop after status-command cleanup becomes uncertain', 
     expect(e.executors.errors.last?.message).toMatch(/cleanup/i),
   );
   expect(e.executors.errors.last?.source).toBe('launcher stop');
+  // record runs in rejection handlers; a throw there used to exit Node.
+  const broken = new SchedulerErrors(() => [JSON.parse('{') as undefined]);
+  broken.record('executor scan', Error('scan failed'));
+  expect(broken.last?.message).toBe('scan failed');
 });
 
 it('stops an in-flight launch process group before server shutdown finishes', async () => {

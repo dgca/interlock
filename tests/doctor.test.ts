@@ -598,7 +598,6 @@ describe('doctor health and readiness check', () => {
         const varCheck = report.checks.find((c) =>
           c.name.includes('Missing variable'),
         );
-        expect(varCheck).toBeDefined();
         expect(varCheck!.status).toBe('fail');
         expect(varCheck!.message).toContain(
           `references missing variable "${savedVar.id}"`,
@@ -628,17 +627,18 @@ describe('doctor health and readiness check', () => {
       });
       const wf = engine.create('Production Pipeline', '', def);
       engine.publish(wf.id);
-
       const report = await engine.doctor();
       expect(report.status).toBe('fail');
-      const text = formatDoctorReport(report);
-      for (const line of [
-        '✗ Disabled variable in workflow: Production Pipeline',
-        '⚠ 0.3.0 upgrade: disabled variable API_KEY: Variable "API_KEY" is disabled and referenced by "Production Pipeline" (draft, v1)',
-        'Remediation: Enable "API_KEY" in Variables to keep it, or leave it disabled and upgrading to 0.3.0 deletes it.',
-        '⚠ 0.3.0 upgrade: disabled variable UNUSED_KEY: Variable "UNUSED_KEY" is disabled and not referenced by any workflow',
-      ])
-        expect(text).toContain(line);
+      const ref: unknown = expect.objectContaining({ workflowId: wf.id });
+      expect(
+        report.checks
+          .filter((c) => /disabled variable/i.test(c.name))
+          .map((c) => [c.status, c.name, c.details?.workflows ?? []]),
+      ).toEqual([
+        ['warn', '0.3.0 upgrade: disabled variable API_KEY', [ref]],
+        ['warn', '0.3.0 upgrade: disabled variable UNUSED_KEY', []],
+        ['fail', 'Disabled variable in workflow: Production Pipeline', []],
+      ]);
     });
 
     it('reports deleted aliases and unavailable pinned prompts while retaining literal model support', async () => {

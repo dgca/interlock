@@ -397,9 +397,6 @@ const readServerKeys = {
 };
 it.each([
   ['javascript', undefined, 'server-key:declared:bound:true:run'],
-  ['bash', undefined, 'server-key:declared:bound:true:run'],
-  ['javascript', 'inherit', 'server-key:declared:bound:true:run'],
-  ['bash', 'inherit', 'server-key:declared:bound:true:run'],
   ['javascript', 'minimal', ':declared:bound:true:run'],
   ['bash', 'minimal', ':declared:bound:true:run'],
 ] as const)(

@@ -83,9 +83,24 @@ export class SchedulerErrors {
     this.log = log;
   }
   handler = (source: string) => (error: unknown) => this.record(source, error);
+  /** Never throws: it runs inside rejection handlers, where a throw would exit Node. */
   record(source: string, error: unknown) {
+    try {
+      this.recordUnsafe(source, error);
+    } catch {
+      // Losing one diagnostic is better than crashing the engine.
+    }
+  }
+  private secretValues() {
+    try {
+      return this.secrets();
+    } catch {
+      return [];
+    }
+  }
+  private recordUnsafe(source: string, error: unknown) {
     let text = error instanceof Error ? error.message : String(error);
-    for (const values of this.secrets())
+    for (const values of this.secretValues())
       for (const value of Object.values(values ?? {}))
         if (typeof value === 'string' && value.length >= 4)
           text = text.replaceAll(value, '[redacted]');
