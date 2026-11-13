@@ -128,7 +128,12 @@ import {
   type DraftLayout,
 } from '@interlock/core';
 import { assignmentInstructions } from './agentInstructions.js';
-import { executeFetch, UncertainFetch } from './fetch.js';
+import {
+  checkPrivateNetwork,
+  executeFetch,
+  redirectPolicy,
+  UncertainFetch,
+} from './fetch.js';
 import { executeScript, baseEnvironment, scriptFailure } from './scripts.js';
 import { ScriptApprovals } from './scriptApprovals.js';
 import { RunStarts } from './runStarts.js';
@@ -3610,11 +3615,21 @@ export class Engine {
         }
         if (deliveredSecrets.size)
           redact = secretRedaction([...resolved.secrets, ...deliveredSecrets]);
+        const request = resolveFetch(operation, input, resolved.value);
+        await checkPrivateNetwork(operation, request.url, (target, text) => {
+          if (this.stopped) return;
+          const latest = this.run(run.id);
+          const step = latest.executions.find((e) => e.id === execution.id);
+          if (latest.status !== 'running' || !step) return;
+          step.privateNetwork = target;
+          this.save(latest);
+          this.event(latest, 'node.private_network', text);
+        });
         const response = await executeFetch(
-          resolveFetch(operation, input, resolved.value),
+          request,
           operation.timeoutMs,
           signal,
-          { allowRedirects: !resolved.secrets.length },
+          redirectPolicy(operation, resolved.secrets.length > 0),
         );
         const error = operation.failOnHttpError
           ? fetchHttpError(response.status)
@@ -3677,6 +3692,7 @@ export class Engine {
               ...bindings,
             },
             resolved.secrets.length > 0,
+            provenanceFile,
           );
         }
         const output = await this.backgroundScripts.monitor(

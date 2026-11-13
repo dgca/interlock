@@ -1,4 +1,4 @@
-import { writeFileSync } from 'node:fs';
+import { rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -133,15 +133,26 @@ export function readBranchValue(
   }
   return readPath(execution.input, path);
 }
+
+/** Write an owner-only provenance file for one Script launch. */
 export function writeExecutionProvenanceFile(
   run: Run,
   execution: NodeExecution,
 ): string {
-  const data = buildRunExecutionProvenanceFile(run);
-  const filePath = join(
+  const path = join(
     tmpdir(),
     `interlock-provenance-${run.id}-${execution.id}.json`,
   );
-  writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
-  return filePath;
+  // Replace rather than follow an existing file or link at the path.
+  rmSync(path, { force: true });
+  writeFileSync(
+    path,
+    JSON.stringify(buildRunExecutionProvenanceFile(run), null, 2),
+    {
+      encoding: 'utf8',
+      flag: 'wx',
+      mode: 0o600,
+    },
+  );
+  return path;
 }

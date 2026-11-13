@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
-import { createClient, TRPCClientError } from '@interlock/client';
+import { TRPCClientError } from '@interlock/client';
+import { engineClient } from './engineClient.js';
 import { parseArgs } from 'node:util';
 import { usage } from './usage.js';
 import {
@@ -95,7 +96,7 @@ function parseSummaryArgs(args: string[], withBudget = false) {
   return { values, positionals };
 }
 export async function runCommand(argv: string[]) {
-  const client = createClient(process.env.INTERLOCK_URL);
+  const client = engineClient();
   const [command, ...args] = argv;
   switch (command) {
     case 'triggers':
@@ -668,8 +669,7 @@ export function commandError(error: unknown) {
 }
 
 export async function runDoctorCommand(options: { live?: boolean } = {}) {
-  const client = createClient(process.env.INTERLOCK_URL);
-  return await client.system.doctor.query({ live: options.live });
+  return await engineClient().system.doctor.query({ live: options.live });
 }
 
 export function formatDoctorReport(report: DoctorReport): string {
@@ -732,8 +732,7 @@ export function parseReportArgs(args: string[]) {
 }
 
 export async function runReportCommand(filter: ReportFilter) {
-  const client = createClient(process.env.INTERLOCK_URL);
-  return await client.report.summary.query(filter);
+  return await engineClient().report.summary.query(filter);
 }
 
 export function formatWorkflowReport(report: WorkflowReport): string {

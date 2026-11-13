@@ -320,19 +320,19 @@ Script nodes and Script checks in polling Waits receive these environment
 variables. Read them through `process.env` in JavaScript or shell variables
 in Bash. JavaScript's `input` and Bash's JSON stdin keep their usual format.
 
-| Variable                              | Value                                                                                                                                  |
-| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `INTERLOCK_RUN_ID`                    | Run executing the script. Use this ID to inspect the run.                                                                              |
-| `INTERLOCK_ROOT_RUN_ID`               | Outermost ancestor run. A top-level run identifies itself. A detached child keeps its original ancestry.                               |
-| `INTERLOCK_WORKFLOW_ID`               | Workflow whose published definition supplies the step. Batch items use their owner's workflow.                                         |
-| `INTERLOCK_WORKFLOW_VERSION`          | Published version number.                                                                                                              |
-| `INTERLOCK_NODE_ID`                   | Step ID in the published definition. For a polling check, this is the Wait node ID.                                                    |
-| `INTERLOCK_EXECUTION_ID`              | Current node execution. Each new visit and explicit retry gets a fresh ID. Checks within the same Wait attempt share its execution ID. |
-| `INTERLOCK_ATTEMPT`                   | Attempt within a visit, starting at 1. Explicit retries increment it. A later visit starts at 1.                                       |
-| `INTERLOCK_BATCH_OWNER_RUN_ID`        | Run containing the Batch that started this item. Present for Batch item runs.                                                          |
-| `INTERLOCK_BATCH_ITEM_INDEX`          | Zero-based position in the Batch input. Present for Batch item runs.                                                                   |
-| `INTERLOCK_POLL_CHECK_NUMBER`         | Present for polling Script checks. Starts at 1 within each Wait attempt. An interrupted check can reuse its number after restart.      |
-| `INTERLOCK_EXECUTION_PROVENANCE_FILE` | Path to temporary JSON file with prior node provenance: `{ [nodeId]: { visitCount, latest, history } }`. Cleaned up upon completion.   |
+| Variable                              | Value                                                                                                                                             |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `INTERLOCK_RUN_ID`                    | Run executing the script. Use this ID to inspect the run.                                                                                         |
+| `INTERLOCK_ROOT_RUN_ID`               | Outermost ancestor run. A top-level run identifies itself. A detached child keeps its original ancestry.                                          |
+| `INTERLOCK_WORKFLOW_ID`               | Workflow whose published definition supplies the step. Batch items use their owner's workflow.                                                    |
+| `INTERLOCK_WORKFLOW_VERSION`          | Published version number.                                                                                                                         |
+| `INTERLOCK_NODE_ID`                   | Step ID in the published definition. For a polling check, this is the Wait node ID.                                                               |
+| `INTERLOCK_EXECUTION_ID`              | Current node execution. Each new visit and explicit retry gets a fresh ID. Checks within the same Wait attempt share its execution ID.            |
+| `INTERLOCK_ATTEMPT`                   | Attempt within a visit, starting at 1. Explicit retries increment it. A later visit starts at 1.                                                  |
+| `INTERLOCK_BATCH_OWNER_RUN_ID`        | Run containing the Batch that started this item. Present for Batch item runs.                                                                     |
+| `INTERLOCK_BATCH_ITEM_INDEX`          | Zero-based position in the Batch input. Present for Batch item runs.                                                                              |
+| `INTERLOCK_POLL_CHECK_NUMBER`         | Present for polling Script checks. Starts at 1 within each Wait attempt. An interrupted check can reuse its number after restart.                 |
+| `INTERLOCK_EXECUTION_PROVENANCE_FILE` | Path to temporary owner-only JSON file with prior node provenance: `{ [nodeId]: { visitCount, latest, history } }`. Removed when the Script ends. |
 
 Interlock uses `INTERLOCK_` for its own environment variables. Choose names
 outside that prefix for saved variable bindings to avoid collisions. Explicit
@@ -368,7 +368,7 @@ The shared API exposes `report.summary` (with `system.report` as an alias), the 
 
 ## Local interfaces
 
-The main service binds to `127.0.0.1` and rejects unexpected request hosts and browser origins. It is a single-user local service without authentication. Local processes can invoke its interfaces. It must not be exposed through a public tunnel.
+The main service binds to `127.0.0.1` and rejects unexpected request hosts and browser origins. It is a single-user local service. A per-install [API token](connect-harness.md#api-token) is sent by first-party clients; on loopback it is required on `/trpc`, `/mcp` and `/events` only when `INTERLOCK_REQUIRE_TOKEN` is set, so by default local processes can invoke its interfaces. `startServer` always requires it, and refuses to start without one, when given a non-loopback `hostname`; no user-facing option sets one yet. The check lives in `packages/server/src/apiToken.ts`. It must not be exposed through a public tunnel.
 
 Installed copies use `~/.interlock/interlock.db`; development uses `.interlock/interlock.db` inside the checkout. `interlock` starts the engine and built UI in the foreground. Its `--port`, `--db`, and `--workdir` flags override defaults. Development uses `pnpm dev` for the engine and Vite UI, or `pnpm start` for the engine and previously built UI.
 
@@ -650,7 +650,7 @@ Interlock provides a unified read-only readiness and health check via `interlock
 
 Core owns the diagnostic schemas (`diagnosticCategorySchema`, `diagnosticStatusSchema`, `diagnosticCheckSchema`, `doctorReportSchema`, and `doctorOptionsSchema`). Diagnostics evaluate five categories without mutating state or starting workflow runs:
 
-1. **System**: Checks engine version match, SQLite database integrity (`PRAGMA quick_check`), schema migration version, database file size and run history count, and available disk space (`statfsSync`).
+1. **System**: Checks engine version match, SQLite database integrity (`PRAGMA quick_check`), schema migration version, database file size and run history count, and available disk space (`statfsSync`). It also warns about each disabled variable, naming the workflow drafts and retained versions that reference it, because upgrading to 0.3.0 deletes disabled variables; with none disabled it reports that the upgrade needs no manual variable step.
 2. **Harnesses**: Verifies enabled harness profiles, binary detection, version discovery, `cwd` and `allowedRoots` existence, and optional live single-turn auth/model verification (`--live`).
 3. **Triggers**: Checks schedule execution lag (>60s), consecutive failures and automatic pauses across enabled schedule and lifecycle event triggers.
 4. **Blockers**: Inspects active library and workflow pause holds (`pauseHolds`), uncertain resource and executor holds (`uncertainClaims`, `uncertainOperations`, and uncertain `workResources` reservations), active stalled work items (`currentStalls`), and `needs_model` execution holds (`managedExecutions`).
