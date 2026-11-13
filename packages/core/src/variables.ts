@@ -4,6 +4,11 @@ import {
   type WorkflowDefinition,
   type WorkflowNode,
 } from './index.js';
+import {
+  environmentModeSchema,
+  environmentPassthroughSchema,
+} from './environmentMode.js';
+export * from './environmentMode.js';
 
 export const variableKindSchema = z.enum(['config', 'secret']);
 export type VariableKind = z.infer<typeof variableKindSchema>;
@@ -45,7 +50,7 @@ export const variableReferenceSchema = z.object({
   prefix: z.string().max(2048).optional(),
   suffix: z.string().max(2048).optional(),
 });
-export const scriptEnvironmentSchema = z
+const scriptEnvironmentSchema = z
   .array(
     z.object({
       name: z.string().max(120),
@@ -53,12 +58,18 @@ export const scriptEnvironmentSchema = z
         .string()
         .max(120)
         .describe(
-          'Stable library variable ID delivered only to this Script process. No plaintext in the definition.',
+          'Library variable ID delivered only to this process; no plaintext.',
         ),
     }),
   )
   .max(64);
 export type ScriptEnvironment = z.infer<typeof scriptEnvironmentSchema>;
+/** Process environment fields shared by Script nodes and Script checks. */
+export const scriptEnvironmentFields = {
+  environment: scriptEnvironmentSchema.optional(),
+  environmentMode: environmentModeSchema.optional(),
+  environmentPassthrough: environmentPassthroughSchema.optional(),
+};
 export interface SavedVariable {
   id: string;
   name: string;
@@ -221,6 +232,11 @@ export function validateVariableReferences(definition: WorkflowDefinition) {
         );
       names.add(entry.name);
     }
+    for (const name of op.environmentPassthrough ?? [])
+      if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name))
+        throw new InterlockError(
+          `${node.label}: enter a valid passthrough environment name`,
+        );
   }
 }
 export const variableRevisionConflict =

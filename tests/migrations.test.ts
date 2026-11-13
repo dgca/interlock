@@ -14,8 +14,12 @@ import { tmpdir } from 'node:os';
 import { Store } from '@interlock/storage';
 import { Engine } from '@interlock/runtime';
 import { migrate, migrations } from '../packages/storage/src/migrations';
+import { blankDefinition, nodeSchema } from '@interlock/core';
 import fixture from './fixtures/schema-v1.json';
 import previousRelease from './fixtures/schema-v2.json';
+// Schema 20 adds approval records for stored Scripts; other documents stay as written.
+const existingDocuments =
+  "SELECT * FROM documents WHERE collection != 'scriptApprovals' ORDER BY rowid";
 
 const directories: string[] = [];
 const connections: { close(): void }[] = [];
@@ -70,9 +74,9 @@ const next = [
 it('initializes empty databases and reopens current databases without a backup', () => {
   const file = path();
   const db = open(file);
-  expect(migrate(db, file)).toEqual({ from: 0, to: 19 });
+  expect(migrate(db, file)).toEqual({ from: 0, to: 20 });
   expect(db.prepare('PRAGMA synchronous').get()).toEqual({ synchronous: 2 });
-  expect(migrate(db, file)).toEqual({ from: 19, to: 19 });
+  expect(migrate(db, file)).toEqual({ from: 20, to: 20 });
   expect(existsSync(`${file}.backups`)).toBe(false);
 });
 
@@ -95,7 +99,7 @@ it('indexes queued comparison roots during schema-8 upgrade without rewriting ru
   const before = db.prepare('SELECT * FROM documents ORDER BY rowid').all();
   expect(migrate(db, file)).toMatchObject({
     from: 8,
-    to: 19,
+    to: 20,
     backup: expect.any(String),
   });
   expect(db.prepare('SELECT * FROM documents ORDER BY rowid').all()).toEqual(
@@ -274,7 +278,7 @@ it('opens the previous release without rewriting records and executes its publis
   connections.push(store);
   expect(store.migration).toMatchObject({
     from: 1,
-    to: 19,
+    to: 20,
     backup: expect.any(String),
   });
   expect(
@@ -284,9 +288,7 @@ it('opens the previous release without rewriting records and executes its publis
       )
       .all(),
   ).toHaveLength(7);
-  expect(db.prepare('SELECT * FROM documents ORDER BY rowid').all()).toEqual(
-    before,
-  );
+  expect(db.prepare(existingDocuments).all()).toEqual(before);
   expect(
     store.workflows().every((workflow) => workflow.ownerWorkflowId === null),
   ).toBe(true);
@@ -323,12 +325,10 @@ it('upgrades schema-2 documents without rewriting them and persists revisions ac
   connections.push(store);
   expect(store.migration).toMatchObject({
     from: 2,
-    to: 19,
+    to: 20,
     backup: expect.any(String),
   });
-  expect(db.prepare('SELECT * FROM documents ORDER BY rowid').all()).toEqual(
-    before,
-  );
+  expect(db.prepare(existingDocuments).all()).toEqual(before);
   const run = previousRelease.documents.runs[0];
   expect(store.continuation(run.id).revision).toBe(0);
   store.put('runs', { ...run, error: 'revision-test' });
@@ -336,7 +336,7 @@ it('upgrades schema-2 documents without rewriting them and persists revisions ac
   expect(revision).toBeGreaterThan(0);
   const reopened = new Store(file);
   connections.push(reopened);
-  expect(reopened.migration).toEqual({ from: 19, to: 19 });
+  expect(reopened.migration).toEqual({ from: 20, to: 20 });
   expect(reopened.continuation(run.id).revision).toBe(revision);
   store.remove('runs', run.id);
   expect(
@@ -358,7 +358,7 @@ it('adds run summary indexes to schema-6 databases without rewriting records', (
   connections.push(store);
   expect(store.migration).toMatchObject({
     from: 6,
-    to: 19,
+    to: 20,
     backup: expect.any(String),
   });
   expect(store.get('runs', run.id)).toEqual(run);
@@ -449,7 +449,7 @@ it('indexes unresolved stalls during schema-10 upgrade without discarding resolv
   const before = db.prepare('SELECT * FROM documents ORDER BY rowid').all();
   expect(migrate(db, file)).toMatchObject({
     from: 10,
-    to: 19,
+    to: 20,
     backup: expect.any(String),
   });
   expect(db.prepare('SELECT * FROM documents ORDER BY rowid').all()).toEqual(
@@ -493,7 +493,7 @@ it('adds lifecycle indexes and active background projection to schema-12 without
   const before = db.prepare('SELECT * FROM documents ORDER BY rowid').all();
   expect(migrate(db, file)).toMatchObject({
     from: 12,
-    to: 19,
+    to: 20,
     backup: expect.any(String),
   });
   expect(db.prepare('SELECT * FROM documents ORDER BY rowid').all()).toEqual(
@@ -521,4 +521,50 @@ it('adds lifecycle indexes and active background projection to schema-12 without
     executions: [{ background: { state: 'completed' } }],
   });
   expect(store.terminalBackgroundRuns()).toEqual([]);
+});
+
+it('approves Scripts stored before approvals existed so schema-19 workflows keep running', async () => {
+  const file = path(),
+    db = open(file);
+  migrate(db, file, migrations.slice(0, 19));
+  // Shapes written by the previous release: a published imported Script workflow.
+  const source = new Engine(new Store(':memory:'), process.cwd());
+  const blank = blankDefinition();
+  const workflow = source.create('Imported before upgrade', '', {
+    ...blank,
+    nodes: blank.nodes.map((node) =>
+      node.kind === 'agent'
+        ? nodeSchema.parse({
+            id: node.id,
+            kind: 'script',
+            label: 'Answer',
+            command: 'echo 42',
+          })
+        : node,
+    ),
+  });
+  source.publish(workflow.id);
+  for (const collection of ['workflows', 'versions'] as const)
+    for (const record of source.store.list<{ id: string }>(collection))
+      db.prepare('INSERT INTO documents VALUES (?, ?, ?)').run(
+        collection,
+        record.id,
+        JSON.stringify(record),
+      );
+  source.stop();
+  source.store.close();
+  const store = new Store(file);
+  connections.push(store);
+  expect(store.migration).toMatchObject({ from: 19, to: 20 });
+  expect(store.list('scriptApprovals')).toEqual([
+    expect.objectContaining({ workflowId: workflow.id, state: 'approved' }),
+  ]);
+  const engine = new Engine(store, process.cwd());
+  try {
+    const run = engine.start(workflow.id, {}).run;
+    await vi.waitFor(() => expect(engine.run(run.id).status).toBe('completed'));
+    expect(engine.run(run.id).output).toBe(42);
+  } finally {
+    engine.stop();
+  }
 });

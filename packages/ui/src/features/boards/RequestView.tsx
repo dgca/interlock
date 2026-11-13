@@ -1,12 +1,6 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router';
-import {
-  ArrowLeft,
-  ArrowUpRight,
-  ChevronDown,
-  Copy,
-  FileText,
-} from 'lucide-react';
+import { ArrowLeft, ArrowUpRight, ChevronDown, Copy } from 'lucide-react';
 import { useQueries } from '@tanstack/react-query';
 import {
   requestKey,
@@ -17,8 +11,6 @@ import {
 } from '@interlock/core';
 import {
   ActionError,
-  Anchor,
-  Badge,
   Button,
   Checkbox,
   CopyButton,
@@ -45,6 +37,7 @@ import { ManagedRequestControls } from '../executors/ManagedExecutionPanel';
 import { ModelPicker } from '../executors/ModelPicker';
 import { ExternalTaskLink } from '../../components/ExternalTaskLink';
 import classes from './Boards.module.css';
+import { RequestEvidence, ReviewText } from './RequestEvidence';
 
 type Detail = Awaited<ReturnType<typeof api.requests.get.query>>;
 type HumanDetail = Extract<Detail, { kind: 'human' }>;
@@ -159,27 +152,7 @@ export function RequestView({
               {'context' in detail && detail.context && (
                 <ReviewText>{detail.context}</ReviewText>
               )}
-              {detail.kind === 'human' && detail.evidence && (
-                <section className={classes.evidence}>
-                  <Group gap="xs" className={classes.evidenceHeader}>
-                    <FileText size={16} aria-hidden="true" />
-                    <h3>{detail.evidence.title}</h3>
-                    {detail.evidence.revision && (
-                      <Badge color="blue" variant="light">
-                        {detail.evidence.revision}
-                      </Badge>
-                    )}
-                  </Group>
-                  <div
-                    className={classes.evidenceScroll}
-                    tabIndex={0}
-                    role="region"
-                    aria-label={detail.evidence.title}
-                  >
-                    <ReviewText>{detail.evidence.content}</ReviewText>
-                  </div>
-                </section>
-              )}
+              <RequestEvidence detail={detail} />
               <RequestAnswer
                 key={key}
                 detail={detail}
@@ -265,25 +238,6 @@ function RequestSelector({
       )}
     </Group>
   );
-}
-
-function ReviewText({ children }: { children: string }) {
-  const links =
-    /\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s<>]+)/gi;
-  const parts: ReactNode[] = [];
-  let cursor = 0;
-  for (const match of children.matchAll(links)) {
-    parts.push(children.slice(cursor, match.index));
-    const href = match[2] ?? match[3];
-    parts.push(
-      <Anchor key={match.index} href={href} target="_blank" rel="noreferrer">
-        {match[1] ?? href}
-      </Anchor>,
-    );
-    cursor = match.index + match[0].length;
-  }
-  parts.push(children.slice(cursor));
-  return <p className={classes.reviewText}>{parts}</p>;
 }
 
 function RequestAnswer({
@@ -650,6 +604,22 @@ function RequestAnswer({
             </Group>
           </>
         )}
+      {detail.kind === 'scriptApproval' && detail.state === 'open' && (
+        <Group justify="flex-end">
+          <Button
+            variant="primary"
+            disabled={disabled}
+            onClick={() => {
+              const { runId, executionId } = detail.target;
+              void perform(() =>
+                api.scripts.approve.mutate({ runId, executionId }),
+              );
+            }}
+          >
+            Approve and run
+          </Button>
+        </Group>
+      )}
       {detail.kind === 'stalled' && detail.state === 'open' && (
         <Text size="sm">
           This step crossed its configured stall threshold. Open the run to
@@ -695,6 +665,7 @@ function decision(detail: Detail) {
     return detail.request.answer?.allow ? 'Allowed once' : 'Denied';
   if (detail.kind === 'model') return 'Replacement model recorded';
   if (detail.kind === 'recovery') return 'Stop confirmed';
+  if (detail.kind === 'scriptApproval') return 'Script approved';
   return 'Answer accepted';
 }
 

@@ -212,6 +212,13 @@ export function createRunProjector(
         );
       else if (work?.status === 'claimed')
         branch.actor = work.executor ? 'engine' : 'agent';
+      else if (current?.scriptApproval)
+        wait(
+          'human_request',
+          'person',
+          'Waiting for imported Script approval',
+          current.scriptApproval.since,
+        );
       else if (current?.kind === 'input') {
         const held = store.externalInputHold(runId);
         wait(

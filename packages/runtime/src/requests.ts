@@ -15,6 +15,7 @@ import {
 } from '@interlock/core';
 import type { Store } from '@interlock/storage';
 import type { ExternalInputs } from './externalInputs.js';
+import { ScriptApprovals } from './scriptApprovals.js';
 
 type Ancestor = ReturnType<Store['attentionAncestors']>[number];
 type State =
@@ -49,21 +50,40 @@ export class Requests {
     const stalls = this.store.currentStalls();
     const resources = this.store.uncertainResourceAttempts();
     const scripts = this.store.uncertainBackgroundSteps();
+    const approvals = this.store.waitingScriptApprovals();
     const runs = this.ancestors(
-      [...managed, ...human, ...stalls, ...resources, ...scripts].map(
-        (item) => item.runId,
-      ),
+      [
+        ...managed,
+        ...human,
+        ...stalls,
+        ...resources,
+        ...scripts,
+        ...approvals,
+      ].map((item) => item.runId),
     );
     const result: RequestSummary[] = [];
-    const add = (target: RequestTarget, label: string, since: string) => {
+    const add = (
+      target: RequestTarget,
+      label: string,
+      since: string,
+      reason?: RequestSummary['reason'],
+    ) => {
       if (runs.has(target.runId))
         result.push({
           cardId: cardId(runs, target.runId),
           target,
           label,
           since,
+          ...(reason ? { reason } : {}),
         });
     };
+    for (const { runId, executionId, since } of approvals)
+      add(
+        { kind: 'script', runId, executionId },
+        'Approve imported Script',
+        since,
+        'approval',
+      );
     for (const { runId, executionId, label, since } of human)
       add({ kind: 'human', runId, executionId }, label, since);
     const managedRecovery = new Set<string>();
@@ -293,6 +313,32 @@ export class Requests {
         question: 'Investigate stalled work',
         state: (active ? 'open' : 'resolved') as State,
         stall,
+        actions: [],
+      };
+    }
+    if (target.kind === 'script' && execution && !execution.background) {
+      const script = new ScriptApprovals(this.store).step(run, execution);
+      if (!script?.record)
+        throw new InterlockError('Script approval request not found');
+      return {
+        ...base,
+        target,
+        kind: 'scriptApproval' as const,
+        question: 'Approve imported Script',
+        context:
+          'This Script came from an imported workflow and runs as your user with your files and network access. Review the code before approving. Approval applies to this exact code in this workflow.',
+        agentNote:
+          'A person must approve this in the Interlock UI or CLI; agents cannot approve it.',
+        state: (active
+          ? 'open'
+          : script.record.state === 'approved'
+            ? 'accepted'
+            : inactive) as State,
+        script: {
+          label: script.label,
+          language: script.language ?? 'bash',
+          command: script.command,
+        },
         actions: [],
       };
     }

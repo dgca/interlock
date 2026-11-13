@@ -249,6 +249,21 @@ it('preserves legacy Bash JSON results', async () => {
   expect((await state(engine, id)).output).toEqual({ bash: true });
 });
 
+it('writes owner-only provenance files and removes them when the Script ends', async () => {
+  const { open } = setup();
+  const engine = open();
+  const id = start(
+    engine,
+    `const file = process.env.INTERLOCK_EXECUTION_PROVENANCE_FILE; return { file, mode: require('node:fs').statSync(file).mode & 0o777 };`,
+  );
+  const { file, mode } = (await state(engine, id)).output as {
+    file: string;
+    mode: number;
+  };
+  expect(mode).toBe(0o600);
+  expect(existsSync(file)).toBe(false);
+});
+
 function receipt(
   files: BackgroundFiles,
   job: BackgroundJob,

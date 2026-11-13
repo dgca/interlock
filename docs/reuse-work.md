@@ -13,6 +13,12 @@ The starter picker offers published procedures you can add to your library. The 
 
 Use a **Workflow** step to invoke a published procedure from another workflow. For example, several procedures can share a review workflow instead of maintaining separate copies of its steps. Choose whether the caller waits for its result or starts it independently.
 
+## Approve imported Scripts
+
+Script steps and polling Script checks run as your user. The import preview lists every Script an import contains so you can read the code first. After an import, a run that reaches an imported Script waits on a **Needs attention** request that shows the code. Choose **Approve and run** to continue, or run `interlock approve-script RUN_ID EXECUTION_ID`. Approval applies to that exact code in that workflow, so later runs and edits you make do not ask again. Scripts that you write, or that a connected agent writes over MCP, run without approval. Workflows and Scripts that existed before this check was added stay approved.
+
+Choose which Scripts need approval in **Settings → AI → Execution settings → Script approval**, or with `interlock script-approval`. **Imported and agent Scripts** also holds Script content an agent adds or changes over MCP. **Off** runs every Script without approval. Only a person can approve Scripts or change this setting; MCP callers are refused.
+
 ## Set up a board during import
 
 When an import includes board suggestions, open **Board setup** in the preview. Choose **Create suggested board** to review the proposed columns, or **Use existing board** to choose a destination column for each stage. **Skip board setup** keeps any existing local board membership and stage mappings.

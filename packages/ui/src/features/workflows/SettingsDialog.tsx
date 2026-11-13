@@ -197,6 +197,7 @@ export function SettingsDialog({
           prompt: 'Describe the assignment.',
           url: '',
           language: 'javascript',
+          environmentMode: 'minimal',
           command: 'return input;',
           path: '',
           equals: true,

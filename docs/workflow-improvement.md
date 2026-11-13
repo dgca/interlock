@@ -6,7 +6,7 @@ This first version supports one target Agent's inline `prompt`, one candidate, a
 
 ## Prepare an experiment once
 
-1. Import [workflows/improve.json](../workflows/improve.json) through **Import → GitHub folder** or **Import → Local file**. The bundle includes its published owned evaluator. Publish the root draft after reviewing it. Existing libraries are unchanged until you import.
+1. Import [workflows/improve.json](../workflows/improve.json) through **Import → GitHub folder** or **Import → Local file**. The bundle includes its published owned evaluator. Publish the root draft after reviewing it. Its Scripts wait for your [approval](reuse-work.md#approve-imported-scripts) on their first run. Existing libraries are unchanged until you import.
 2. Select the production workflow and its current published baseline version, with no unpublished definition edits. Read its immutable definition with `list_workflow_versions`; `get_workflow` returns current metadata and draft. Keep production consumers on an explicitly selected version.
 3. Create a separate experimental workflow using `create_workflow` with that exact baseline definition. Publish it once as version 1. Do not use a current edited draft as a substitute for the baseline. The experiment must have no other published version or draft changes when the starter captures it. Record its ID before starting the experiment.
 4. Save two test suites on the experimental workflow with `save_test_suite`: tuning and acceptance. Each has 1–5 cases. Use distinct IDs and different original inputs across both sets. Record their current revisions. Keep acceptance cases out of the proposal conversation.
