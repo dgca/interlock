@@ -20,8 +20,8 @@ import { importWorkflows, type WorkflowImportResult } from './transfer.js';
 import {
   parseImportDocument,
   type ImportDocument,
-} from '../../core/src/importDocument.js';
-import type { WorkflowBundle } from '../../core/src/transfer.js';
+} from '@interlock/core/importDocument';
+import type { WorkflowBundle } from '@interlock/core/transfer';
 import {
   applyBoardImport,
   previewBoardImport,

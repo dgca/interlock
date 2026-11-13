@@ -10,7 +10,7 @@
     "packages/runtime/src/report.ts": 943,
     "packages/runtime/src/testbench.ts": 1032,
     "packages/runtime/src/transfer.ts": 806,
-    "packages/server/src/router.ts": 937,
+    "packages/server/src/router.ts": 934,
     "packages/storage/src/index.ts": 1004,
     "packages/ui/src/features/automations/AutomationEditor.tsx": 1073,
     "packages/ui/src/features/boards/RequestView.tsx": 816,

@@ -5,7 +5,9 @@
   "type": "module",
   "exports": {
     ".": "./src/router.ts",
-    "./transport": "./src/transport.ts"
+    "./transport": "./src/transport.ts",
+    "./sqliteWarning": "./src/sqliteWarning.ts",
+    "./start": "./src/start.ts"
   },
   "dependencies": {
     "@interlock/core": "workspace:*",

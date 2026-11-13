@@ -1,6 +1,6 @@
 import { api } from '../../lib/api';
 import type { BoardImportSetup, VariableImportBindings } from '@interlock/core';
-import { assertLegacyVariableFree } from '../../../../core/src/importDocument';
+import { assertLegacyVariableFree } from '@interlock/core/importDocument';
 
 /** Both local files and pasted JSON use the same server operations and defaults. */
 export async function importWorkflowJson(

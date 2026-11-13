@@ -19,7 +19,7 @@ import {
 } from '@interlock/core';
 import { scriptOperationSchema } from '@interlock/core';
 import { listStarters, importStarter } from './starters.js';
-import { parseImportDocument } from '../../core/src/importDocument.js';
+import { parseImportDocument } from '@interlock/core/importDocument';
 import { workResourceRequestSchema } from '@interlock/core';
 import {
   variableReadSchema,
@@ -101,15 +101,12 @@ import {
   modelAliasReadSchema,
   modelAliasMutationSchema,
 } from '@interlock/core';
-import {
-  exportWorkflows,
-  importWorkflows,
-} from '../../runtime/src/transfer.js';
-import { workflowBundleSchema } from '../../core/src/transfer.js';
+import { exportWorkflows, importWorkflows } from '@interlock/runtime/transfer';
+import { workflowBundleSchema } from '@interlock/core/transfer';
 import {
   previewBoardImport,
   previewLegacyBoardImport,
-} from '../../runtime/src/boardImport.js';
+} from '@interlock/runtime/boardImport';
 
 import { GithubImporter, githubSourceSchema } from './githubImport.js';
 const githubImporter = new GithubImporter();
