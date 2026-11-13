@@ -1,14 +1,10 @@
 # Interlock
 
-Interlock is a local workflow editor and engine for AI agents. Define a procedure once, combine agent assignments with HTTP requests and JavaScript or Bash steps, and inspect each run in your browser.
+Interlock turns a procedure you repeat with AI agents into a workflow that runs the same way every time, on your own machine. A workflow combines agent assignments with JavaScript or Bash steps, HTTP requests, branches, waits and human decisions. Interlock checks each step's input and result against its contract, stores every run in SQLite and shows its progress in your browser. A connected agent handles assignments through the Model Context Protocol (MCP), or Interlock launches Claude Code, Codex or Pi for you.
 
-Read the [documentation](https://dgca.github.io/interlock/docs/) for installation, workflow concepts, agent setup, and troubleshooting.
+Read the [documentation](https://dgca.github.io/interlock/docs/) for installation, workflow concepts, agent setup, and troubleshooting. The [feature index](docs/features.md) lists what is implemented by area, and [current limits](docs/v1.md) lists what is not.
 
-Build workflows visually or edit their JSON definitions. Interlock validates inputs and results, runs scripts, and stores progress in SQLite. A connected agent can handle assignments through the Model Context Protocol (MCP), or Interlock can launch a configured Claude Code, Codex, or Pi harness automatically.
-
-Workflow `maxActiveRuns` and stage exclusions can queue starts until capacity is available. Starts also support dependencies, priority, and atomic active-task policies. See [start admission](docs/idempotent-run-starts.md). Optional node stages and shared run waiting/actor fields support board projections and diagnostics. Add a readable title to external task correlation when starting a run. See [run projections](docs/agent-workflows.md#project-run-stages-and-waiting).
-
-## Install and run
+## Try it without an agent
 
 Requires **Node.js 24.13 or later** on **macOS or Linux**. Bash script nodes also require `/bin/bash`.
 
@@ -17,17 +13,28 @@ npm install -g @type_of/interlock
 interlock
 ```
 
-Open [http://127.0.0.1:4310](http://127.0.0.1:4310) in your browser. The package includes the engine, UI, CLI, and MCP tools. No separate build is required.
+Open [http://127.0.0.1:4310](http://127.0.0.1:4310) and run the Parallel checks demo, which uses only Script steps:
 
-You can also start Interlock with `npx -y @type_of/interlock@latest` without a global installation. Both startup methods use the same HTTP MCP connection flow.
+1. Open **Workflows → Import → GitHub folder**, enter `https://github.com/dgca/interlock/tree/main/workflows` and select **Find workflows**.
+2. Select **Parallel checks (demo)** and choose **Import workflow**.
+3. Open the imported workflow, choose **Review & publish**, then **Publish version**.
+4. Choose **Run v1** and start a run with the input `{"checks":["lint","test"]}`.
+5. The run waits for you to approve its two imported Scripts. Open each request from **Runs → Needs attention**, read the code and choose **Approve and run**.
 
-Workflow editors and run inspectors have bookmarkable URLs. Reloading restores the workflow or run, and browser Back and Forward follow your navigation. Returning to a visited page reuses its loaded data immediately and refreshes it in the background. Each workflow has **Editor** and **Runs** tabs. The workflow Runs tab and its Active or History filter survive reload. Switching between Editor and Runs retains local edits. Unsaved draft edits still require saving; navigation asks before discarding them.
+The run completes with `{"count":2,"hasTests":true}`. Open it from **Runs → History** to inspect each step's input and output.
 
-Keep the terminal running while you use Interlock. Closing the browser does not stop the engine. Press Ctrl+C in the terminal to stop it.
+You can also start Interlock with `npx -y @type_of/interlock@latest` without a global installation. The package includes the engine, UI, CLI, and MCP tools. No separate build is required. Keep the terminal running while you use Interlock. Closing the browser does not stop the engine. Press Ctrl+C in the terminal to stop it.
 
-To stop a runaway tree, use **Cancel run tree** in its inspector and explicitly include detached descendants when needed. CLI and MCP provide the same bounded preview and atomic cancellation state. External work can still require stop reconciliation. See [cancel a run tree](docs/workflow-execution.md#cancel-a-run-tree).
+## Security
 
-## Run your first workflow
+Interlock is a trusted local tool for one person. Workflows run Scripts, Fetch requests and agents with your user account's access, so treat a workflow like code you run.
+
+- The server listens only on `127.0.0.1`, and the listen address is not configurable. It rejects requests addressed to another host or sent from an untrusted browser origin. Do not expose the port through a tunnel, proxy, port forward or container port mapping.
+- Interlock creates a per-install [API token](docs/connect-harness.md#api-token) in an owner-only `api-token` file. The UI, the `interlock` CLI and the stdio bridge send it automatically, and **Connect with MCP** includes it in HTTP client configuration. On loopback the token is optional in 0.2. Set `INTERLOCK_REQUIRE_TOKEN=1` before starting Interlock to reject `/trpc`, `/mcp` and `/events` requests without it. A server listening beyond loopback always requires the token and refuses to start without one.
+- Scripts are not sandboxed. A Script's [server environment](docs/architecture.md#scripts-and-interruptions) mode decides which of Interlock's environment variables it receives. `minimal` passes only `PATH`, `HOME`, locale variables, `INTERLOCK_*` variables, bound saved variables, execution context and the names you list to pass through. Scripts and polling checks added in the editor start in `minimal`. A Script without a mode, or set to `inherit`, receives the whole server environment, including any credentials in it, so existing and imported workflows keep their behavior.
+- Imported Scripts wait for [one-time approval](docs/reuse-work.md#approve-imported-scripts) before their first run. Scripts you write, or that a connected agent writes over MCP, run without approval unless you extend approval to agent-authored Scripts.
+
+## Run the SDLC workflow
 
 New libraries start empty. Open **Workflows → Import → Starters**, select **SDLC workflow**, and choose **Add to library** for a published procedure that plans, implements, and reviews a software change. It creates a task branch, saves planning artifacts, and commits the completed change. It finishes locally by default. Existing libraries keep their workflows when you upgrade. Nothing is added or run automatically.
 
@@ -172,7 +179,11 @@ Manual completion of unrestricted current-context assignments keeps claim creden
 
 Failed executions can be retried from the inspector. Retrying a failed Batch preserves successful items. Retrying Script or Fetch steps can repeat external side effects.
 
+To stop a runaway tree, use **Cancel run tree** in its inspector and explicitly include detached descendants when needed. CLI and MCP provide the same bounded preview and atomic cancellation state. External work can still require stop reconciliation. See [cancel a run tree](docs/workflow-execution.md#cancel-a-run-tree).
+
 ### Manage workflows
+
+Workflow editors and run inspectors have bookmarkable URLs. Reloading restores the workflow or run, and browser Back and Forward follow your navigation. Returning to a visited page reuses its loaded data immediately and refreshes it in the background. Each workflow has **Editor** and **Runs** tabs. The workflow Runs tab and its Active or History filter survive reload. Switching between Editor and Runs retains local edits. Unsaved draft edits still require saving; navigation asks before discarding them.
 
 Agents can request the editor's Dagre Tidy layout during draft creation or updates with `layout: "tidy"`. Omitting it preserves the supplied positions. See [arrange drafts during authoring](docs/authoring-layout.md) for MCP, shared API, and CLI examples.
 
@@ -201,6 +212,8 @@ Run versions stay pinned by default. Opt into [compatible version upgrades](docs
 Standalone recurring Agent workflows can use an Exit with `continueAsNew:{maxRuns:100}` to pass a checkpoint into the predecessor's current published version with fresh step history. Runs remain pinned by default; explicit upgrades carry into the successor without resetting the chain cap. The chain retains captured prompts and budget consumption. Inspect lineage and stop it from any member. See [continue as new](docs/continue-as-new.md).
 
 ### Retry a task start safely
+
+Workflow `maxActiveRuns` and stage exclusions can queue starts until capacity is available. Starts also support dependencies, priority, and atomic active-task policies. See [start admission](docs/idempotent-run-starts.md). Optional node stages and shared run waiting/actor fields support board projections and diagnostics. Add a readable title to external task correlation when starting a run. See [run projections](docs/agent-workflows.md#project-run-stages-and-waiting).
 
 Optional `start_run.requestId` recovers the original run after repeated delivery or a lost response. `externalTask` links a run to a non-secret task identity for existing lookup tools. Old keys cannot recreate deleted history; deliberate new attempts use new keys. Optional [run tags](docs/idempotent-run-starts.md#tag-and-filter-runs) label ordinary and triggered runs with up to 16 string pairs. Filter Runs, MCP `list_runs`, or `interlock runs --tag repo=dgca/interlock` by exact pairs. Reports expose wall, paused, and active elapsed time; the UI’s Duration basis selects which to display. Reports accept the same filter through the UI, MCP `workflow_report`, or `interlock report --tag repo=dgca/interlock`. Tags inherit through child runs and chains. See [idempotent run starts](docs/idempotent-run-starts.md) for MCP, CLI and retention rules.
 
@@ -339,13 +352,13 @@ interlock doctor --live
 
 Interlock is a local, single-user application. Agent steps use connected executors, manual submission, or opt-in managed Claude Code, Codex, and Pi sessions; script steps run in the engine. Managed harnesses use their native account and permission configuration.
 
-The server listens only on loopback and rejects requests with other hosts or untrusted browser origins. On loopback the [API token](docs/connect-harness.md#api-token) is accepted when sent and required only with `INTERLOCK_REQUIRE_TOKEN=1`. A server listening on any other address always requires the token on `/trpc`, `/mcp` and `/events` and refuses to start without one. Interlock does not offer a non-loopback listen address yet; do not expose it through a tunnel or proxy.
+See [Security](#security) for the loopback boundary, the API token and Script environments.
 
 Agent nodes can opt into [context continuity groups](docs/context-continuity.md) to declare a shared session within a run, with recorded handoffs when the session must change.
 
 A connected executor supplies the tools, skills, and context isolation requested by a workflow. Interlock checks the executor's declared capabilities but does not install or provide them.
 
-See [Scope and limits](docs/v1.md) for execution limits and unsupported features.
+See the [feature index](docs/features.md) for implemented features by area and [current limits](docs/v1.md) for execution limits and unsupported features.
 
 ## Develop locally
 
@@ -385,7 +398,8 @@ Browse the [documentation site](https://dgca.github.io/interlock/docs/) or start
 
 - [Domain language](CONTEXT.md)
 - [Architecture and execution semantics](docs/architecture.md)
-- [Scope and limits](docs/v1.md)
+- [Feature index](docs/features.md)
+- [Current limits](docs/v1.md)
 - [Harness integration](docs/connect-harness.md)
 - [Create and reuse saved prompts](docs/prompts.md)
 - [Reuse configuration and credentials](docs/variables.md)
