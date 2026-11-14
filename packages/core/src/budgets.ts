@@ -77,8 +77,25 @@ export interface BudgetBlock {
   runIds: string[];
   since: string;
   remainingMs?: number;
+  /** Blocking reasons across the governing budgets. */
+  reasons?: ('limit_reached' | 'usage_incomplete')[];
   /** A managed attempt was stopped at the limit; the next claim resumes it. */
   stopped?: { attempt: number; reason: string };
+}
+const incomplete =
+  'usage is incomplete under unknownUsage:block; report final figures for the attempt, or set unknownUsage to allow';
+/** The waiting reason for a budget-blocked assignment, from its live reasons. */
+export function budgetWaitMessage(block: BudgetBlock, attempt: number) {
+  const limit = block.reasons?.includes('limit_reached') ?? true,
+    unknown = block.reasons?.includes('usage_incomplete') ?? false;
+  const stopped = block.stopped?.attempt === attempt ? block.stopped : null;
+  if (!stopped)
+    return unknown && !limit
+      ? `Claim blocked: ${incomplete}.`
+      : 'Claim blocked by run budget';
+  return limit
+    ? `Stopped at the run budget limit: ${stopped.reason}. Raise the budget to resume${unknown ? `; the stopped attempt's ${incomplete}` : ''}.`
+    : `Stopped at the run budget limit (${stopped.reason}). The limit now allows it, but the stopped attempt's ${incomplete}.`;
 }
 
 export function evaluateBudget(

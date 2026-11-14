@@ -45,7 +45,10 @@ function harness(e: Engine, run: HarnessAdapter['run']) {
 }
 // One USD per million input tokens: each streamed model turn costs USD 0.30.
 const turnTokens = 300_000;
-function budgetRun(e: Engine) {
+function budgetRun(
+  e: Engine,
+  unknownUsage: 'allow' | 'block' | null = 'allow',
+) {
   const table = e.usage.prices.read();
   e.usage.prices.set({
     expectedId: table.id,
@@ -67,11 +70,18 @@ function budgetRun(e: Engine) {
   definition.executor = 'codex';
   const w = e.create('Budgeted', '', definitionSchema.parse(definition));
   e.publish(w.id);
-  return e.start(w.id, 1, undefined, {
-    scope: 'lifecycle',
-    unknownUsage: 'allow',
-    limits: { cost: { currency: 'USD', threshold: { max: 1_000_000 } } },
-  }).run;
+  return e.start(
+    w.id,
+    1,
+    undefined,
+    unknownUsage
+      ? {
+          scope: 'lifecycle',
+          unknownUsage,
+          limits: { cost: { currency: 'USD', threshold: { max: 1_000_000 } } },
+        }
+      : undefined,
+  ).run;
 }
 // Cumulative usage after a number of turns; one model has no price.
 const turnUsage = (turns: number) => [
@@ -91,8 +101,20 @@ it('stops a managed attempt within one model turn of a 1 USD budget and resumes 
   harness(e, async (i) => {
     calls.push(i);
     i.onSession('native-session');
+    // The resumed native session reports its own cumulative totals.
     if (calls.length > 1)
-      return { output: i.work.input, usageScope: 'attempt' };
+      return {
+        output: i.work.input,
+        usage: [
+          {
+            provider: 'fixture',
+            model: 'm',
+            inputTokens: 4 * turnTokens + 100,
+            outputTokens: 0,
+          },
+          { ...turnUsage(1)[1], inputTokens: 6, outputTokens: 6 },
+        ],
+      };
     for (let turn = 1; turn <= 10; turn++) {
       await new Promise((r) => setTimeout(r, 1));
       if (i.signal.aborted) throw new Error('Execution stopped');
@@ -140,6 +162,55 @@ it('stops a managed attempt within one model turn of a 1 USD budget and resumes 
   await vi.waitFor(() => expect(e.run(run.id).status).toBe('completed'));
   expect(calls).toHaveLength(2);
   expect(calls[1].sessionId).toBe('native-session');
+  // Differenced against the stopped attempt's streamed usage, and final.
+  expect(
+    e.usage.read({ runId: run.id, groupBy: 'attempt' }).groups[1].snapshot,
+  ).toMatchObject({
+    final: true,
+    models: [{ inputTokens: 100 }, { inputTokens: 5, outputTokens: 5 }],
+  });
+});
+
+it('says how to leave a stop that incomplete usage still blocks', async () => {
+  const e = create();
+  harness(e, async (i) => {
+    i.onSession('native-session');
+    for (let turn = 1; turn <= 10; turn++) {
+      await new Promise((r) => setTimeout(r, 1));
+      if (i.signal.aborted) throw new Error('Execution stopped');
+      i.onUsage?.(turnUsage(turn), 'attempt');
+    }
+    return { output: 'over budget', usageScope: 'attempt' };
+  });
+  const run = budgetRun(e, 'block');
+  const message = () => e.projectRun(run.id).waiting?.detail.message;
+  await vi.waitFor(() => expect(message()).toMatch(/Raise the budget/));
+  expect(message()).toMatch(/set unknownUsage to allow/);
+  const [gate] = e.budgets.read(run.id).governing;
+  e.budgets.set({
+    runId: run.id,
+    expectedRevision: 1,
+    budget: {
+      ...gate.budget,
+      limits: { cost: { currency: 'USD', threshold: { max: 5_000_000 } } },
+    },
+  });
+  expect(e.projectRun(run.id).waiting?.kind).toBe('budget');
+  expect(message()).not.toMatch(/Raise the budget/);
+  expect(message()).toMatch(/report final figures.*set unknownUsage to allow/);
+});
+
+it('never stops a run without a budget while usage streams', async () => {
+  const e = create();
+  harness(e, (i) => {
+    i.onSession('native-session');
+    for (let turn = 1; turn <= 10; turn++)
+      i.onUsage?.(turnUsage(turn), 'attempt');
+    expect(i.signal.aborted).toBe(false);
+    return Promise.resolve({ output: 'done', usageScope: 'attempt' });
+  });
+  const run = budgetRun(e, null);
+  await vi.waitFor(() => expect(e.run(run.id).status).toBe('completed'));
 });
 
 it('keeps a result that arrives after a budget stop', async () => {
