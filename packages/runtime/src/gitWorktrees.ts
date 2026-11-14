@@ -102,17 +102,30 @@ async function branchExists(repository: string, branch: string) {
   );
 }
 
-/** Remove one owned checkout and its Git registration. The branch is kept. */
-export async function removeWorktree(root: string, owner: Owner) {
+/**
+ * Remove one owned checkout and its Git registration. The branch is kept, and
+ * a checkout with uncommitted or untracked changes is left in place.
+ */
+export async function removeWorktree(
+  root: string,
+  owner: Owner,
+): Promise<'removed' | 'dirty'> {
   const { path, marker } = workspacePaths(root, owner.id);
   if (!existsSync(marker)) {
     if (existsSync(path))
       throw new InterlockError(
         'Workspace ownership marker is missing; the directory was not removed',
       );
-    return;
+    return 'removed';
   }
   const owned = assertOwned(root, owner);
+  // A checkout without Git metadata never finished preparing; nothing was edited.
+  if (
+    owned.exists &&
+    existsSync(join(path, '.git')) &&
+    (await git(path, ['status', '--porcelain', '--untracked-files=all']))
+  )
+    return 'dirty';
   const repository = existsSync(owner.repository) ? owner.repository : null;
   if (owned.exists && repository)
     await git(repository, ['worktree', 'remove', '--force', '--', path]).catch(
@@ -125,6 +138,7 @@ export async function removeWorktree(root: string, owner: Owner) {
   if (repository)
     await git(repository, ['worktree', 'prune']).catch(() => undefined);
   await rm(marker, { force: true });
+  return 'removed';
 }
 
 /** Create the run's checkout on a new branch, or on the branch it already claimed. */
@@ -159,7 +173,10 @@ export async function createWorktree(
   await mkdir(root, { recursive: true });
   const { path, marker } = workspacePaths(root, workspace.id);
   // A previous attempt of this run may have left a partial checkout.
-  await removeWorktree(root, workspace);
+  if ((await removeWorktree(root, workspace)) === 'dirty')
+    throw new InterlockError(
+      'The previous checkout of this run has uncommitted changes; it was kept',
+    );
   await writeFile(marker, ownerText(workspace), { flag: 'wx', mode: 0o600 });
   const exists = await branchExists(repository, workspace.branch);
   if (exists && !workspace.branchClaimed)
