@@ -27,6 +27,8 @@ A passing simulation shows that those supplied results followed the expected pat
 
 A live comparison runs two published versions against the same saved cases. Preview the comparison through MCP before starting it. Scripts and requests perform their real actions, and Agent steps need a connected agent or configured automatic executor.
 
+The **Tests** tab lists the workflow's recent comparisons. A comparison's page is read-only: it shows each side's runs, checks, median run times, reported cost and quality coverage, then each case, each sample with its result and checks and an **Open run** link, and the recorded quality judgments. Starting a comparison and recording judgments remain agent, MCP and API operations.
+
 Review execution outcomes, assertion results, and quality judgments separately. A completed run can still miss an expectation. Compare timing and reported costs with [Reports](reports.md), keeping missing measurements in view.
 
 Use the findings to [edit the workflow](build-workflow.md), publish another version, and repeat the comparison. Publication remains a separate decision.
