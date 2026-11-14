@@ -311,6 +311,7 @@ try {
     [
       'sdlc',
       'sdlc-v2',
+      'pr-watcher',
       'evaluate-comparison',
       'github-issue-intake',
       'run-notifications',

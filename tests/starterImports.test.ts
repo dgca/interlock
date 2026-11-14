@@ -35,6 +35,7 @@ it('lists bundled choices without installing, publishing or starting anything', 
   expect(listStarters(e).map((s) => s.id)).toEqual([
     'sdlc',
     'sdlc-v2',
+    'pr-watcher',
     'evaluate-comparison',
     'github-issue-intake',
     'run-notifications',
@@ -66,6 +67,7 @@ it.each(['draft', 'version'])(
     expect(listStarters(e).map((s) => s.id)).toEqual([
       'sdlc',
       'sdlc-v2',
+      'pr-watcher',
       'evaluate-comparison',
       'github-issue-intake',
       'run-notifications',
