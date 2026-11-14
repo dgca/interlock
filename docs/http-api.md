@@ -52,7 +52,7 @@ curl -s http://127.0.0.1:4310/api/workflows
 
 `inputSchema` is the JSON Schema of the latest published version, or `null` when that version was deleted.
 
-Start the run. The body accepts `workflowId`, `input`, and optionally `version` (a retained published version; the latest by default), `requestId`, `title`, `tags` and `hold` (`{"reason": "..."}`, which keeps the run queued until it is [released](workflow-boards.md#act-on-a-card)). Other fields are rejected.
+Start the run. The body accepts `workflowId`, `input`, and optionally `version` (a retained published version; the latest by default), `requestId`, `title`, `tags` and `hold` (`{"reason": "..."}`, which keeps the run queued until `interlock board release` or MCP `manage_pause` releases it). Other fields are rejected.
 
 ```sh
 curl -s -i http://127.0.0.1:4310/api/runs \
