@@ -49,7 +49,16 @@ pnpm exec playwright install --only-shell chromium
 pnpm test:browser
 ```
 
-CI runs all of these on Linux for pull requests and pushes to `main`. See [Release Interlock](releases.md) for versioning and publication.
+CI runs on Linux for pull requests, pushes to `main`, and manual dispatches. Four jobs run independently:
+
+- `checks` runs `pnpm format:check`, `pnpm lint`, `pnpm lint:deps`, and `pnpm lint:unused`.
+- `unit` runs `pnpm test` without sharding.
+- `browser` builds the package and UI, installs Chromium, and runs `pnpm test:browser`. On failure, it uploads available screenshot diffs.
+- `package` builds the package and UI, then runs `pnpm site:build`, `pnpm test:package`, and `pnpm test:kill`.
+
+Each job installs its own dependencies. The browser and package jobs build separately because their tests need build output. The final required check, `validate (linux)`, runs after all four jobs and succeeds only if every job succeeded. A failed, cancelled, or skipped dependency makes this final check fail.
+
+See [Release Interlock](releases.md) for versioning and publication.
 
 ## Add a database migration
 
