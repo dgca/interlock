@@ -134,7 +134,7 @@ it('upgrades development assignments without changing pins, captures, or executi
       .all();
     expect(migrate(db, file)).toMatchObject({
       from: 15,
-      to: 20,
+      to: 21,
       backup: expect.any(String),
     });
     const row = db

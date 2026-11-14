@@ -11,9 +11,7 @@ import { ProtectedValues } from './protectedValues.js';
 import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { isDeepStrictEqual } from 'node:util';
 import {
-  readPath,
   InterlockError,
   samePromptContent,
   type RunQuery,
@@ -21,6 +19,8 @@ import {
   type WorkflowCatalogQuery,
 } from '@interlock/core';
 import { migrate, type MigrationResult } from './migrations.js';
+import { readRuns, writeRun } from './runExecutions.js';
+import { findRuns } from './runQueries.js';
 import {
   continuationState,
   touchRunRevision,
@@ -197,8 +197,7 @@ export class Store {
     const row = this.db
       .prepare(
         `SELECT coalesce(json_array_length(${value}), 0) AS size
-      FROM documents d, json_each(d.value, '$.executions') e
-      WHERE d.collection = 'runs' AND d.id = ? AND json_extract(e.value, '$.id') = ?`,
+      FROM run_executions e WHERE e.run_id = ? AND e.id = ?`,
       )
       .get(...keys, id, executionId);
     return Number(row?.size ?? 0);
@@ -237,7 +236,10 @@ export class Store {
     const row = this.db
       .prepare('SELECT value FROM documents WHERE collection = ? AND id = ?')
       .get(collection, id);
-    return row ? (JSON.parse(row.value as string) as T) : undefined;
+    if (!row) return undefined;
+    return collection === 'runs'
+      ? readRuns<T>(this.db, [row])[0]
+      : (JSON.parse(row.value as string) as T);
   }
   workflowTriggers(
     workflowId?: string,
@@ -298,22 +300,26 @@ export class Store {
       .run(triggerId);
   }
   terminalBackgroundRuns(): Run[] {
-    return this.db
-      .prepare(
-        `
+    return readRuns(
+      this.db,
+      this.db
+        .prepare(
+          `
       SELECT d.value FROM active_background_runs b CROSS JOIN documents d
         ON d.collection = 'runs' AND d.id = b.run_id
       WHERE json_extract(d.value, '$.status') IN ('completed', 'failed', 'cancelled')
     `,
-      )
-      .all()
-      .map((row) => JSON.parse(row.value as string));
+        )
+        .all(),
+    );
   }
   /** Source run, descendants including detached runs, and their continuations. */
   sourceRunTree(runId: string): Run[] {
-    return this.db
-      .prepare(
-        `
+    return readRuns(
+      this.db,
+      this.db
+        .prepare(
+          `
       WITH RECURSIVE tree(id) AS (
         SELECT ?
         UNION
@@ -328,9 +334,9 @@ export class Store {
       SELECT d.value FROM tree CROSS JOIN documents d
         ON d.collection = 'runs' AND d.id = tree.id ORDER BY d.rowid
     `,
-      )
-      .all(runId)
-      .map((row) => JSON.parse(row.value as string));
+        )
+        .all(runId),
+    );
   }
   scheduleFires(triggerId: string, offset = 0, limit = 20) {
     const total = Number(
@@ -402,12 +408,14 @@ export class Store {
       .map((row) => JSON.parse(row.value as string));
   }
   list<T>(collection: string): T[] {
-    return this.db
+    const rows = this.db
       .prepare(
         'SELECT value FROM documents WHERE collection = ? ORDER BY rowid',
       )
-      .all(collection)
-      .map((row) => JSON.parse(row.value as string) as T);
+      .all(collection);
+    return collection === 'runs'
+      ? readRuns<T>(this.db, rows)
+      : rows.map((row) => JSON.parse(row.value as string) as T);
   }
   forRuns<T>(collection: string, runIds: Set<string>): T[] {
     if (!runIds.size) return [];
@@ -446,11 +454,13 @@ export class Store {
       }));
   }
   put<T extends { id: string }>(collection: string, value: T): void {
-    this.db
-      .prepare(
-        'INSERT INTO documents VALUES (?, ?, ?) ON CONFLICT(collection, id) DO UPDATE SET value = excluded.value',
-      )
-      .run(collection, value.id, JSON.stringify(value));
+    if (collection === 'runs') writeRun(this.db, value as unknown as Run);
+    else
+      this.db
+        .prepare(
+          'INSERT INTO documents VALUES (?, ?, ?) ON CONFLICT(collection, id) DO UPDATE SET value = excluded.value',
+        )
+        .run(collection, value.id, JSON.stringify(value));
     this.changed(collection);
   }
   remove(collection: string, id: string) {
@@ -545,29 +555,33 @@ export class Store {
     return runsForReport(this.db, filter);
   }
   queuedRuns(): Run[] {
-    return this.db
-      .prepare(
-        `SELECT value FROM documents INDEXED BY runs_admission_queue
+    return readRuns(
+      this.db,
+      this.db
+        .prepare(
+          `SELECT value FROM documents INDEXED BY runs_admission_queue
       WHERE collection = 'runs' AND json_extract(value, '$.status') = 'queued'
       ORDER BY coalesce(json_extract(value, '$.admission.priority'), 0) DESC, rowid`,
-      )
-      .all()
-      .map((row) => JSON.parse(row.value as string));
+        )
+        .all(),
+    );
   }
   activeRuns(): Run[] {
     // Separate equalities keep SQLite on the status index even without ANALYZE.
     // An IN predicate can otherwise choose a scan of every run document.
-    return this.db
-      .prepare(
-        `SELECT value, rowid AS position FROM documents WHERE collection = 'runs' AND json_extract(value, '$.status') = 'queued'
+    return readRuns(
+      this.db,
+      this.db
+        .prepare(
+          `SELECT value, rowid AS position FROM documents WHERE collection = 'runs' AND json_extract(value, '$.status') = 'queued'
         UNION ALL
         SELECT value, rowid AS position FROM documents WHERE collection = 'runs' AND json_extract(value, '$.status') = 'running'
         UNION ALL
         SELECT value, rowid AS position FROM documents WHERE collection = 'runs' AND json_extract(value, '$.status') = 'waiting'
         ORDER BY position`,
-      )
-      .all()
-      .map((row) => JSON.parse(row.value as string));
+        )
+        .all(),
+    );
   }
   /** Ancestors include detached parents; callers decide which policies govern. */
   runAncestors(ids: Set<string>): CurrentRun[] {
@@ -600,9 +614,11 @@ export class Store {
   runTrees(ids: Set<string>): Run[] {
     if (!ids.size) return [];
     // Match continuation's indexed descendant traversal, including JSON affinity.
-    return this.db
-      .prepare(
-        `
+    return readRuns(
+      this.db,
+      this.db
+        .prepare(
+          `
       WITH RECURSIVE tree(id) AS (
         SELECT value FROM json_each(?)
         UNION
@@ -610,9 +626,9 @@ export class Store {
         WHERE d.collection = 'runs'
       ) SELECT d.value FROM tree CROSS JOIN documents d ON d.collection = 'runs' AND d.id = tree.id ORDER BY d.rowid
     `,
-      )
-      .all(JSON.stringify([...ids]))
-      .map((row) => JSON.parse(row.value as string));
+        )
+        .all(JSON.stringify([...ids])),
+    );
   }
   /** Nearest held run, stopping at the detached boundary. */
   externalInputHoldOwner(id: string): string | undefined {
@@ -650,9 +666,8 @@ export class Store {
           ON json_extract(d.value, '$.parentRunId') = +attached.id
         WHERE d.collection = 'runs' AND json_extract(d.value, '$.parentMode') IS NOT 'detached'
       )
-      SELECT d.id FROM attached JOIN documents d ON d.collection = 'runs' AND d.id = attached.id
-      WHERE json_extract(d.value, '$.status') = 'waiting'
-        AND json_extract(d.value, '$.executions[#-1].kind') = 'input'`,
+      SELECT m.id FROM attached JOIN run_metadata m ON m.id = attached.id
+      WHERE m.status = 'waiting' AND json_extract(m.execution, '$.kind') = 'input'`,
       )
       .all(id)
       .map((row) => row.id as string);
@@ -688,126 +703,7 @@ export class Store {
     return ancestry;
   }
   findRuns(query: RunQuery) {
-    const filters = ['1'];
-    const parameters: (string | number)[] = [];
-    for (const [key, value] of Object.entries(query.tags ?? {})) {
-      filters.push(
-        'id IN (SELECT run_id FROM run_tags WHERE tag_key = ? AND tag_value = ?)',
-      );
-      parameters.push(key, value);
-    }
-    if (query.requestId !== undefined) {
-      filters.push('request_id = ?');
-      parameters.push(query.requestId);
-    }
-    if (query.externalTask) {
-      filters.push('task_system = ? AND task_id = ?');
-      parameters.push(query.externalTask.system, query.externalTask.id);
-    }
-    if (query.workflowId !== undefined) {
-      filters.push('workflow_id = ?');
-      parameters.push(query.workflowId);
-    }
-    if (query.chainRootRunId !== undefined) {
-      filters.push('chain_root_id = ?');
-      parameters.push(query.chainRootRunId);
-    }
-    if (query.status !== undefined) {
-      filters.push('status = ?');
-      parameters.push(query.status);
-    }
-    if (query.rootOnly) filters.push('parent_id IS NULL');
-    const bounded = !query.inputMatch && query.limit !== undefined;
-    if (bounded) parameters.push(query.limit);
-    const rows = this.db
-      .prepare(
-        `SELECT id, value FROM run_metadata WHERE ${filters.join(' AND ')}
-      ORDER BY created_at DESC, position DESC ${bounded ? 'LIMIT ?' : ''}`,
-      )
-      .iterate(...parameters);
-    const inputFor = this.db.prepare(
-      "SELECT value -> '$.input' AS input FROM documents WHERE collection = 'runs' AND id = ?",
-    );
-    const ancestry = new Map<string, RunAncestry>();
-    const result: (Pick<
-      Run,
-      | 'id'
-      | 'workflowId'
-      | 'workflowName'
-      | 'version'
-      | 'status'
-      | 'createdAt'
-      | 'updatedAt'
-      | 'cursor'
-      | 'input'
-      | 'parentRunId'
-      | 'batchNodeId'
-      | 'parallelBranch'
-      | 'comparison'
-      | 'chain'
-      | 'startRequestId'
-      | 'externalTask'
-      | 'tags'
-    > &
-      RunAncestry)[] = [];
-    for (const row of rows) {
-      const run: CurrentRun = JSON.parse(row.value as string);
-      const rawInput = inputFor.get(row.id as string)?.input;
-      const input = (
-        typeof rawInput === 'string' ? JSON.parse(rawInput) : undefined
-      ) as Run['input'];
-      if (query.inputMatch) {
-        try {
-          if (
-            !isDeepStrictEqual(
-              readPath(input, query.inputMatch.path),
-              query.inputMatch.equals,
-            )
-          )
-            continue;
-        } catch {
-          continue;
-        } // Missing paths do not match, including JSON null.
-      }
-      const {
-        id,
-        workflowId,
-        workflowName,
-        version,
-        status,
-        createdAt,
-        updatedAt,
-        cursor,
-        parentRunId,
-        batchNodeId,
-        parallelBranch,
-        comparison,
-      } = run;
-      result.push({
-        ...this.runAncestry(id, ancestry),
-        id,
-        workflowId,
-        workflowName,
-        version,
-        status,
-        createdAt,
-        updatedAt,
-        cursor,
-        input,
-        parentRunId,
-        batchNodeId,
-        ...(parallelBranch ? { parallelBranch } : {}),
-        ...(comparison ? { comparison } : {}),
-        ...(run.startRequestId !== undefined
-          ? { startRequestId: run.startRequestId }
-          : {}),
-        ...(run.externalTask ? { externalTask: run.externalTask } : {}),
-        ...(run.tags !== undefined ? { tags: run.tags } : {}),
-        ...(run.chain ? { chain: run.chain } : {}),
-      });
-      if (result.length === query.limit) break;
-    }
-    return result;
+    return findRuns(this.db, query, (id, cache) => this.runAncestry(id, cache));
   }
   runWorkflowId(id: string): string | undefined {
     return this.db
