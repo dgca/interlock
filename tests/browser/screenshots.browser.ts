@@ -30,6 +30,7 @@ const gallerySections = [
   'editors',
   'dialogs',
   'testing',
+  'memory',
   'boards',
 ];
 
@@ -153,7 +154,7 @@ describe.each(widths)('gallery at %dpx', (width) => {
     await target.blur();
   });
 
-  it.for(['modal', 'busy', 'discard'])(
+  it.for(['modal', 'busy', 'discard', 'memory-note'])(
     'checks the %s dialog',
     async (dialog) => {
       await page.goto(`${app.url}/-/gallery?open=${dialog}`);
