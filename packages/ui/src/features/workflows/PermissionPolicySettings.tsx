@@ -79,8 +79,7 @@ export function PermissionPolicySettings({
       <Textarea
         label="Commands"
         description="One pattern per line, such as git status or pnpm test *. A final * allows further arguments whose paths stay in the workspace. Commands joined with &&, ; or | must each match."
-        autosize
-        minRows={2}
+        rows={4}
         value={commands}
         error={errors.length ? errors.join('\n') : undefined}
         onChange={(event) => {
