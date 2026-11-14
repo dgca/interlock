@@ -43,7 +43,7 @@ function start(e: Engine) {
   e.publish(w.id);
   return e.start(w.id, { task: 'pull' }).run;
 }
-const pull = (e: Engine) => e.executors.launcher.pull;
+const pull = (e: Engine) => e.executors.pull;
 const rejection = (call: () => unknown) => {
   try {
     call();
@@ -164,7 +164,8 @@ it('keeps work unclaimed while no client polls and allows one active client', as
   const e = setup();
   const { credential } = pull(e).rotateCredential({ profileId: 'plugin' });
   const run = start(e);
-  await new Promise((resolve) => setTimeout(resolve, 1200));
+  // The dispatch scan runs in a microtask after the run starts.
+  await new Promise((resolve) => setImmediate(resolve));
   expect(operations(e)).toEqual([]);
   const managed = e.inspect(run.id).work[0].managedExecution;
   expect(managed?.reason).toContain('launcher_client_offline');
@@ -210,4 +211,28 @@ it('keeps cleanup across a restart and turns a late launch result into a stop', 
     kind: 'stop',
     payload: { workId, sessionId: 'orphan' },
   });
+});
+
+it('ends a poll open across a credential rotation without work and admits the new client at once', async () => {
+  const e = setup();
+  const old = pull(e).rotateCredential({ profileId: 'plugin' }).credential;
+  const waiting = pull(e).poll({
+    profileId: 'plugin',
+    credential: old,
+    clientId: 'old-plugin',
+    waitMs: 20_000,
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  const { credential } = pull(e).rotateCredential({ profileId: 'plugin' });
+  await expect(waiting).rejects.toMatchObject({
+    code: 'launcher_credential_invalid',
+  });
+  start(e);
+  const { operations: leased } = await pull(e).poll({
+    profileId: 'plugin',
+    credential,
+    clientId: 'new-plugin',
+    waitMs: 5000,
+  });
+  expect(leased.map((op) => op.kind)).toEqual(['launch']);
 });
