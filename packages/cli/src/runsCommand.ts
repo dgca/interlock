@@ -3,6 +3,12 @@ import { runQuerySchema, runTagsSchema } from '@interlock/core';
 import type { engineClient } from './engineClient.js';
 import { parse } from './json.js';
 
+/** `run <id> [--full]`, with `--full` accepted before or after the ID. */
+export const runQuery = (args: string[]) => ({
+  id: args.find((arg) => arg !== '--full') ?? '',
+  full: args.includes('--full'),
+});
+
 export function parseTags(values: string[] | undefined) {
   if (!values) return undefined;
   const entries = values.map((value) => {

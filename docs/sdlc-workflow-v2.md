@@ -166,9 +166,11 @@ Compare, per arm:
 | Accepted by the independent probe | Your probe, run at each arm's final commit.                                             |
 | Approvals asked and auto-allowed  | `workflow_report` `approvals` (the report's **Permission approvals** section), per run. |
 | Tokens and cost                   | `get_run_usage`: input, cached input and output tokens, and reported or derived cost.   |
-| Review rounds                     | The number of `review` (v1) or `changeReview` (v2) executions in `get_run`.             |
+| Review rounds                     | The number of `review` (v1) or `changeReview` (v2) executions in `get_run` `full:true`. |
 | Assignments                       | `get_run_budget`: the claim count against the 30-claim limit.                           |
 | Wall time                         | The run's start and end times in `get_run`; note separately how long it waited for you. |
+
+A long run's `get_run` response can drop older executions above 64 KiB; pass `full: true` to count every round.
 
 A run that reaches its budget waits and appears in **Runs → Needs attention** as **Run budget reached**. Record that as the arm's outcome rather than raising the limit.
 
