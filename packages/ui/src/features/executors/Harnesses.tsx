@@ -386,7 +386,7 @@ function ProfileRow({
             <strong>{label}</strong>
             <p>
               {profile.harness === 'custom'
-                ? `Custom integration · ${profile.mode === 'launcher' ? 'Delegated launcher' : 'Direct turn'}${profile.transport === 'http' ? ' over HTTP' : ' over subprocess'}`
+                ? `Custom integration · ${profile.mode === 'launcher' ? 'Delegated launcher' : 'Direct turn'}${profile.transport === 'http' ? ' over HTTP' : profile.transport === 'pull' ? ' polled by a client' : ' over subprocess'}`
                 : 'Local executable'}
             </p>
           </div>

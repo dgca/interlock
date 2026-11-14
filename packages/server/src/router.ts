@@ -11,8 +11,6 @@ import {
   scheduleReadSchema,
   scheduleTimingSchema,
   triggerListQuerySchema,
-} from '@interlock/core';
-import {
   pauseCreateSchema,
   pauseListSchema,
   pauseResumeSchema,
@@ -110,6 +108,7 @@ import {
 import { GithubImporter, githubSourceSchema } from './githubImport.js';
 const githubImporter = new GithubImporter();
 import { pricesRouter } from './prices.js';
+import { launcherRouter } from './launcherRouter.js';
 import { id, inputMutation, p, t } from './trpc.js';
 import {
   agentDraftEdit,
@@ -136,6 +135,7 @@ const claim = z.object({ workId: z.string(), token: z.string() });
 export const appRouter = t.router({
   scripts: scriptRouter,
   prices: pricesRouter,
+  launcher: launcherRouter,
   triggers: t.router({
     read: p
       .input(scheduleReadSchema)

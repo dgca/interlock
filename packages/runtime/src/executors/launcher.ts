@@ -18,6 +18,11 @@ import {
 } from './custom.js';
 import { evaluateCommandOrUrlTemplate, sanitizeDeepLink } from './templates.js';
 import { now } from './supervision.js';
+import {
+  PullLaunchers,
+  pullLaunchResult,
+  pullStatus,
+} from './pullLaunchers.js';
 
 export interface LauncherSession {
   idempotencyKey: string;
@@ -30,7 +35,8 @@ export interface LauncherSession {
   resumeCommand?: string;
   deepLink?: string;
   cwd: string;
-  status: 'working' | 'idle' | 'needs_attention' | 'ended';
+  /** `unknown`: a pull client did not answer, so recovery must not assume idle. */
+  status: 'working' | 'idle' | 'needs_attention' | 'ended' | 'unknown';
   launchedAt: string;
   lastStatusAt: number;
   archived: boolean;
@@ -82,6 +88,8 @@ export class LauncherSupervisor {
   private readonly launcherStops: LauncherState['launcherStops'];
   private readonly launcherCommands: LauncherState['launcherCommands'];
   private readonly customCommands: LauncherState['customCommands'];
+  /** Pull transport queue and client API; other transports never touch it. */
+  readonly pull: PullLaunchers;
   constructor(
     private readonly engine: Pick<
       Engine,
@@ -96,6 +104,7 @@ export class LauncherSupervisor {
     this.launcherStops = state.launcherStops;
     this.launcherCommands = state.launcherCommands;
     this.customCommands = state.customCommands;
+    this.pull = new PullLaunchers(engine.store, host, this.customCommands);
   }
   private get errors() {
     return this.host.errors;
@@ -198,7 +207,19 @@ export class LauncherSupervisor {
     let remoteResumeCommand: string | undefined;
     let remoteDeepLink: string | undefined;
     const invocation = customInvocation(profile, 'launcher');
-    if (profile.transport === 'http') {
+    if (profile.transport === 'pull') {
+      ({
+        sessionId: remoteSessionId,
+        resumeCommand: remoteResumeCommand,
+        deepLink: remoteDeepLink,
+      } = pullLaunchResult(
+        await this.pull.request(
+          { ...work, workId: work.id, profile },
+          'launch',
+          launchPayload,
+        ),
+      ));
+    } else if (profile.transport === 'http') {
       if (!invocation) {
         throw new Error(
           `Custom profile "${profile.id}" in launcher HTTP mode requires launchUrl`,
@@ -339,7 +360,16 @@ export class LauncherSupervisor {
     let parsedStatusData: any;
 
     try {
-      if (session.profile.statusUrl) {
+      if (session.profile.transport === 'pull') {
+        const reported = await this.pull.request(session, 'status', {
+          workId: session.workId,
+          runId: session.runId,
+          sessionId: session.sessionId,
+          sessionName: session.sessionName,
+        });
+        parsedStatusData = reported;
+        newStatus = pullStatus(reported);
+      } else if (session.profile.statusUrl) {
         const url = interpolateTokens(session.profile.statusUrl, tokenMap);
         const headers: Record<string, string> = { Accept: 'application/json' };
         if (session.profile.headers)
@@ -367,6 +397,7 @@ export class LauncherSupervisor {
         }
       }
     } catch (error) {
+      if (session.profile.transport === 'pull') session.status = 'unknown';
       this.errors.record('launcher status', error);
     }
 
@@ -464,7 +495,11 @@ export class LauncherSupervisor {
     this.idleRecovering.add(captured.id);
     try {
       if (!pending) {
-        if (!session.profile.messageCommand && !session.profile.messageUrl)
+        if (
+          !session.profile.messageCommand &&
+          !session.profile.messageUrl &&
+          session.profile.transport !== 'pull'
+        )
           return;
         const work = owned();
         if (!work) return;
@@ -482,7 +517,12 @@ export class LauncherSupervisor {
         await this.sendLauncherMessage(session, recovery.message);
         return;
       }
-      if (!session.profile.stopCommand && !session.profile.stopUrl) return;
+      if (
+        !session.profile.stopCommand &&
+        !session.profile.stopUrl &&
+        session.profile.transport !== 'pull'
+      )
+        return;
       await this.requestLauncherStop(session);
       await this.pollLauncherStatus(session);
       const work = owned();
@@ -609,7 +649,9 @@ export class LauncherSupervisor {
       message,
     };
 
-    if (session.profile.messageUrl) {
+    if (session.profile.transport === 'pull')
+      await this.pull.request(session, 'message', payload);
+    else if (session.profile.messageUrl) {
       const url = interpolateTokens(session.profile.messageUrl, tokenMap);
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
@@ -654,7 +696,9 @@ export class LauncherSupervisor {
       sessionId: session.sessionId,
     };
 
-    if (session.profile.archiveUrl) {
+    if (session.profile.transport === 'pull')
+      await this.pull.request(session, 'archive', payload);
+    else if (session.profile.archiveUrl) {
       const url = interpolateTokens(session.profile.archiveUrl, tokenMap);
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
@@ -708,7 +752,9 @@ export class LauncherSupervisor {
       sessionId: session.sessionId,
     };
 
-    if (session.profile.stopUrl) {
+    if (session.profile.transport === 'pull')
+      await this.pull.request(session, 'stop', payload);
+    else if (session.profile.stopUrl) {
       const url = interpolateTokens(session.profile.stopUrl, tokenMap);
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',

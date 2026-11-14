@@ -24,6 +24,7 @@ export const requestTargetSchema = z.discriminatedUnion('kind', [
     })
     .strict(),
   z.object({ kind: z.literal('script'), ...step }).strict(),
+  z.object({ kind: z.literal('launcher'), ...step, workId: id }).strict(),
   z
     .object({
       kind: z.literal('stalled'),
