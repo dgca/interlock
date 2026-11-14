@@ -757,10 +757,10 @@ export default function Gallery() {
         <Feedback />
         <Loading />
         <Collections />
-        <Boards />
         <Layout />
         <Editors />
         <Dialogs />
+        <Boards />
       </div>
     </main>
   );
