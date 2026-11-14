@@ -92,9 +92,10 @@ it.each(['http', 'stdio'])(
       expect(choices.map((s: any) => s.id)).toEqual([
         'sdlc',
         'sdlc-v2',
+        'pr-watcher',
         'evaluate-comparison',
       ]);
-      expect(JSON.stringify(choices).length).toBeLessThan(2000);
+      expect(JSON.stringify(choices).length).toBeLessThan(2500);
       expect(e.store.workflows()).toEqual([]);
       expect(choices[0].boardSetup?.suggestions[0]).toMatchObject({
         id: 'sdlc-board',

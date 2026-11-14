@@ -35,6 +35,7 @@ it('lists bundled choices without installing, publishing or starting anything', 
   expect(listStarters(e).map((s) => s.id)).toEqual([
     'sdlc',
     'sdlc-v2',
+    'pr-watcher',
     'evaluate-comparison',
   ]);
   expect(e.store.workflows()).toEqual([]);
@@ -64,6 +65,7 @@ it.each(['draft', 'version'])(
     expect(listStarters(e).map((s) => s.id)).toEqual([
       'sdlc',
       'sdlc-v2',
+      'pr-watcher',
       'evaluate-comparison',
     ]);
     expect(listStarters(e).every((s) => !s.existing)).toBe(true);
