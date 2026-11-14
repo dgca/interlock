@@ -50,9 +50,12 @@ import {
 import { useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router';
 import { EllipsisVertical, Plus, Trash2 } from 'lucide-react';
-import type { Contract, Json } from '@interlock/core';
+import type { BoardTypeContent, Contract, Json } from '@interlock/core';
 import { ContractEditor } from '../components/ContractEditor/ContractEditor';
 import { WorkflowSyncAlertList } from '../features/workflows/WorkflowSyncAlerts';
+import { BoardCard, type BoardCardData } from '../features/boards/BoardCard';
+import { LanesEditor } from '../features/boards/BoardTypeFields';
+import boardClasses from '../features/boards/Boards.module.css';
 import {
   ListTable,
   ListTableRow,
@@ -661,6 +664,88 @@ function Dialogs() {
   );
 }
 
+const hour = 3_600_000;
+const boardCards: BoardCardData[] = [
+  {
+    id: 'task:github/481',
+    runId: 'run-481',
+    runCount: 2,
+    workflowName: 'Feature',
+    externalTask: {
+      system: 'github',
+      id: '481',
+      title:
+        'Keep board placement stable when a long-running review is retried after a failed check',
+      url: 'https://github.com/example/app/issues/481',
+    },
+    status: 'waiting',
+    stage: 'Review',
+    actor: 'person',
+    waiting: null,
+    since: new Date(Date.now() - 3 * hour).toISOString(),
+    attentionCount: 1,
+    requestSummary: 'Approve the change plan',
+    fields: {
+      pr: 'https://github.com/example/app/pull/912',
+      spend: '$4.18',
+    },
+  },
+  {
+    id: 'run:held',
+    runId: 'run-held',
+    workflowName: 'Dependency upgrade',
+    title: 'Upgrade the test runner',
+    status: 'queued',
+    stage: null,
+    actor: 'engine',
+    waiting: null,
+    held: { reason: 'Start after the release freeze' },
+    since: new Date(Date.now() - 26 * hour).toISOString(),
+    attentionCount: 0,
+  },
+];
+
+function Boards() {
+  const [lanes, setLanes] = useState<BoardTypeContent['lanes']>([
+    { id: 'backlog', name: 'Backlog', match: [{ status: ['held'] }] },
+    {
+      id: 'review',
+      name: 'Review',
+      match: [
+        {
+          status: ['running', 'waiting'],
+          stages: ['Review'],
+        },
+      ],
+    },
+  ]);
+  return (
+    <Section id="boards" title="Boards">
+      <Specimen name="BoardCard with fields">
+        <ul className={boardClasses.cards} role="list">
+          <BoardCard
+            card={boardCards[0]}
+            runLink="#gallery-boards"
+            requestLink="#gallery-boards"
+            fields={[
+              { id: 'pr', label: 'Pull request' },
+              { id: 'spend', label: 'Spend' },
+            ]}
+          />
+        </ul>
+      </Specimen>
+      <Specimen name="BoardCard held">
+        <ul className={boardClasses.cards} role="list">
+          <BoardCard card={boardCards[1]} runLink="#gallery-boards" />
+        </ul>
+      </Specimen>
+      <Specimen name="LanesEditor" wide>
+        <LanesEditor lanes={lanes} disabled={false} onChange={setLanes} />
+      </Specimen>
+    </Section>
+  );
+}
+
 /** Development-only route. Production builds never include this module. */
 export default function Gallery() {
   return (
@@ -672,6 +757,7 @@ export default function Gallery() {
         <Feedback />
         <Loading />
         <Collections />
+        <Boards />
         <Layout />
         <Editors />
         <Dialogs />

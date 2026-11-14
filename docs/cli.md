@@ -51,6 +51,8 @@ interlock import @workflow.json --board-setup @setup.json
 interlock import-starter sdlc --board-setup @setup.json
 ```
 
+Read a board's lanes and cards with `interlock board view BOARD_ID` or `interlock board view --workflow WORKFLOW_ID`. See [board views](workflow-boards.md#read-a-board-from-scripts-and-agents).
+
 Keep the setup's `requestId` and arguments when retrying. For starter imports, the CLI uses that key if you omit `--request-id`. Use `--copy` to apply board setup when the starter already has a local copy. See [board setup choices](reuse-work.md#set-up-a-board-during-import).
 
 ## Start and inspect runs

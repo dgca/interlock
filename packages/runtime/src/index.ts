@@ -272,12 +272,8 @@ export class Engine {
     this.requests = new Requests(store, this.externalInputs, (id) =>
       this.projectRun(id),
     );
-    this.boards = new WorkflowBoards(
-      store,
-      this.requests,
-      (id) => this.projectRun(id),
-      () => this.nowMs(),
-      () => this.notify(),
+    this.boards = new WorkflowBoards(store, this.requests, this, () =>
+      this.notify(),
     );
     this.holds = new WorkHolds(
       store,

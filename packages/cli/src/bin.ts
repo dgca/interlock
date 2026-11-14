@@ -52,6 +52,7 @@ Workflow triggers: triggers (schedules is an alias) <read|manage> <json|@file>
 Kinds: schedule, event. Event triggers match run transitions with optional quiescence.
 Stall monitoring: stalls
 Named pause holds: pause, pause-holds, resume
+Boards: board <view|types|save-type>
 Workflow performance and cost report: report [--workflow <id>] [--since <ISO datetime>] [--until <ISO datetime>] [--limit <n>] [--tag KEY=VALUE ...] [--json]
 Report dates must be valid ISO datetimes whose rounded UTC bounds stay within years 0000 through 9999.
 System readiness check: doctor [--live] [--json]
@@ -110,6 +111,7 @@ Commands and the mcp bridge read the token from the api-token file beside the ke
       'export',
       'publish',
       'start',
+      'board',
       'runs',
       'run',
       'run-history',

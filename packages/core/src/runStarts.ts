@@ -69,6 +69,8 @@ export interface RunAdmission {
   after: { reference: StartDependency; runId?: string }[];
   blockers: string[];
   admittedAt?: string;
+  /** A held start stays queued until it is released. */
+  hold?: { reason: string; at: string };
 }
 export const runStartOptionsSchema = z
   .object({

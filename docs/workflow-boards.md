@@ -14,6 +14,35 @@ If Interlock cannot confirm an update, use **Load latest** to check the saved bo
 
 Membership applies to existing and future runs as soon as you save. It is independent of publication. Reimporting a workflow keeps its board membership. To place runs in a stage, open a node's settings, choose a board column in **Stage**, and publish the workflow. Selecting a column binds its ID. Typing stage text creates a label for run summaries, even if the text matches a column. Renaming or reordering a column preserves its bindings. A draft, retained version, or retained run can prevent column removal.
 
+## Use a board type
+
+A board type is a reusable layout: ordered lanes, the conditions that place a card in each lane, and the fields each card shows. A board built from a type shows runs from any number of workflows and computes every card's lane from run state each time it loads. Nothing is stored per card, so the board never drifts from the runs. Cards never move by dragging.
+
+1. Open **Boards → Board types** and choose **New board type**. Start from **Coding**, **Design**, **Research** or **Blank**.
+2. Edit the lanes. Each lane has conditions on the run's stage, status, actor and waiting reason. A card goes to the first lane whose conditions match; **Add alternative** adds another set of conditions to the same lane. A lane without conditions takes every card an earlier lane did not. Cards that match no lane go to **Unmapped**.
+3. Add card fields: the task link, workflow, stage, waiting reason, actor, spend, age, tags, or a **Node result** path such as `open_pr.url`, read from that step's latest output.
+4. Open **Boards → New board**, choose the type in **Layout**, and choose which runs it shows: some or all workflows, runs carrying every listed tag, and external task systems.
+
+Workflows that use the type's stage names, such as Plan, Build and Review, appear in the matching lanes without setup. Under **Stage mapping**, map another workflow's stage name to one of the type's stages without changing the workflow. A misnamed stage never fails validation; its cards appear in **Unmapped**.
+
+Runs that share an external task (system and ID) form one card, as do the runs of a continue-as-new chain. When a card spans several runs, a run waiting on a person places it; otherwise the newest active run does, then the newest run. A typed board shows every active run in scope and runs finished in the last 24 hours, up to 20 finished cards per lane.
+
+A type in use by a board cannot be deleted. Typed boards do not take workflow membership, so a workflow can appear on any number of them, and column boards keep working as before.
+
+## See a workflow's stages
+
+Each workflow also has its own board without setup. Open the workflow's **Runs** and choose **Stages**. It shows one lane per stage in graph order, plus **Needs you**, **Done** and **Failed**, and **Queued**, **Cancelled** or **Unmapped** when they have cards. Runs started by another workflow's step appear on that workflow's cards instead.
+
+## Read a board from scripts and agents
+
+The same lanes and cards are available everywhere:
+
+- CLI: `interlock board view BOARD_ID`, or `interlock board view --workflow WORKFLOW_ID` for a workflow's stage board. Add `--lane LANE --offset N --limit N` to page one lane. `interlock board types` lists types and `interlock board save-type @type.json` saves one.
+- HTTP: `GET /api/boards/view?id=BOARD_ID` or `?workflowId=WORKFLOW_ID`, with optional `lane`, `offset` and `limit`.
+- MCP: `read_workflow_boards` with `request.action: "view"` and an `id` or a `workflowId`; `limit` counts cards per lane and defaults to 10.
+
+Each lane has an `id`, `name`, `total` and `cards`. A card's `id` is `task:<system>/<id>` or `run:<root run ID>`; `runId` is the run that placed it and `runCount` the number of runs it spans. A view of a column board returns its columns as lanes. Board types are managed in the UI, CLI and shared API; MCP reads them only through board views.
+
 ## Set up a board during import
 
 When an import includes board suggestions, open **Board setup** in the import preview. The preview lists the workflows each choice applies to.

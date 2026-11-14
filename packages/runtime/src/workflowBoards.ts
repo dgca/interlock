@@ -5,7 +5,6 @@ import {
   type BoardMembership,
   type BoardQuery,
   type BoardRun,
-  type RunProjection,
   type SaveBoard,
   type Workflow,
   type WorkflowBoard,
@@ -13,18 +12,24 @@ import {
 import type { Store } from '@interlock/storage';
 import type { Requests } from './requests.js';
 import { boardCollection as collection } from './boardImport.js';
+import { BoardTypes, boardTypeCollection } from './boardTypes.js';
+import { BoardViews, type BoardEngine } from './boardView.js';
 
 const terminalWindowMs = 86_400_000;
 const terminalLimit = 20;
 
 export class WorkflowBoards {
+  readonly types: BoardTypes;
+  readonly views: BoardViews;
   constructor(
     private store: Store,
     private requests: Requests,
-    private projectRun: (id: string) => RunProjection,
-    private now: () => number,
+    private engine: BoardEngine,
     private changed: () => void,
-  ) {}
+  ) {
+    this.types = new BoardTypes(store, changed);
+    this.views = new BoardViews(store, requests, engine, this, this.types);
+  }
 
   list() {
     const workflows = this.store.workflows();
@@ -43,16 +48,26 @@ export class WorkflowBoards {
       if (boardId && count)
         counts.set(boardId, (counts.get(boardId) ?? 0) + count);
     }
-    return boards.map((board) => ({
-      ...board,
-      workflowIds: workflows
-        .filter((workflow) => workflow.boardId === board.id)
-        .map((workflow) => workflow.id),
-      attentionCount: counts.get(board.id) ?? 0,
-    }));
+    return boards
+      .map((board) => ({
+        ...board,
+        ...(board.typeId && {
+          workflowIds: board.scope?.workflowIds ?? [],
+          attentionCount: this.views.attentionCount(board),
+        }),
+      }))
+      .map((board) => ({
+        ...board,
+        workflowIds:
+          board.workflowIds ??
+          workflows
+            .filter((workflow) => workflow.boardId === board.id)
+            .map((workflow) => workflow.id),
+        attentionCount: board.attentionCount ?? counts.get(board.id) ?? 0,
+      }));
   }
 
-  private get(id: string) {
+  get(id: string) {
     const board = this.store.get<WorkflowBoard>(collection, id);
     if (!board) throw new InterlockError('Board not found');
     return board;
@@ -60,6 +75,8 @@ export class WorkflowBoards {
 
   settings(id: string) {
     const board = this.get(id);
+    if (board.typeId)
+      return { ...board, workflowIds: [], protectedColumnIds: [] };
     return {
       ...board,
       workflowIds: this.store
@@ -99,7 +116,8 @@ export class WorkflowBoards {
         throw new InterlockError(
           'Workflow board changed. Refresh and try again.',
         );
-      if (input.boardId) this.get(input.boardId);
+      if (input.boardId && this.get(input.boardId).typeId)
+        throw new InterlockError('Typed boards select runs by scope');
       if ((workflow.boardId ?? null) !== input.boardId) {
         this.membershipChanged(workflow.boardId);
         this.membershipChanged(input.boardId ?? undefined);
@@ -115,9 +133,14 @@ export class WorkflowBoards {
       const current = input.id ? this.get(input.id) : undefined;
       if (current?.revision !== input.expectedRevision)
         throw new InterlockError(boardSettingsRevisionConflict);
+      if (current && Boolean(current.typeId) !== Boolean(input.typeId))
+        throw new InterlockError(
+          'A column board cannot become a typed board, or the reverse. Create a new board.',
+        );
+      if (input.typeId) return this.saveTyped(input, current);
       const existing = new Set(current?.columns.map((column) => column.id));
       const retained = new Set<string>();
-      const columns = input.columns.map(({ id, name }) => {
+      const columns = (input.columns ?? []).map(({ id, name }) => {
         if (id && (!existing.has(id) || retained.has(id)))
           throw new InterlockError('Invalid or duplicate board column');
         if (id) retained.add(id);
@@ -143,7 +166,7 @@ export class WorkflowBoards {
       const workflows = new Map(
         this.store.workflows().map((workflow) => [workflow.id, workflow]),
       );
-      const selected = new Set(input.workflowIds);
+      const selected = new Set(input.workflowIds ?? []);
       for (const id of selected) {
         const workflow = workflows.get(id);
         if (!workflow)
@@ -169,6 +192,26 @@ export class WorkflowBoards {
     return saved;
   }
 
+  private saveTyped(input: SaveBoard, current?: WorkflowBoard) {
+    if (!this.store.get(boardTypeCollection, input.typeId!))
+      throw new InterlockError('Board type not found');
+    const workflows = new Set(this.store.workflows().map(({ id }) => id));
+    if (input.scope?.workflowIds?.some((id) => !workflows.has(id)))
+      throw new InterlockError('A selected workflow no longer exists');
+    const board: WorkflowBoard = {
+      id: current?.id ?? randomUUID(),
+      revision: (current?.revision ?? 0) + 1,
+      name: input.name,
+      columns: [],
+      typeId: input.typeId,
+      ...(input.scope && { scope: input.scope }),
+      ...(input.stageMap && { stageMap: input.stageMap }),
+      ...(input.fieldPaths && { fieldPaths: input.fieldPaths }),
+    };
+    this.store.put(collection, board);
+    return board;
+  }
+
   read(query: BoardQuery) {
     const board = this.get(query.id);
     const requests = this.requests.byCard();
@@ -176,7 +219,7 @@ export class WorkflowBoards {
       board,
       query,
       Object.fromEntries([...requests].map(([id, open]) => [id, open.length])),
-      new Date(this.now() - terminalWindowMs).toISOString(),
+      new Date(this.engine.nowMs() - terminalWindowMs).toISOString(),
       terminalLimit,
     );
     const cards = new Map<string, ReturnType<typeof this.card>[]>();
@@ -209,7 +252,7 @@ export class WorkflowBoards {
   private card(run: BoardRun, open: ReturnType<Requests['current']>) {
     return {
       ...run,
-      ...this.projectRun(run.runId),
+      ...this.engine.projectRun(run.runId),
       attentionCount: open.length,
       request: open[0]?.target,
       requestSummary: open
