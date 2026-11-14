@@ -206,7 +206,7 @@ export const executorProfileSchema = z
     clientTimeoutSeconds: z
       .number()
       .int()
-      .min(5)
+      .min(10)
       .max(3600)
       .optional()
       .describe('Pull client offline after this many seconds (60).'),

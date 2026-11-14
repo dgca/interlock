@@ -9,11 +9,13 @@
     "@typescript-eslint/no-unsafe-member-access": {
       "count": 8
     },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
-    },
     "@typescript-eslint/no-unused-vars": {
       "count": 4
+    }
+  },
+  "packages/cli/src/json.ts": {
+    "@typescript-eslint/no-unsafe-return": {
+      "count": 1
     }
   },
   "packages/core/src/fetch.ts": {

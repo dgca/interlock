@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -6,10 +6,27 @@ import { Engine } from '@interlock/runtime';
 import { Store } from '@interlock/storage';
 import { blankDefinition, definitionSchema } from '@interlock/core';
 import { nativeAdapters } from '../packages/runtime/src/executors/native';
+import { createApp } from '../packages/server/src/app';
+// @ts-expect-error The reference launcher is plain JavaScript.
+import { pullOnce as referencePullOnce } from '../packages/runtime/test/fixtures/custom-harness-reference.js';
+
+type PullClient = {
+  baseUrl: string;
+  profileId: string;
+  credential: string;
+  clientId: string;
+  waitMs?: number;
+  report?: boolean;
+  fetch: (url: string, init: RequestInit) => Promise<Response>;
+};
+const pullOnce = referencePullOnce as (
+  options: PullClient,
+) => Promise<{ kind: string; operationId: string; leaseToken: string }[]>;
 
 const engines: Engine[] = [];
 const dirs: string[] = [];
 afterEach(async () => {
+  vi.useRealTimers();
   for (const e of engines.splice(0)) await close(e);
   for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
 });
@@ -31,7 +48,7 @@ function setup(path = ':memory:', existing = false) {
       expectedRevision: 0,
       mode: 'launcher',
       transport: 'pull',
-      clientTimeoutSeconds: 5,
+      clientTimeoutSeconds: 10,
     });
   e.executors.start(nativeAdapters);
   return e;
@@ -44,13 +61,6 @@ function start(e: Engine) {
   return e.start(w.id, { task: 'pull' }).run;
 }
 const pull = (e: Engine) => e.executors.pull;
-const rejection = (call: () => unknown) => {
-  try {
-    call();
-  } catch (error) {
-    return (error as { code?: string }).code;
-  }
-};
 const operations = (e: Engine) =>
   e.store.list<{ id: string; kind: string; state: string }>(
     'launcherOperations',
@@ -94,13 +104,7 @@ it('leases a launch to the credentialed client and accepts its result once', asy
       deepLink: 'https://app.example/s/1',
     },
   };
-  expect(
-    rejection(() => pull(e).complete({ ...done, leaseToken: 'someone-else' })),
-  ).toBe('launcher_lease_invalid');
   expect(pull(e).complete(done)).toMatchObject({ late: false });
-  expect(rejection(() => pull(e).complete(done))).toBe(
-    'launcher_operation_not_found',
-  );
   await vi.waitFor(() =>
     expect(e.executors.inspect(work.id).items[0]).toMatchObject({
       state: 'running',
@@ -118,48 +122,6 @@ it('leases a launch to the credentialed client and accepts its result once', asy
   expect(claimed.token).toBeTruthy();
 });
 
-it('returns an expired lease to the queue with the same launch and rejects the old lease', async () => {
-  const e = setup();
-  const { credential } = pull(e).rotateCredential({ profileId: 'plugin' });
-  const run = start(e);
-  const client = { profileId: 'plugin', credential, clientId: 'plugin-1' };
-  const first = (await pull(e).poll({ ...client, waitMs: 5000 })).operations[0];
-  // The client died holding the lease.
-  const [stored] = operations(e);
-  e.store.put('launcherOperations', {
-    ...stored,
-    leaseUntil: new Date(Date.now() - 1).toISOString(),
-  });
-  const second = (await pull(e).poll({ ...client, waitMs: 0 })).operations[0];
-  expect(second.operationId).toBe(first.operationId);
-  expect(second.payload).toEqual(first.payload);
-  expect(second.leaseToken).not.toBe(first.leaseToken);
-  const result = { sessionHandle: 'deduplicated-session' };
-  expect(
-    rejection(() =>
-      pull(e).complete({
-        profileId: 'plugin',
-        credential,
-        operationId: first.operationId,
-        leaseToken: first.leaseToken,
-        result,
-      }),
-    ),
-  ).toBe('launcher_lease_invalid');
-  pull(e).complete({
-    profileId: 'plugin',
-    credential,
-    operationId: second.operationId,
-    leaseToken: second.leaseToken,
-    result,
-  });
-  const work = e.available(run.id)[0];
-  await vi.waitFor(() =>
-    expect(e.executors.inspect(work.id).items[0].state).toBe('running'),
-  );
-  expect(e.executors.inspect(work.id).total).toBe(1);
-});
-
 it('keeps work unclaimed while no client polls and allows one active client', async () => {
   const e = setup();
   const { credential } = pull(e).rotateCredential({ profileId: 'plugin' });
@@ -170,8 +132,12 @@ it('keeps work unclaimed while no client polls and allows one active client', as
   const managed = e.inspect(run.id).work[0].managedExecution;
   expect(managed?.reason).toContain('launcher_client_offline');
   expect(managed?.state).toBe('blocked');
+  expect(e.requests.current()).toMatchObject([
+    { label: 'Launcher client offline', target: { kind: 'launcher' } },
+  ]);
   const client = { profileId: 'plugin', credential, waitMs: 0 };
   await pull(e).poll({ ...client, clientId: 'plugin-1' });
+  expect(e.requests.current()).toEqual([]);
   await expect(
     pull(e).poll({ ...client, clientId: 'plugin-2' }),
   ).rejects.toMatchObject({ code: 'launcher_client_conflict' });
@@ -211,6 +177,84 @@ it('keeps cleanup across a restart and turns a late launch result into a stop', 
     kind: 'stop',
     payload: { workId, sessionId: 'orphan' },
   });
+});
+
+it('runs the reference pull launcher over the HTTP API, deduplicating a redelivered launch', async () => {
+  // Archiving waits for the supervisor's one-second tick.
+  vi.useFakeTimers({ toFake: ['setInterval'] });
+  const e = setup();
+  const app = createApp(e);
+  const { credential } = pull(e).rotateCredential({ profileId: 'plugin' });
+  const client: PullClient = {
+    baseUrl: 'http://127.0.0.1:4310',
+    profileId: 'plugin',
+    credential,
+    clientId: 'reference',
+    fetch: async (url, init) => app.request(url, init),
+  };
+  await expect(
+    pullOnce({ ...client, credential: 'wrong', waitMs: 0 }),
+  ).rejects.toMatchObject({ code: 'launcher_credential_invalid' });
+  const run = start(e);
+  // The client creates the session, then dies before reporting it.
+  const [first] = await pullOnce({ ...client, waitMs: 5000, report: false });
+  expect(first.kind).toBe('launch');
+  const [stored] = operations(e);
+  e.store.put('launcherOperations', {
+    ...stored,
+    leaseUntil: new Date(Date.now() - 1).toISOString(),
+  });
+  const [second] = await pullOnce({ ...client, waitMs: 0, report: false });
+  expect(second.operationId).toBe(first.operationId);
+  const work = e.available(run.id)[0];
+  const complete = (leaseToken: string) =>
+    app.request(
+      `/api/launchers/plugin/operations/${first.operationId}/complete`,
+      {
+        method: 'POST',
+        headers: { 'X-Interlock-Launcher-Credential': credential },
+        body: JSON.stringify({
+          leaseToken,
+          result: { sessionHandle: `launcher-sess-${work.id}` },
+        }),
+      },
+    );
+  // The dead lease cannot complete the redelivery; the live one completes once.
+  expect((await complete(first.leaseToken)).status).toBe(409);
+  expect((await complete(second.leaseToken)).status).toBe(200);
+  expect((await complete(second.leaseToken)).status).toBe(404);
+  await vi.waitFor(() =>
+    expect(e.executors.inspect(work.id).items[0]).toMatchObject({
+      state: 'running',
+      sessionId: `launcher-sess-${work.id}`,
+    }),
+  );
+  const session = JSON.parse(
+    readFileSync(
+      join(tmpdir(), `custom-harness-session-${work.id}.json`),
+      'utf8',
+    ),
+  ) as { claimTicket: string };
+  const claimed = e.claim(work.id, {
+    workerId: 'reference-session',
+    freshContext: true,
+    tools: [],
+    skills: [],
+    claimTicket: session.claimTicket,
+  });
+  e.submit(claimed.id, claimed.token!, { done: true });
+  expect(e.run(run.id).status).toBe('completed');
+  // Interlock archives the finished session through the client.
+  vi.advanceTimersByTime(1000);
+  await vi.waitFor(
+    async () => {
+      await pullOnce({ ...client, waitMs: 2000 });
+      expect(
+        existsSync(join(tmpdir(), `custom-harness-session-${work.id}.json`)),
+      ).toBe(false);
+    },
+    { timeout: 8000 },
+  );
 });
 
 it('ends a poll open across a credential rotation without work and admits the new client at once', async () => {
