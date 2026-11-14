@@ -92,12 +92,12 @@ Restart or reconnect your harness after changing configuration. Enable Interlock
 
 Every tool definition a client lists costs context in each conversation. Profiles serve a smaller tool set:
 
-| Profile   | Tools                                                                                                                      | Endpoint             |
-| --------- | -------------------------------------------------------------------------------------------------------------------------- | -------------------- |
-| `all`     | Every tool. The default, so existing configurations keep the same tools.                                                   | `/mcp` or `/mcp/all` |
-| `execute` | Assignment execution: list, claim, renew, preflight, submit, fail and hold work, usage, resources, memory, run reads.      | `/mcp/execute`       |
-| `author`  | Workflows, versions, ownership, prompts, variables, presets, triggers, boards and the testbench.                           | `/mcp/author`        |
-| `operate` | Starting, inspecting, waiting on, pausing, holding, retrying and cancelling runs, resource release, executors and budgets. | `/mcp/operate`       |
+| Profile   | Tools                                                                                                                             | Endpoint             |
+| --------- | --------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
+| `all`     | Every tool. The default, so existing configurations keep the same tools.                                                          | `/mcp` or `/mcp/all` |
+| `execute` | Assignment execution: list, claim, renew, preflight, submit, fail and hold work, tool calls, usage, resources, memory, run reads. | `/mcp/execute`       |
+| `author`  | Workflows, versions, ownership, prompts, variables, presets, triggers, boards and the testbench.                                  | `/mcp/author`        |
+| `operate` | Starting, inspecting, waiting on, pausing, holding, retrying and cancelling runs, resource release, executors and budgets.        | `/mcp/operate`       |
 
 Select a profile with the URL path, such as `http://127.0.0.1:4310/mcp/execute`, or send the header `X-Interlock-Mcp-Profile: execute` to `/mcp`. Unknown profiles are rejected; a path and header that disagree are rejected. For the stdio bridge, use `interlock mcp --profile execute` or set `INTERLOCK_MCP_PROFILE`. Connect more than one profile under different names when an agent needs tools from several. A tool outside the connected profile is not found, and the profile's server instructions, tool descriptions and schemas omit guidance and values that name one. When a compact mutation would suggest a `nextCall` tool outside the profile, it suggests `get_run_briefing` for the same run instead. A profile without `claim_work` reports `next: wait_for_worker` with a `wait_for_run_change` call where other profiles report `claim_work`.
 
@@ -256,6 +256,7 @@ When a workflow has [memory](memory.md) turned on, claimed prompts include a Mem
 | `get_run_briefing`, `get_run_result`, `wait_for_run_change`                     | Resume with bounded snapshots, selected values, and finite scoped change waits.                   |
 | `list_work`, `claim_work`                                                       | Discover available assignments and reserve one with declared capabilities.                        |
 | `submit_result`, `fail_work`, `renew_claim`                                     | Complete or fail claimed work, or extend its lease.                                               |
+| `call_work_tool`                                                                | Run a Script or Fetch step offered in a claimed assignment's `tools`.                             |
 | `manage_work_hold`                                                              | Hold/resume one assignment or read its bounded external-blocker history.                          |
 | `cancel_run`, `retry_run`                                                       | Cancel unfinished work or explicitly retry a failed run.                                          |
 | `preview_run_cancellation`, `cancel_run_tree`                                   | Preview active descendants, then atomically cancel with a reason and explicit detached inclusion. |

@@ -2,6 +2,7 @@ import type { Engine } from '../index.js';
 import type { ManagedExecution, Run, TranscriptEvent } from '@interlock/core';
 import { secretRedaction } from '../secretRedaction.js';
 import { sanitizeMessage } from './templates.js';
+import { toolCallToken } from '../toolCalls.js';
 
 /** Never let optional capture errors escape into execution or result submission. */
 export class ManagedTranscripts {
@@ -13,7 +14,10 @@ export class ManagedTranscripts {
         ?.filter((c) => c.kind === 'secret')
         .map((c) => c.referenceId) ?? [];
     const secrets = run ? this.engine.variables.resolve(run, ids).secrets : [];
-    return secretRedaction([...secrets, ...credentials].filter(Boolean));
+    const tools = credentials.filter(Boolean).map(toolCallToken);
+    return secretRedaction(
+      [...secrets, ...credentials, ...tools].filter(Boolean),
+    );
   }
   safeMetadata(
     record: ManagedExecution,

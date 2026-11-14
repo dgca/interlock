@@ -7,7 +7,7 @@ import {
   Client as CurrentClient,
   StreamableHTTPClientTransport as CurrentHttpTransport,
 } from '@modelcontextprotocol/client';
-import { blankDefinition } from '@interlock/core';
+import { blankDefinition, nodeSchema } from '@interlock/core';
 import { Engine } from '@interlock/runtime';
 import { Store } from '@interlock/storage';
 import { createApp } from '../packages/server/src/app';
@@ -75,8 +75,26 @@ it('serves bounded tool profiles over MCP without changing the default tool set'
         ...discovery.tools.map((tool) => JSON.stringify(tool)),
       ].join('\n');
       if (profile !== 'execute') continue;
-      // The execute profile completes the claim loop and rejects other tools.
-      const w = engine.create('Profiles', '', blankDefinition());
+      // The execute profile completes the claim loop, including an assignment
+      // tool call, and rejects other tools.
+      const definition = blankDefinition();
+      definition.nodes.push(
+        nodeSchema.parse({
+          id: 'checks',
+          kind: 'script',
+          label: 'Run checks',
+          language: 'javascript',
+          command: 'return { checked: input.target }',
+        }),
+      );
+      definition.edges.push({
+        id: 'tool',
+        source: 'agent',
+        target: 'checks',
+        port: 'default',
+        kind: 'tool',
+      });
+      const w = engine.create('Profiles', '', definition);
       engine.publish(w.id);
       const run = engine.start(w.id, { task: 'profile' }).run;
       const listed = await client.callTool({
@@ -87,6 +105,32 @@ it('serves bounded tool profiles over MCP without changing the default tool set'
         listed.structuredContent as { items: { runId: string }[] }
       ).items;
       expect(work.runId).toBe(run.id);
+      const claimed = (
+        await client.callTool({
+          name: 'claim_work',
+          arguments: { workId: (work as { id?: string }).id, workerId: 'w' },
+        })
+      ).structuredContent as {
+        id: string;
+        token: string;
+        tools: { name: string }[];
+        executionInstructions: string;
+      };
+      expect(claimed.tools.map((t) => t.name)).toEqual(['run_checks']);
+      expect(claimed.executionInstructions).toContain('call_work_tool');
+      const called = await client.callTool({
+        name: 'call_work_tool',
+        arguments: {
+          workId: claimed.id,
+          token: claimed.token,
+          name: 'run_checks',
+          arguments: { target: 'all' },
+        },
+      });
+      expect(called.structuredContent).toMatchObject({
+        status: 'completed',
+        output: { checked: 'all' },
+      });
       expect(
         (await client.callTool({ name: 'start_run', arguments: {} })).isError,
       ).toBe(true);

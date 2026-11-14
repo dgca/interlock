@@ -98,7 +98,7 @@ Use **Create integration** for a new configuration and **Save changes** for an e
 
 Interlock supports user-defined custom harnesses (`harness: "custom"`) to execute external agent CLI tools, standalone scripts, or desktop/hosted agent applications. Custom profiles support two execution modes:
 
-- **Direct Turn Mode (`mode: "direct"`)**: Interlock manages the assignment claim, renews the claim lease, executes the command or HTTP endpoint, and submits the returned result envelope.
+- **Direct Turn Mode (`mode: "direct"`)**: Interlock manages the assignment claim, renews the claim lease, executes the command or HTTP endpoint, and submits the returned result envelope. When the Agent has [tool edges](agent-tools.md), the assignment prompt lists the tools and the session calls them through the Interlock MCP tool `call_work_tool`.
 - **Delegated Claim-Ticket Mode (`mode: "launcher"`)**: Interlock launches an external session and issues a one-time `claimTicket`. The launched session claims the work via MCP `claim_work` using this ticket, executes autonomously, and submits its own result.
 
 Subprocess commands (turn, launch, status, message, stop and archive) inherit the server's full environment by default. Set `environmentMode: "minimal"` to pass only `PATH`, `HOME`, locale variables (`LANG`, `LANGUAGE`, `LC_*`), `INTERLOCK_*`, the profile's `env` values and any names listed in `environmentPassthrough`. Profiles without `environmentMode` keep `inherit`. When a minimal command fails and its source or error output mentions a withheld server variable, the error names it and the fix. HTTP transports are unaffected.

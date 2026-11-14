@@ -20,6 +20,14 @@ import { bindingNodeIds, bindingNodes } from './inputBindings';
 import { outputPortTop } from '@interlock/core/layout';
 import styles from './WorkflowEditor.module.css';
 import { parallelEndHandle } from './parallelReturns';
+import { TOOL_SOURCE_HANDLE, TOOL_TARGET_HANDLE } from './editorConnections';
+
+/** Tool edges join an Agent's Tools handle to a step's Tool handle. */
+function canvasHandles(edge: WorkflowEdge) {
+  return edge.kind === 'tool'
+    ? { source: TOOL_SOURCE_HANDLE, target: TOOL_TARGET_HANDLE }
+    : { source: edge.port, target: edge.targetHandle ?? 'default' };
+}
 
 type Options = {
   workflows?: Pick<Workflow, 'id' | 'name' | 'ownerWorkflowId'>[];
@@ -140,9 +148,13 @@ export function canvasGraph(
   };
   for (const edge of definition.edges) {
     if (!selectedIds.has(edge.id) && !linkedEdges.has(edge.id)) continue;
-    addActivePort(edge.source, `source:${edge.port}`);
-    addActivePort(edge.target, `target:${edge.targetHandle ?? 'default'}`);
+    const handles = canvasHandles(edge);
+    addActivePort(edge.source, `source:${handles.source}`);
+    addActivePort(edge.target, `target:${handles.target}`);
   }
+  const toolTargets = new Set(
+    definition.edges.flatMap((e) => (e.kind === 'tool' ? [e.target] : [])),
+  );
   const nodes: CanvasNode[] = ordered.map((node) => ({
     id: node.id,
     type: 'workflow',
@@ -189,6 +201,7 @@ export function canvasGraph(
       activePorts: [...(activePorts.get(node.id) ?? [])],
       connectionPorts: options.connectionPorts?.get(node.id),
       parallelLanes: node.kind === 'parallel' ? lanePorts(node) : undefined,
+      toolTarget: toolTargets.has(node.id) || undefined,
       bindingSources: bindingNodeIds(node).map((id) => {
         const source = bindingNodes(node, definition.nodes).find(
           (candidate) => candidate.id === id,
@@ -318,7 +331,9 @@ export function canvasGraph(
   const corridorTop = (edge: WorkflowEdge) =>
     Math.min(...crossed(edge).map((node) => absolute(node).y));
   const loops = definition.edges
-    .filter((edge) => !hiddenEdge(edge) && backward(edge))
+    .filter(
+      (edge) => edge.kind !== 'tool' && !hiddenEdge(edge) && backward(edge),
+    )
     .sort(
       (a, b) =>
         absolute(index.get(b.source)!).x - absolute(index.get(a.source)!).x,
@@ -475,6 +490,7 @@ export function canvasGraph(
     if (
       !source ||
       !target ||
+      edge.kind === 'tool' ||
       hiddenEdge(edge) ||
       lane.has(edge.id) ||
       edge.targetHandle === 'end' ||
@@ -620,11 +636,14 @@ export function canvasGraph(
             : undefined,
         data: lane.get(edge.id) ?? ortho.get(edge.id),
         selected: selectedIds.has(edge.id),
-        sourceHandle: edge.port,
-        targetHandle: laneEnd ?? edge.targetHandle ?? 'default',
-        className: laneEnd
-          ? [edgeClass, styles.automaticReturn].filter(Boolean).join(' ')
-          : edgeClass,
+        sourceHandle: canvasHandles(edge).source,
+        targetHandle: laneEnd ?? canvasHandles(edge).target,
+        className:
+          laneEnd || edge.kind === 'tool'
+            ? [edgeClass, laneEnd ? styles.automaticReturn : styles.toolEdge]
+                .filter(Boolean)
+                .join(' ')
+            : edgeClass,
         ...(laneEnd
           ? {
               selectable: false,
