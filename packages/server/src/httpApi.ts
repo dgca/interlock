@@ -161,7 +161,11 @@ export function createHttpApi(
         limit: 1,
       });
       c.header('Location', `/api/runs/${started.runId}`);
-      return c.json(await status(c, started.runId), 202);
+      const cost =
+        'costProjection' in started
+          ? { costProjection: started.costProjection }
+          : {};
+      return c.json({ ...(await status(c, started.runId)), ...cost }, 202);
     } catch (error) {
       return rejection(c, error);
     }

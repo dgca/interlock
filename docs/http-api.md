@@ -102,6 +102,7 @@ The status response has the same shape as the start response. Its fields:
 - `stage`: the workflow's current named stage, or `null`.
 - `waiting`: what the run is waiting for, or `null`. `kind` is one of `claim_queue`, `managed_launch`, `human_request`, `input_node`, `hold`, `pause`, `budget`, `resource`, `timer`, `poll` or `admission_queue`. `detail` identifies the node and, where relevant, the queue position, resume time or blockers.
 - `actor`: who must act next. `agent` means an agent assignment or integration, `person` means every active branch needs someone in the UI, and `engine` means Interlock itself.
+- `costProjection` (start response only): the workflow's median recent run cost, present when a [start warning threshold](run-budgets.md#warn-before-large-runs) is set. It is information; the start is never refused.
 
 These are the same projection fields that the UI and MCP use; see [agent workflow operations](agent-workflows.md) for how `stage` rolls up from child runs. The response never includes the full run document, executions or events. Use MCP `get_run`, the CLI or the UI for full inspection.
 

@@ -3,6 +3,7 @@ import {
   executorPermissionModeSchema,
   managedWorkSummarySchema,
   resourceOwnerSchema,
+  startCostProjectionSchema,
 } from '@interlock/core';
 import { z } from 'zod';
 import {
@@ -66,6 +67,11 @@ export const startResponseSchema = z
     ...inspectionFields,
     ...mutationSummarySchema.partial().shape,
     nextCall: nextCallSchema.optional(),
+    costProjection: startCostProjectionSchema
+      .optional()
+      .describe(
+        'Median recent run cost, when a start warning threshold is set. Information only.',
+      ),
   })
   .describe(
     'summary (default) requires ok, runId, runStatus, cursor, nextWork, next, nextDeadline and nextCall. full returns inspection with run, definition, work, descendants and events, including execution input/output payloads.',
