@@ -22,15 +22,18 @@ const terminal = (status: string) =>
   ['completed', 'failed', 'cancelled'].includes(status);
 
 interface ToolCallHost {
-  run(id: string): Run;
+  /** Public engine reads and change notifications. */
+  engine: {
+    run(id: string): Run;
+    subscribe(listener: () => void): () => void;
+    nowMs(): number;
+  };
   definition(run: Pick<Run, 'workflowId' | 'version'>): WorkflowDefinition;
   save(run: Run): void;
   event(run: Run, type: string, text: string): void;
   fail(run: Run, execution: NodeExecution, error: string): void;
   cancel(run: Run, reason: string): void;
   paused(run: Run): boolean;
-  subscribe(listener: () => void): () => void;
-  nowMs(): number;
 }
 
 export interface ToolCallResult {
@@ -64,7 +67,7 @@ export class ToolCalls {
 
   /** The calling execution and tools available to an active claim. */
   private context(work: WorkRequest) {
-    const parent = this.host.run(work.runId);
+    const parent = this.host.engine.run(work.runId);
     const execution = parent.executions.find((e) => e.id === work.executionId);
     if (!execution || execution.status !== 'waiting')
       throw new InterlockError('The calling Agent execution is not active');
@@ -77,29 +80,6 @@ export class ToolCalls {
       definition,
       tools: agentTools(definition, work.nodeId),
     };
-  }
-
-  /** Tools offered with an assignment; omitted when the node has none. */
-  forAssignment(work: WorkRequest) {
-    const run = this.store.get<Run>('runs', work.runId);
-    if (!run) return undefined;
-    const execution = run.executions.find((e) => e.id === work.executionId);
-    const tools = agentTools(
-      this.host.definition({
-        ...run,
-        version: execution?.version ?? run.version,
-      }),
-      work.nodeId,
-    );
-    return tools.length
-      ? tools.map((tool) => ({
-          name: tool.name,
-          description: tool.description,
-          inputSchema: tool.inputSchema,
-          maxCallsPerAttempt: tool.maxCallsPerAttempt,
-          maxCallsPerExecution: tool.maxCallsPerExecution,
-        }))
-      : undefined;
   }
 
   private calls(execution: NodeExecution, tool: AssignmentTool) {
@@ -143,7 +123,7 @@ export class ToolCalls {
     const node = definition.nodes.find((n) => n.id === tool.nodeId)!;
     const args = q.arguments as Json;
     assertContract(node.inputSchema, args, `${tool.name} arguments`);
-    const time = new Date(this.host.nowMs()).toISOString();
+    const time = new Date(this.host.engine.nowMs()).toISOString();
     const run: Run = {
       ...(parent.tags ? { tags: structuredClone(parent.tags) } : {}),
       ...(parent.triggerChain
@@ -197,12 +177,13 @@ export class ToolCalls {
   /** Wait for the call to end, bounded by waitMs and the remaining lease. */
   async wait(
     runId: string,
-    work: WorkRequest,
+    workId: string,
     waitMs: number,
     signal?: AbortSignal,
   ): Promise<ToolCallResult> {
+    const work = this.store.get<WorkRequest>('work', workId)!;
     const leaseMs = work.leaseUntil
-      ? Date.parse(work.leaseUntil) - this.host.nowMs() - LEASE_MARGIN_MS
+      ? Date.parse(work.leaseUntil) - this.host.engine.nowMs() - LEASE_MARGIN_MS
       : 0;
     const budget = Math.max(0, Math.min(waitMs, leaseMs));
     const done = () => terminal(this.store.get<Run>('runs', runId)!.status);
@@ -216,7 +197,7 @@ export class ToolCalls {
           resolve();
         };
         const timer = setTimeout(finish, budget);
-        unsubscribe = this.host.subscribe(() => {
+        unsubscribe = this.host.engine.subscribe(() => {
           if (done()) finish();
         });
         signal?.addEventListener('abort', finish, { once: true });
@@ -228,7 +209,7 @@ export class ToolCalls {
   describe(runId: string, work: WorkRequest): ToolCallResult {
     const run = this.store.get<Run>('runs', runId)!;
     const link: ToolCallLink = run.toolCall!;
-    const parent = this.host.run(run.parentRunId!);
+    const parent = this.host.engine.run(run.parentRunId!);
     const execution = parent.executions.find((e) => e.id === link.executionId)!;
     const tool = agentTools(this.host.definition(run), work.nodeId).find(
       (t) => t.edgeId === link.edgeId,
@@ -272,7 +253,7 @@ export class ToolCalls {
     for (const { run: state } of this.store.activeRunState()) {
       const link = (state as Run).toolCall;
       if (!link) continue;
-      const run = this.host.run(state.id);
+      const run = this.host.engine.run(state.id);
       const step = run.executions.at(-1);
       const work = this.store.get<WorkRequest>('work', link.workId);
       const claimed =

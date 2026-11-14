@@ -19,6 +19,11 @@ export function assignmentInstructions(
   options: { managedSession?: boolean; lifecycleRunId?: string } = {},
 ) {
   return [
+    ...(work.tools?.length
+      ? [
+          `Assignment tools: ${work.tools.map((t) => t.name).join(', ')}. Each runs a workflow step and returns its output. Call one with call_work_tool using workId ${work.id}, ${options.managedSession ? `token ${work.token ?? ''} (use it only for tool calls; the host still submits)` : 'your claim token'}, its name and arguments matching its inputSchema in tools. If status is still running or waiting, call again with the returned callId.${options.managedSession ? `\nTools: ${JSON.stringify(work.tools)}` : ''}`,
+        ]
+      : []),
     ...(work.resources?.length
       ? [
           'Exclusive Agent resources: ' +

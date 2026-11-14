@@ -4,8 +4,6 @@ import {
   doctorOptionsSchema,
   transcriptQuerySchema,
   messageReceiptQuerySchema,
-} from '@interlock/core';
-import {
   scheduleMutationSchema,
   scheduleReadSchema,
   scheduleTimingSchema,
@@ -15,6 +13,7 @@ import {
   pauseResumeSchema,
 } from '@interlock/core';
 import { startersQuery, importStarter } from './starters.js';
+import { callTool } from './toolCallProcedures.js';
 import { parseImportDocument } from '@interlock/core/importDocument';
 import {
   scriptOperationSchema,
@@ -823,6 +822,7 @@ export const appRouter = t.router({
     }),
   }),
   work: t.router({
+    callTool,
     resources: p
       .input(workResourceRequestSchema)
       .mutation(({ ctx, input }) => ctx.engine.manageWorkResources(input)),

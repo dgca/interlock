@@ -33,6 +33,17 @@ export interface AssignmentTool {
   maxCallsPerAttempt: number;
   maxCallsPerExecution: number;
 }
+/** The listing a worker receives with its assignment. */
+export type WorkTool = Pick<
+  AssignmentTool,
+  | 'name'
+  | 'description'
+  | 'inputSchema'
+  | 'maxCallsPerAttempt'
+  | 'maxCallsPerExecution'
+>;
+/** Bounds the tool listing in each assignment. */
+const MAX_TOOLS_PER_AGENT = 20;
 export interface ToolEdgeProblem {
   code: string;
   message: string;
@@ -40,8 +51,7 @@ export interface ToolEdgeProblem {
   nodeId?: string;
 }
 
-export const isToolEdge = (edge: Pick<WorkflowEdge, 'kind'>) =>
-  edge.kind === 'tool';
+const isToolEdge = (edge: Pick<WorkflowEdge, 'kind'>) => edge.kind === 'tool';
 
 /** Nodes offered as tools. They run only through tool calls, never as routes. */
 export function toolTargetIds(definition: Pick<WorkflowDefinition, 'edges'>) {
@@ -91,6 +101,23 @@ const literalResources = (node: WorkflowNode) =>
         b.source === 'literal' && typeof b.value === 'string' ? [b.value] : [],
       )
     : [];
+
+/** Assignment fields for an Agent's tools, captured when its work is created. */
+export function workTools(
+  definition: Pick<WorkflowDefinition, 'nodes' | 'edges'>,
+  agentId: string,
+): { tools?: WorkTool[] } {
+  const tools = agentTools(definition, agentId).map(
+    ({ name, description, inputSchema, ...limits }) => ({
+      name,
+      description,
+      inputSchema,
+      maxCallsPerAttempt: limits.maxCallsPerAttempt,
+      maxCallsPerExecution: limits.maxCallsPerExecution,
+    }),
+  );
+  return tools.length ? { tools } : {};
+}
 
 /** Every tool edge problem, for publication checks and draft diagnostics. */
 export function toolEdgeProblems(
@@ -199,6 +226,12 @@ export function toolEdgeProblems(
       );
     used.add(name);
     names.set(source.id, used);
+    if (used.size === MAX_TOOLS_PER_AGENT + 1)
+      add(
+        'tool_count',
+        `${source.label}: at most ${MAX_TOOLS_PER_AGENT} tools per Agent.`,
+        source.id,
+      );
   }
   return problems;
 }
@@ -214,16 +247,11 @@ export interface ToolCallLink {
 }
 
 export const toolCallRequestSchema = z.object({
-  workId: z.string().min(1),
-  token: z.string().min(1),
+  workId: z.string(),
+  token: z.string(),
   name: z.string().min(1).max(64),
   arguments: z.record(z.unknown()).default({}),
-  callId: z
-    .string()
-    .min(1)
-    .max(200)
-    .optional()
-    .describe('Repeat to resume waiting for an earlier call.'),
+  callId: z.string().min(1).max(200).optional(),
   waitMs: z.number().int().min(0).max(600_000).default(50_000),
 });
 export type ToolCallRequest = z.infer<typeof toolCallRequestSchema>;

@@ -77,6 +77,8 @@ MCP `create_workflow.definition`, `update_workflow.draft` and `validate_workflow
 
 For node configuration and examples, see [author definitions through MCP](connect-harness.md#author-definitions-through-mcp), [workflow definitions and Batch scopes](architecture.md#workflow-definitions), [branch routing](switch.md), and [input and output bindings](node-data.md).
 
+To let an Agent call a Script or Fetch step during its turn, add an edge with `"kind": "tool"` from the Agent to that step through `edit_workflow` `add_edge` or a full update. The step must have no routes of its own. Claimed assignments list the tools in `tools`; call them with `call_work_tool`. See [Agent tool calls](agent-tools.md).
+
 Set `timeoutMs` on a Script node to allow 100 to 3,600,000 milliseconds. Omission uses 60,000. Polling checks use a separate timeout with a 30,000-millisecond default and a 120,000-millisecond maximum. See [polling Waits](timers.md#polling-waits).
 
 Scripts and polling Script checks can read `INTERLOCK_RUN_ID` directly from

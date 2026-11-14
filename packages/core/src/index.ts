@@ -149,7 +149,6 @@ export * from './toolEdges.js';
 import {
   toolEdgeFields,
   toolEdgeProblems,
-  isToolEdge,
   toolTargetIds,
 } from './toolEdges.js';
 export {
@@ -932,6 +931,7 @@ export interface WorkRequest {
   input: Json;
   context: ContextPolicy;
   outputSchema: Record<string, unknown>;
+  tools?: import('./toolEdges.js').WorkTool[];
   status:
     | 'available'
     | 'held'
@@ -1325,7 +1325,7 @@ export function validateDefinition(input: unknown): WorkflowDefinition {
         `${node.label}: blank Items path requires an array input contract`,
       );
     const outgoing = d.edges.filter(
-      (e) => e.source === node.id && !isToolEdge(e),
+      (e) => e.source === node.id && e.kind !== 'tool',
     );
     const expected = tools.has(node.id) ? [] : outgoingPorts(node);
     if (node.routing && !supportsResultRouting(node))
