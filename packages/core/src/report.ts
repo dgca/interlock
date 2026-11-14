@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { modelAliasSelectionSchema } from './modelAliases.js';
 import { runTagsSchema } from './runTags.js';
+import { pricingSummarySchema } from './pricing.js';
 
 const firstReportInstant = Date.parse('0000-01-01T00:00:00.000Z');
 const lastReportInstant = Date.parse('9999-12-31T23:59:59.999Z');
@@ -210,6 +211,8 @@ export const usageCostReportSchema = z
     byModel: z.array(usageByModelSchema),
     byProvider: z.array(usageByProviderSchema),
     byAlias: z.array(usageByAliasSchema).optional(),
+    /** Present when any cost was derived or tokens lack a price. */
+    pricing: pricingSummarySchema.optional(),
   })
   .strict();
 

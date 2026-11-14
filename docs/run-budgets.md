@@ -22,7 +22,7 @@ Pass `budget` to `runs.start`, `runs.startSummary`, or MCP `start_run` to config
 }
 ```
 
-Choose at least one limit. Each maximum and warning threshold is a nonnegative safe integer. A warning threshold cannot exceed its maximum. Reaching a maximum blocks the next claim; zero blocks before the first claim. Warnings are advisory and appear in budget inspection. Cost values are millionths of the stated three-letter uppercase currency, so the example cost maximum is USD 5. Interlock does not calculate prices or convert currencies.
+Choose at least one limit. Each maximum and warning threshold is a nonnegative safe integer. A warning threshold cannot exceed its maximum. Reaching a maximum blocks the next claim; zero blocks before the first claim. Warnings are advisory and appear in budget inspection. Cost values are millionths of the stated three-letter uppercase currency, so the example cost maximum is USD 5. Budgets count reported costs only, not costs [derived from the price table](usage-reporting.md#derived-cost), and never convert currencies.
 
 `scope` is required:
 

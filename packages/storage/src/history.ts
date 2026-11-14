@@ -40,6 +40,7 @@ const scoped = [
   'events',
   'usageAttempts',
   'runUsage',
+  'runPricing',
   'workHolds',
   'stalls',
   'activeClockHolds',

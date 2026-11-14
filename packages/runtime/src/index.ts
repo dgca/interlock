@@ -141,7 +141,6 @@ import { ContextContinuityGroups } from './contextContinuity.js';
 import { claimTokenHash, leaseCounts, expiredClaimMessage } from './leases.js';
 
 class ExpiredClaimError extends InterlockError {}
-
 const now = () => new Date().toISOString();
 const terminal = (s: string) =>
   ['completed', 'failed', 'cancelled'].includes(s);
@@ -954,6 +953,7 @@ export class Engine {
       run.schedule = schedule ?? continuedFrom?.schedule;
     new RunAdmission(this.store).queue(run, definition, startOptions);
     this.save(run);
+    this.usage.prices.start(run, continuedFrom?.id, sameWorkflowChild);
     this.event(
       run,
       run.status === 'queued' ? 'run.queued' : 'run.started',

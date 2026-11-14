@@ -45,7 +45,7 @@ mcp       Stdio MCP bridge to the running engine. Set INTERLOCK_URL to override
 
 Workflow commands: workflows, workflow, starters, import-starter, import, update, edit, export, publish, archive, restore, delete, start, simulation, test-suite
 Run commands: runs, run, run-history, run-version, context-group, handoff-context, work, claim, preflight, submit, fail, renew, assignment-size, external-input, work-hold, work-resources, script, approve-script, script-approval, cancel-tree, cancel, retry
-Usage and budget commands: usage, report-usage, budget, set-budget
+Usage and budget commands: usage, report-usage, budget, set-budget, prices
 Local harness configuration and execution: executors
 Workflow variables: variables <read|manage> <json|@file> [--value-stdin]
 Workflow triggers: triggers (schedules is an alias) <read|manage> <json|@file>
@@ -129,6 +129,7 @@ Commands and the mcp bridge read the token from the api-token file beside the ke
       'report-usage',
       'budget',
       'set-budget',
+      'prices',
       'doctor',
       'report',
     ];
