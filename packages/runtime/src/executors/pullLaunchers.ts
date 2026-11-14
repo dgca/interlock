@@ -85,6 +85,14 @@ const digest = (value: string) => createHash('sha256').update(value).digest();
 const text = (value: unknown) =>
   typeof value === 'string' && value ? value : undefined;
 
+function assertEnabled(profile: ExecutorProfile | undefined) {
+  if (!profile?.enabled)
+    throw new LauncherClientError(
+      'launcher_profile_disabled',
+      'This launcher profile is disabled. Enable it in Interlock before polling.',
+    );
+}
+
 /** A waiting poll refreshes `lastPolledAt` at least every five seconds. */
 function polled(store: Engine['store'], profile: ExecutorProfile) {
   const last = store.get<ClientRecord>(
@@ -245,6 +253,7 @@ export class PullLaunchers {
         'launcher_credential_invalid',
         'Launcher credential is not valid for this profile',
       );
+    assertEnabled(profile);
     return { profile, client };
   }
   async poll(input: unknown, signal?: AbortSignal) {
@@ -267,6 +276,8 @@ export class PullLaunchers {
           'launcher_credential_invalid',
           'Launcher credential is not valid for this profile',
         );
+      // Disabling the profile ends a waiting poll too.
+      assertEnabled(this.profile(profile.id));
       const offline = !this.online(profile);
       this.touch(profile.id, q.clientId);
       // A client coming online can take waiting launches without the next scan tick.
@@ -313,6 +324,11 @@ export class PullLaunchers {
       signal?.addEventListener('abort', done, { once: true });
       waiting.add(done);
     });
+  }
+  /** A saved pull profile wakes its waiting polls, which end if it is disabled. */
+  saved<T extends ExecutorProfile>(profile: T) {
+    if (profile.transport === 'pull') this.notify(profile.id);
+    return profile;
   }
   private notify(profileId: string) {
     for (const wake of [...(this.pollers.get(profileId) ?? [])]) wake();

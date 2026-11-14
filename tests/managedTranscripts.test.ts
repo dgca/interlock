@@ -149,7 +149,8 @@ async function setup() {
   e.executors.start([adapter]);
   const run = e.start(w.id, {}).run;
   await vi.waitFor(() => expect(input).toBeDefined());
-  const record = e.executors.inspect(input!.work.id).items[0];
+  const record = e.executors.inspect(input!.work.id)
+    .items[0] as ManagedExecution;
   return { e, run, input: input!, record, send, finish };
 }
 it('captures exact attempts and active credentials without inflating ordinary inspection', async () => {
