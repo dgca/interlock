@@ -13,6 +13,6 @@ Use an **Interlock event** to respond to run transitions, such as completion, fa
 
 Manage both kinds in **Automations**. New automations can be saved disabled or enabled when created. Inspect **Activity** for occurrence and delivery outcomes, then open the linked run to see its progress and result. A started or queued run has not necessarily completed.
 
-To start runs from GitHub issues or post notifications to a webhook, begin with the [integration starters](integration-starters.md).
+To start runs from GitHub issues or post notifications to a webhook, begin with the [integration starters](https://github.com/dgca/interlock/blob/main/docs/integration-starters.md).
 
 Build and test the target [workflow](build-workflow.md) before enabling recurring starts. If an automation pauses or work waits, inspect its warning and the run's [waiting reason](troubleshooting.md).
