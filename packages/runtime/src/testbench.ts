@@ -31,6 +31,12 @@ import {
 } from '@interlock/core';
 import type { Store } from '@interlock/storage';
 import { fingerprint } from './versionIdentity.js';
+import {
+  active,
+  sampleRuns,
+  tree as treeOf,
+  type TreeRun,
+} from './comparisonTrees.js';
 import { Variables } from './variables.js';
 import type { ModelAliases } from './modelAliases.js';
 import { modelReferences, type ModelAliasCapture } from '@interlock/core';
@@ -52,10 +58,6 @@ import {
   publicJudgment,
   validateEvaluationReceipt,
 } from './evaluationReceipts.js';
-const active = (run: Run) =>
-  run.status === 'queued' ||
-  run.status === 'running' ||
-  run.status === 'waiting';
 const now = () => new Date().toISOString();
 const textError = (e: unknown) => (e instanceof Error ? e.message : String(e));
 const trimError = (e?: string) => e?.slice(0, 512);
@@ -118,29 +120,27 @@ export class Testbench {
     );
     if (!sample?.runId)
       throw new InterlockError('Comparison sample is unavailable');
-    const runs = this.store.runs();
+    const comparisons = this.store.list<WorkflowComparison>('comparisons');
+    const runs = sampleRuns(this.store, comparisons);
     // Retrying within an already active tree consumes no additional tree slot.
-    if (this.tree(sample.runId, runs).some(active)) return;
+    if (treeOf(sample.runId, runs).some(active)) return;
     const busy = (c: WorkflowComparison) =>
       c.samples.filter(
         (s) =>
-          trialReserved(s) ||
-          (s.runId && this.tree(s.runId, runs).some(active)),
+          trialReserved(s) || (s.runId && treeOf(s.runId, runs).some(active)),
       ).length;
     if (
       comparison.status !== 'running' &&
       busy(comparison) === 0 &&
-      this.store
-        .list<WorkflowComparison>('comparisons')
-        .filter(
-          (c) =>
-            c.status === 'running' ||
-            c.samples.some(
-              (s) =>
-                trialReserved(s) ||
-                (s.runId && this.tree(s.runId, runs).some(active)),
-            ),
-        ).length >= 4
+      comparisons.filter(
+        (c) =>
+          c.status === 'running' ||
+          c.samples.some(
+            (s) =>
+              trialReserved(s) ||
+              (s.runId && treeOf(s.runId, runs).some(active)),
+          ),
+      ).length >= 4
     )
       throw new InterlockError(
         'Four comparisons are already active; retry after one finishes or is cancelled',
@@ -457,17 +457,16 @@ export class Testbench {
         );
       if (!preview.canStart)
         throw new InterlockError(preview.blockers.join('; '));
-      const allRuns = this.store.runs();
+      const comparisons = this.store.list<WorkflowComparison>('comparisons');
+      const allRuns = sampleRuns(this.store, comparisons);
       if (
-        this.store
-          .list<WorkflowComparison>('comparisons')
-          .filter(
-            (c) =>
-              c.status === 'running' ||
-              c.samples.some(
-                (s) => s.runId && this.tree(s.runId, allRuns).some(active),
-              ),
-          ).length >= 4
+        comparisons.filter(
+          (c) =>
+            c.status === 'running' ||
+            c.samples.some(
+              (s) => s.runId && treeOf(s.runId, allRuns).some(active),
+            ),
+        ).length >= 4
       )
         throw new InterlockError(
           'Four comparisons are already active; finish or cancel one first',
@@ -542,19 +541,6 @@ export class Testbench {
       repetition: s.repetition,
     };
   }
-  private tree(rootId: string, runs: Run[]) {
-    const ids = new Set([rootId]);
-    let changed = true;
-    while (changed) {
-      changed = false;
-      for (const r of runs)
-        if (r.parentRunId && ids.has(r.parentRunId) && !ids.has(r.id)) {
-          ids.add(r.id);
-          changed = true;
-        }
-    }
-    return runs.filter((r) => ids.has(r.id));
-  }
   advance() {
     let changed = false;
     const comparisons = this.store.scheduledComparisons();
@@ -573,7 +559,7 @@ export class Testbench {
           comparisons.flatMap((c) =>
             c.samples
               .filter((s) => s.runId && !s.observation)
-              .flatMap((s) => this.tree(s.runId!, runs).map((r) => r.id)),
+              .flatMap((s) => treeOf(s.runId!, runs).map((r) => r.id)),
           ),
         ),
       ));
@@ -582,8 +568,7 @@ export class Testbench {
         n +
         c.samples.filter(
           (s) =>
-            trialReserved(s) ||
-            (s.runId && this.tree(s.runId, runs).some(active)),
+            trialReserved(s) || (s.runId && treeOf(s.runId, runs).some(active)),
         ).length,
       0,
     );
@@ -592,13 +577,12 @@ export class Testbench {
       let updated = false;
       let busy = c.samples.filter(
         (s) =>
-          trialReserved(s) ||
-          (s.runId && this.tree(s.runId, runs).some(active)),
+          trialReserved(s) || (s.runId && treeOf(s.runId, runs).some(active)),
       ).length;
       for (const sample of c.samples) {
         if (sample.observation) continue;
         if (sample.runId) {
-          const tree = this.tree(sample.runId, runs);
+          const tree = treeOf(sample.runId, runs);
           if (tree.some(active)) continue;
           const run = runs.find((r) => r.id === sample.runId);
           const testCase = c.suite.cases.find((t) => t.id === sample.caseId)!;
@@ -668,8 +652,7 @@ export class Testbench {
         c.samples.every((s) => Boolean(s.observation)) &&
         !c.samples.some(
           (s) =>
-            trialReserved(s) ||
-            (s.runId && this.tree(s.runId, runs).some(active)),
+            trialReserved(s) || (s.runId && treeOf(s.runId, runs).some(active)),
         )
       ) {
         c.status = 'completed';
@@ -686,9 +669,12 @@ export class Testbench {
   progress(id: string) {
     return this.summary(this.get(id));
   }
-  private summary(c: WorkflowComparison, runs = this.store.runs()) {
+  private summary(
+    c: WorkflowComparison,
+    runs: TreeRun[] = sampleRuns(this.store, [c]),
+  ) {
     const activeDetached = c.samples
-      .flatMap((s) => (s.runId ? this.tree(s.runId, runs) : []))
+      .flatMap((s) => (s.runId ? treeOf(s.runId, runs) : []))
       .filter((r) => r.parentMode === 'detached' && active(r));
     return {
       id: c.id,
@@ -714,7 +700,7 @@ export class Testbench {
       observed: c.samples.filter((s) => s.observation).length,
       queued: c.samples.filter((s) => !s.runId && !s.observation).length,
       activeTrees: c.samples.filter(
-        (s) => s.runId && this.tree(s.runId, runs).some(active),
+        (s) => s.runId && treeOf(s.runId, runs).some(active),
       ).length,
       activeDetachedCount: activeDetached.length,
       activeDetachedRunIds: activeDetached.slice(0, 25).map((r) => r.id),
@@ -756,7 +742,7 @@ export class Testbench {
   report(input: Input<typeof comparisonReportSchema>) {
     const q = comparisonReportSchema.parse(input),
       c = this.get(q.id),
-      runs = this.store.runs();
+      runs = sampleRuns(this.store, [c]);
     const metrics = this.metrics.report(
       c,
       q.caseOffset,
@@ -911,13 +897,13 @@ export class Testbench {
     const q = comparisonCancelSchema.parse(input);
     return this.store.transaction(() => {
       const c = this.get(q.id);
-      const runs = this.store.runs();
+      const runs = sampleRuns(this.store, [c]);
       for (const s of c.samples) {
         if (s.runId) {
           const root = runs.find((r) => r.id === s.runId);
           if (root && active(root)) this.hooks.cancel(root.id);
           if (q.cancelDetached)
-            for (const r of this.tree(s.runId, runs).filter(
+            for (const r of treeOf(s.runId, runs).filter(
               (r) => r.parentMode === 'detached' && active(r),
             ))
               this.hooks.cancel(r.id);

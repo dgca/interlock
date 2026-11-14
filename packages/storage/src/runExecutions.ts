@@ -169,3 +169,24 @@ export function readRuns<T = Run>(
       .push(JSON.parse(row.value as string) as NodeExecution);
   return runs as T[];
 }
+
+/** Length of the array at `path` in one execution's input, read without parsing the run. */
+export function batchSize(
+  db: DatabaseSync,
+  id: string,
+  executionId: string,
+  path: string,
+) {
+  const keys =
+    !path || path === '$' ? [] : path.replace(/^\$\./, '').split('.');
+  let value = "json_quote(json_extract(e.value, '$.input'))";
+  for (let depth = 0; depth < keys.length; depth++)
+    value = `(SELECT CASE WHEN j.type IN ('array', 'object') THEN json(j.value) ELSE json_quote(j.value) END FROM json_each(${value}) j WHERE CAST(j.key AS TEXT) = ?)`;
+  const row = db
+    .prepare(
+      `SELECT coalesce(json_array_length(${value}), 0) AS size
+    FROM run_executions e WHERE e.run_id = ? AND e.id = ?`,
+    )
+    .get(...keys, id, executionId);
+  return Number(row?.size ?? 0);
+}
