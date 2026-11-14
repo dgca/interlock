@@ -51,8 +51,7 @@ export interface ToolEdgeProblem {
   nodeId?: string;
 }
 
-const isToolEdge = (edge: Pick<WorkflowEdge, 'kind'>) =>
-  edge.kind === 'tool';
+const isToolEdge = (edge: Pick<WorkflowEdge, 'kind'>) => edge.kind === 'tool';
 
 /** Nodes offered as tools. They run only through tool calls, never as routes. */
 export function toolTargetIds(definition: Pick<WorkflowDefinition, 'edges'>) {
