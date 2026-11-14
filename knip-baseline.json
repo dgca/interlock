@@ -222,11 +222,6 @@
     },
     {
       "file": "packages/core/src/index.ts",
-      "type": "exports",
-      "symbol": "workflowEditSchema"
-    },
-    {
-      "file": "packages/core/src/index.ts",
       "type": "types",
       "symbol": "BackgroundScript"
     },
@@ -526,11 +521,6 @@
       "symbol": "ChangeKind"
     },
     {
-      "file": "packages/core/src/workflowEdits.ts",
-      "type": "exports",
-      "symbol": "workflowEditSchema"
-    },
-    {
       "file": "packages/core/src/workflowTriggers.ts",
       "type": "types",
       "symbol": "TriggerState"
@@ -679,11 +669,6 @@
       "file": "packages/ui/src/features/workflows/workflowDiff.ts",
       "type": "types",
       "symbol": "ChangeKind"
-    },
-    {
-      "file": "packages/ui/src/features/workflows/workflowDiff.ts",
-      "type": "types",
-      "symbol": "WorkflowDiff"
     },
     {
       "file": "packages/ui/src/lib/query.tsx",

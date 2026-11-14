@@ -10,71 +10,9 @@ import { useEffect, useState } from 'react';
 import type { WorkflowDefinition, WorkflowVersion } from '@interlock/core';
 
 import { api, errorMessage } from '../../lib/api';
-import {
-  compareWorkflow,
-  type DiffItem,
-  type ValueChange,
-} from './workflowDiff';
+import { compareWorkflow } from './workflowDiff';
+import { WorkflowDiffList } from './WorkflowDiffList';
 import styles from './PublishReviewDialog.module.css';
-
-function format(value: unknown): string {
-  if (value === undefined) return 'Not set';
-  if (typeof value === 'string') return value || '(empty)';
-  return JSON.stringify(value, null, 2);
-}
-
-function changeCount(count: number, subject: string): string {
-  return `${count} ${subject} change${count === 1 ? '' : 's'}`;
-}
-
-function Detail({ path, before, after }: ValueChange) {
-  return (
-    <div className={styles.detail}>
-      <div className={styles.path}>{path}</div>
-      <div className={styles.values}>
-        <div>
-          <span>Published</span>
-          <pre>{format(before)}</pre>
-        </div>
-        <div>
-          <span>Draft</span>
-          <pre>{format(after)}</pre>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ChangeGroup({ title, items }: { title: string; items: DiffItem[] }) {
-  if (!items.length) return null;
-  return (
-    <section className={styles.group}>
-      <h3>
-        {title} <span>{items.length}</span>
-      </h3>
-      {items.map((item) => (
-        <details key={item.id} className={styles.item}>
-          <summary>
-            <span className={`${styles.kind} ${styles[item.kind]}`}>
-              {item.kind}
-            </span>
-            <span>{item.title}</span>
-            {item.kind === 'changed' && (
-              <small>
-                {item.details.map((field) => field.path).join(', ')}
-              </small>
-            )}
-          </summary>
-          <div className={styles.details}>
-            {item.details.map((detail) => (
-              <Detail key={detail.path} {...detail} />
-            ))}
-          </div>
-        </details>
-      ))}
-    </section>
-  );
-}
 
 export function PublishReviewDialog({
   workflowId,
@@ -176,25 +114,18 @@ export function PublishReviewDialog({
               )}
               {diff && (
                 <>
-                  <div className={styles.counts} aria-label="Change summary">
-                    <span>{changeCount(diff.nodes.length, 'node')}</span>
-                    <span>{changeCount(diff.routes.length, 'route')}</span>
-                    <span>{changeCount(diff.workflow.length, 'workflow')}</span>
-                  </div>
-                  {count === 0 && (
-                    <p className={styles.empty}>
-                      No definition changes. Publishing still creates a new
-                      version.
-                    </p>
-                  )}
-                  <div>
-                    <ChangeGroup title="Nodes" items={diff.nodes} />
-                    <ChangeGroup title="Routes" items={diff.routes} />
-                    <ChangeGroup
-                      title="Workflow contracts and settings"
-                      items={diff.workflow}
-                    />
-                  </div>
+                  <WorkflowDiffList
+                    diff={diff}
+                    before="Published"
+                    after="Draft"
+                  >
+                    {count === 0 && (
+                      <p className={styles.empty}>
+                        No definition changes. Publishing still creates a new
+                        version.
+                      </p>
+                    )}
+                  </WorkflowDiffList>
                 </>
               )}
             </>

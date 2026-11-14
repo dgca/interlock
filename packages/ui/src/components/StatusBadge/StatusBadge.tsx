@@ -4,6 +4,8 @@ const statusColors: Record<string, string> = {
   completed: 'green',
   passed: 'green',
   published: 'green',
+  approved: 'green',
+  open: 'blue',
   running: 'blue',
   claimed: 'blue',
   waiting: 'yellow',
@@ -12,6 +14,7 @@ const statusColors: Record<string, string> = {
   failed: 'red',
   unsupported: 'yellow',
   cancelled: 'gray',
+  rejected: 'gray',
 };
 export function StatusBadge({ status }: { status: string }) {
   return (

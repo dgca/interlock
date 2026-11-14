@@ -1,13 +1,22 @@
 import { z } from 'zod';
 import { workflowEditsSchema } from './workflowEdits.js';
 import type { DraftDiagnostic } from './draftDiagnostics.js';
+export { wideningChanges, type WideningChange } from './proposalRisks.js';
 
 /** Defaults that keep a looping agent from flooding a workflow's review queue. */
 export const proposalLimits = {
   openPerWorkflow: 20,
   openPerRun: 3,
+  /** Open agent proposals made without a claim, per workflow. */
+  openWithoutClaim: 5,
   sources: 20,
   simulatedCases: 20,
+  /** Proposal simulations that run at once; the rest wait. */
+  activeSimulations: 2,
+  /** Serialized edits per proposal. */
+  editBytes: 262_144,
+  /** Newest approved and newest rejected proposals kept per workflow. */
+  retainedDecided: 100,
 } as const;
 
 const proposalNodeKinds = [
@@ -28,7 +37,9 @@ const proposalNodeKinds = [
 /**
  * Per-workflow proposal policy. People can always propose; agents only when
  * `agents` is on, and only within the node kinds and fields listed (omitted
- * lists allow every kind or field).
+ * lists allow every kind or field). Workflow-level settings need their own
+ * `workflowSettings` permission. Without `otherWorkflows`, an agent needs a
+ * claim on a run of this workflow.
  */
 export const proposalSettingsSchema = z
   .object({
@@ -36,12 +47,21 @@ export const proposalSettingsSchema = z
     nodeKinds: z.array(z.enum(proposalNodeKinds)).max(20).optional(),
     fields: z.array(z.string().min(1).max(100)).max(100).optional(),
     otherWorkflows: z.boolean().optional(),
+    workflowSettings: z.boolean().optional(),
   })
   .strict();
 export type ProposalSettings = z.infer<typeof proposalSettingsSchema>;
 export const defaultProposalSettings: ProposalSettings = { agents: false };
 
 const id = z.string().min(1).max(200);
+const boundedEdits = workflowEditsSchema
+  .min(1)
+  .refine(
+    (edits) =>
+      new TextEncoder().encode(JSON.stringify(edits)).length <=
+      proposalLimits.editBytes,
+    `Edits must be at most ${proposalLimits.editBytes / 1024} KiB`,
+  );
 const proposalSourceSchema = z
   .object({ runId: id, executionId: id.optional() })
   .strict();
@@ -54,7 +74,7 @@ export const proposalCreateSchema = z
     token: z.string().min(1).optional(),
     title: z.string().trim().min(1).max(200),
     rationale: z.string().trim().min(1).max(4000),
-    edits: workflowEditsSchema.min(1),
+    edits: boundedEdits,
     sources: z
       .array(proposalSourceSchema)
       .max(proposalLimits.sources)
@@ -78,7 +98,7 @@ export const proposalDecisionSchema = z.discriminatedUnion('action', [
     .object({
       action: z.literal('approve'),
       id,
-      edits: workflowEditsSchema.min(1).optional(),
+      edits: boundedEdits.optional(),
     })
     .strict(),
   z
@@ -139,6 +159,8 @@ export interface WorkflowProposal {
   edits: unknown[];
   baseDraftRevision: number;
   author: ProposalAuthor;
+  /** How it arrived: an agent's claim, an agent client without a claim, or a person. */
+  origin: 'claim' | 'client' | 'person';
   /** The run and execution of the claim that created it, when there was one. */
   runId?: string;
   executionId?: string;

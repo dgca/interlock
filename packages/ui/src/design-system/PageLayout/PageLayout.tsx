@@ -1,6 +1,6 @@
 import { ActionIcon, Tabs } from '@mantine/core';
 import { Placeholder } from '../LoadingSkeleton/LoadingSkeleton';
-import type { ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 
 import { ArrowLeft } from 'lucide-react';
 
@@ -70,10 +70,32 @@ export function PageTabStrip({
   toolbar?: ReactNode;
   decorative?: boolean;
 }) {
+  const strip = useRef<HTMLDivElement>(null);
+  const shown = useRef<Element | null>(null);
+  // Keep the selected tab visible when the strip scrolls at narrow widths.
+  useEffect(() => {
+    const tab = strip.current?.querySelector<HTMLElement>(
+      '[aria-selected="true"], [aria-current="page"]',
+    );
+    const list = tab?.parentElement;
+    if (!tab || !list || tab === shown.current) return;
+    shown.current = tab;
+    const start =
+      tab.offsetParent === list
+        ? tab.offsetLeft
+        : tab.offsetLeft - list.offsetLeft;
+    if (start < list.scrollLeft) list.scrollLeft = start;
+    else if (start + tab.offsetWidth > list.scrollLeft + list.clientWidth)
+      list.scrollLeft = start + tab.offsetWidth - list.clientWidth;
+  });
   return (
     <>
       {toolbar && <PageToolbar>{toolbar}</PageToolbar>}
-      <div className={classes.tabs} aria-hidden={decorative || undefined}>
+      <div
+        ref={strip}
+        className={classes.tabs}
+        aria-hidden={decorative || undefined}
+      >
         {children}
       </div>
     </>

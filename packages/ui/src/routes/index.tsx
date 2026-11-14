@@ -41,6 +41,7 @@ import {
 } from '../features/report/ReportSkeleton';
 import { DiagnosticsPageSkeleton } from '../features/diagnostics/DiagnosticsSkeleton';
 import { workflowSection } from '../features/workflows/workflowListConfig';
+import { ProposalsSection } from '../features/proposals/proposalRoutes';
 import { TestsViewSkeleton } from '../features/testing/TestsViewSkeleton';
 import { MemoryViewSkeleton } from '../features/memory/MemoryViewSkeleton';
 import { testRoutes } from '../features/testing/testRoutes';
@@ -397,6 +398,7 @@ function WorkflowRoute() {
         section !== 'runs' &&
         section !== 'tests' &&
         section !== 'report' &&
+        section !== 'proposals' &&
         section !== 'memory',
     }),
   );
@@ -477,6 +479,8 @@ function WorkflowRoute() {
             <Suspense fallback={<TestsViewSkeleton />}>
               <TestsView workflow={workflow} />
             </Suspense>
+          ) : section === 'proposals' ? (
+            <ProposalsSection workflow={workflow} act={context.act} />
           ) : section === 'memory' ? (
             <Suspense fallback={<MemoryViewSkeleton />}>
               <MemoryView workflow={workflow} act={context.act} />

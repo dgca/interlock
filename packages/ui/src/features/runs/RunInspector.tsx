@@ -50,7 +50,8 @@ import {
 import { StatusBadge } from '../../components/StatusBadge/StatusBadge';
 import { RunWorkspace } from './RunWorkspace';
 import { RunGraph } from './RunGraph';
-import { runProgress } from './runProgress';
+import { runProgress, statusLabels } from './runProgress';
+import { ExecutionProposals } from '../proposals/ExecutionProposals';
 import { detachedBoundary } from './runScope';
 import { AgentHandoff } from './AgentHandoff';
 import { WorkPanel } from './WorkPanel';
@@ -938,18 +939,12 @@ export function RunInspector({
               !execution?.resumeAt &&
               !execution?.check &&
               !selectedWork.length &&
-              ![
-                'queued',
-                'not started',
-                'running',
-                'waiting',
-                'finished',
-                'completed',
-                'failed',
-                'cancelled',
-              ].includes(progressLabel.toLowerCase()) && (
+              !statusLabels.has(progressLabel.toLowerCase()) && (
                 <p className={styles.progressLabel}>{progressLabel}</p>
               )}
+            {owner && execution && (
+              <ExecutionProposals runId={owner.id} executionId={execution.id} />
+            )}
             {node?.batchId && (
               <section>
                 <h3>Item executions</h3>

@@ -9,7 +9,7 @@ export function registerProposalTools(
 ) {
   tool(
     'propose_workflow_change',
-    'Propose a draft edit for a person to review; it never changes the workflow. In a claim pass workId and token to link its run and execution and default to its workflow; otherwise pass workflowId. Refused unless the workflow allows agent proposals and the edits stay within its allowed node kinds and fields. Identical open proposals return the existing one; open proposals are capped per workflow and run.',
+    'Propose a draft edit for a person to review; it never changes the workflow. In a claim pass workId and token to link its run and execution and default to its workflow; otherwise pass workflowId. Refused unless the workflow allows agent proposals, the edits stay within its allowed scope, and, without a claim on its runs, it allows that. Identical open proposals return the existing one; open proposals are capped per workflow and run.',
     {
       workflowId: z.string().optional(),
       workId: z.string().optional(),

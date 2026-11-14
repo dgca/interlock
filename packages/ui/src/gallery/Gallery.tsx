@@ -56,6 +56,7 @@ import { ContractEditor } from '../components/ContractEditor/ContractEditor';
 import { WorkflowSyncAlertList } from '../features/workflows/WorkflowSyncAlerts';
 import { Section, Specimen } from './GalleryLayout';
 import { Testing } from './TestingSpecimens';
+import { Proposals } from './ProposalSpecimens';
 import { Memory } from './MemorySpecimens';
 import { BoardCard, type BoardCardData } from '../features/boards/BoardCard';
 import { LanesEditor } from '../features/boards/BoardTypeFields';
@@ -90,6 +91,9 @@ const statuses = [
   'failed',
   'cancelled',
   'needs_review',
+  'open',
+  'approved',
+  'rejected',
 ];
 const table: ListTableLayout = {
   columns: [
@@ -748,6 +752,7 @@ export default function Gallery() {
         <Editors />
         <Dialogs />
         <Testing />
+        <Proposals />
         <Boards />
         <AgentTools />
         <Memory />

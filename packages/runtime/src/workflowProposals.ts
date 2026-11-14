@@ -8,6 +8,7 @@ import {
   type TestSuite,
   type WorkflowDefinition,
   type WorkRequest,
+  workflowEditSchema,
 } from '@interlock/core';
 import {
   defaultProposalSettings,
@@ -66,6 +67,8 @@ function scopeProblem(
   for (const [index, raw] of edits.entries()) {
     const edit = { ...(raw as Edit), op: String((raw as Edit | null)?.op) };
     const where = `Edit ${index} (${edit.op})`;
+    if (edit.op === 'update_settings' && !settings.workflowSettings)
+      return `${where}: this workflow does not accept agent proposals for workflow settings`;
     if (edit.op === 'add_node')
       kinds.set(String(edit.node?.id), String(edit.node?.kind));
     if (settings.fields) {
@@ -82,9 +85,15 @@ function scopeProblem(
     )
       return `${where}: this workflow does not accept agent proposals for ${kinds.get(String(edit.op === 'add_node' ? edit.node?.id : edit.id)) ?? 'unknown'} nodes`;
     if (edit.op.endsWith('_edge')) {
+      // Check the route's current endpoints and any it is moved to.
       const edge =
         edit.op === 'add_edge' ? edit.edge : edges.get(String(edit.id));
-      if (edge && !(kindAllowed(edge.source) && kindAllowed(edge.target)))
+      const ends = [edge?.source, edge?.target];
+      if (edit.op === 'update_edge')
+        for (const end of ['source', 'target'] as const)
+          if (edit.set && Object.hasOwn(edit.set, end))
+            ends.push(edit.set[end]);
+      if (ends.some((end) => end !== undefined && !kindAllowed(end)))
         return `${where}: a route endpoint is outside this workflow's proposal node kinds`;
     }
   }
@@ -94,6 +103,8 @@ function scopeProblem(
 /** Proposed workflow edits that wait for a person; approval edits the draft. */
 class WorkflowProposals {
   private simulating = new Set<string>();
+  private active = 0;
+  private waiting: (() => void)[] = [];
   constructor(private engine: Engine) {}
   private get store() {
     return this.engine.store;
@@ -163,6 +174,10 @@ class WorkflowProposals {
           throw new InterlockError(
             "A claim can only propose changes to its own run's workflow",
           );
+        if (!work && !settings.otherWorkflows)
+          throw new InterlockError(
+            'Propose during a claim on a run of this workflow (pass workId and token). A person can allow proposals without a claim in proposal settings.',
+          );
         const problem = scopeProblem(settings, draft, q.edits);
         if (problem) throw new InterlockError(problem);
       }
@@ -176,7 +191,14 @@ class WorkflowProposals {
         throw new InterlockError(
           `Edits do not apply to draft revision ${workflow.draftRevision}: ${errorList(diagnostics)}`,
         );
-      const print = fingerprint(q.edits);
+      // Equivalent edits, such as an omitted or empty unset, merge.
+      const print = fingerprint(
+        q.edits.map((edit) => {
+          const parsed = workflowEditSchema.safeParse(edit);
+          return parsed.success ? parsed.data : edit;
+        }),
+      );
+      const origin = author === 'person' ? 'person' : work ? 'claim' : 'client';
       const duplicate = this.open({ workflowId, fingerprint: print }).items[0];
       if (duplicate) return { ...duplicate, deduplicated: true };
       if (author === 'agent') {
@@ -190,6 +212,14 @@ class WorkflowProposals {
         )
           throw new InterlockError(
             `This run already has ${proposalLimits.openPerRun} open proposals`,
+          );
+        if (
+          !work &&
+          this.open({ workflowId, origin }).total >=
+            proposalLimits.openWithoutClaim
+        )
+          throw new InterlockError(
+            `This workflow already has ${proposalLimits.openWithoutClaim} open agent proposals made without a claim`,
           );
       }
       const sources: ProposalSource[] = [];
@@ -226,6 +256,7 @@ class WorkflowProposals {
             : { kind: 'person' },
         ...(work ? { runId: work.runId, executionId: work.executionId } : {}),
         sources: sources.slice(0, proposalLimits.sources),
+        origin,
         status: 'open',
         fingerprint: print,
         createdAt: time,
@@ -347,6 +378,7 @@ class WorkflowProposals {
           updatedAt: time,
         });
         this.save(proposal);
+        this.prune(workflow.id, 'rejected');
         return { proposal };
       }
       if (q.action === 'reapply') {
@@ -356,6 +388,18 @@ class WorkflowProposals {
         if (view.conflict.state === 'conflicting')
           throw new InterlockError(
             `The proposal no longer applies to the current draft. Ask for a new proposal. ${errorList(view.conflict.diagnostics)}`,
+          );
+        // The draft changed; an agent's edits must still fit the current scope.
+        const problem =
+          proposal.author.kind === 'agent' &&
+          scopeProblem(
+            this.settings(workflow.id),
+            this.engine.describeWorkflow(workflow).draft,
+            proposal.edits,
+          );
+        if (problem)
+          throw new InterlockError(
+            `The proposal is now outside this workflow's agent proposal scope. ${problem}`,
           );
         proposal.baseDraftRevision = workflow.draftRevision;
         delete proposal.simulation;
@@ -389,6 +433,7 @@ class WorkflowProposals {
         updatedAt: time,
       });
       this.save(proposal);
+      this.prune(workflow.id, 'approved');
       return { proposal, result };
     });
   }
@@ -399,11 +444,40 @@ class WorkflowProposals {
       this.store.touchRun(proposal.runId);
   }
 
-  /** Replace the stored simulation without overwriting a concurrent decision. */
-  private record(id: string, simulation: ProposalSimulation) {
+  /** Keep the newest decided proposals of one kind per workflow. */
+  private prune(workflowId: string, status: 'approved' | 'rejected') {
+    for (const p of this.store.where<WorkflowProposal>(
+      collection,
+      { workflowId, status },
+      proposalLimits.retainedDecided,
+      100,
+    ).items)
+      this.store.remove(collection, p.id);
+  }
+
+  /**
+   * Store a simulation result unless the proposal was decided or re-applied
+   * since it started; returns false when the result belongs to an old base.
+   */
+  private record(id: string, base: number, simulation: ProposalSimulation) {
     const current = this.store.get<WorkflowProposal>(collection, id);
-    if (!current) return;
+    if (!current || current.status !== 'open') return true;
+    if (current.baseDraftRevision !== base) return false;
     this.store.put(collection, { ...current, simulation });
+    return true;
+  }
+
+  private async slot() {
+    if (this.active < proposalLimits.activeSimulations) {
+      this.active++;
+      return;
+    }
+    await new Promise<void>((resolve) => this.waiting.push(resolve));
+  }
+  private release() {
+    const next = this.waiting.shift();
+    if (next) next();
+    else this.active--;
   }
 
   /**
@@ -414,18 +488,21 @@ class WorkflowProposals {
     if (this.simulating.has(id)) return;
     this.simulating.add(id);
     const finishedAt = now;
+    let current = true;
+    let slotted = false;
     try {
       const proposal = this.get(id);
       if (proposal.status !== 'open') return;
+      const base = proposal.baseDraftRevision;
       const workflow = this.engine.workflow(proposal.workflowId);
       const draftRevision = workflow.draftRevision;
       const unavailable = (reason: string) =>
-        this.record(id, {
+        void (current = this.record(id, base, {
           state: 'unavailable',
           draftRevision,
           reason,
           finishedAt: finishedAt(),
-        });
+        }));
       const suites = this.store
         .list<TestSuite>('testSuites')
         .filter((suite) => suite.workflowId === workflow.id);
@@ -442,7 +519,14 @@ class WorkflowProposals {
       const applied = applyWorkflowEdits(before, proposal.edits);
       if (!applied.definition)
         return unavailable('The proposal does not apply to the current draft.');
-      this.record(id, { state: 'running', draftRevision, startedAt: now() });
+      await this.slot();
+      slotted = true;
+      current = this.record(id, base, {
+        state: 'running',
+        draftRevision,
+        startedAt: now(),
+      });
+      if (!current) return;
       const covered = { before: new Set<string>(), after: new Set<string>() };
       const results: ProposalCaseResult[] = [];
       const selected = cases.slice(0, proposalLimits.simulatedCases);
@@ -486,7 +570,7 @@ class WorkflowProposals {
         return unavailable(
           `The saved cases cannot be simulated: ${results[0].error ?? 'unsupported'}`,
         );
-      this.record(id, {
+      current = this.record(id, base, {
         state: 'completed',
         draftRevision,
         cases: results,
@@ -506,7 +590,10 @@ class WorkflowProposals {
     } catch {
       // A closed store or deleted workflow leaves the proposal to simulate when next opened.
     } finally {
+      if (slotted) this.release();
       this.simulating.delete(id);
+      // A re-apply during this run discarded its result; simulate the new base.
+      if (!current) queueMicrotask(() => void this.simulate(id));
     }
   }
 }

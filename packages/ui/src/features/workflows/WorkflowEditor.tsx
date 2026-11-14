@@ -17,7 +17,12 @@ import type { Action } from '../../lib/useActionFeedback';
 import { useEditorDraft } from '../../lib/useEditorDraft';
 import { flushSync } from 'react-dom';
 import { WorkflowChildren } from './WorkflowChildren';
-import { workflowSection, type WorkflowSection } from './workflowListConfig';
+import {
+  routedSections,
+  workflowSection,
+  sectionTabs,
+  type WorkflowSection,
+} from './workflowListConfig';
 import { WorkflowCardsSkeleton } from '../../components/WorkflowCards/WorkflowCards';
 import {
   WorkspaceReads,
@@ -65,6 +70,7 @@ import {
   type WorkflowDefinition,
 } from '@interlock/core';
 import { useMemoryReviews } from '../memory/MemoryReviews';
+import { useOpenProposalCount } from '../proposals/proposalRoutes';
 import { parseRawDefinition } from './rawDefinition';
 import { SettingsDialog, type Settings } from './SettingsDialog';
 import { DeleteWorkflowDialog } from './DeleteWorkflowDialog';
@@ -207,6 +213,7 @@ export function WorkflowEditor({
   const layout = useWorkflowLayout(workflow);
   const dragging = useRef<WorkflowDefinition | undefined>(undefined);
   const memoryReviews = useMemoryReviews(workflow.id);
+  const proposalCount = useOpenProposalCount(workflow.id);
   const history = useWorkflowHistory({
     draft: applyWorkflowPositions(workflow.draft, layout.positions),
     name: workflow.name,
@@ -1031,16 +1038,7 @@ export function WorkflowEditor({
       >
         <PageTabList
           label="Workflow sections"
-          items={[
-            { value: 'editor', label: 'Editor' },
-            { value: 'runs', label: 'Runs' },
-            { value: 'tests', label: 'Tests' },
-            { value: 'report', label: 'Report' },
-            { value: 'memory', label: 'Memory', count: memoryReviews.count },
-            ...(!workflow.ownerWorkflowId
-              ? [{ value: 'children', label: 'Child workflows' }]
-              : []),
-          ]}
+          items={sectionTabs(workflow, proposalCount, memoryReviews.count)}
         />
         {section === 'editor' && workflowsRead && (
           <WorkspaceReadWarning reads={[workflowsRead]} />
@@ -1394,7 +1392,7 @@ export function WorkflowEditor({
             </WorkspaceReads>
           </Tabs.Panel>
         )}
-        {(['runs', 'tests', 'report', 'memory'] as const).map((value) => (
+        {routedSections.map((value) => (
           <Tabs.Panel
             key={value}
             value={value}
