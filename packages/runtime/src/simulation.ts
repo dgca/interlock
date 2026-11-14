@@ -22,6 +22,11 @@ import {
 import { Engine } from './index.js';
 import { definitionHash, fingerprint } from './versionIdentity.js';
 import {
+  seedSimulationMemory,
+  simulationMemory,
+  type SimulationMemory,
+} from './memory.js';
+import {
   computeCoverage,
   forSimulation,
   trace,
@@ -60,6 +65,7 @@ type Record = {
     definition: WorkflowDefinition;
     case: CapturedCase;
     prompts: SavedPrompt[];
+    memory?: SimulationMemory;
   };
   state: State;
   substitutions: Receipt[];
@@ -295,6 +301,13 @@ export class Simulations {
         definition,
         case: testCase,
         prompts: unsupported.length ? [] : prompts,
+        ...(() => {
+          const memory = simulationMemory(this.store, [
+            workflow.id,
+            ...childWorkflows.map((cw) => cw.id),
+          ]);
+          return memory && !unsupported.length ? { memory } : {};
+        })(),
       },
       state: unsupported.length ? 'unsupported' : 'running',
       substitutions: [],
@@ -412,6 +425,7 @@ export class Simulations {
         scratch.version(forSimulation(cv, substituted));
       }
       for (const prompt of r.capture.prompts) scratch.put('prompts', prompt);
+      seedSimulationMemory(scratch, r.capture.memory);
       // Detached calls with a workflow fixture take it for their run reference.
       const detached = new Set(
         [version, ...(active.childVersions ?? [])].flatMap((v) =>

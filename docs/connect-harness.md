@@ -95,7 +95,7 @@ Every tool definition a client lists costs context in each conversation. Profile
 | Profile   | Tools                                                                                                                      | Endpoint             |
 | --------- | -------------------------------------------------------------------------------------------------------------------------- | -------------------- |
 | `all`     | Every tool. The default, so existing configurations keep the same tools.                                                   | `/mcp` or `/mcp/all` |
-| `execute` | Assignment execution: list, claim, renew, preflight, submit, fail and hold work, usage, resources, run reads.              | `/mcp/execute`       |
+| `execute` | Assignment execution: list, claim, renew, preflight, submit, fail and hold work, usage, resources, memory, run reads.      | `/mcp/execute`       |
 | `author`  | Workflows, versions, ownership, prompts, variables, presets, triggers, boards and the testbench.                           | `/mcp/author`        |
 | `operate` | Starting, inspecting, waiting on, pausing, holding, retrying and cancelling runs, resource release, executors and budgets. | `/mcp/operate`       |
 
@@ -239,6 +239,10 @@ Claim an assignment only when ready to perform it. Claiming stops its unclaimed 
 Use `list_prompts` for IDs, names, descriptions, and revisions, then `get_prompt` for content and workflow usage. Optional `history:{offset,limit}` lists retained revision/name metadata, default ten and maximum 25; optional `revision` reads one exact retained revision. These reads do not restore prompts or change the current edit revision. `create_prompt` saves named Markdown instructions. Retry a lost response with the same optional `requestId` and content to recover the saved prompt. `update_prompt` requires the current revision and updates guidance for all future runs, including published workflows. Stale saves fail; active runs and retries retain captured content. `delete_prompt` rejects any draft or published-version reference.
 
 Set Agent `promptIds` to distinct IDs in the desired order, alongside the node `prompt` task text. Each invoked workflow captures independently at startup; Batch items and Parallel branches inherit capture. Full `list_work` and `claim_work` return the composed `prompt` and exact `savedPrompts`. `get_run` includes `promptSnapshots`; compact discovery and briefings omit these bodies. Saved prompts do not grant tools or skills or change the harness system prompt. See [Prompts](prompts.md).
+
+## Workflow memory
+
+When a workflow has [memory](memory.md) turned on, claimed prompts include a Memory section with its live notes. Use `work_memory` with the claim's `workId` and `token` to save a lasting fact (`action:"write"`, `scope` `node` or `workflow`) or to read note history (`action:"read"`, optional `noteId`). Notes usually wait for a person's review before later runs see them.
 
 ## MCP tools
 

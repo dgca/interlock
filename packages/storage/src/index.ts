@@ -75,6 +75,7 @@ import type {
   WorkflowComparison,
   ResourceReservation,
 } from '@interlock/core';
+type Field = 'workId' | 'workflowId' | 'noteId' | 'comparisonId';
 /** One service owns the database. Each runtime operation commits as one transaction. */
 export class Store {
   readonly transcripts: Transcripts;
@@ -406,12 +407,12 @@ export class Store {
   latestSimulations<T>(suiteId: string): T[] {
     return suiteRuns(this.db, suiteId) as T[];
   }
-  forWork<T>(collection: string, workId: string): T[] {
+  forWork<T>(collection: string, value: string, field: Field = 'workId'): T[] {
     return this.db
       .prepare(
-        "SELECT value FROM documents WHERE collection = ? AND json_extract(value, '$.workId') = ? ORDER BY rowid",
+        `SELECT value FROM documents WHERE collection = ? AND json_extract(value, '$.${field}') = ? ORDER BY rowid`,
       )
-      .all(collection, workId)
+      .all(collection, value)
       .map((row) => JSON.parse(row.value as string) as T);
   }
   eventTimesForRuns(
@@ -856,7 +857,6 @@ export class Store {
     this.db.close();
   }
 }
-
 export {
   BackgroundFiles,
   type BackgroundJob,

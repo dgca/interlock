@@ -26,6 +26,7 @@ const execute = [
   'manage_work_resources',
   'get_context_group',
   'handoff_context_group',
+  'work_memory',
 ];
 
 const author = [

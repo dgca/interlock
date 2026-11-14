@@ -5,7 +5,7 @@
     "packages/mcp/src/tools/server.ts": 809,
     "packages/runtime/src/doctor.ts": 804,
     "packages/runtime/src/executors/manager.ts": 1800,
-    "packages/runtime/src/index.ts": 3428,
+    "packages/runtime/src/index.ts": 3427,
     "packages/runtime/src/report.ts": 931,
     "packages/runtime/src/testbench.ts": 1018,
     "packages/runtime/src/transfer.ts": 806,

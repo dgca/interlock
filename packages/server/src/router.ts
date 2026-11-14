@@ -4,8 +4,6 @@ import {
   doctorOptionsSchema,
   transcriptQuerySchema,
   messageReceiptQuerySchema,
-} from '@interlock/core';
-import {
   scheduleMutationSchema,
   scheduleReadSchema,
   scheduleTimingSchema,
@@ -108,6 +106,7 @@ import { runReadProcedures } from './runReadProcedures.js';
 import { reportRouter, systemReport } from './reportProcedures.js';
 import { id, inputMutation, p, t } from './trpc.js';
 import { boardTypesRouter, boardsRouter } from './boardProcedures.js';
+import { memoryRouter } from './memoryProcedures.js';
 import {
   agentDraftEdit,
   createWorkflow,
@@ -331,6 +330,7 @@ export const appRouter = t.router({
   }),
   boards: boardsRouter,
   boardTypes: boardTypesRouter,
+  memory: memoryRouter,
   requests: t.router({
     list: p
       .input(requestListSchema.default({}))

@@ -29,6 +29,7 @@ export * from './runChains.js';
 export * from './runStarts.js';
 export * from './runTags.js';
 export * from './runPages.js';
+export * from './memory.js';
 import { runTagsSchema } from './runTags.js';
 import { runPageCursorSchema, runStatusSchema } from './runPages.js';
 export * from './runVersions.js';
@@ -831,6 +832,7 @@ export interface Run {
   promptSnapshots?: import('./prompts.js').PromptSnapshot[];
   variableCaptures?: import('./variables.js').VariableCapture[];
   modelAliasCaptures?: import('./modelAliases.js').ModelAliasCapture[];
+  memoryCapture?: import('./memory.js').MemoryCapture;
   ignoredWorkflowModelAlias?: string;
 }
 export type RunSummary = Pick<
@@ -1521,9 +1523,7 @@ export * from './evaluation.js';
 
 export { nextCallSchema, withNextCall } from './continuation.js';
 export * from './runProjection.js';
-
 export * from './pauseHolds.js';
-
 export * from './workflowTriggers.js';
 
 export * from './workflowDiff.js';
