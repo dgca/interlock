@@ -38,7 +38,6 @@ it('lists bundled choices without installing, publishing or starting anything', 
     'pr-watcher',
     'evaluate-comparison',
     'github-issue-intake',
-    'run-notifications',
   ]);
   expect(e.store.workflows()).toEqual([]);
   expect(e.store.list('starterCopies')).toEqual([]);
@@ -70,7 +69,6 @@ it.each(['draft', 'version'])(
       'pr-watcher',
       'evaluate-comparison',
       'github-issue-intake',
-      'run-notifications',
     ]);
     expect(listStarters(e).every((s) => !s.existing)).toBe(true);
     expect(add(e)).toMatchObject({ created: true });

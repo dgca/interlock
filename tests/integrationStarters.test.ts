@@ -10,7 +10,7 @@ import { importStarter } from '../packages/server/src/starters';
 import { createApp } from '../packages/server/src/app';
 
 // The starters run for real against one in-process HTTP server that stands in
-// for GitHub or the webhook and forwards /api to Interlock's own HTTP API.
+// for GitHub and forwards /api to Interlock's own HTTP API.
 const engines: Engine[] = [],
   servers: Server[] = [],
   dirs: string[] = [];
@@ -230,70 +230,4 @@ it('starts one run per labeled issue, once, and swaps its label even across a re
   expect(runsOf(reviewId)).toHaveLength(1);
   expect(runsOf(targetId)).toHaveLength(1);
   expect(labels(1)).toEqual(['bug', 'started', 'reviewed']);
-});
-
-it('posts one escaped message per lifecycle event and never exposes the webhook URL', async () => {
-  const e = new Engine(new Store(':memory:'), process.cwd());
-  engines.push(e);
-  let status = 200;
-  const { base, seen } = await stub(
-    () => ({ status, body: {} }),
-    () => e,
-  );
-  const handler = importStarter(e, {
-    starterId: 'run-notifications',
-    requestId: 'notify',
-  }).workflow.id;
-  const hook = `${base}/hooks/T000/secret-path`;
-  setSecret(e, 'interlock-notify-webhook-url', hook);
-  // A source that fails at its first step, without an agent or a Script.
-  const source = blankDefinition();
-  source.nodes[1] = {
-    ...source.nodes[1],
-    kind: 'switch',
-    label: 'Route <x> & fail',
-    path: '',
-    cases: [{ port: 'never', equals: 'never' }],
-  };
-  source.edges[1].port = 'never';
-  const sourceId = e.create('Source', '', source).id;
-  e.publish(sourceId);
-  // The handler's contract accepts the real event object.
-  e.triggers.mutate({
-    action: 'create',
-    workflowId: handler,
-    enabled: true,
-    config: {
-      kind: 'event',
-      name: 'Notify',
-      events: ['completed', 'failed', 'needs_attention'],
-      scope: { type: 'workflow', workflowId: sourceId },
-    },
-  });
-  const handlerRuns = () =>
-    e.store.runs().filter((r) => r.workflowId === handler);
-
-  const failed = e.start(sourceId, {}).run.id;
-  e.pump();
-  await vi.waitFor(() => expect(handlerRuns()).toHaveLength(1));
-  expect((await settle(e, handlerRuns()[0].id)).status).toBe('completed');
-  expect(seen).toHaveLength(1);
-  expect(seen[0]).toMatchObject({
-    method: 'POST',
-    url: '/hooks/T000/secret-path',
-  });
-  const text = seen[0].body!.text!;
-  expect(Object.keys(seen[0].body!)).toEqual(['text']);
-  expect(text).toContain(`Interlock run ${failed} failed.`);
-  expect(text).toContain('Step: Route &lt;x&gt; &amp; fail');
-  expect(text).toContain(`/runs/${failed}`);
-
-  // A rejected POST fails the handler without naming the URL.
-  status = 500;
-  e.start(sourceId, {});
-  e.pump();
-  await vi.waitFor(() => expect(handlerRuns()).toHaveLength(2));
-  const rejected = await settle(e, handlerRuns()[1].id);
-  expect(rejected.error).toMatch(/HTTP 500/);
-  expect(JSON.stringify(e.store.runs())).not.toContain('secret-path');
 });

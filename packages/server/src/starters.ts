@@ -19,7 +19,6 @@ import sdlcV2 from '../../../workflows/sdlc-v2.json';
 import prWatcher from '../../../workflows/pr-watcher.json';
 import evaluate from '../../../workflows/evaluate.json';
 import issueIntake from '../../../workflows/github-issue-intake.json';
-import runNotifications from '../../../workflows/run-notifications.json';
 import { provisionStarterVariables } from './starterVariables.js';
 import { z } from 'zod';
 import { p } from './trpc.js';
@@ -59,7 +58,6 @@ const bundleRoot = (bundle: StarterBundle) => {
 const sdlcV2Bundle = sdlcV2 as StarterBundle;
 const prWatcherBundle = prWatcher as StarterBundle;
 const intakeBundle = issueIntake as StarterBundle;
-const notificationsBundle = runNotifications as StarterBundle;
 const catalog = [
   {
     id: 'sdlc',
@@ -107,16 +105,6 @@ const catalog = [
       'Experimental, not yet run against live GitHub. Start one run of your workflow per open GitHub issue with your label, on a schedule you create.',
     requirements:
       'On each issue it starts, removes your label and adds a picked-up label. Set the github_token Secret.',
-  },
-  {
-    id: 'run-notifications',
-    template: bundleRoot(notificationsBundle),
-    bundle: notificationsBundle,
-    boardSuggestion: undefined,
-    summary:
-      'Experimental, not yet run against a live webhook. Post a short message to a webhook when a run fails or needs attention.',
-    requirements:
-      'One JSON POST per event to the URL in the notify_webhook_url Secret. Start it from an event automation.',
   },
 ] as const;
 type Starter = (typeof catalog)[number];
