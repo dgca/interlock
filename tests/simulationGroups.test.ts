@@ -2,7 +2,11 @@ import { afterEach, expect, it } from 'vitest';
 import { setImmediate as tick } from 'node:timers/promises';
 import { Store } from '@interlock/storage';
 import { Engine } from '@interlock/runtime';
-import type { Json, SimulationFixture } from '@interlock/core';
+import {
+  definitionSchema,
+  type Json,
+  type SimulationFixture,
+} from '@interlock/core';
 import { importWorkflows } from '../packages/runtime/src/transfer';
 import allNodes from '../workflows/all-nodes.json';
 import evaluate from '../workflows/evaluate.json';
@@ -221,4 +225,105 @@ it('simulates every Parallel branch, invoked children in Batch items and a detac
       .filter((s) => s.nodeId.startsWith('badge-'))
       .map((s) => steps.get(s.executionId)?.branch),
   ).toEqual(['count', 'allNamed']);
+  expect(e.available()).toEqual([]);
+});
+
+// Small graphs for the saved-suite regressions below.
+const script = (id: string, extra = {}) => ({
+  id,
+  kind: 'script',
+  label: id,
+  language: 'javascript',
+  command: 'return input;',
+  ...extra,
+});
+const call = (id: string, workflowId: string, mode = 'wait') => ({
+  id,
+  kind: 'workflow',
+  label: id,
+  workflowId,
+  version: 1,
+  mode,
+});
+function publish(e: Engine, name: string, middle: object[]) {
+  const ids = middle.map((n) => (n as { id: string }).id);
+  const w = e.create(
+    name,
+    '',
+    definitionSchema.parse({
+      nodes: [
+        { id: 'entry', kind: 'entry', label: 'In' },
+        ...middle,
+        { id: 'exit', kind: 'exit', label: 'Out' },
+      ],
+      edges: [...ids, 'exit'].map((target, i, all) => ({
+        id: `e${i}`,
+        source: i ? all[i - 1] : 'entry',
+        target,
+      })),
+    }),
+  );
+  e.publish(w.id);
+  return w.id;
+}
+function batch(e: Engine, name: string) {
+  const w = e.create(
+    name,
+    '',
+    definitionSchema.parse({
+      nodes: [
+        { id: 'entry', kind: 'entry', label: 'In' },
+        { id: 'items', kind: 'batch', label: 'Items', itemsPath: 'items' },
+        script('a', { batchId: 'items' }),
+        script('b', { batchId: 'items' }),
+        { id: 'exit', kind: 'exit', label: 'Out' },
+      ],
+      edges: [
+        { id: 'in', source: 'entry', target: 'items' },
+        { id: 'item', source: 'items', port: 'item', target: 'a' },
+        { id: 'ab', source: 'a', target: 'b' },
+        { id: 'end', source: 'b', target: 'items', targetHandle: 'end' },
+        { id: 'out', source: 'items', port: 'complete', target: 'exit' },
+      ],
+    }),
+  );
+  e.publish(w.id);
+  return w.id;
+}
+
+it('keeps suites for a detached call inside a waited child running that child', async () => {
+  const e = engine();
+  const leaf = publish(e, 'Leaf', [script('ls')]);
+  const mid = publish(e, 'Mid', [call('call', leaf, 'detached')]);
+  // The root's waited call shares the detached call's node ID.
+  const root = publish(e, 'Root', [call('call', mid)]);
+  const ran = await simulate(e, root, {}, [
+    { nodeId: 'ls', kind: 'script', output: {} },
+  ]);
+  expect(ran.state, ran.error ?? ran.unsupported.items.join()).toBe('passed');
+  const failed = await simulate(e, mid, {}, [
+    { nodeId: 'call', kind: 'workflow', error: 'never' },
+  ]);
+  expect(failed.error).toMatch(/detached Workflow call cannot fail/);
+});
+
+it('accepts item-by-item and step-by-step fixture order for Batch items', async () => {
+  const e = engine();
+  const inner = batch(e, 'Inner');
+  const outer = publish(e, 'Outer', [call('call', inner)]);
+  const fixture = (nodeId: string, n: number): SimulationFixture => ({
+    nodeId,
+    kind: 'script',
+    output: n,
+  });
+  const steps = [fixture('a', 0), fixture('a', 1), fixture('b', 0)];
+  const items = [fixture('a', 0), fixture('b', 0), fixture('a', 1)];
+  for (const [id, fixtures] of [
+    [inner, [...steps, fixture('b', 1)]],
+    [outer, [...steps, fixture('b', 1)]],
+    [outer, [...items, fixture('b', 1)]],
+  ] as const) {
+    const r = await simulate(e, id, { items: [1, 2] }, [...fixtures]);
+    expect(r.state, r.error ?? r.unsupported.items.join()).toBe('passed');
+  }
 });

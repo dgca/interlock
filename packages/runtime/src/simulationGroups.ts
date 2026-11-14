@@ -90,11 +90,12 @@ export function computeCoverage(
 }
 
 // Simulation runs one Batch item or Parallel branch at a time, in input and
-// branch order, so a single ordered fixture list stays deterministic. A
-// detached call takes the waited path, where its fixture supplies the run
-// reference, checked against the Started run contract, and no child starts.
+// branch order. A detached call with a workflow fixture takes the waited path,
+// where the fixture supplies the run reference, checked against the Started
+// run contract, and no child starts.
 export const forSimulation = <V extends { definition: WorkflowDefinition }>(
   version: V,
+  substituted: Set<string>,
 ): V => ({
   ...version,
   definition: {
@@ -102,7 +103,9 @@ export const forSimulation = <V extends { definition: WorkflowDefinition }>(
     nodes: version.definition.nodes.map((node) =>
       node.kind === 'batch' || node.kind === 'parallel'
         ? { ...node, concurrency: 1 }
-        : node.kind === 'workflow' && node.mode === 'detached'
+        : node.kind === 'workflow' &&
+            node.mode === 'detached' &&
+            substituted.has(node.id)
           ? { ...node, mode: 'wait' as const, outputSchema: STARTED_RUN_SCHEMA }
           : node,
     ),
