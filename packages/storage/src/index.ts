@@ -19,8 +19,9 @@ import {
   type WorkflowCatalogQuery,
 } from '@interlock/core';
 import { migrate, type MigrationResult } from './migrations.js';
-import { readRuns, writeRun } from './runExecutions.js';
+import { batchSize, readRuns, writeRun } from './runExecutions.js';
 import { findRuns } from './runQueries.js';
+import { RunScopes } from './runScopes.js';
 import {
   continuationState,
   touchRunRevision,
@@ -69,6 +70,7 @@ import type {
 /** One service owns the database. Each runtime operation commits as one transaction. */
 export class Store {
   readonly transcripts: Transcripts;
+  readonly runScopes: RunScopes;
   readonly protectedValues: ProtectedValues;
   private db: DatabaseSync;
   private transactionDepth = 0;
@@ -189,18 +191,7 @@ export class Store {
     this.changed('runs');
   }
   batchSize(id: string, executionId: string, path: string) {
-    const keys =
-      !path || path === '$' ? [] : path.replace(/^\$\./, '').split('.');
-    let value = "json_quote(json_extract(e.value, '$.input'))";
-    for (const _key of keys)
-      value = `(SELECT CASE WHEN j.type IN ('array', 'object') THEN json(j.value) ELSE json_quote(j.value) END FROM json_each(${value}) j WHERE CAST(j.key AS TEXT) = ?)`;
-    const row = this.db
-      .prepare(
-        `SELECT coalesce(json_array_length(${value}), 0) AS size
-      FROM run_executions e WHERE e.run_id = ? AND e.id = ?`,
-      )
-      .get(...keys, id, executionId);
-    return Number(row?.size ?? 0);
+    return batchSize(this.db, id, executionId, path);
   }
   readonly migration: MigrationResult;
   constructor(
@@ -217,6 +208,7 @@ export class Store {
     );
     if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });
     this.db = new DatabaseSync(path);
+    this.runScopes = new RunScopes(this.db);
     try {
       this.migration = migrate(this.db, path);
       const journalMode = this.db.prepare('PRAGMA journal_mode = WAL;').get();

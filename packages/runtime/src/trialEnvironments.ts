@@ -107,7 +107,7 @@ export class TrialEnvironments {
   private tree(
     c: WorkflowComparison,
     s: ComparisonSample,
-    runs = this.store.runs(),
+    runs = this.store.runScopes.comparisonSample(c.id, s.id),
   ) {
     return runs.filter(
       (r) =>
@@ -132,10 +132,7 @@ export class TrialEnvironments {
                   e.status === 'waiting' &&
                   e.nextCheckAt !== undefined),
             ),
-          ) ||
-          this.store
-            .work()
-            .some((w) => ids.has(w.runId) && w.status === 'claimed');
+          ) || this.store.workState('claimed').some((w) => ids.has(w.runId));
         if (running) for (const r of tree) if (active(r)) interrupted.add(r.id);
         if (t.preparation === 'preparing' || t.cleanup === 'running' || running)
           this.update(c.id, s.id, (t) => {
