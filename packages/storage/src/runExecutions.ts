@@ -28,6 +28,7 @@ export function migrateRunExecutions(db: DatabaseSync) {
       WHERE json_extract(value, '$.resourceActive') = 1;
     CREATE INDEX run_executions_background ON run_executions(run_id)
       WHERE json_extract(value, '$.background.state') IN ('launching', 'running');
+    -- Schema 13+ triggers reject run documents whose executions are not objects.
     INSERT INTO run_executions
       SELECT d.id, CAST(e.key AS INTEGER), json_extract(e.value, '$.id'), e.value
       FROM documents d, json_each(d.value, '$.executions') e
@@ -112,15 +113,36 @@ function projection(value: string, runId: string) {
       'output', substr(${checkOutput}, 1, 512), 'truncated', length(${checkOutput}) > 512) END)`;
 }
 
-/** Writes the run document, then only the execution rows whose content changed. */
+/**
+ * Writes the run document, then only the execution rows whose content changed,
+ * as one unit: a savepoint nests inside a caller's transaction or stands alone.
+ */
 export function writeRun(db: DatabaseSync, run: Run) {
+  db.exec('SAVEPOINT write_run');
+  try {
+    writeRunRows(db, run);
+    db.exec('RELEASE write_run');
+  } catch (error) {
+    db.exec('ROLLBACK TO write_run');
+    db.exec('RELEASE write_run');
+    throw error;
+  }
+}
+
+function writeRunRows(db: DatabaseSync, run: Run) {
   const executions = run.executions as NodeExecution[] | undefined;
+  // A run written without executions keeps its stored ones readable.
+  const kept =
+    !executions &&
+    db
+      .prepare('SELECT 1 FROM run_executions WHERE run_id = ? LIMIT 1')
+      .get(run.id);
   db.prepare(
     'INSERT INTO documents VALUES (?, ?, ?) ON CONFLICT(collection, id) DO UPDATE SET value = excluded.value',
   ).run(
     'runs',
     run.id,
-    JSON.stringify(executions ? { ...run, executions: [] } : run),
+    JSON.stringify(executions || kept ? { ...run, executions: [] } : run),
   );
   if (!executions) return;
   const upsert = db.prepare(

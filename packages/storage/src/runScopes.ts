@@ -2,6 +2,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import type { Run } from '@interlock/core';
 import type { CurrentRun } from './currentState.js';
 import { readRuns } from './runExecutions.js';
+import { runCursor } from './runQueries.js';
 
 /** Indexed reads for engine paths that previously loaded every retained run. */
 export class RunScopes {
@@ -31,6 +32,24 @@ export class RunScopes {
       )
       .all(parentId)
       .map((row) => row.id as string);
+  }
+
+  /** Full runs, most recently stored first, after an optional cursor run. */
+  page({ limit, afterRunId }: { limit: number; afterRunId?: string }): Run[] {
+    const position =
+      afterRunId === undefined
+        ? Number.MAX_SAFE_INTEGER
+        : runCursor(this.db, afterRunId).position;
+    return readRuns(
+      this.db,
+      this.db
+        .prepare(
+          `SELECT d.value FROM run_metadata m
+          CROSS JOIN documents d ON d.collection = 'runs' AND d.id = m.id
+          WHERE m.position < ? ORDER BY m.position DESC LIMIT ?`,
+        )
+        .all(position, limit),
+    );
   }
 
   /** Runs with at least one execution that still holds its resources. */

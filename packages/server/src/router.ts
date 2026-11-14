@@ -108,6 +108,7 @@ const githubImporter = new GithubImporter();
 import { pricesRouter } from './prices.js';
 import { launcherRouter } from './launcherRouter.js';
 import { evaluationProcedures } from './evaluationProcedures.js';
+import { runReadProcedures } from './runReadProcedures.js';
 import { id, inputMutation, p, t } from './trpc.js';
 import {
   agentDraftEdit,
@@ -767,9 +768,7 @@ export const appRouter = t.router({
       .query(({ ctx, input }) =>
         ctx.engine.projectRuns(ctx.engine.store.findRuns(input)),
       ),
-    list: p.query(({ ctx }) =>
-      ctx.engine.projectRuns(ctx.engine.store.runs().reverse()),
-    ),
+    ...runReadProcedures,
     summaries: p
       .input(runSummaryQuerySchema.default({}))
       .query(({ ctx, input }) => {
