@@ -11,7 +11,6 @@ import {
   Button,
   Group,
   ActionError,
-  Alert,
 } from '../../design-system';
 
 import { useEffect, useState, useRef } from 'react';
@@ -28,6 +27,7 @@ import styles from './RunForms.module.css';
 import { SchemaInput } from '../../components/SchemaInput/SchemaInput';
 import { api, errorMessage } from '../../lib/api';
 import { TagFields, tagsFromRows, type TagRow } from './RunTags';
+import { StartCostWarning } from './StartCostWarning';
 function sample(schema: Record<string, any>): Json {
   if (schema.default !== undefined) return schema.default;
   if (schema.enum?.length) return schema.enum[0];
@@ -46,8 +46,6 @@ function sample(schema: Record<string, any>): Json {
   if (schema.type === 'null') return null;
   return schema.type === 'string' ? '' : {};
 }
-const money = (micros: number, currency: string) =>
-  `${currency} ${(micros / 1e6).toFixed(2)}`;
 export function RunDialog({
   workflow,
   onClose,
@@ -118,14 +116,7 @@ export function RunDialog({
   return (
     <Modal title={`Run ${workflow.name}`} onClose={onClose}>
       <ModalBody>
-        {cost?.exceedsThreshold && (
-          <Alert color="yellow" title="Large run" mb="md">
-            Recent runs of this workflow cost a median of{' '}
-            {money(cost.medianMicros, cost.currency)} ({cost.sampleSize} runs),
-            above the {money(cost.thresholdMicros, cost.currency)} warning
-            threshold.
-          </Alert>
-        )}
+        {cost?.exceedsThreshold && <StartCostWarning cost={cost} />}
         {versions.length > 0 ? (
           <>
             <TextInput
