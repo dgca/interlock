@@ -1,7 +1,9 @@
 import {
+  budgetWaitMessage,
   InterlockError,
   requestKey,
   runDisplayTitle,
+  type BudgetBlock,
   type ManagedExecution,
   type RequestList,
   type RequestSummary,
@@ -16,7 +18,11 @@ import {
 } from '@interlock/core';
 import type { Store } from '@interlock/storage';
 import type { ExternalInputs } from './externalInputs.js';
-import { ScriptApprovals } from './scriptApprovals.js';
+import {
+  approvalSubject,
+  ScriptApprovals,
+  waitingApprovalContent,
+} from './scriptApprovals.js';
 import { offlineLauncherWork } from './executors/pullLaunchers.js';
 
 type Ancestor = ReturnType<Store['attentionAncestors']>[number];
@@ -39,6 +45,11 @@ function cardId(runs: Map<string, Ancestor>, runId: string) {
   return current?.chainRootRunId ?? current?.id ?? runId;
 }
 
+const budgetLabel = (block: BudgetBlock) =>
+  block.reasons?.includes('limit_reached') === false
+    ? 'Run budget needs final usage'
+    : 'Run budget reached';
+
 export class Requests {
   constructor(
     private store: Store,
@@ -54,9 +65,13 @@ export class Requests {
     const scripts = this.store.uncertainBackgroundSteps();
     const approvals = this.store.waitingScriptApprovals();
     const launchers = offlineLauncherWork(this.store);
+    const budgets = this.store
+      .workState('available')
+      .filter((work) => work.budgetBlocked);
     const runs = this.ancestors(
       [
         ...launchers,
+        ...budgets,
         ...managed,
         ...human,
         ...stalls,
@@ -81,13 +96,19 @@ export class Requests {
           ...(reason ? { reason } : {}),
         });
     };
-    for (const { runId, executionId, since } of approvals)
+    for (const approval of approvals) {
+      const { runId, executionId, since, workflowId, version } = approval;
+      const content = waitingApprovalContent(
+        this.store.getVersion(workflowId, version)?.definition,
+        { nodeId: approval.nodeId, scriptApproval: { hash: approval.hash } },
+      );
       add(
         { kind: 'script', runId, executionId },
-        'Approve imported Script',
+        `Approve ${approvalSubject(content)}`,
         since,
         'approval',
       );
+    }
     for (const { runId, executionId, label, since } of human)
       add({ kind: 'human', runId, executionId }, label, since);
     const managedRecovery = new Set<string>();
@@ -123,6 +144,17 @@ export class Requests {
         { kind: 'launcher', runId, executionId, workId },
         'Launcher client offline',
         since,
+      );
+    for (const work of budgets)
+      add(
+        {
+          kind: 'budget',
+          runId: work.runId,
+          executionId: work.executionId,
+          workId: work.id,
+        },
+        budgetLabel(work.budgetBlocked!),
+        work.budgetBlocked!.since,
       );
     const scriptRecovery = new Set(scripts.map((script) => script.executionId));
     for (const { runId, executionId, since } of scripts)
@@ -334,14 +366,13 @@ export class Requests {
         ...base,
         target,
         kind: 'scriptApproval' as const,
+        question: `Approve ${approvalSubject(script)}`,
         ...(script.language === 'permission-policy'
           ? {
-              question: 'Approve permission policy',
               context:
                 'This policy came from an import or an agent. Once approved, managed Agent sessions in this workflow run the listed actions inside the run workspace without asking. Other actions still ask. Approval applies to this exact policy in this workflow.',
             }
           : {
-              question: 'Approve imported Script',
               context:
                 'This Script came from an imported workflow and runs as your user with your files and network access. Review the code before approving. Approval applies to this exact code in this workflow.',
             }),
@@ -375,6 +406,23 @@ export class Requests {
         state: (active ? 'open' : 'resolved') as State,
         question: 'Launcher client offline',
         context: `No launcher client for executor profile "${work.executor}" has polled recently (launcher_client_offline). The assignment stays unclaimed until the client polls again.`,
+        actions: [],
+      };
+    }
+    if (target.kind === 'budget') {
+      const work = this.store.get<WorkRequest>('work', target.workId);
+      if (work?.runId !== run.id || work.executionId !== target.executionId)
+        throw new InterlockError('Budget-blocked assignment not found');
+      const block = active ? work.budgetBlocked : undefined;
+      return {
+        ...base,
+        target,
+        kind: target.kind,
+        state: (block ? 'open' : 'resolved') as State,
+        question: block ? budgetLabel(block) : 'Run budget reached',
+        context: block
+          ? `${budgetWaitMessage(block, work.attempt).replace(/\.?$/, '.')} Governing budget on run ${block.runIds.join(', ')}. Change it with set_run_budget (MCP) or interlock set-budget (CLI), or cancel the run.`
+          : undefined,
         actions: [],
       };
     }

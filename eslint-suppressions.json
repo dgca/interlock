@@ -707,11 +707,6 @@
       "count": 1
     }
   },
-  "packages/ui/src/features/executors/ManagedExecutionPanel.tsx": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    }
-  },
   "packages/ui/src/features/executors/ModelPicker.tsx": {
     "design-system/control-height": {
       "count": 1
@@ -1807,7 +1802,7 @@
       "count": 1
     },
     "@typescript-eslint/no-unused-vars": {
-      "count": 2
+      "count": 1
     },
     "@typescript-eslint/require-await": {
       "count": 1

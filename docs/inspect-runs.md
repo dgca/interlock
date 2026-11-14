@@ -13,7 +13,7 @@ The run inspector shows the executed path and current status. Select a step exec
 
 Read the waiting reason before taking action. A run may need an agent, an external answer, a timer, or a resource another step holds. Waiting does not always mean something is wrong.
 
-For automatically launched agents, **Runs → Needs attention** brings together permission requests, questions, model selection, and recovery checks. Open the affected run and resolve the displayed request. See [Run agents](agents.md).
+For automatically launched agents, **Runs → Needs attention** brings together permission requests, questions, model selection, recovery checks, and runs stopped by their [budget](run-budgets.md). Open the affected run and resolve the displayed request. See [Run agents](agents.md).
 
 ## Inspect a managed Agent
 

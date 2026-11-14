@@ -27,13 +27,14 @@ const resultQuery = z.object({
   maxBytes: z.coerce.number().optional(),
 });
 
-type Status = 400 | 403 | 404 | 409 | 429;
+type Status = 400 | 401 | 403 | 404 | 409 | 429;
 const launcherStatus: Record<LauncherClientError['code'], Status> = {
   launcher_credential_invalid: 403,
   launcher_client_conflict: 409,
   launcher_lease_invalid: 409,
   launcher_operation_not_found: 404,
   launcher_poll_busy: 429,
+  launcher_profile_disabled: 409,
 };
 const failure = (
   c: Context,
@@ -238,11 +239,19 @@ export function createHttpApi(
     }
     if (!body || typeof body !== 'object' || Array.isArray(body))
       return failure(c, 400, 'invalid_request', 'Body must be a JSON object');
+    const credential = c.req.header('x-interlock-launcher-credential');
+    if (!credential)
+      return failure(
+        c,
+        401,
+        'launcher_credential_missing',
+        'Send the launcher credential in the X-Interlock-Launcher-Credential header',
+      );
     try {
       const input = {
         ...body,
         profileId: c.req.param('profileId'),
-        credential: c.req.header('x-interlock-launcher-credential') ?? '',
+        credential,
         ...(c.req.param('operationId')
           ? { operationId: c.req.param('operationId') }
           : {}),

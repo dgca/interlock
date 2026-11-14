@@ -70,11 +70,23 @@ export function waitingScriptApprovals(db: DatabaseSync) {
   return db
     .prepare(
       `SELECT id AS runId, json_extract(value, '$.executions[#-1].id') AS executionId,
-        json_extract(value, '$.executions[#-1].scriptApproval.since') AS since
+        json_extract(value, '$.executions[#-1].scriptApproval.since') AS since,
+        json_extract(value, '$.executions[#-1].scriptApproval.hash') AS hash,
+        json_extract(value, '$.executions[#-1].nodeId') AS nodeId,
+        json_extract(value, '$.workflowId') AS workflowId,
+        json_extract(value, '$.version') AS version
       FROM documents INDEXED BY script_approval_waiting WHERE collection = 'runs'
         AND json_extract(value, '$.status') = 'waiting'
         AND json_type(value, '$.executions[#-1].scriptApproval') = 'object'
       ORDER BY rowid`,
     )
-    .all() as { runId: string; executionId: string; since: string }[];
+    .all() as {
+    runId: string;
+    executionId: string;
+    since: string;
+    hash: string;
+    nodeId: string;
+    workflowId: string;
+    version: number;
+  }[];
 }

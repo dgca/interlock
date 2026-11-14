@@ -216,7 +216,7 @@ The file holds the `id` returned by the read and the replacement table, or `null
 
 Rates are integer millionths of the currency per million tokens, so `4000000` is $4 per million tokens. `cachedInputMicros` and `cacheWriteMicros` are optional. A stale `expectedId` is rejected. The replacement table holds every model you want priced; it does not merge with the shipped table.
 
-Run budgets count reported costs only; derived costs do not change budget admission.
+Run budget cost limits count reported costs, and tokens reported without a cost at their derived price. See [run budgets](run-budgets.md).
 
 ## Use the CLI
 
