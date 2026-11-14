@@ -59,8 +59,9 @@ Run 'interlock commands' for argument syntax.
 
 Environment: INTERLOCK_DB, INTERLOCK_WORKDIR, INTERLOCK_URL, INTERLOCK_SECRET_KEY_FILE,
              INTERLOCK_MCP_PROFILE, INTERLOCK_REQUIRE_TOKEN, INTERLOCK_LOG_LEVEL,
-             INTERLOCK_SYNC_DIR
+             INTERLOCK_SYNC_DIR, INTERLOCK_OTEL_TRACES
 INTERLOCK_SYNC_DIR=PATH syncs workflow drafts with bundle files in PATH.
+INTERLOCK_OTEL_TRACES=1 exports run traces to OTEL_EXPORTER_OTLP_ENDPOINT (OTLP/HTTP JSON).
 Variable encryption keys are held separately from the database. Back up keys separately.
 INTERLOCK_REQUIRE_TOKEN=1 rejects API, MCP and event requests without the API token.
 Commands and the mcp bridge read the token from the api-token file beside the key folder.`);

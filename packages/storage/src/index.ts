@@ -4,6 +4,7 @@ import {
   waitingHumanInputs,
   uncertainResourceAttempts,
   uncertainBackgroundSteps,
+  currentStalls,
 } from './runAttention.js';
 import { waitingScriptApprovals } from './scriptApprovals.js';
 export * from './scriptApprovals.js';
@@ -24,6 +25,7 @@ import { findRuns } from './runQueries.js';
 import { RunScopes } from './runScopes.js';
 import {
   continuationState,
+  runsChangedSince,
   touchRunRevision,
   type ExecutionMetadata,
 } from './continuation.js';
@@ -100,19 +102,15 @@ export class Store {
       if (touchRunRevision(this.db, id)) this.changed('runs');
     });
   }
-  currentStalls(runId?: string): import('@interlock/core').StallRecord[] {
-    const scoped =
-      runId === undefined ? '' : " AND json_extract(value, '$.runId') = ?";
-    return this.db
-      .prepare(
-        "SELECT value FROM documents INDEXED BY stalls_unresolved WHERE collection = 'stalls' AND json_extract(value, '$.resolvedAt') IS NULL" +
-          scoped,
-      )
-      .all(...(runId === undefined ? [] : [runId]))
-      .map((row) => JSON.parse(row.value as string));
+  currentStalls(runId?: string) {
+    return currentStalls(this.db, runId);
   }
   continuation(id: string) {
     return continuationState(this.db, id);
+  }
+  /** Runs changed after a continuation revision; omit it to read the current revision. */
+  runsChangedSince(revision?: number) {
+    return runsChangedSince(this.db, revision);
   }
   currentProjection(ids: readonly string[]) {
     return currentProjection(this.db, ids);
