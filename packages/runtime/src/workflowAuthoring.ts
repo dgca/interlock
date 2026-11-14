@@ -33,6 +33,7 @@ import {
   readWorkflowLayout,
   saveWorkflowLayout,
 } from './workflowLayouts.js';
+import { publishObserver } from './workflowSyncHooks.js';
 
 const now = () => new Date().toISOString();
 
@@ -468,6 +469,12 @@ export class WorkflowAuthoring {
     });
   }
   publish(id: string | string[], cascade = false) {
+    const published = publishObserver(this.store)?.publishing();
+    const result = this.publishTargets(id, cascade);
+    published?.();
+    return result;
+  }
+  private publishTargets(id: string | string[], cascade: boolean) {
     const targetIds = Array.isArray(id) ? id : [id];
     return this.store.transaction(() => {
       if (!cascade && targetIds.length === 1)
