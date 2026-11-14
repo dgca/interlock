@@ -67,6 +67,8 @@ import {
   resolveBindingFields,
   matchRouting,
   type PathBinding,
+  toolCallRequestSchema,
+  type ToolCallInput,
   workHoldRequestSchema,
   HoldDeadlineError,
   type WorkHoldRequest,
@@ -105,8 +107,6 @@ import {
   type RunStartOptions,
   type BudgetPolicy,
   type ContextHandoffInput,
-  type SessionIdentity,
-  type ModelSelection,
   modelSelectionSchema,
   type DraftLayout,
 } from '@interlock/core';
@@ -151,24 +151,10 @@ const terminal = (s: string) =>
   ['completed', 'failed', 'cancelled'].includes(s);
 const message = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
-export interface Worker {
-  modelSelection?: ModelSelection;
-  session?: SessionIdentity;
-  workerId: string;
-  freshContext: boolean;
-  tools: string[];
-  skills: string[];
-  claimTicket?: string;
-}
-
-class ResultProcessingError extends InterlockError {
-  constructor(
-    readonly setting: 'routing' | 'outputBindings',
-    message: string,
-  ) {
-    super(message);
-  }
-}
+export type { Worker } from './engineTypes.js';
+import { ResultProcessingError, type Worker } from './engineTypes.js';
+import { ToolCalls } from './toolCalls.js';
+import { recoverInterruptedOperations } from './interruptedOperations.js';
 export class Engine {
   readonly stalls: Stalls;
   readonly triggers: WorkflowTriggers;
@@ -176,6 +162,7 @@ export class Engine {
   readonly retention: HistoryRetention;
   readonly executors: ExecutorManager;
   readonly continuation: Continuation;
+  readonly toolCalls: ToolCalls;
   readonly prompts: Prompts;
   readonly variables: Variables;
   readonly modelAliases: ModelAliases;
@@ -248,6 +235,17 @@ export class Engine {
     this.executors = new ExecutorManager(this, cwd);
     this.simulations = new Simulations(store, cwd);
     this.chains = new RunChains(store);
+    this.toolCalls = new ToolCalls(store, {
+      run: (id) => this.run(id),
+      definition: (run) => this.definition(run),
+      save: (run) => this.save(run),
+      event: (run, type, text) => this.event(run, type, text),
+      fail: (run, execution, error) => this.fail(run, execution, error),
+      cancel: (run, reason) => this.cancelOne(run, undefined, reason),
+      paused: (run) => this.pauses.applicable(run.workflowId).length > 0,
+      subscribe: (listener) => this.subscribe(listener),
+      nowMs: () => this.nowMs(),
+    });
     this.continuation = new Continuation(
       store,
       (id) => this.inspection.overlayProjection(this.store.continuation(id)),
@@ -532,43 +530,10 @@ export class Engine {
       }
       if (changed) this.save(run);
     }
-    // A process interruption gives no evidence that local work or remote side effects completed.
-    for (const run of store.activeRuns()) {
-      const execution = run.executions.at(-1);
-      if (
-        run.status === 'waiting' &&
-        execution?.kind === 'wait' &&
-        execution.operationStartedAt
-      ) {
-        this.resources.uncertainExecution(
-          run.id,
-          execution,
-          'Service interrupted during polling check',
-          true,
-        );
-        execution.operationStartedAt = undefined;
-        this.save(run);
-      }
-      if (
-        run.status === 'running' &&
-        (execution?.kind === 'script' || execution?.kind === 'fetch') &&
-        execution.status === 'running' &&
-        !execution.background &&
-        (!execution.resources?.length || execution.operationStartedAt)
-      ) {
-        this.resources.uncertainExecution(
-          run.id,
-          execution,
-          'Service interrupted during operation',
-          true,
-        );
-        this.fail(
-          run,
-          execution,
-          `Service interrupted during ${execution.kind} execution. Inspect side effects before retrying.`,
-        );
-      }
-    }
+    recoverInterruptedOperations(store, this.resources, {
+      save: (run) => this.save(run),
+      fail: (run, execution, error) => this.fail(run, execution, error),
+    });
   }
   nowMs(): number {
     return this.options.clock ? this.options.clock.now() : Date.now();
@@ -1170,7 +1135,12 @@ export class Engine {
       this.failOperation(routed, execution, node, error, category, child);
     });
   }
-  private bindingSource(run: Run, input: Json) {
+  private bindingSource(
+    run: Run,
+    input: Json,
+  ): (b: PathBinding) => Json | undefined {
+    if (run.toolCall)
+      return this.bindingSource(this.run(run.parentRunId!), input);
     let workflowRun = run;
     while (
       (workflowRun.batchNodeId || workflowRun.parallelBranch) &&
@@ -1284,9 +1254,9 @@ export class Engine {
       }
     }
     const edge = this.definition(run).edges.find(
-      (e) => e.source === node.id && e.port === port,
+      (e) => e.source === node.id && e.port === port && e.kind !== 'tool',
     );
-    if (!edge && node.kind !== 'exit')
+    if (!edge && node.kind !== 'exit' && !run.toolCall)
       throw new InterlockError(
         'Missing outgoing route; connect item paths to End',
       );
@@ -1416,6 +1386,7 @@ export class Engine {
     run.value = output;
     if (
       node.kind === 'exit' ||
+      run.toolCall ||
       edge?.targetHandle === 'end' ||
       edge?.targetHandle === 'join'
     ) {
@@ -1424,11 +1395,13 @@ export class Engine {
       this.event(
         run,
         'run.completed',
-        run.parallelBranch
-          ? 'Branch result returned'
-          : run.batchNodeId
-            ? 'Item result returned'
-            : 'Workflow completed',
+        run.toolCall
+          ? 'Tool result returned'
+          : run.parallelBranch
+            ? 'Branch result returned'
+            : run.batchNodeId
+              ? 'Item result returned'
+              : 'Workflow completed',
       );
     } else {
       run.cursor = edge!.target;
@@ -1475,11 +1448,12 @@ export class Engine {
       run.executions.push(execution);
       try {
         if (workspace) throw new InterlockError(workspace);
-        if (node.batchId !== run.batchNodeId)
+        if (!run.toolCall && node.batchId !== run.batchNodeId)
           throw new InterlockError('Execution cannot cross Batch groups');
         if (
-          node.parallelId !== run.parallelBranch?.nodeId ||
-          node.parallelBranchId !== run.parallelBranch?.id
+          !run.toolCall &&
+          (node.parallelId !== run.parallelBranch?.nodeId ||
+            node.parallelBranchId !== run.parallelBranch?.id)
         )
           throw new InterlockError('Execution cannot cross Parallel branches');
         this.chargeStep(run, node, definition.maxSteps);
@@ -2252,6 +2226,7 @@ export class Engine {
           this.releaseFailure(work, 'Worker lease expired', 'expiry');
         }
       }
+      this.toolCalls.tick();
       const continuedChains = new Set<string>();
       let changed = true,
         rounds = 0;
@@ -2915,6 +2890,16 @@ export class Engine {
       }
       throw error;
     }
+  }
+  /** Run one Agent tool call under the caller's active claim and wait for its result. */
+  async callTool(input: ToolCallInput, signal?: AbortSignal) {
+    const q = toolCallRequestSchema.parse(input);
+    const runId = this.withClaim(q.workId, q.token, (work) =>
+      this.toolCalls.begin(work, q),
+    );
+    this.pump();
+    const work = this.store.get<WorkRequest>('work', q.workId)!;
+    return this.toolCalls.wait(runId, work, q.waitMs, signal);
   }
   renew(id: string, token: string, leaseSeconds?: number) {
     return this.withClaim(id, token, (work) => {

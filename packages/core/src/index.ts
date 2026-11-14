@@ -144,6 +144,14 @@ export {
   type FailureCategory,
 } from './failureRoute.js';
 export { validateBatchScopes } from './batchScopes.js';
+export { blankDefinition } from './blankDefinition.js';
+export * from './toolEdges.js';
+import {
+  toolEdgeFields,
+  toolEdgeProblems,
+  isToolEdge,
+  toolTargetIds,
+} from './toolEdges.js';
 export {
   parallelBranchPort,
   parallelConnectionError,
@@ -641,6 +649,7 @@ export const definitionSchema = z.object({
       target: z.string(),
       port: z.string().min(1).default('default'),
       targetHandle: z.enum(['default', 'end', 'join']).optional(),
+      ...toolEdgeFields,
     }),
   ),
   maxActiveRuns: z
@@ -815,6 +824,7 @@ export interface Run {
   batchNodeId?: string;
   batchItemIndex?: number;
   parallelBranch?: { nodeId: string; id: string; key: string };
+  toolCall?: import('./toolEdges.js').ToolCallLink;
   /** Branch node starts charged to this workflow run, including prior visits. */
   parallelSteps?: number;
   /** Attempt reserved for a Script or Wait step by explicit retry. */
@@ -1179,7 +1189,8 @@ export function validateDefinition(input: unknown): WorkflowDefinition {
     if (problems.length)
       throw new InterlockError(`${node.label}: ${problems.join('; ')}`);
   }
-  const ids = new Set(d.nodes.map((n) => n.id));
+  const ids = new Set(d.nodes.map((n) => n.id)),
+    tools = toolTargetIds(d);
   const chainLimits = new Set(
     d.nodes.flatMap((n) =>
       n.kind === 'exit' && n.continueAsNew ? [n.continueAsNew.maxRuns] : [],
@@ -1219,6 +1230,8 @@ export function validateDefinition(input: unknown): WorkflowDefinition {
     if (edge.target === entries[0].id)
       throw new InterlockError('Edges cannot target the entry');
   }
+  const toolProblem = toolEdgeProblems(d)[0];
+  if (toolProblem) throw new InterlockError(toolProblem.message);
   for (const node of d.nodes) {
     const resourceBindings =
       'resources' in node
@@ -1311,8 +1324,10 @@ export function validateDefinition(input: unknown): WorkflowDefinition {
       throw new InterlockError(
         `${node.label}: blank Items path requires an array input contract`,
       );
-    const outgoing = d.edges.filter((e) => e.source === node.id);
-    const expected = outgoingPorts(node);
+    const outgoing = d.edges.filter(
+      (e) => e.source === node.id && !isToolEdge(e),
+    );
+    const expected = tools.has(node.id) ? [] : outgoingPorts(node);
     if (node.routing && !supportsResultRouting(node))
       throw new InterlockError(
         `${node.label}: result routing requires an Agent, Script, Fetch or waited Workflow`,
@@ -1353,35 +1368,6 @@ export function validateDefinition(input: unknown): WorkflowDefinition {
   if (reachable.size !== ids.size)
     throw new InterlockError('Every node must be reachable from entry');
   return d;
-}
-export function blankDefinition(): WorkflowDefinition {
-  return definitionSchema.parse({
-    nodes: [
-      {
-        id: 'entry',
-        kind: 'entry',
-        label: 'Workflow input',
-        position: { x: 60, y: 160 },
-      },
-      {
-        id: 'agent',
-        kind: 'agent',
-        label: 'Agent assignment',
-        prompt: 'Process the input and return your result as JSON.',
-        position: { x: 370, y: 160 },
-      },
-      {
-        id: 'exit',
-        kind: 'exit',
-        label: 'Return result',
-        position: { x: 680, y: 160 },
-      },
-    ],
-    edges: [
-      { id: 'e1', source: 'entry', target: 'agent' },
-      { id: 'e2', source: 'agent', target: 'exit' },
-    ],
-  });
 }
 
 export {
