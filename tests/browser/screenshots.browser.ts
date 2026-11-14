@@ -29,6 +29,7 @@ const gallerySections = [
   'layout',
   'editors',
   'dialogs',
+  'boards',
 ];
 
 /** Main screens, each with a locator that proves the screen finished loading. */

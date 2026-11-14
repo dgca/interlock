@@ -14,6 +14,7 @@ const sections = [
   'Page layout',
   'Editors',
   'Dialogs',
+  'Boards',
 ];
 
 let browser: Browser;
