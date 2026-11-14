@@ -1,10 +1,11 @@
 import { randomUUID } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
 import { TRPCClientError } from '@interlock/client';
 import { engineClient } from './engineClient.js';
 import { parseArgs } from 'node:util';
 import { usage } from './usage.js';
 import { pricingLines, runPricesCommand } from './prices.js';
+import { parse } from './json.js';
+import { runLauncherCommand } from './launcher.js';
 import {
   externalInputRequestSchema,
   boardImportSetupSchema,
@@ -23,12 +24,6 @@ import {
   type WorkflowReport,
   type ReportFilter,
 } from '@interlock/core';
-const parse = async (value: string | undefined) => {
-  if (value === undefined) throw new Error('Missing JSON argument');
-  return JSON.parse(
-    value.startsWith('@') ? await readFile(value.slice(1), 'utf8') : value,
-  );
-};
 function parseTags(values: string[] | undefined) {
   if (!values) return undefined;
   const entries = values.map((value) => {
@@ -477,6 +472,8 @@ export async function runCommand(argv: string[]) {
       });
     case 'prices':
       return runPricesCommand(args);
+    case 'launcher':
+      return runLauncherCommand(args);
     case 'report-usage':
       if (args.length !== 1)
         throw new Error('Usage: report-usage <json|@file>');

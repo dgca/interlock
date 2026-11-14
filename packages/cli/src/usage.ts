@@ -6,6 +6,7 @@ export const usage = [
   'variables <read|manage> <json|@file> [--value-stdin] (metadata list/inspect, explicit config_value with valueRevision, write-only Secret creation/replacement through stdin)',
   'stalls [json|@file] (settings by default; configure with expectedRevision/policy, inspect with runId/offset/limit)',
   'executors [json|@file] (list by default; settings/save_settings, save profiles, models, inspect work, transcript by executionId with before/after paging, message with executionId/requestId/message, receipt with executionId/requestId, respond, retry_model, stop, reconcile)',
+  'launcher <json|@file> (pull launcher profiles: credential with profileId rotates and prints the credential once; poll with profileId/clientId/waitMs/limit, complete with profileId/operationId/leaseToken/result, fail with profileId/operationId/leaseToken/error/retryable; the credential is read from INTERLOCK_LAUNCHER_CREDENTIAL unless given)',
   'workflows [scope-json: {"ownerWorkflowId":null|"parent-id"}]',
   'workflow <id>',
   'update <workflow-id> <json|@file> (metadata or draft replacement; layout:"tidy" arranges with Dagre, "preserve" keeps saved positions; draft/layout requests require draftRevision; layout-only changes preserve it)',

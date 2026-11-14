@@ -6,6 +6,7 @@ import {
   RunStartConflict,
   runStartSchema,
 } from '@interlock/core';
+import { LauncherClientError } from '@interlock/core/launcherClient';
 import type { Engine } from '@interlock/runtime';
 import { appRouter } from './router.js';
 import type { ConnectionConfig } from './connection.js';
@@ -26,7 +27,14 @@ const resultQuery = z.object({
   maxBytes: z.coerce.number().optional(),
 });
 
-type Status = 400 | 404 | 409;
+type Status = 400 | 403 | 404 | 409 | 429;
+const launcherStatus: Record<LauncherClientError['code'], Status> = {
+  launcher_credential_invalid: 403,
+  launcher_client_conflict: 409,
+  launcher_lease_invalid: 409,
+  launcher_operation_not_found: 404,
+  launcher_poll_busy: 429,
+};
 const failure = (
   c: Context,
   status: Status,
@@ -44,6 +52,8 @@ function rejection(c: Context, error: unknown) {
     return failure(c, 400, 'invalid_request', 'Invalid request', {
       issues: issues(cause),
     });
+  if (cause instanceof LauncherClientError)
+    return failure(c, launcherStatus[cause.code], cause.code, cause.message);
   if (cause instanceof RunStartConflict)
     return failure(c, 409, 'conflict', cause.message);
   if (cause instanceof InterlockError)
@@ -209,6 +219,48 @@ export function createHttpApi(
       return rejection(c, error);
     }
   });
+
+  // Pull launcher clients: the profile credential travels in its own header
+  // because Authorization carries the API token when one is required.
+  const launcherCall = async (
+    c: Context,
+    call: (
+      launcher: ReturnType<typeof caller>['launcher'],
+      input: Record<string, unknown>,
+    ) => Promise<unknown>,
+  ) => {
+    let body: unknown = {};
+    try {
+      const raw = await c.req.text();
+      if (raw.trim()) body = JSON.parse(raw);
+    } catch {
+      return failure(c, 400, 'invalid_request', 'Body must be JSON');
+    }
+    if (!body || typeof body !== 'object' || Array.isArray(body))
+      return failure(c, 400, 'invalid_request', 'Body must be a JSON object');
+    try {
+      const input = {
+        ...body,
+        profileId: c.req.param('profileId'),
+        credential: c.req.header('x-interlock-launcher-credential') ?? '',
+        ...(c.req.param('operationId')
+          ? { operationId: c.req.param('operationId') }
+          : {}),
+      };
+      return c.json(await call(caller(c).launcher, input));
+    } catch (error) {
+      return rejection(c, error);
+    }
+  };
+  api.post('/launchers/:profileId/poll', (c) =>
+    launcherCall(c, (launcher, input) => launcher.poll(input as never)),
+  );
+  api.post('/launchers/:profileId/operations/:operationId/complete', (c) =>
+    launcherCall(c, (launcher, input) => launcher.complete(input as never)),
+  );
+  api.post('/launchers/:profileId/operations/:operationId/fail', (c) =>
+    launcherCall(c, (launcher, input) => launcher.fail(input as never)),
+  );
 
   // Keep unknown API paths out of the UI's fallback page.
   api.all('*', (c) => failure(c, 404, 'not_found', 'Unknown API route'));

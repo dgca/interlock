@@ -14,7 +14,9 @@ export function runAttention(requests: RequestSummary[]): RunAttention[] {
         ? 'approval'
         : target.kind === 'resource' || target.kind === 'script'
           ? 'recovery'
-          : target.kind;
+          : target.kind === 'launcher'
+            ? 'stalled'
+            : target.kind;
     const entry = result.get(cardId);
     if (entry) {
       if (!entry.reasons.includes(reason)) entry.reasons.push(reason);

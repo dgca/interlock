@@ -143,16 +143,21 @@ export class Budgets {
       new Set(available.map((work) => work.runId)),
     );
     for (const state of available) {
-      const runIds = evaluations
-        .filter(
-          ({ scope, result }) =>
-            scope.has(state.runId) && result.state === 'blocked',
-        )
-        .map(({ record }) => record.id)
-        .sort();
+      const blocking = evaluations.filter(
+        ({ scope, result }) =>
+          scope.has(state.runId) && result.state === 'blocked',
+      );
+      const runIds = blocking.map(({ record }) => record.id).sort();
+      const reasons = (['limit_reached', 'usage_incomplete'] as const).filter(
+        (reason) =>
+          blocking.some(({ result }) =>
+            result.checks.some((check) => check.reasons.includes(reason)),
+          ),
+      );
       if (
         runIds.length
-          ? isDeepStrictEqual(state.budgetBlocked?.runIds, runIds)
+          ? isDeepStrictEqual(state.budgetBlocked?.runIds, runIds) &&
+            isDeepStrictEqual(state.budgetBlocked?.reasons, reasons)
           : !state.budgetBlocked
       )
         continue;
@@ -161,6 +166,7 @@ export class Budgets {
         work.budgetBlocked = {
           ...work.budgetBlocked,
           runIds,
+          reasons,
           since: work.budgetBlocked?.since ?? new Date().toISOString(),
           remainingMs:
             work.budgetBlocked?.remainingMs ??

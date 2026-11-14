@@ -1,4 +1,5 @@
 import {
+  budgetWaitMessage,
   modelKey,
   tokenFields,
   type ManagedExecution,
@@ -21,9 +22,11 @@ export function usageDelta(
 ): ModelUsage[] | undefined {
   if (!before) return;
   return current.map((value) => {
-    const prior = before.find(
-      (v) => v.provider === value.provider && v.model === value.model,
-    );
+    // A streamed baseline may name another provider for the same model.
+    const prior =
+      before.find(
+        (v) => v.provider === value.provider && v.model === value.model,
+      ) ?? before.find((v) => v.model === value.model);
     const result: ModelUsage = { provider: value.provider, model: value.model };
     for (const field of tokenFields)
       if (
@@ -169,6 +172,17 @@ export class AttemptBudget {
       this.halt.abort(new Error(reason));
     }
   };
+  /**
+   * The native session's usage after a stop, as the next attempt's baseline:
+   * the streamed session totals, or the prior baseline plus this attempt's
+   * streamed figures. Unknown when neither is known.
+   */
+  sessionBaseline(): ModelUsage[] | null {
+    if (this.sessionTotals) return this.sessionTotals;
+    return this.baseline && this.current
+      ? addUsage(this.baseline, this.current)
+      : null;
+  }
   /** Record final usage as before, or the live figures when none arrived. */
   complete(final?: ModelUsage[]) {
     if (this.settled) return;
@@ -240,12 +254,7 @@ export class BudgetStops {
           return `${check.metric} ${value} (budget on run ${gate.runId})`;
         }),
     );
-    return reached.length
-      ? `Stopped at the run budget limit: ${reached.join('; ')}. Raise the budget to resume.`.slice(
-          0,
-          1000,
-        )
-      : undefined;
+    return reached.length ? reached.join('; ').slice(0, 500) : undefined;
   }
   /** The stopped attempt's session, so the next claim resumes it. */
   resumeKey(work: WorkRequest) {
@@ -261,7 +270,20 @@ export class BudgetStops {
    */
   release(job: Job, session: Session, budget: AttemptBudget) {
     const record = job.record;
-    const reason = budget.reason ?? 'Stopped at the run budget limit';
+    const detail = budget.reason ?? 'limit reached';
+    const reason = budgetWaitMessage(
+      {
+        runIds: [],
+        since: '',
+        reasons: this.gates(job.work.runId).some(
+          (gate) => gate.budget.unknownUsage === 'block',
+        )
+          ? ['limit_reached', 'usage_incomplete']
+          : ['limit_reached'],
+        stopped: { attempt: record.attempt, reason: detail },
+      },
+      record.attempt,
+    ).slice(0, 1000);
     try {
       this.engine.store.transaction(() => {
         const work = this.engine.store.get<WorkRequest>('work', job.work.id);
@@ -298,12 +320,16 @@ export class BudgetStops {
         });
         const released = this.engine.store.get<WorkRequest>('work', work.id)!;
         if (released.budgetBlocked) {
-          released.budgetBlocked.stopped = { attempt: work.attempt, reason };
+          released.budgetBlocked.stopped = {
+            attempt: work.attempt,
+            reason: detail,
+          };
           this.engine.store.put('work', released);
         }
-        // Session totals stay a valid baseline; other figures leave it unknown.
-        if (budget.sessionTotals) session.usage = budget.sessionTotals;
-        session.usageUncertain = !budget.sessionTotals;
+        // The next attempt's final report is differenced against this.
+        const baseline = budget.sessionBaseline();
+        if (baseline) session.usage = baseline;
+        session.usageUncertain = !baseline;
         this.engine.store.put(sessionsCollection, session);
         record.state = 'failed';
         record.endedAt = now();
