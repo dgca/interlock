@@ -167,6 +167,10 @@ Core defines bounded Agent resultRules and structural evaluation. Runtime captur
 
 Runtime external holds preserve one assignment and its captured input while invalidating active claim authority. Separate interval records support bounded history and declared blocked-time accounting. Resume returns to availability through existing claim/budget/context checks; cancellation closes the interval. Holds do not stop external processes or replay actions. See [external holds](work-holds.md).
 
+### Agent tool calls
+
+Tool edges (`kind: "tool"`) are definition edges that routing ignores. Core derives each Agent's tools from them and validates their targets, scope, lease fit and limits (`toolEdges.ts`). Runtime runs a call as a child run of the Agent's run whose cursor is the target step and which completes with that step's result (`toolCalls.ts`). The child carries a `toolCall` link to the work, execution and claim attempt, joins the calling execution's `childRunIds`, reads bindings from the Agent's run, and is excluded from start admission counts. A pump tick cancels unstarted calls whose claim attempt ended and fails calls blocked by their own Agent's resources. See [Agent tool calls](agent-tools.md).
+
 ## Saved prompts
 
 Core defines prompt content, optional Agent `promptIds`, and pure instruction composition. SQLite stores current prompts and immutable revision records in document collections; Run `promptSnapshots` and assignment `savedPrompts` are compatible optional fields requiring no migration. Runtime protects edits with revisions, reports usage across drafts and every published version, and blocks deletion while references exist. Missing references are publication diagnostics; incomplete drafts remain saveable.

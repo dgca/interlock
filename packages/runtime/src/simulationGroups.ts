@@ -69,8 +69,10 @@ export function computeCoverage(
   }
   const covered = (e: WorkflowDefinition['edges'][number]) =>
     taken.has(`${e.source}\0${e.port ?? 'default'}`);
-  const totalEdges = definition.edges.length;
-  const coveredEdges = definition.edges.filter(covered).length;
+  // Tool edges are never routes, so route coverage leaves them out.
+  const routes = definition.edges.filter((e) => e.kind !== 'tool');
+  const totalEdges = routes.length;
+  const coveredEdges = routes.filter(covered).length;
   return {
     totalEdges,
     coveredEdges,
@@ -78,7 +80,7 @@ export function computeCoverage(
       totalEdges > 0
         ? Math.round((coveredEdges / totalEdges) * 1000) / 10
         : 100,
-    untested: definition.edges
+    untested: routes
       .filter((e) => !covered(e))
       .map((e) => ({
         edgeId: e.id,

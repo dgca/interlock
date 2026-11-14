@@ -21,6 +21,7 @@ import {
 } from './index.js';
 import { structuralEqual } from './jsonEquality.js';
 import { sameExecutionScope, validateParallelScopes } from './parallel.js';
+import { toolEdgeProblems, toolTargetIds } from './toolEdges.js';
 export interface DraftDiagnostic {
   severity: 'error' | 'warning';
   category: 'save' | 'publication' | 'contract';
@@ -154,7 +155,7 @@ export function diagnoseDraft(input: unknown): {
         { edgeId: e.id },
       );
     else {
-      if (!outgoingPorts(source).includes(e.port))
+      if (e.kind !== 'tool' && !outgoingPorts(source).includes(e.port))
         add(
           'invalid_port',
           `edges.${i}.port`,
@@ -167,6 +168,16 @@ export function diagnoseDraft(input: unknown): {
         });
     }
   });
+  const tools = toolTargetIds(d);
+  for (const problem of toolEdgeProblems(d))
+    add(
+      problem.code,
+      problem.edgeId
+        ? `edges.${d.edges.findIndex((e) => e.id === problem.edgeId)}`
+        : 'edges',
+      problem.message,
+      { nodeId: problem.nodeId, edgeId: problem.edgeId },
+    );
   d.nodes.forEach((n, i) => {
     if (n.routing && !supportsResultRouting(n))
       add(
@@ -182,8 +193,8 @@ export function diagnoseDraft(input: unknown): {
         'Output fields require an Agent, Script, Fetch or waited Workflow.',
         { nodeId: n.id },
       );
-    const ports = outgoingPorts(n),
-      edges = d.edges.filter((e) => e.source === n.id);
+    const ports = tools.has(n.id) ? [] : outgoingPorts(n),
+      edges = d.edges.filter((e) => e.source === n.id && e.kind !== 'tool');
     if (
       edges.length !== ports.length ||
       ports.some((p) => edges.filter((e) => e.port === p).length !== 1)
@@ -413,6 +424,7 @@ function contractDiagnostics(d: WorkflowDefinition): DraftDiagnostic[] {
     const edges = d.edges.filter(
       (e) =>
         e.target === node.id &&
+        e.kind !== 'tool' &&
         e.targetHandle !== 'end' &&
         e.targetHandle !== 'join',
     );
@@ -719,6 +731,7 @@ function contractDiagnostics(d: WorkflowDefinition): DraftDiagnostic[] {
       const incomingEdges = d.edges.filter(
         (e) =>
           e.target === node.id &&
+          e.kind !== 'tool' &&
           e.targetHandle !== 'end' &&
           e.targetHandle !== 'join',
       );

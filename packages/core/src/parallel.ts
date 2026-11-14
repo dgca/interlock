@@ -137,7 +137,13 @@ export function validateParallelScopes(definition: WorkflowDefinition) {
         );
     }
   }
+  const tools = new Map<string, string[]>();
   for (const edge of definition.edges) {
+    if (edge.kind === 'tool') {
+      // Tool targets are reached through their Agent, never routed.
+      tools.set(edge.source, [...(tools.get(edge.source) ?? []), edge.target]);
+      continue;
+    }
     const source = nodes.get(edge.source),
       target = nodes.get(edge.target);
     if (!source || !target) continue; // Ordinary graph validation reports missing endpoints.
@@ -163,6 +169,7 @@ export function validateParallelScopes(definition: WorkflowDefinition) {
       if (visited.has(id)) return;
       visited.add(id);
       active.add(id);
+      for (const target of tools.get(id) ?? []) visited.add(target);
       const edges = outgoing.get(id);
       if (!edges?.length)
         throw new InterlockError(
