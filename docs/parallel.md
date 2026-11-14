@@ -42,4 +42,4 @@ interlock start WORKFLOW_ID '{"checks":["lint","test"]}' --summary
 interlock run RUN_ID
 ```
 
-Replace the IDs with the ones returned by import and start. The completed run returns `{"count":2,"hasTests":true}`. Inspect the same workflow through MCP with `get_run_briefing` for bounded `parallels` counts and descendant references, then `get_run_result` for the joined output. Fixture simulation rejects Parallel definitions before executing them. Use an ordinary run or a live comparison to exercise the group.
+Replace the IDs with the ones returned by import and start. The completed run returns `{"count":2,"hasTests":true}`. Inspect the same workflow through MCP with `get_run_briefing` for bounded `parallels` counts and descendant references, then `get_run_result` for the joined output. [Fixture simulation](workflow-simulation.md) runs the branches one at a time in branch order and reports coverage for each branch.

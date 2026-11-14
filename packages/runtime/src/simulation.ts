@@ -18,10 +18,15 @@ import {
   type WorkRequest,
   type ResultCheck,
   type RouteCoverage,
-  type NodeExecution,
 } from '@interlock/core';
 import { Engine } from './index.js';
 import { definitionHash, fingerprint } from './versionIdentity.js';
+import {
+  computeCoverage,
+  forSimulation,
+  trace,
+  type Trace,
+} from './simulationGroups.js';
 
 type Request = typeof simulationRequestSchema._output;
 type State =
@@ -40,58 +45,6 @@ type Receipt = {
     | 'timed_out';
   diagnostics?: ResultCheck['diagnostics'];
 };
-type Trace = {
-  executionId: string;
-  nodeId: string;
-  kind: string;
-  status: string;
-  port?: string;
-  truncated?: boolean;
-};
-const trace = (run: Run): Trace[] =>
-  run.executions.map((e) => ({
-    executionId: e.id,
-    nodeId: e.nodeId.slice(0, 256),
-    kind: e.kind,
-    status: e.status,
-    ...(e.port ? { port: e.port.slice(0, 256) } : {}),
-    ...(e.nodeId.length > 256 || (e.port?.length ?? 0) > 256
-      ? { truncated: true }
-      : {}),
-  }));
-function computeCoverage(
-  definition: WorkflowDefinition,
-  executions: NodeExecution[],
-): RouteCoverage {
-  const coveredEdgeIds = new Set<string>();
-  for (const execution of executions) {
-    const port = execution.port ?? 'default';
-    for (const edge of definition.edges) {
-      const edgePort = edge.port ?? 'default';
-      if (edge.source === execution.nodeId && edgePort === port) {
-        coveredEdgeIds.add(edge.id);
-      }
-    }
-  }
-  const totalEdges = definition.edges.length;
-  const coveredEdges = coveredEdgeIds.size;
-  const percentage =
-    totalEdges > 0 ? Math.round((coveredEdges / totalEdges) * 1000) / 10 : 100;
-  const untested = definition.edges
-    .filter((e) => !coveredEdgeIds.has(e.id))
-    .map((e) => ({
-      edgeId: e.id,
-      source: e.source,
-      target: e.target,
-      ...(e.port ? { port: e.port } : {}),
-    }));
-  return {
-    totalEdges,
-    coveredEdges,
-    percentage,
-    untested,
-  };
-}
 type Record = {
   id: string;
   requestHash: string;
@@ -252,10 +205,6 @@ export class Simulations {
         return [
           `Node ${node.id}: continue as new is unsupported in simulation`,
         ];
-      if (node.kind === 'parallel')
-        return [
-          `Node ${node.id}: Parallel is unsupported in fixture simulation; use an ordinary run or live comparison`,
-        ];
       if (
         ![
           'entry',
@@ -268,13 +217,11 @@ export class Simulations {
           'workflow',
           'wait',
           'input',
+          'batch',
+          'parallel',
         ].includes(node.kind)
       )
         return [`Node ${node.id}: ${node.kind} is unsupported`];
-      if (node.kind === 'workflow' && node.mode === 'detached')
-        return [
-          `Node ${node.id}: detached workflows are unsupported in simulation`,
-        ];
       return [];
     });
     unsupported.push(...assertionProblems(testCase.assertions, definition));
@@ -284,7 +231,7 @@ export class Simulations {
     const visitedWorkflows = new Set<string>();
     while (queue.length) {
       const node = queue.shift()!;
-      if (node.kind === 'workflow') {
+      if (node.kind === 'workflow' && node.mode !== 'detached') {
         const cw = this.store.get<Workflow>('workflows', node.workflowId);
         if (cw && !visitedWorkflows.has(cw.id)) {
           visitedWorkflows.add(cw.id);
@@ -386,6 +333,9 @@ export class Simulations {
     let runId: string | undefined;
     let cursor = 0;
     let fatal: string | undefined;
+    let read: (id: string) => Run = () => {
+      throw new InterlockError('Simulation engine is not running');
+    };
     const fixtures = r.capture.case.fixtures ?? [];
     const take = (nodeId: string, kind: string) => {
       if (fatal) throw new InterlockError(fatal);
@@ -429,7 +379,7 @@ export class Simulations {
         ownerWorkflowId: undefined,
         archived: false,
       });
-      scratch.version(version);
+      scratch.version(forSimulation(version));
       for (const cw of active.childWorkflows ?? []) {
         scratch.put('workflows', {
           ...cw,
@@ -438,9 +388,18 @@ export class Simulations {
         });
       }
       for (const cv of active.childVersions ?? []) {
-        scratch.version(cv);
+        scratch.version(forSimulation(cv));
       }
       for (const prompt of r.capture.prompts) scratch.put('prompts', prompt);
+      const detached = new Set(
+        [
+          r.capture.definition,
+          ...(active.childVersions ?? []).map((v) => v.definition),
+        ]
+          .flatMap((d) => d.nodes)
+          .filter((n) => n.kind === 'workflow' && n.mode === 'detached')
+          .map((n) => n.id),
+      );
       let virtualTime = Date.now();
       const clock = {
         now: () => virtualTime,
@@ -449,12 +408,19 @@ export class Simulations {
         clock,
         substituteWorkflow: (node, execution) => {
           const nextFixture = fixtures[cursor];
+          // A detached call always takes a fixture for its run reference.
           if (
-            nextFixture &&
-            nextFixture.nodeId === node.id &&
-            nextFixture.kind === 'workflow'
+            detached.has(node.id) ||
+            (nextFixture &&
+              nextFixture.nodeId === node.id &&
+              nextFixture.kind === 'workflow')
           ) {
-            const f = take(node.id, 'workflow');
+            let f: (typeof fixtures)[number];
+            try {
+              f = take(node.id, 'workflow');
+            } catch (error) {
+              return Promise.reject(new InterlockError(errorText(error)));
+            }
             receipt(
               node.id,
               'workflow',
@@ -480,17 +446,18 @@ export class Simulations {
         },
       });
       active.engine = engine;
+      read = (id) => engine.run(id);
       runId = engine.start(workflow.id, r.capture.case.input, r.version).run.id;
       let claim: WorkRequest | undefined;
       for (let turns = 0; turns < 10000 && r.state === 'running'; turns++) {
         if (fatal) throw new InterlockError(fatal);
         const run = engine.run(runId);
         r.runStatus = run.status;
-        r.executions = trace(run);
+        r.executions = trace(run, read);
         if (['completed', 'failed', 'cancelled'].includes(run.status)) {
           r.checks = evaluateAssertions(r.capture.case.assertions, run);
           r.result = run.output;
-          r.coverage = computeCoverage(r.capture.definition, run.executions);
+          r.coverage = computeCoverage(r.capture.definition, run, read);
           if (cursor < fixtures.length)
             throw new InterlockError(
               `${run.error ? run.error.slice(0, 256) + '. ' : ''}${fixtures.length - cursor} unused fixtures starting at index ${cursor}`,
@@ -652,9 +619,9 @@ export class Simulations {
       if (runId && active.engine && !this.stopped) {
         const run = active.engine.run(runId);
         r.runStatus = run.status;
-        r.executions = trace(run);
+        r.executions = trace(run, read);
         r.checks = evaluateAssertions(r.capture.case.assertions, run);
-        r.coverage = computeCoverage(r.capture.definition, run.executions);
+        r.coverage = computeCoverage(r.capture.definition, run, read);
       }
       active.engine?.stop();
       scratch?.close();

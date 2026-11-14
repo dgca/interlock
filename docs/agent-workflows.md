@@ -552,7 +552,7 @@ Agent executors can [check candidate results before submission](result-preflight
 
 [Assignment size diagnostics](assignment-size.md) show UTF-8 byte contributions and advisory warnings before claims. Agent previews accept sample inputs and upstream outputs, with unresolved values marked unknown. Payload values are omitted from reports.
 
-Use [fixture simulation](workflow-simulation.md) to check contracts and routes before spending model tokens on supported flat graphs. `workflow_simulation` groups run/get/list/capture/cancel actions. Simulation results are separate evidence from live runs and do not assess prompt or implementation quality.
+Use [fixture simulation](workflow-simulation.md) to check contracts and routes before spending model tokens on supported graphs. `workflow_simulation` groups run/get/list/capture/cancel actions. Simulation results are separate evidence from live runs and do not assess prompt or implementation quality.
 
 ## Resume externally blocked assignments
 
