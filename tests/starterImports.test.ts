@@ -124,6 +124,12 @@ it('adds SDLC v2 as its own copy and leaves an existing v1 copy untouched', () =
     created: false,
     workflow: { id: v1 },
   });
+  // A bundled starter is not an import: its permission policy needs no approval.
+  const definition = e.store.getVersion(v2.workflow.id, 1)!.definition;
+  expect(definition.permissionPolicy?.allow.length).toBeGreaterThan(0);
+  expect(
+    e.scriptApprovals.pendingPolicy(v2.workflow.id, definition),
+  ).toBeFalsy();
 });
 it('recognizes renamed legacy drafts and retained originals without changing them', () => {
   const e = setup(),

@@ -7,6 +7,112 @@
       "path": "repoPath"
     },
     "agentPermissions": "standard",
+    "permissionPolicy": {
+      "allow": [
+        {
+          "kind": "read"
+        },
+        {
+          "kind": "edit"
+        },
+        {
+          "kind": "command",
+          "pattern": "git status"
+        },
+        {
+          "kind": "command",
+          "pattern": "git status *"
+        },
+        {
+          "kind": "command",
+          "pattern": "git diff"
+        },
+        {
+          "kind": "command",
+          "pattern": "git diff *"
+        },
+        {
+          "kind": "command",
+          "pattern": "git log"
+        },
+        {
+          "kind": "command",
+          "pattern": "git log *"
+        },
+        {
+          "kind": "command",
+          "pattern": "git show *"
+        },
+        {
+          "kind": "command",
+          "pattern": "git blame *"
+        },
+        {
+          "kind": "command",
+          "pattern": "git rev-parse *"
+        },
+        {
+          "kind": "command",
+          "pattern": "git ls-files *"
+        },
+        {
+          "kind": "command",
+          "pattern": "git merge-base *"
+        },
+        {
+          "kind": "command",
+          "pattern": "git branch --show-current"
+        },
+        {
+          "kind": "command",
+          "pattern": "git add *"
+        },
+        {
+          "kind": "command",
+          "pattern": "git commit *"
+        },
+        {
+          "kind": "command",
+          "pattern": "ls"
+        },
+        {
+          "kind": "command",
+          "pattern": "ls *"
+        },
+        {
+          "kind": "command",
+          "pattern": "pwd"
+        },
+        {
+          "kind": "command",
+          "pattern": "cat *"
+        },
+        {
+          "kind": "command",
+          "pattern": "head *"
+        },
+        {
+          "kind": "command",
+          "pattern": "tail *"
+        },
+        {
+          "kind": "command",
+          "pattern": "wc *"
+        },
+        {
+          "kind": "command",
+          "pattern": "rg *"
+        },
+        {
+          "kind": "command",
+          "pattern": "grep *"
+        },
+        {
+          "kind": "command",
+          "pattern": "find *"
+        }
+      ]
+    },
     "inputSchema": {
       "type": "object",
       "required": ["request"],
@@ -334,7 +440,7 @@
         "prompt": "Write or revise root.taskDir/spec.md for root.request. It is the single definition of what this change must do.\n\nInclude, briefly:\n- Problem and outcome: what is wrong or missing today and what will be true afterwards. Quote or link the source request.\n- Scope: what is included, and what is explicitly not.\n- Behavior: the observable behavior required, including the failure and edge cases the change affects.\n- Acceptance criteria with stable ids (AC1, AC2, ...). Each must be checkable by a test or an observation. Never renumber existing ids.\n- For a change a person will see: the existing screens, components and patterns it reuses, the flow, and the loading, empty, error and success states it affects. Do not introduce a new visual pattern where an existing one fits.\n- Open decisions, each with the options and the one you recommend.\n\nLeave implementation steps and verification methods to plan.md. On revision, previous.feedback says what to change: change the affected passages, keep settled decisions, and do not narrate the revision history.\n\nReturn artifactPath (relative to root.workdir), summary, and decisions: the open decisions only a person can settle, each with question, whyItMatters and recommendation. Return an empty list when there are none.",
         "context": {
           "mode": "current",
-          "instructions": "Inputs: root is this run's setup (workdir, request, taskDir, size, issue, baseCommit, branch, dedicatedBranch, reviewPolicy, createPr, commitArtifacts). previous is the result of the step that routed here.\nWork in root.workdir, which is your current directory. Read the repository's own instructions (AGENTS.md, CLAUDE.md, README, contributing or design docs) and follow them; where they conflict with this workflow, they win.\nKeep every file you write inside root.workdir. Put notes and scratch files in root.taskDir, never in /tmp or your home directory.\nPreserve unrelated changes. Settle routine technical questions from the repository and record the assumption. Ask a person only about a decision that changes scope, public behavior, compatibility, consequential architecture or authorization and that nothing already settles.\nKeep workflow details such as root, previous and route values out of the artifacts. Report a real blocker as a failure; never invent a result.",
+          "instructions": "Inputs: root is this run's setup (workdir, request, taskDir, size, issue, baseCommit, branch, dedicatedBranch, reviewPolicy, createPr, commitArtifacts). previous is the result of the step that routed here.\nWork in root.workdir, which is your current directory. Read the repository's own instructions (AGENTS.md, CLAUDE.md, README, contributing or design docs) and follow them; where they conflict with this workflow, they win.\nKeep every file you write inside root.workdir. Put notes and scratch files in root.taskDir, never in /tmp or your home directory.\nRun plain commands from root.workdir: no heredocs, no $ variables or command substitution, no cd, no bash -c, no background jobs. Use your file tools to read and edit files when you have them; from the shell, read with cat, head, tail, rg or git show rather than sed or awk. The workflow's permission policy can allow commands written this way without asking a person.\nPreserve unrelated changes. Settle routine technical questions from the repository and record the assumption. Ask a person only about a decision that changes scope, public behavior, compatibility, consequential architecture or authorization and that nothing already settles.\nKeep workflow details such as root, previous and route values out of the artifacts. Report a real blocker as a failure; never invent a result.",
           "tools": [],
           "skills": [],
           "tier": "max",
@@ -412,7 +518,7 @@
         "prompt": "Write or revise root.taskDir/plan.md for root.request.\n\nWhen root.size is small there is no spec: plan.md states the problem and outcome in a few sentences and owns the acceptance criteria, with stable ids (AC1, AC2, ...) that are each checkable by a test or an observation. When root.size is standard, read spec.md (spec.artifactPath) and reference its criteria by id instead of copying them.\n\nRead the code the change touches before planning it. Then include:\n- Approach: the change in a few sentences, the code areas involved, and why this approach over the obvious alternative.\n- Steps: a short checklist with stable task ids, each mapped to the criteria it serves.\n- Verification: how each criterion will be demonstrated, and for the two or three riskiest failure cases, a direct check with its expected result.\n- Open decisions, each with the options and the one you recommend.\nKeep it proportionate: a small fix needs a short plan. Distinguish facts you verified from assumptions.\n\nOn revision, previous.feedback says what to change. Apply it to the affected passages and keep criterion and task ids stable. If it shows a criterion itself was wrong, correct it and say why. When root.size is standard and the feedback concerns spec.md, correct spec.md too.\n\nReturn:\n- artifactPath, relative to root.workdir, and summary.\n- checkCommands: up to six commands from the repository's own instructions or scripts that must exit 0 for this change to be acceptable (typically tests, type check or build, and lint). Interlock runs them after every build, in root.workdir, without asking, so name only the repository's own commands, one plain command each. A command may name a script this change adds. Return an empty list if the repository defines none. When root.checkCommands is set, Interlock runs those instead.\n- decisions: open decisions only a person can settle, each with question, whyItMatters and recommendation, including any from spec.decisions that are still open. Empty when there are none.",
         "context": {
           "mode": "current",
-          "instructions": "Inputs: root is this run's setup (workdir, request, taskDir, size, issue, baseCommit, branch, dedicatedBranch, reviewPolicy, createPr, commitArtifacts). previous is the result of the step that routed here.\nWork in root.workdir, which is your current directory. Read the repository's own instructions (AGENTS.md, CLAUDE.md, README, contributing or design docs) and follow them; where they conflict with this workflow, they win.\nKeep every file you write inside root.workdir. Put notes and scratch files in root.taskDir, never in /tmp or your home directory.\nPreserve unrelated changes. Settle routine technical questions from the repository and record the assumption. Ask a person only about a decision that changes scope, public behavior, compatibility, consequential architecture or authorization and that nothing already settles.\nKeep workflow details such as root, previous and route values out of the artifacts. Report a real blocker as a failure; never invent a result.",
+          "instructions": "Inputs: root is this run's setup (workdir, request, taskDir, size, issue, baseCommit, branch, dedicatedBranch, reviewPolicy, createPr, commitArtifacts). previous is the result of the step that routed here.\nWork in root.workdir, which is your current directory. Read the repository's own instructions (AGENTS.md, CLAUDE.md, README, contributing or design docs) and follow them; where they conflict with this workflow, they win.\nKeep every file you write inside root.workdir. Put notes and scratch files in root.taskDir, never in /tmp or your home directory.\nRun plain commands from root.workdir: no heredocs, no $ variables or command substitution, no cd, no bash -c, no background jobs. Use your file tools to read and edit files when you have them; from the shell, read with cat, head, tail, rg or git show rather than sed or awk. The workflow's permission policy can allow commands written this way without asking a person.\nPreserve unrelated changes. Settle routine technical questions from the repository and record the assumption. Ask a person only about a decision that changes scope, public behavior, compatibility, consequential architecture or authorization and that nothing already settles.\nKeep workflow details such as root, previous and route values out of the artifacts. Report a real blocker as a failure; never invent a result.",
           "tools": [],
           "skills": [],
           "tier": "max",
@@ -578,7 +684,7 @@
         "prompt": "Review the plan for input.request before anyone builds it. You did not write it. This is a report, not an approval.\n\n1. Read the repository's instructions, then input.planPath and, when input.specPath is set, the spec. Read the source files the plan names or depends on.\n2. Check the plan against input.request: does it solve what was asked, without scope nobody requested?\n3. Inspect, in this order: assumptions about existing code that the code contradicts; acceptance criteria that cannot be observed or tested; failure, recovery and compatibility behavior; whether the verification would catch the main risks; whether an implementer could start without asking a question.\n\nFindings must be concrete and located. Give each a stable id (P1, P2, ...), an owner, a severity, the location, what is wrong and a recommendation.\n- owner spec: the spec's scope or acceptance criteria are wrong or missing. Use only when input.specPath is set.\n- owner plan: the approach, steps or verification are wrong or missing.\n- severity blocker: building this would produce the wrong thing or break something that works. major: must be resolved before building. minor: should not hold up building.\nPut evidence you could not obtain in limitations, not in findings. Zero findings is a valid result.\n\nVerdict: ready when no blocker or major finding remains, revise when one does, blocked when you could not inspect what the review depends on.",
         "context": {
           "mode": "fresh",
-          "instructions": "Run in a new session or an isolated subagent with no inherited conversation. If that is unavailable, report the blocker; never claim fresh context from inside an existing conversation.\nWork read-only in input.workdir, your current directory: do not edit files, commit, or change Git state.",
+          "instructions": "Run in a new session or an isolated subagent with no inherited conversation. If that is unavailable, report the blocker; never claim fresh context from inside an existing conversation.\nWork read-only in input.workdir, your current directory: do not edit files, commit, or change Git state. Run plain commands: no heredocs, no $ variables or command substitution, no cd, no files outside the repository. Use your file tools to read files when you have them; from the shell, read with cat, head, tail, rg or git show rather than sed or awk.",
           "tools": [],
           "skills": [],
           "tier": "max"
@@ -860,7 +966,7 @@
         "prompt": "Implement the change in plan.md (plan.artifactPath, and spec.md when root.size is standard), then commit it.\n\nInputs: plan is the latest plan result. review is the latest independent review, or null before the first one. previous is the step that routed here:\n- a plan decision: when it has humanResponse a person approved the plan; otherwise it was accepted under root.reviewPolicy.\n- a string: a person's answer to your questions.\n- a check result (route build): previous.feedback lists check failures or problems with your last result. Fix them.\n- a review (route build): fix every unresolved finding with owner build, by id.\n- a limit decision: a person allowed you to continue; previous.feedback says what is outstanding.\n\nFirst build:\n- If root.dedicatedBranch is true, commit on the current branch root.branch. Otherwise create a task branch from root.baseCommit following repository conventions; never commit to the branch root.baseCommit came from.\n- Implement the plan's steps within its scope. If the plan turns out to be wrong, say so in summary rather than building something else.\n- Follow the repository's conventions. Reuse existing helpers, components and patterns. Add or update tests that would fail without the change. Update documentation the repository requires to stay current.\n\nRepairs: read the diff since review.reviewedCommit first. Findings with owner environment are not yours. Return resolutions with one entry per build finding you were given: its id, fixed or not_fixed, and details. Do not weaken a test or a criterion to make a finding go away.\n\nChecks: Interlock runs the check commands at your commit after you finish and sends failures back to you, so do not run the full list yourself. Run only the focused tests you need while working.\n\nQuestions: if you cannot continue without a person's decision, return status question with questions (question, whyItMatters, recommendation) and headCommit set to the current HEAD. Keep the work committed so far. Ask only about scope, public behavior, compatibility or authorization.\n\nFinish: commit the code, tests and docs. Commit planning artifacts only when root.commitArtifacts is true or the repository requires it. Leave no uncommitted changes to tracked files. Do not push, merge or deploy.\n\nReturn status done, summary, headCommit (the full id of the commit to review), questions (empty) and resolutions (empty on a first build).",
         "context": {
           "mode": "current",
-          "instructions": "Inputs: root is this run's setup (workdir, request, taskDir, size, issue, baseCommit, branch, dedicatedBranch, reviewPolicy, createPr, commitArtifacts). previous is the result of the step that routed here.\nWork in root.workdir, which is your current directory. Read the repository's own instructions (AGENTS.md, CLAUDE.md, README, contributing or design docs) and follow them; where they conflict with this workflow, they win.\nKeep every file you write inside root.workdir. Put notes and scratch files in root.taskDir, never in /tmp or your home directory.\nPreserve unrelated changes. Settle routine technical questions from the repository and record the assumption. Ask a person only about a decision that changes scope, public behavior, compatibility, consequential architecture or authorization and that nothing already settles.\nKeep workflow details such as root, previous and route values out of the artifacts. Report a real blocker as a failure; never invent a result.",
+          "instructions": "Inputs: root is this run's setup (workdir, request, taskDir, size, issue, baseCommit, branch, dedicatedBranch, reviewPolicy, createPr, commitArtifacts). previous is the result of the step that routed here.\nWork in root.workdir, which is your current directory. Read the repository's own instructions (AGENTS.md, CLAUDE.md, README, contributing or design docs) and follow them; where they conflict with this workflow, they win.\nKeep every file you write inside root.workdir. Put notes and scratch files in root.taskDir, never in /tmp or your home directory.\nRun plain commands from root.workdir: no heredocs, no $ variables or command substitution, no cd, no bash -c, no background jobs. Use your file tools to read and edit files when you have them; from the shell, read with cat, head, tail, rg or git show rather than sed or awk. The workflow's permission policy can allow commands written this way without asking a person.\nPreserve unrelated changes. Settle routine technical questions from the repository and record the assumption. Ask a person only about a decision that changes scope, public behavior, compatibility, consequential architecture or authorization and that nothing already settles.\nKeep workflow details such as root, previous and route values out of the artifacts. Report a real blocker as a failure; never invent a result.",
           "tools": [],
           "skills": [],
           "tier": "balanced",
@@ -1144,7 +1250,7 @@
         "prompt": "Check a finished change against its acceptance criteria. You did not write it. Do not modify anything.\n\nAcceptance criteria are in input.specPath when set, otherwise in input.planPath. The change is the diff from input.baseCommit to input.headCommit; input.changedFiles lists the files.\n\n1. Read the criteria and the complete diff.\n2. For every criterion, find observable evidence that it holds: a test that asserts it, a check result, or behavior you exercised. A test count or the author's summary is not evidence. Report each criterion by id in criteria as verified, unverified (no evidence either way) or gap (evidence that it fails).\n3. Check scope against input.request: flag work nobody asked for and requested behavior that is missing.\n4. Exercise one boundary case the tests do not cover, chosen from the riskiest criterion.\n\nUse finding ids S1, S2, ...\n\nInterlock already checked out input.headCommit and ran the check commands there: input.checks holds each command, its exit code, attempts and output tail, and input.checksPassed is the overall result (null when none ran). Treat them as facts and do not rerun a command that passed. A check with attempts 2 that passed is flaky: mention it in limitations, not as a finding.\n\nEarlier review: input.priorReview is the previous merged review, or null. When set, read the diff from input.priorReview.reviewedCommit to input.headCommit first, give each earlier finding from your lane a resolutions entry under its original id, recheck only what the fixes affect, and carry earlier verified evidence forward, saying so.\n\nEvery finding has an owner:\n- spec: an acceptance criterion or the spec's scope is wrong or missing, so neither plan nor code can satisfy the request. Use only when input.specPath is set.\n- plan: the plan's approach or verification is wrong, so fixing the code alone cannot resolve it.\n- build: the code, tests or docs are wrong and the plan is right.\n- environment: a check failed for a reason this change did not cause and cannot fix within scope. Only with proof in details: the same command fails the same way at input.baseCommit, or the failure is in code the diff does not touch and does not reproduce on rerun. Put the exact command in location. These never hold the change.\nAnd a severity: blocker (wrong or harmful behavior), major (must be fixed before this ships), minor (worth fixing, should not hold the change).\n\nDo not raise findings about the pull request or anything that can exist only after delivery; put them in deliveryNotes. Put evidence you could not obtain in limitations.\n\nSet reviewedCommit to input.headCommit. Verdict: pass when no blocker or major finding remains in your lane, revise when one does, blocked only when you could not inspect what the review depends on.",
         "context": {
           "mode": "fresh",
-          "instructions": "Run in a new session or an isolated subagent with no inherited conversation. If that is unavailable, report the blocker; never claim fresh context from inside an existing conversation.\nWork read-only in input.workdir, your current directory: do not edit files, commit, or change Git state.",
+          "instructions": "Run in a new session or an isolated subagent with no inherited conversation. If that is unavailable, report the blocker; never claim fresh context from inside an existing conversation.\nWork read-only in input.workdir, your current directory: do not edit files, commit, or change Git state. Run plain commands: no heredocs, no $ variables or command substitution, no cd, no files outside the repository. Use your file tools to read files when you have them; from the shell, read with cat, head, tail, rg or git show rather than sed or awk.",
           "tools": [],
           "skills": [],
           "tier": "balanced"
@@ -1324,7 +1430,7 @@
         "prompt": "Review the quality of a finished change. You did not write it. Do not modify anything. Another reviewer checks the acceptance criteria; you check how the change is built.\n\nThe change is the diff from input.baseCommit to input.headCommit; input.changedFiles lists the files.\n\n1. Read the repository's instructions, then the complete diff.\n2. Look for regressions in neighbouring behavior, error handling, security, concurrency and data loss, and tests that would not fail without the change.\n3. Check the repository's conventions: structure, naming, reuse of existing helpers and components, and documentation it requires to stay current.\n4. If the change touches UI, compare it with the repository's design guidance and the screens it resembles, and check the loading, empty and error states it affects.\n\nUse finding ids C1, C2, ... Return criteria as an empty list.\n\nInterlock already checked out input.headCommit and ran the check commands there: input.checks holds each command, its exit code, attempts and output tail, and input.checksPassed is the overall result (null when none ran). Treat them as facts and do not rerun a command that passed. A check with attempts 2 that passed is flaky: mention it in limitations, not as a finding.\n\nEarlier review: input.priorReview is the previous merged review, or null. When set, read the diff from input.priorReview.reviewedCommit to input.headCommit first, give each earlier finding from your lane a resolutions entry under its original id, recheck only what the fixes affect, and carry earlier verified evidence forward, saying so.\n\nEvery finding has an owner:\n- spec: an acceptance criterion or the spec's scope is wrong or missing, so neither plan nor code can satisfy the request. Use only when input.specPath is set.\n- plan: the plan's approach or verification is wrong, so fixing the code alone cannot resolve it.\n- build: the code, tests or docs are wrong and the plan is right.\n- environment: a check failed for a reason this change did not cause and cannot fix within scope. Only with proof in details: the same command fails the same way at input.baseCommit, or the failure is in code the diff does not touch and does not reproduce on rerun. Put the exact command in location. These never hold the change.\nAnd a severity: blocker (wrong or harmful behavior), major (must be fixed before this ships), minor (worth fixing, should not hold the change).\n\nDo not raise findings about the pull request or anything that can exist only after delivery; put them in deliveryNotes. Put evidence you could not obtain in limitations.\n\nSet reviewedCommit to input.headCommit. Verdict: pass when no blocker or major finding remains in your lane, revise when one does, blocked only when you could not inspect what the review depends on.",
         "context": {
           "mode": "fresh",
-          "instructions": "Run in a new session or an isolated subagent with no inherited conversation. If that is unavailable, report the blocker; never claim fresh context from inside an existing conversation.\nWork read-only in input.workdir, your current directory: do not edit files, commit, or change Git state.",
+          "instructions": "Run in a new session or an isolated subagent with no inherited conversation. If that is unavailable, report the blocker; never claim fresh context from inside an existing conversation.\nWork read-only in input.workdir, your current directory: do not edit files, commit, or change Git state. Run plain commands: no heredocs, no $ variables or command substitution, no cd, no files outside the repository. Use your file tools to read files when you have them; from the shell, read with cat, head, tail, rg or git show rather than sed or awk.",
           "tools": [],
           "skills": [],
           "tier": "max"
@@ -1631,7 +1737,7 @@
         "prompt": "Open or update a pull request for the reviewed change. It passed independent review at deliver.reviewedCommit on branch deliver.branch.\n\nPush that branch and create the pull request with the repository's own tooling and template, following its instructions. Base it on the branch root.baseCommit came from unless the repository says otherwise. In the description: what changed and why, the acceptance criteria and how each was verified (review.criteria), the checks Interlock ran (review.checks), minor findings left open, review.deliveryNotes, and a link to root.issue when set. Keep to the template's own sections.\n\nDo not change the reviewed code. If the branch must change to open the pull request, stop and report it. If no remote or credentials are available, return prUrl null and say what blocked delivery. Do not merge, and do not wait for the pull request's CI.\n\nReturn prUrl and summary.",
         "context": {
           "mode": "current",
-          "instructions": "Inputs: root is this run's setup (workdir, request, taskDir, size, issue, baseCommit, branch, dedicatedBranch, reviewPolicy, createPr, commitArtifacts). previous is the result of the step that routed here.\nWork in root.workdir, which is your current directory. Read the repository's own instructions (AGENTS.md, CLAUDE.md, README, contributing or design docs) and follow them; where they conflict with this workflow, they win.\nKeep every file you write inside root.workdir. Put notes and scratch files in root.taskDir, never in /tmp or your home directory.\nPreserve unrelated changes. Settle routine technical questions from the repository and record the assumption. Ask a person only about a decision that changes scope, public behavior, compatibility, consequential architecture or authorization and that nothing already settles.\nKeep workflow details such as root, previous and route values out of the artifacts. Report a real blocker as a failure; never invent a result.",
+          "instructions": "Inputs: root is this run's setup (workdir, request, taskDir, size, issue, baseCommit, branch, dedicatedBranch, reviewPolicy, createPr, commitArtifacts). previous is the result of the step that routed here.\nWork in root.workdir, which is your current directory. Read the repository's own instructions (AGENTS.md, CLAUDE.md, README, contributing or design docs) and follow them; where they conflict with this workflow, they win.\nKeep every file you write inside root.workdir. Put notes and scratch files in root.taskDir, never in /tmp or your home directory.\nRun plain commands from root.workdir: no heredocs, no $ variables or command substitution, no cd, no bash -c, no background jobs. Use your file tools to read and edit files when you have them; from the shell, read with cat, head, tail, rg or git show rather than sed or awk. The workflow's permission policy can allow commands written this way without asking a person.\nPreserve unrelated changes. Settle routine technical questions from the repository and record the assumption. Ask a person only about a decision that changes scope, public behavior, compatibility, consequential architecture or authorization and that nothing already settles.\nKeep workflow details such as root, previous and route values out of the artifacts. Report a real blocker as a failure; never invent a result.",
           "tools": [],
           "skills": [],
           "continuityGroup": "author"
