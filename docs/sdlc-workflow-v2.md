@@ -29,12 +29,13 @@ The steps need a coding agent with file access, Git and the repository's tools: 
 | `taskDir`         | Directory for the spec and plan, relative to the checkout. Defaults to `.tasks/<slug>`.                                                        |
 | `reviewPolicy`    | `auto` (default) asks a person only when the plan has open decisions or review cannot settle it. `always` asks a person to approve every plan. |
 | `createPr`        | `false` by default. `true` pushes the branch and opens a pull request after the change passes review.                                          |
+| `checkCommands`   | Up to six commands Interlock runs before every review. When omitted, the plan proposes them and they run without a prompt.                     |
 | `commitArtifacts` | `false` by default. `true` commits the spec and plan with the change.                                                                          |
 
 ## How a change moves
 
 1. **Setup.** A Script resolves the checkout, the base commit and the task folder. No agent is needed.
-2. **Spec** (standard only) and **plan**, written by one author session (`author` continuity group). The plan owns the acceptance criteria and names up to six check commands. Open decisions go to a person.
+2. **Spec** (standard only) and **plan**, written by one author session (`author` continuity group). The plan owns the acceptance criteria and names up to six check commands, unless the `checkCommands` input pins them. Open decisions go to a person.
 3. **Plan approval.** A plan without open decisions goes to the build (small, `auto`) or to **Plan review** (standard). Plan review findings go back to the plan. A person approves, answers or asks for changes, or stops, through Human input; approval covers only the plan text they were shown.
 4. **Build.** The author session implements and commits. It runs only focused tests, because Change review runs the full checks. If it needs a decision on scope, public behavior, compatibility or authorization, it returns its questions and a person answers in a text field.
 5. **Change review.** Its `checks` Script runs the plan's check commands at the built commit, retrying a failure once and reporting a pass on retry as flaky. One fresh reviewer then gets the exit codes and output, checks each criterion and the diff, and does not rerun passing checks. A Script applies the verdict rules. Each finding has an owner:
@@ -77,6 +78,8 @@ Each workflow can be checked with [fixture simulation](workflow-simulation.md), 
 
 ## Run with few approvals
 
+On a default import, every Agent action asks a person, but the check commands Interlock runs before each review do not: they run as a Script with your permissions, not as an Agent action. When the plan chooses them and `reviewPolicy` is `auto` on a small change, nobody sees them before they run. Pin them with the `checkCommands` input, or use `reviewPolicy: "always"` to approve each plan first; plan approval lists the commands.
+
 A managed Agent session with **Standard** permissions asks a person before it edits a file or runs a command. SDLC v2 ships a conservative [permission policy](permission-policy.md) on **SDLC workflow v2** and a narrower one on **Change review**. They allow routine reading, editing and Git bookkeeping without asking. **Plan review** runs its reviewer with **Read only** permissions, which a policy never widens. A policy applies only inside a run's own [Git worktree](managed-workspaces.md), so turn that on first:
 
 1. Open **SDLC workflow v2**, then **Workflow settings**.
@@ -111,7 +114,7 @@ The workflows avoid most of those requests by design:
 
 To allow your repository's own commands, add rules such as `{ "kind": "command", "pattern": "pnpm test *" }` in **Workflow settings → Permission policy**. Treat each as code execution: an agent that can edit files can change what the command runs. See [the policy's limits](permission-policy.md#limits).
 
-The plan proposes the check commands from the repository's own instructions, and Interlock runs them without asking. Use `reviewPolicy: "always"` to read the plan, including its verification section, before any code is written.
+Without the worktree setting, a run must start from a checkout with no uncommitted changes to tracked files, so the checks test what was committed; the setup step refuses otherwise. A review round whose check commands were skipped cannot pass, and the result never reports `verification: "passed"` for it.
 
 ## Compare v2 with the original
 

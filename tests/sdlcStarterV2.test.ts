@@ -109,6 +109,7 @@ type Output = {
   taskDir: string;
   route: string;
   verdict: string;
+  verification: string;
   feedback: string;
   checks: { outputTail: string }[];
 };
@@ -140,15 +141,44 @@ it('runs the setup, check, verdict, routing and delivery Scripts on a real repos
   git('add', '.');
   git('commit', '-qm', 'base');
 
-  const root = await run(S.setup, {
+  // Scripts run in the run's worktree when it has one, otherwise in repoPath.
+  const inDir = async (dir: string, input: unknown) => {
+    const before = process.cwd();
+    process.chdir(dir);
+    try {
+      return await run(S.setup, input);
+    } finally {
+      process.chdir(before);
+    }
+  };
+  const root = await inDir(repo, {
     run: { repoPath: repo, request: 'Fix reimport!', issue: 'o/r/issues/403' },
   });
   expect(root).toMatchObject({ size: 'small', createPr: false });
   expect(root.taskDir).toMatch(/^\.tasks\/403-fix-reimport-/);
   expect(existsSync(join(repo, root.taskDir))).toBe(true);
   await expect(
-    run(S.setup, { run: { repoPath: repo, request: 'x', taskDir: '../out' } }),
+    inDir(repo, { run: { repoPath: repo, request: 'x', taskDir: '../out' } }),
   ).rejects.toThrow(/inside/);
+
+  // Without its own worktree, a dirty checkout is refused. In a run's own
+  // worktree, a passed repoPath does not move the work to the main checkout.
+  writeFileSync(join(repo, 'a.txt'), 'dirty');
+  await expect(
+    inDir(repo, { run: { repoPath: repo, request: 'x' } }),
+  ).rejects.toThrow(/uncommitted changes/);
+  const tree = join(repo, '..', `${repo.split('/').at(-1)}-tree`);
+  dirs.push(tree);
+  git('worktree', 'add', '-q', '-b', 'interlock/run-1', tree, 'HEAD');
+  process.env.INTERLOCK_ROOT_RUN_ID = 'run-1';
+  try {
+    expect(
+      await inDir(tree, { run: { repoPath: repo, request: 'x' } }),
+    ).toMatchObject({ repoPath: realpathSync(tree), dedicatedBranch: true });
+  } finally {
+    delete process.env.INTERLOCK_ROOT_RUN_ID;
+  }
+  git('checkout', '-q', 'a.txt');
 
   // Approval covers only the plan text the person saw.
   const planPath = join(root.taskDir, 'plan.md');
@@ -254,6 +284,44 @@ it('runs the setup, check, verdict, routing and delivery Scripts on a real repos
   expect(
     (await run(S.reviewRoute, { review: plans, count: 3, grant })).route,
   ).toBe('ask');
+  // A review-round extension survives a later question-limit decision.
+  const rounds = await run(S.limitGrant, {
+    asked: { kind: 'rounds', resume: 'plan', round: 3, feedback: '' },
+    answer: { choice: 'continue' },
+    prior: null,
+  });
+  const later = await run(S.limitGrant, {
+    asked: await run(S.limitAsk, { ask: gate }),
+    answer: { choice: 'continue' },
+    prior: rounds,
+  });
+  expect(
+    (await run(S.reviewRoute, { review: plans, count: 4, grant: later })).route,
+  ).toBe('replan');
+
+  // Check commands skipped on a dirty checkout hold the round, and the result
+  // can never report verification passed for them.
+  writeFileSync(join(repo, 'b.txt'), 'dirty');
+  const skipped = await run(C.checks, {
+    run: { repoPath: repo, baseRef: 'main', checkCommands: ['true'] },
+  });
+  git('checkout', '-q', 'b.txt');
+  expect(skipped.checks).toMatchObject([{ status: 'not_run' }]);
+  const unproven = await run(C.normalize, { pre: skipped, review: review([]) });
+  expect(unproven).toMatchObject({
+    verdict: 'revise',
+    findings: [{ id: 'rule-checks', severity: 'major' }],
+  });
+  expect(
+    (
+      await run(S.result, {
+        root,
+        review: { ...unproven, verdict: 'pass', findings: [] },
+        deliver: { branch: 'task', reviewedCommit: head },
+        pr: null,
+      })
+    ).verification,
+  ).toBe('incomplete');
 
   // Delivery refuses a checkout that moved after review.
   expect((await run(S.deliverCheck, { root, review: excused })).route).toBe(

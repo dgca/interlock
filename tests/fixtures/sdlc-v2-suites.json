@@ -43,7 +43,8 @@
               "decisions": [],
               "summary": "plan",
               "question": "q",
-              "context": "c"
+              "context": "c",
+              "checkCommands": ["pnpm test"]
             }
           },
           {
@@ -209,7 +210,8 @@
               "decisions": [],
               "summary": "plan",
               "question": "q",
-              "context": "c"
+              "context": "c",
+              "checkCommands": ["pnpm test"]
             }
           },
           {
@@ -264,7 +266,8 @@
               "decisions": [],
               "summary": "plan",
               "question": "q",
-              "context": "c"
+              "context": "c",
+              "checkCommands": ["pnpm test"]
             }
           },
           {
@@ -533,7 +536,8 @@
               "decisions": [],
               "summary": "plan",
               "question": "q",
-              "context": "c"
+              "context": "c",
+              "checkCommands": ["pnpm test"]
             }
           },
           {
@@ -628,7 +632,8 @@
               "decisions": [],
               "summary": "plan",
               "question": "q",
-              "context": "c"
+              "context": "c",
+              "checkCommands": ["pnpm test"]
             }
           },
           {
@@ -788,7 +793,8 @@
               "decisions": [],
               "summary": "plan",
               "question": "q",
-              "context": "c"
+              "context": "c",
+              "checkCommands": ["pnpm test"]
             }
           },
           {
@@ -952,7 +958,8 @@
               "decisions": [],
               "summary": "plan",
               "question": "q",
-              "context": "c"
+              "context": "c",
+              "checkCommands": ["pnpm test"]
             }
           },
           {
@@ -1003,7 +1010,8 @@
               "decisions": [],
               "summary": "plan",
               "question": "q",
-              "context": "c"
+              "context": "c",
+              "checkCommands": ["pnpm test"]
             }
           },
           {
@@ -1197,7 +1205,8 @@
               "decisions": [],
               "summary": "plan",
               "question": "q",
-              "context": "c"
+              "context": "c",
+              "checkCommands": ["pnpm test"]
             }
           },
           {
@@ -1326,7 +1335,8 @@
               "decisions": [],
               "summary": "plan",
               "question": "q",
-              "context": "c"
+              "context": "c",
+              "checkCommands": ["pnpm test"]
             }
           },
           {
@@ -1430,7 +1440,7 @@
             "output": {
               "route": "build",
               "kind": "rounds",
-              "until": 6,
+              "reviewUntil": 6,
               "feedback": "fb",
               "humanResponse": "{}",
               "summary": "s"
@@ -1537,7 +1547,7 @@
             "output": {
               "route": "plan",
               "kind": "rounds",
-              "until": 6,
+              "reviewUntil": 6,
               "feedback": "fb",
               "humanResponse": "{}",
               "summary": "s"
@@ -1561,7 +1571,8 @@
               "decisions": [],
               "summary": "plan",
               "question": "q",
-              "context": "c"
+              "context": "c",
+              "checkCommands": ["pnpm test"]
             }
           },
           {
@@ -1665,7 +1676,7 @@
             "output": {
               "route": "stop",
               "kind": "rounds",
-              "until": 6,
+              "reviewUntil": 6,
               "feedback": "fb",
               "humanResponse": "{}",
               "summary": "s"
@@ -1742,7 +1753,8 @@
               "decisions": [],
               "summary": "plan",
               "question": "q",
-              "context": "c"
+              "context": "c",
+              "checkCommands": ["pnpm test"]
             }
           },
           {
@@ -1857,7 +1869,7 @@
             "output": {
               "route": "build",
               "kind": "questions",
-              "until": 3,
+              "reviewUntil": null,
               "feedback": "fb",
               "humanResponse": "{}",
               "summary": "s"
