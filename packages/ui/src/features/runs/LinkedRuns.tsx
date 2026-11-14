@@ -83,7 +83,7 @@ export function ToolCallLinks({
               <ChevronRight size={14} />
             </button>
           ) : (
-            <div key={call.id} className={styles.branchPending}>
+            <div key={call.id} className={styles.toolPending}>
               {content}
             </div>
           );
