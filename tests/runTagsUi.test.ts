@@ -193,12 +193,14 @@ it('preserves exact tag filters through list and inspector URLs', () => {
   expect(runTagFilter('{"repo":42}')).toBeUndefined();
 });
 
-it('accepts only internal run, Board, and workflow Runs return locations', () => {
+it('accepts only internal run, Board, report, and workflow Runs return locations', () => {
   const scope = '/workflows/w1?view=runs&tab=history&offset=100';
   expect(runReturnLocation(scope)?.path).toBe(scope);
   expect(
     runReturnLocation('/boards/b1?status=attention&page%3Areview=2')?.label,
   ).toBe('Back to board');
+  for (const report of ['/report', '/workflows/w1?view=report'])
+    expect(runReturnLocation(report)?.label).toBe('Back to report');
   for (const url of [
     'https://example.com/runs',
     '//example.com/runs',

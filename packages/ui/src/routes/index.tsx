@@ -35,7 +35,10 @@ import {
 } from '../features/variables/VariableListSkeleton';
 import { HarnessLibrarySkeleton } from '../features/executors/HarnessListSkeleton';
 import { AutomationListSkeleton } from '../features/automations/AutomationListSkeleton';
-import { ReportPageSkeleton } from '../features/report/ReportSkeleton';
+import {
+  ReportLoadingContent,
+  ReportPageSkeleton,
+} from '../features/report/ReportSkeleton';
 import { DiagnosticsPageSkeleton } from '../features/diagnostics/DiagnosticsSkeleton';
 import { workflowSection } from '../features/workflows/workflowListConfig';
 import { TestsViewSkeleton } from '../features/testing/TestsViewSkeleton';
@@ -188,21 +191,17 @@ function DiagnosticsRoute() {
 }
 
 function ReportRoute() {
-  const { workflowId } = useParams<{ workflowId?: string }>();
-  const navigate = useNavigate();
   return (
     <Suspense fallback={<ReportPageSkeleton />}>
-      <WorkflowReportView
-        key={workflowId ?? 'library'}
-        workflowId={workflowId}
-        onBack={
-          workflowId
-            ? () => void navigate(paths.workflow(workflowId))
-            : undefined
-        }
-      />
+      <WorkflowReportView key="library" />
     </Suspense>
   );
+}
+
+// Earlier workflow report links open the workflow's Report tab.
+function WorkflowReportRedirect() {
+  const { workflowId } = useParams<{ workflowId: string }>();
+  return <Navigate replace to={paths.workflowReport(workflowId!)} />;
 }
 
 function PromptsRoute() {
@@ -380,7 +379,8 @@ function WorkflowRoute() {
         Boolean(workflow) &&
         !redirectToSchedules &&
         section !== 'runs' &&
-        section !== 'tests',
+        section !== 'tests' &&
+        section !== 'report',
     }),
   );
   const ownerId = workflow?.ownerWorkflowId ?? undefined;
@@ -438,7 +438,6 @@ function WorkflowRoute() {
           )
         }
         onOpenWorkflow={(id) => void navigate(paths.workflow(id))}
-        onReport={() => void navigate(paths.workflowReport(workflow.id))}
         onDeleted={() => {
           flushSync(() => context.onDirty(false));
           void navigate(
@@ -460,6 +459,10 @@ function WorkflowRoute() {
           section === 'tests' ? (
             <Suspense fallback={<TestsViewSkeleton />}>
               <TestsView workflow={workflow} />
+            </Suspense>
+          ) : section === 'report' ? (
+            <Suspense fallback={<ReportLoadingContent />}>
+              <WorkflowReportView workflowId={workflow.id} />
             </Suspense>
           ) : (
             <Suspense fallback={<RunListSkeleton embedded />}>
@@ -703,7 +706,10 @@ export const routes: RouteObject[] = [
       },
       { path: 'prompts/:promptId', Component: PromptRoute },
       { path: 'workflows/:workflowId', Component: WorkflowRoute },
-      { path: 'workflows/:workflowId/report', Component: ReportRoute },
+      {
+        path: 'workflows/:workflowId/report',
+        Component: WorkflowReportRedirect,
+      },
       ...testRoutes,
       { path: 'runs', Component: RunsRoute },
       {

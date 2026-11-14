@@ -13,7 +13,13 @@ export function workflowTabs(workflows: Pick<Workflow, 'archived'>[]) {
 }
 
 /** Workflow page sections, selected by the `view` URL parameter. */
-const workflowSections = ['editor', 'runs', 'tests', 'children'] as const;
+const workflowSections = [
+  'editor',
+  'runs',
+  'tests',
+  'report',
+  'children',
+] as const;
 export type WorkflowSection = (typeof workflowSections)[number];
 export function workflowSection(view: string | null): WorkflowSection {
   return workflowSections.find((section) => section === view) ?? 'editor';

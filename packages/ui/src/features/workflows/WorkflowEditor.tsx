@@ -53,7 +53,6 @@ import {
   Redo2,
   MoreHorizontal,
   Trash2,
-  ChartNoAxesColumn,
 } from 'lucide-react';
 import {
   validateDefinition,
@@ -171,7 +170,6 @@ export function WorkflowEditor({
   onSectionChange,
   sectionView,
   onOpenWorkflow,
-  onReport,
 }: {
   workflow: Workflow & { layoutRevision?: number };
   workflows: WorkflowCatalogEntry[];
@@ -188,8 +186,7 @@ export function WorkflowEditor({
   section?: WorkflowSection;
   onSectionChange?: (section: WorkflowSection) => void;
   onOpenWorkflow?: (id: string) => void;
-  onReport?: () => void;
-  /** Content of the selected Runs or Tests section. */
+  /** Content of the selected Runs, Tests or Report section. */
   sectionView?: ReactNode;
 }) {
   const [deleting, setDeleting] = useState(false);
@@ -947,14 +944,6 @@ export function WorkflowEditor({
                 </ActionIcon>
               </Menu.Target>
               <Menu.Dropdown>
-                {onReport && (
-                  <Menu.Item
-                    leftSection={<ChartNoAxesColumn size={14} />}
-                    onClick={onReport}
-                  >
-                    Performance & cost report
-                  </Menu.Item>
-                )}
                 {section === 'editor' && compactHeader && (
                   <>
                     <Menu.Item
@@ -1088,6 +1077,7 @@ export function WorkflowEditor({
             { value: 'editor', label: 'Editor' },
             { value: 'runs', label: 'Runs' },
             { value: 'tests', label: 'Tests' },
+            { value: 'report', label: 'Report' },
             ...(!workflow.ownerWorkflowId
               ? [{ value: 'children', label: 'Child workflows' }]
               : []),
@@ -1457,7 +1447,7 @@ export function WorkflowEditor({
             </WorkspaceReads>
           </Tabs.Panel>
         )}
-        {(['runs', 'tests'] as const).map((value) => (
+        {(['runs', 'tests', 'report'] as const).map((value) => (
           <Tabs.Panel
             key={value}
             value={value}

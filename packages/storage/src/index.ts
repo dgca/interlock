@@ -49,7 +49,7 @@ import {
   workflowBoardStageColumn,
 } from './workflowBoards.js';
 import { Transcripts } from './transcripts.js';
-import { runsForReport } from './report.js';
+import { countReportRuns, runsForReport } from './report.js';
 export { runsForReport } from './report.js';
 export type { HistoryRun } from './history.js';
 import {
@@ -528,9 +528,8 @@ export class Store {
       terminalLimit,
     );
   }
-  runsForReport(filter: ReportFilter): Run[] {
-    return runsForReport(this.db, filter);
-  }
+  runsForReport = (filter: ReportFilter) => runsForReport(this.db, filter);
+  countReportRuns = (filter: ReportFilter) => countReportRuns(this.db, filter);
   queuedRuns(): Run[] {
     return readRuns(
       this.db,

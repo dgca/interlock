@@ -244,7 +244,7 @@ Attempt groups include `wallMs`, `pausedMs`, and `activeMs`, with null values wh
 
 ## Workflow performance and cost reports
 
-Use `interlock report`, the MCP tool `workflow_report`, the shared API `report.summary`, or the UI **Report** view (`/report` or `/workflows/:id/report`) to generate operational performance and cost reports over a single workflow or across the entire library.
+Use `interlock report`, the MCP tool `workflow_report`, the shared API `report.summary`, or the UI **Report** view (`/report` or a workflow's **Report** tab) to generate operational performance and cost reports over a single workflow or across the entire library.
 
 Reports select the newest matching runs by creation time. Optional `since` and `until` timestamps are inclusive and accept ISO datetimes with a timezone offset. Equivalent offsets and omitted fractional seconds select the same instants. Bounds are normalized to UTC for comparison with stored millisecond timestamps. Finer lower bounds round up and finer upper bounds round down to stored milliseconds. The rounded UTC bound must stay within `0000-01-01T00:00:00.000Z` through `9999-12-31T23:59:59.999Z`. Invalid calendar dates, malformed offsets and bounds outside that range return validation errors. Omitted dates impose no restriction. The sample limit defaults to 500 and accepts 1 through 5000 runs. The UI initially selects the past seven days and requests up to 1000 runs.
 
@@ -266,7 +266,7 @@ MCP `workflow_report` and shared `report.summary` accept the same filter:
 }
 ```
 
-Open a workflow report from **Workflow actions → Performance & cost report** in its editor. **Back to workflow** returns to that workflow. The workflow-scoped report keeps its workflow fixed; use the global **Report** page to compare workflow scopes.
+Open a workflow report from the workflow's **Report** tab. The workflow-scoped report keeps its workflow fixed; use the global **Report** page to compare workflow scopes. Both add a comparison with the previous period of the same length, computed by the same report (shared API `report.dashboard`, UI only).
 
 The Reports UI provides **Filter by tags** with **Apply filters** and **Clear filters** actions. Storage applies indexed tag matching before the sample limit. Every report metric and usage breakdown covers only the selected sample. Tags select runs; they do not create a tag grouping or automatically expand the sample to include descendants.
 

@@ -36,7 +36,7 @@ export function automationDraftKey(search: URLSearchParams) {
   return JSON.stringify([search.get('type'), search.get('workflow') || null]);
 }
 
-// Only return to in-app run, request, or Board views. Parse before navigation
+// Only return to in-app run, request, Board, or report views. Parse before navigation
 // because the destination can be supplied by a copied or edited URL.
 export function runReturnLocation(value: string | null | undefined) {
   if (
@@ -61,11 +61,12 @@ export function runReturnLocation(value: string | null | undefined) {
           ? 'Back to request'
           : 'Back to board',
       };
-    if (
-      /^\/workflows\/[^/]+$/.test(pathname) &&
-      searchParams.get('view') === 'runs'
-    )
-      return { path, label: 'Back to runs' };
+    if (pathname === '/report') return { path, label: 'Back to report' };
+    if (/^\/workflows\/[^/]+$/.test(pathname)) {
+      const view = searchParams.get('view');
+      if (view === 'runs') return { path, label: 'Back to runs' };
+      if (view === 'report') return { path, label: 'Back to report' };
+    }
   } catch {
     return;
   }
@@ -87,7 +88,8 @@ export const paths = {
   automation: (id: string) => `/automations/${encodeURIComponent(id)}`,
   automationEdit: (id: string) => `/automations/${encodeURIComponent(id)}/edit`,
   report: '/report',
-  workflowReport: (id: string) => `/workflows/${encodeURIComponent(id)}/report`,
+  workflowReport: (id: string) =>
+    `/workflows/${encodeURIComponent(id)}?view=report`,
   diagnostics: '/settings/diagnostics',
   harnesses: '/settings/ai',
   integrationNew: '/settings/ai/integrations/-/new',
