@@ -91,6 +91,7 @@ it.each(['http', 'stdio'])(
       const choices = await call('list_workflows', { source: 'starters' });
       expect(choices.map((s: any) => s.id)).toEqual([
         'sdlc',
+        'sdlc-v2',
         'evaluate-comparison',
       ]);
       expect(JSON.stringify(choices).length).toBeLessThan(2000);

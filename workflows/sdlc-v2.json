@@ -1,0 +1,3035 @@
+{
+  "name": "SDLC workflow v2",
+  "description": "Plan, build, review and deliver a software change. Interlock runs the checks; fresh criteria and code reviewers work in parallel; findings return to the spec, plan or build; a person answers questions and decides at every limit.",
+  "definition": {
+    "cwd": {
+      "source": "runInput",
+      "path": "repoPath"
+    },
+    "agentPermissions": "standard",
+    "inputSchema": {
+      "type": "object",
+      "required": ["request"],
+      "additionalProperties": false,
+      "properties": {
+        "request": {
+          "type": "string",
+          "minLength": 1,
+          "title": "Change request",
+          "description": "What to change and why, in the requester's words. Paste the issue text when there is one."
+        },
+        "repoPath": {
+          "type": "string",
+          "minLength": 1,
+          "title": "Repository path",
+          "description": "Absolute path of the Git checkout to work in. Required unless the workflow gives each run its own Git worktree, which then takes precedence."
+        },
+        "size": {
+          "type": "string",
+          "enum": ["small", "standard"],
+          "default": "small",
+          "title": "Size",
+          "description": "small: plan, build, review. standard: adds a written spec and an independent plan review before any code. Use standard for new screens, public behavior or work across several modules."
+        },
+        "issue": {
+          "type": "string",
+          "minLength": 1,
+          "title": "Issue",
+          "description": "Optional issue URL or identifier this change resolves."
+        },
+        "baseRef": {
+          "type": "string",
+          "minLength": 1,
+          "title": "Base",
+          "description": "Commit or branch the work starts from. Omit for the checkout's current HEAD."
+        },
+        "taskDir": {
+          "type": "string",
+          "minLength": 1,
+          "title": "Artifact directory",
+          "description": "Directory, relative to the checkout, for the spec, plan and notes. Omit for .tasks/<slug>."
+        },
+        "checkCommands": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "maxItems": 6,
+          "title": "Check commands",
+          "description": "Commands that must exit 0, such as the repository's test, build and lint commands. Interlock runs them after each build. Omit to let the plan propose them."
+        },
+        "reviewPolicy": {
+          "type": "string",
+          "enum": ["auto", "always"],
+          "default": "auto",
+          "title": "Plan approval",
+          "description": "auto asks a person only about open decisions or when review cannot settle the plan. always asks a person to approve every plan before code is written."
+        },
+        "createPr": {
+          "type": "boolean",
+          "default": false,
+          "title": "Open a pull request",
+          "description": "Push the branch and open a pull request after the change passes review. Omission finishes locally."
+        },
+        "commitArtifacts": {
+          "type": "boolean",
+          "default": false,
+          "title": "Commit planning artifacts",
+          "description": "Commit the spec and plan with the change. Leave off for repositories that keep task notes untracked."
+        }
+      }
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "outcome": {
+          "type": "string",
+          "enum": ["finished", "stopped"]
+        },
+        "summary": {
+          "type": "string"
+        },
+        "taskDir": {
+          "type": "string"
+        },
+        "verification": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": ["passed", "incomplete", "not_reviewed"]
+            },
+            "baseCommit": {
+              "type": ["string", "null"]
+            },
+            "reviewedCommit": {
+              "type": ["string", "null"]
+            },
+            "reviewRounds": {
+              "type": "integer"
+            },
+            "checksPassed": {
+              "type": ["boolean", "null"]
+            },
+            "checks": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "command": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": ["passed", "failed", "not_run"]
+                  },
+                  "exitCode": {
+                    "type": ["integer", "null"]
+                  },
+                  "attempts": {
+                    "type": "integer"
+                  }
+                },
+                "required": ["command", "status", "exitCode", "attempts"],
+                "additionalProperties": false
+              }
+            },
+            "criteria": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": ["verified", "unverified", "gap"]
+                  },
+                  "evidence": {
+                    "type": "string"
+                  }
+                },
+                "required": ["id", "status", "evidence"],
+                "additionalProperties": false
+              }
+            },
+            "openFindings": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "owner": {
+                    "type": "string"
+                  },
+                  "severity": {
+                    "type": "string"
+                  },
+                  "location": {
+                    "type": "string"
+                  },
+                  "details": {
+                    "type": "string"
+                  }
+                },
+                "required": ["id", "owner", "severity", "location", "details"],
+                "additionalProperties": false
+              }
+            },
+            "notes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "status",
+            "baseCommit",
+            "reviewedCommit",
+            "reviewRounds",
+            "checksPassed",
+            "checks",
+            "criteria",
+            "openFindings",
+            "notes"
+          ],
+          "additionalProperties": false
+        },
+        "delivery": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": ["local", "pr_opened", "blocked", "not_attempted"]
+            },
+            "branch": {
+              "type": ["string", "null"]
+            },
+            "prUrl": {
+              "type": ["string", "null"]
+            },
+            "ci": {
+              "type": "string",
+              "enum": ["not_awaited", "not_applicable"]
+            },
+            "notes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["status", "branch", "prUrl", "ci", "notes"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["outcome", "summary", "taskDir", "verification", "delivery"],
+      "additionalProperties": false
+    },
+    "maxSteps": 150,
+    "nodes": [
+      {
+        "id": "entry",
+        "kind": "entry",
+        "label": "Change request",
+        "stage": "Planning",
+        "stageId": "planning",
+        "position": {
+          "x": 40,
+          "y": 300
+        },
+        "inputSchema": {},
+        "outputSchema": {}
+      },
+      {
+        "id": "setup",
+        "kind": "script",
+        "label": "Resolve checkout and task folder",
+        "stage": "Planning",
+        "stageId": "planning",
+        "position": {
+          "x": 340,
+          "y": 300
+        },
+        "inputSchema": {},
+        "outputSchema": {},
+        "language": "javascript",
+        "command": "// Resolve the checkout this run works in. With a managed worktree, the current\n// directory is that worktree; otherwise it is the repoPath input.\nconst fs = await import('node:fs/promises');\nconst path = await import('node:path');\nconst { execFileSync } = await import('node:child_process');\nconst { createHash } = await import('node:crypto');\nconst i = input.run;\nconst git = (...args) => execFileSync('git', args, { encoding: 'utf8' }).trim();\nconst workdir = await fs.realpath(process.cwd());\nconst top = await fs.realpath(git('rev-parse', '--show-toplevel'));\nif (top !== workdir) throw new Error('The working directory must be the root of a Git checkout; its root is ' + top);\nconst baseCommit = git('rev-parse', '--verify', (i.baseRef || 'HEAD') + '^{commit}');\nconst branch = git('rev-parse', '--abbrev-ref', 'HEAD');\n// A managed worktree's branch name always contains the run ID.\nconst dedicatedBranch = !!process.env.INTERLOCK_ROOT_RUN_ID && branch.includes(process.env.INTERLOCK_ROOT_RUN_ID);\nconst words = ((i.issue ? String(i.issue).split('/').pop() + ' ' : '') + i.request).toLowerCase()\n  .replace(/[^a-z0-9]+/g, '-').replace(/^-+/, '').slice(0, 40).replace(/-+$/, '') || 'change';\nconst taskDir = i.taskDir || path.join('.tasks', words + '-' + createHash('sha256').update(i.request).digest('hex').slice(0, 6));\nif (path.isAbsolute(taskDir)) throw new Error('taskDir must be relative to the checkout');\nawait fs.mkdir(path.resolve(workdir, taskDir), { recursive: true });\nconst rel = path.relative(workdir, await fs.realpath(path.resolve(workdir, taskDir)));\nif (!rel || rel.startsWith('..') || path.isAbsolute(rel)) throw new Error('taskDir must stay inside the checkout');\nreturn {\n  workdir, request: i.request, taskDir: rel, size: i.size ?? 'small', issue: i.issue ?? null, baseCommit, branch, dedicatedBranch,\n  checkCommands: i.checkCommands ?? null, reviewPolicy: i.reviewPolicy ?? 'auto', createPr: i.createPr ?? false, commitArtifacts: i.commitArtifacts ?? false,\n};\n",
+        "timeoutMs": 20000,
+        "inputBindings": {
+          "run": {
+            "source": "runInput",
+            "path": ""
+          }
+        },
+        "routing": {
+          "path": "size",
+          "cases": [
+            {
+              "port": "small",
+              "equals": "small"
+            },
+            {
+              "port": "standard",
+              "equals": "standard"
+            }
+          ]
+        }
+      },
+      {
+        "id": "spec",
+        "kind": "agent",
+        "label": "Write the spec",
+        "stage": "Planning",
+        "stageId": "planning",
+        "position": {
+          "x": 640,
+          "y": 120
+        },
+        "inputSchema": {},
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "artifactPath": {
+              "type": "string",
+              "minLength": 1
+            },
+            "summary": {
+              "type": "string",
+              "minLength": 1
+            },
+            "decisions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "question": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "whyItMatters": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "recommendation": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": ["question", "whyItMatters", "recommendation"],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": ["artifactPath", "summary", "decisions"],
+          "additionalProperties": false
+        },
+        "prompt": "Write or revise root.taskDir/spec.md for root.request. It is the single definition of what this change must do.\n\nInclude, briefly:\n- Problem and outcome: what is wrong or missing today and what will be true afterwards. Quote or link the source request.\n- Scope: what is included, and what is explicitly not.\n- Behavior: the observable behavior required, including the failure and edge cases the change affects.\n- Acceptance criteria with stable ids (AC1, AC2, ...). Each must be checkable by a test or an observation. Never renumber existing ids.\n- For a change a person will see: the existing screens, components and patterns it reuses, the flow, and the loading, empty, error and success states it affects. Do not introduce a new visual pattern where an existing one fits.\n- Open decisions, each with the options and the one you recommend.\n\nLeave implementation steps and verification methods to plan.md. On revision, previous.feedback says what to change: change the affected passages, keep settled decisions, and do not narrate the revision history.\n\nReturn artifactPath (relative to root.workdir), summary, and decisions: the open decisions only a person can settle, each with question, whyItMatters and recommendation. Return an empty list when there are none.",
+        "context": {
+          "mode": "current",
+          "instructions": "Inputs: root is this run's setup (workdir, request, taskDir, size, issue, baseCommit, branch, dedicatedBranch, reviewPolicy, createPr, commitArtifacts). previous is the result of the step that routed here.\nWork in root.workdir, which is your current directory. Read the repository's own instructions (AGENTS.md, CLAUDE.md, README, contributing or design docs) and follow them; where they conflict with this workflow, they win.\nKeep every file you write inside root.workdir. Put notes and scratch files in root.taskDir, never in /tmp or your home directory.\nPreserve unrelated changes. Settle routine technical questions from the repository and record the assumption. Ask a person only about a decision that changes scope, public behavior, compatibility, consequential architecture or authorization and that nothing already settles.\nKeep workflow details such as root, previous and route values out of the artifacts. Report a real blocker as a failure; never invent a result.",
+          "tools": [],
+          "skills": [],
+          "tier": "max",
+          "continuityGroup": "author"
+        },
+        "maxAttempts": 2,
+        "inputBindings": {
+          "root": {
+            "source": "node",
+            "nodeId": "setup",
+            "path": ""
+          },
+          "previous": {
+            "source": "input",
+            "path": ""
+          }
+        }
+      },
+      {
+        "id": "plan",
+        "kind": "agent",
+        "label": "Plan the change",
+        "stage": "Planning",
+        "stageId": "planning",
+        "position": {
+          "x": 940,
+          "y": 300
+        },
+        "inputSchema": {},
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "artifactPath": {
+              "type": "string",
+              "minLength": 1
+            },
+            "summary": {
+              "type": "string",
+              "minLength": 1
+            },
+            "checkCommands": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "maxItems": 6
+            },
+            "decisions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "question": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "whyItMatters": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "recommendation": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": ["question", "whyItMatters", "recommendation"],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": ["artifactPath", "summary", "checkCommands", "decisions"],
+          "additionalProperties": false
+        },
+        "prompt": "Write or revise root.taskDir/plan.md for root.request.\n\nWhen root.size is small there is no spec: plan.md states the problem and outcome in a few sentences and owns the acceptance criteria, with stable ids (AC1, AC2, ...) that are each checkable by a test or an observation. When root.size is standard, read spec.md (spec.artifactPath) and reference its criteria by id instead of copying them.\n\nRead the code the change touches before planning it. Then include:\n- Approach: the change in a few sentences, the code areas involved, and why this approach over the obvious alternative.\n- Steps: a short checklist with stable task ids, each mapped to the criteria it serves.\n- Verification: how each criterion will be demonstrated, and for the two or three riskiest failure cases, a direct check with its expected result.\n- Open decisions, each with the options and the one you recommend.\nKeep it proportionate: a small fix needs a short plan. Distinguish facts you verified from assumptions.\n\nOn revision, previous.feedback says what to change. Apply it to the affected passages and keep criterion and task ids stable. If it shows a criterion itself was wrong, correct it and say why. When root.size is standard and the feedback concerns spec.md, correct spec.md too.\n\nReturn:\n- artifactPath, relative to root.workdir, and summary.\n- checkCommands: up to six commands from the repository's own instructions or scripts that must exit 0 for this change to be acceptable (typically tests, type check or build, and lint). Interlock runs them after every build, in root.workdir, without asking, so name only the repository's own commands, one plain command each. A command may name a script this change adds. Return an empty list if the repository defines none. When root.checkCommands is set, Interlock runs those instead.\n- decisions: open decisions only a person can settle, each with question, whyItMatters and recommendation, including any from spec.decisions that are still open. Empty when there are none.",
+        "context": {
+          "mode": "current",
+          "instructions": "Inputs: root is this run's setup (workdir, request, taskDir, size, issue, baseCommit, branch, dedicatedBranch, reviewPolicy, createPr, commitArtifacts). previous is the result of the step that routed here.\nWork in root.workdir, which is your current directory. Read the repository's own instructions (AGENTS.md, CLAUDE.md, README, contributing or design docs) and follow them; where they conflict with this workflow, they win.\nKeep every file you write inside root.workdir. Put notes and scratch files in root.taskDir, never in /tmp or your home directory.\nPreserve unrelated changes. Settle routine technical questions from the repository and record the assumption. Ask a person only about a decision that changes scope, public behavior, compatibility, consequential architecture or authorization and that nothing already settles.\nKeep workflow details such as root, previous and route values out of the artifacts. Report a real blocker as a failure; never invent a result.",
+          "tools": [],
+          "skills": [],
+          "tier": "max",
+          "continuityGroup": "author"
+        },
+        "maxAttempts": 2,
+        "inputBindings": {
+          "root": {
+            "source": "node",
+            "nodeId": "setup",
+            "path": ""
+          },
+          "spec": {
+            "source": "node",
+            "nodeId": "spec",
+            "path": "",
+            "sourceDefault": null
+          },
+          "previous": {
+            "source": "input",
+            "path": ""
+          }
+        }
+      },
+      {
+        "id": "planGate",
+        "kind": "script",
+        "label": "Check the plan and choose its approval",
+        "stage": "Planning",
+        "stageId": "planning",
+        "position": {
+          "x": 1240,
+          "y": 300
+        },
+        "inputSchema": {},
+        "outputSchema": {},
+        "language": "javascript",
+        "command": "// Check the plan result, then decide how the plan is accepted.\nconst fs = await import('node:fs/promises');\nconst path = await import('node:path');\nconst { root, plan, spec, prior, changeReviewed } = input;\nconst inside = async (p) => {\n  try {\n    const file = await fs.realpath(path.resolve(root.workdir, p));\n    const rel = path.relative(root.workdir, file);\n    return !rel.startsWith('..') && !path.isAbsolute(rel) && (await fs.stat(file)).isFile();\n  } catch { return false; }\n};\nconst problems = [];\nif (!(await inside(plan.artifactPath))) problems.push('plan.artifactPath ' + JSON.stringify(plan.artifactPath) + ' is not a file inside the checkout.');\nif (root.size === 'standard' && !(spec && (await inside(spec.artifactPath)))) problems.push('spec.md is missing; write it in root.taskDir and keep its criteria ids.');\nconst commands = root.checkCommands ?? plan.checkCommands ?? [];\nif (!root.checkCommands && commands.some((c) => /[`$;|&<>\\n]/.test(c))) problems.push('Each check command must be one plain command without $, backticks, ;, |, &, < or >.');\n// Bounded result repair: two corrections, then a person decides.\nconst repairs = prior?.route === 'repair' ? prior.repairs + 1 : 0;\nconst open = plan.decisions ?? [];\nlet route;\nif (problems.length) route = repairs < 2 ? 'repair' : 'ask';\nelse if (open.length || root.reviewPolicy === 'always') route = 'ask';\nelse if (root.size === 'standard' && !changeReviewed) route = 'review';\nelse route = 'build';\nconst list = open.map((d, n) => (n + 1) + '. ' + d.question + '\\n   Why it matters: ' + d.whyItMatters + '\\n   Recommended: ' + d.recommendation).join('\\n\\n');\nconst question = problems.length ? 'The plan result is still incomplete after two corrections:\\n' + problems.join('\\n')\n  : open.length ? 'The plan has decisions only you can settle. Approving accepts each recommendation.\\n\\n' + list\n  : 'Approve this plan before any code is written?';\nreturn {\n  route, repairs: problems.length ? repairs : 0, problems, decisions: open, summary: plan.summary,\n  feedback: problems.length ? 'Correct the plan result: ' + problems.join(' ') : '',\n  question: question.slice(0, 4000),\n  context: (plan.summary + '\\n\\nCheck commands Interlock will run after each build:\\n' + (commands.join('\\n') || '(none)')).slice(0, 32000),\n};\n",
+        "timeoutMs": 20000,
+        "inputBindings": {
+          "root": {
+            "source": "node",
+            "nodeId": "setup",
+            "path": ""
+          },
+          "plan": {
+            "source": "input",
+            "path": ""
+          },
+          "spec": {
+            "source": "node",
+            "nodeId": "spec",
+            "path": "",
+            "sourceDefault": null
+          },
+          "prior": {
+            "source": "node",
+            "nodeId": "planGate",
+            "path": "",
+            "sourceDefault": null
+          },
+          "changeReviewed": {
+            "source": "node",
+            "nodeId": "reviewMerge",
+            "path": "",
+            "sourceDefault": null
+          }
+        },
+        "routing": {
+          "path": "route",
+          "cases": [
+            {
+              "port": "build",
+              "equals": "build"
+            },
+            {
+              "port": "review",
+              "equals": "review"
+            },
+            {
+              "port": "ask",
+              "equals": "ask"
+            },
+            {
+              "port": "repair",
+              "equals": "repair"
+            }
+          ]
+        }
+      },
+      {
+        "id": "planReview",
+        "kind": "agent",
+        "label": "Review the plan (fresh)",
+        "stage": "Planning",
+        "stageId": "planning",
+        "position": {
+          "x": 1540,
+          "y": 120
+        },
+        "inputSchema": {},
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "verdict": {
+              "type": "string",
+              "enum": ["ready", "revise", "blocked"]
+            },
+            "summary": {
+              "type": "string",
+              "minLength": 1
+            },
+            "findings": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "owner": {
+                    "type": "string",
+                    "enum": ["spec", "plan"]
+                  },
+                  "severity": {
+                    "type": "string",
+                    "enum": ["blocker", "major", "minor"]
+                  },
+                  "location": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "details": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "recommendation": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "owner",
+                  "severity",
+                  "location",
+                  "details",
+                  "recommendation"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "limitations": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["verdict", "summary", "findings", "limitations"],
+          "additionalProperties": false
+        },
+        "prompt": "Review the plan for input.request before anyone builds it. You did not write it. This is a report, not an approval.\n\n1. Read the repository's instructions, then input.planPath and, when input.specPath is set, the spec. Read the source files the plan names or depends on.\n2. Check the plan against input.request: does it solve what was asked, without scope nobody requested?\n3. Inspect, in this order: assumptions about existing code that the code contradicts; acceptance criteria that cannot be observed or tested; failure, recovery and compatibility behavior; whether the verification would catch the main risks; whether an implementer could start without asking a question.\n\nFindings must be concrete and located. Give each a stable id (P1, P2, ...), an owner, a severity, the location, what is wrong and a recommendation.\n- owner spec: the spec's scope or acceptance criteria are wrong or missing. Use only when input.specPath is set.\n- owner plan: the approach, steps or verification are wrong or missing.\n- severity blocker: building this would produce the wrong thing or break something that works. major: must be resolved before building. minor: should not hold up building.\nPut evidence you could not obtain in limitations, not in findings. Zero findings is a valid result.\n\nVerdict: ready when no blocker or major finding remains, revise when one does, blocked when you could not inspect what the review depends on.",
+        "context": {
+          "mode": "fresh",
+          "instructions": "Run in a new session or an isolated subagent with no inherited conversation. If that is unavailable, report the blocker; never claim fresh context from inside an existing conversation.\nWork read-only in input.workdir, your current directory: do not edit files, commit, or change Git state.",
+          "tools": [],
+          "skills": [],
+          "tier": "max"
+        },
+        "maxAttempts": 2,
+        "inputBindings": {
+          "workdir": {
+            "source": "node",
+            "nodeId": "setup",
+            "path": "workdir"
+          },
+          "request": {
+            "source": "node",
+            "nodeId": "setup",
+            "path": "request"
+          },
+          "planPath": {
+            "source": "node",
+            "nodeId": "plan",
+            "path": "artifactPath"
+          },
+          "specPath": {
+            "source": "node",
+            "nodeId": "spec",
+            "path": "artifactPath",
+            "sourceDefault": null
+          }
+        }
+      },
+      {
+        "id": "planReviewRoute",
+        "kind": "script",
+        "label": "Route plan review findings",
+        "stage": "Planning",
+        "stageId": "planning",
+        "position": {
+          "x": 1840,
+          "y": 120
+        },
+        "inputSchema": {},
+        "outputSchema": {},
+        "language": "javascript",
+        "command": "// Route independent plan review: findings go to the spec or the plan; a third review with findings asks a person.\nconst { root, review, count } = input;\nconst material = review.findings.filter((f) => f.severity !== 'minor');\nconst owner = material.some((f) => f.owner === 'spec') && root.size === 'standard' ? 'spec' : 'plan';\nconst feedback = review.findings.map((f) => '[' + f.id + ' ' + f.severity + ', ' + f.owner + '] ' + f.location + ': ' + f.details + (f.recommendation ? ' Recommendation: ' + f.recommendation : '')).join('\\n');\nlet route;\nif (review.verdict === 'ready' && !material.length) route = root.reviewPolicy === 'always' ? 'ask' : 'build';\nelse if (review.verdict !== 'blocked' && material.length && count < 3) route = owner;\nelse route = 'ask';\nconst why = review.verdict === 'blocked' ? 'Independent plan review could not be completed: ' + review.limitations.join(' ')\n  : material.length ? 'The plan still has review findings after ' + count + ' reviews.' : 'Independent review found the plan ready.';\nreturn {\n  route, summary: review.summary,\n  feedback: material.length ? 'Independent plan review found problems. Resolve each by id and keep ids stable:\\n' + feedback : '',\n  question: (why + ' Approve the plan as it stands, request changes, or stop?').slice(0, 4000),\n  context: (review.summary + (feedback ? '\\n\\nFindings:\\n' + feedback : '')).slice(0, 32000),\n};\n",
+        "timeoutMs": 20000,
+        "inputBindings": {
+          "root": {
+            "source": "node",
+            "nodeId": "setup",
+            "path": ""
+          },
+          "review": {
+            "source": "input",
+            "path": ""
+          },
+          "count": {
+            "source": "execution",
+            "nodeId": "planReview",
+            "path": "visitCount"
+          }
+        },
+        "routing": {
+          "path": "route",
+          "cases": [
+            {
+              "port": "build",
+              "equals": "build"
+            },
+            {
+              "port": "plan",
+              "equals": "plan"
+            },
+            {
+              "port": "spec",
+              "equals": "spec"
+            },
+            {
+              "port": "ask",
+              "equals": "ask"
+            }
+          ]
+        }
+      },
+      {
+        "id": "planAsk",
+        "kind": "script",
+        "label": "Capture the plan for approval",
+        "stage": "Planning",
+        "stageId": "planning",
+        "position": {
+          "x": 1540,
+          "y": 480
+        },
+        "inputSchema": {},
+        "outputSchema": {},
+        "language": "javascript",
+        "command": "// Capture the exact plan text a person approves.\nconst fs = await import('node:fs/promises');\nconst path = await import('node:path');\nconst { createHash } = await import('node:crypto');\nconst { root, plan, ask } = input;\nlet file = path.resolve(root.workdir, plan.artifactPath), text = '';\ntry { file = await fs.realpath(file); text = await fs.readFile(file, 'utf8'); } catch { text = ''; }\nreturn {\n  question: ask.question, context: ask.context, feedback: ask.feedback ?? '', file,\n  revision: createHash('sha256').update(text).digest('hex'),\n  evidence: !text ? '(The plan file could not be read.)' : text.length > 32000 ? text.slice(0, 31900) + '\\n\\n[Truncated; open ' + plan.artifactPath + ' for the rest.]' : text,\n};\n",
+        "timeoutMs": 20000,
+        "inputBindings": {
+          "root": {
+            "source": "node",
+            "nodeId": "setup",
+            "path": ""
+          },
+          "plan": {
+            "source": "node",
+            "nodeId": "plan",
+            "path": ""
+          },
+          "ask": {
+            "source": "input",
+            "path": ""
+          }
+        }
+      },
+      {
+        "id": "planHuman",
+        "kind": "input",
+        "label": "Approve the plan",
+        "stage": "Planning",
+        "stageId": "planning",
+        "position": {
+          "x": 1840,
+          "y": 480
+        },
+        "inputSchema": {},
+        "outputSchema": {},
+        "humanInput": {
+          "question": "Approve this plan?",
+          "questionPath": "question",
+          "contextPath": "context",
+          "evidence": {
+            "title": "Plan as shown for this decision",
+            "contentPath": "evidence",
+            "revisionPath": "revision"
+          },
+          "answer": {
+            "kind": "choice",
+            "choices": [
+              {
+                "label": "Approve the plan",
+                "value": "approved"
+              },
+              {
+                "label": "Answer questions or request changes",
+                "value": "revise",
+                "requireComment": true
+              },
+              {
+                "label": "Stop this change",
+                "value": "stop"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "planDecision",
+        "kind": "script",
+        "label": "Record the plan decision",
+        "stage": "Planning",
+        "stageId": "planning",
+        "position": {
+          "x": 2140,
+          "y": 480
+        },
+        "inputSchema": {},
+        "outputSchema": {},
+        "language": "javascript",
+        "command": "// Record a person's plan decision. Approval covers only the text they saw.\nconst fs = await import('node:fs/promises');\nconst { createHash } = await import('node:crypto');\nconst { answer, capture } = input;\nconst humanResponse = JSON.stringify(answer);\nif (answer.choice === 'stop') return { route: 'stop', feedback: '', humanResponse, summary: 'A person stopped the change at plan approval.' };\nif (answer.choice === 'revise') return { route: 'plan', humanResponse, summary: 'A person asked for plan changes.',\n  feedback: 'A person reviewed the plan and asked for changes. Their words: ' + (answer.comment ?? '') + (capture.feedback ? '\\n\\nOutstanding findings:\\n' + capture.feedback : '') };\nlet current = null;\ntry { current = createHash('sha256').update(await fs.readFile(capture.file, 'utf8')).digest('hex'); } catch { /* treated as changed */ }\nif (current !== capture.revision) return { route: 'plan', humanResponse, summary: 'The plan changed after it was shown for approval.',\n  feedback: 'The plan file changed or became unreadable after a person approved it. That approval does not cover the current text. Return the plan for approval again without further changes unless needed.' };\nreturn { route: 'build', feedback: '', humanResponse, summary: 'A person approved the plan.' + (answer.comment ? ' Comment: ' + answer.comment : '') };\n",
+        "timeoutMs": 20000,
+        "inputBindings": {
+          "capture": {
+            "source": "node",
+            "nodeId": "planAsk",
+            "path": ""
+          },
+          "answer": {
+            "source": "input",
+            "path": ""
+          }
+        },
+        "routing": {
+          "path": "route",
+          "cases": [
+            {
+              "port": "build",
+              "equals": "build"
+            },
+            {
+              "port": "plan",
+              "equals": "plan"
+            },
+            {
+              "port": "stop",
+              "equals": "stop"
+            }
+          ]
+        }
+      },
+      {
+        "id": "build",
+        "kind": "agent",
+        "label": "Implement and commit",
+        "stage": "Implementation",
+        "stageId": "implementation",
+        "position": {
+          "x": 2440,
+          "y": 300
+        },
+        "inputSchema": {},
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": ["done", "question"]
+            },
+            "summary": {
+              "type": "string",
+              "minLength": 1
+            },
+            "headCommit": {
+              "type": "string"
+            },
+            "questions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "question": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "whyItMatters": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "recommendation": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": ["question", "whyItMatters", "recommendation"],
+                "additionalProperties": false
+              }
+            },
+            "resolutions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": ["fixed", "not_fixed"]
+                  },
+                  "details": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": ["id", "status", "details"],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "status",
+            "summary",
+            "headCommit",
+            "questions",
+            "resolutions"
+          ],
+          "additionalProperties": false
+        },
+        "prompt": "Implement the change in plan.md (plan.artifactPath, and spec.md when root.size is standard), then commit it.\n\nInputs: plan is the latest plan result. review is the latest independent review, or null before the first one. previous is the step that routed here:\n- a plan decision: when it has humanResponse a person approved the plan; otherwise it was accepted under root.reviewPolicy.\n- a string: a person's answer to your questions.\n- a check result (route build): previous.feedback lists check failures or problems with your last result. Fix them.\n- a review (route build): fix every unresolved finding with owner build, by id.\n- a limit decision: a person allowed you to continue; previous.feedback says what is outstanding.\n\nFirst build:\n- If root.dedicatedBranch is true, commit on the current branch root.branch. Otherwise create a task branch from root.baseCommit following repository conventions; never commit to the branch root.baseCommit came from.\n- Implement the plan's steps within its scope. If the plan turns out to be wrong, say so in summary rather than building something else.\n- Follow the repository's conventions. Reuse existing helpers, components and patterns. Add or update tests that would fail without the change. Update documentation the repository requires to stay current.\n\nRepairs: read the diff since review.reviewedCommit first. Findings with owner environment are not yours. Return resolutions with one entry per build finding you were given: its id, fixed or not_fixed, and details. Do not weaken a test or a criterion to make a finding go away.\n\nChecks: Interlock runs the check commands at your commit after you finish and sends failures back to you, so do not run the full list yourself. Run only the focused tests you need while working.\n\nQuestions: if you cannot continue without a person's decision, return status question with questions (question, whyItMatters, recommendation) and headCommit set to the current HEAD. Keep the work committed so far. Ask only about scope, public behavior, compatibility or authorization.\n\nFinish: commit the code, tests and docs. Commit planning artifacts only when root.commitArtifacts is true or the repository requires it. Leave no uncommitted changes to tracked files. Do not push, merge or deploy.\n\nReturn status done, summary, headCommit (the full id of the commit to review), questions (empty) and resolutions (empty on a first build).",
+        "context": {
+          "mode": "current",
+          "instructions": "Inputs: root is this run's setup (workdir, request, taskDir, size, issue, baseCommit, branch, dedicatedBranch, reviewPolicy, createPr, commitArtifacts). previous is the result of the step that routed here.\nWork in root.workdir, which is your current directory. Read the repository's own instructions (AGENTS.md, CLAUDE.md, README, contributing or design docs) and follow them; where they conflict with this workflow, they win.\nKeep every file you write inside root.workdir. Put notes and scratch files in root.taskDir, never in /tmp or your home directory.\nPreserve unrelated changes. Settle routine technical questions from the repository and record the assumption. Ask a person only about a decision that changes scope, public behavior, compatibility, consequential architecture or authorization and that nothing already settles.\nKeep workflow details such as root, previous and route values out of the artifacts. Report a real blocker as a failure; never invent a result.",
+          "tools": [],
+          "skills": [],
+          "tier": "balanced",
+          "continuityGroup": "author"
+        },
+        "maxAttempts": 2,
+        "inputBindings": {
+          "root": {
+            "source": "node",
+            "nodeId": "setup",
+            "path": ""
+          },
+          "plan": {
+            "source": "node",
+            "nodeId": "plan",
+            "path": ""
+          },
+          "review": {
+            "source": "node",
+            "nodeId": "reviewMerge",
+            "path": "",
+            "sourceDefault": null
+          },
+          "previous": {
+            "source": "input",
+            "path": ""
+          }
+        }
+      },
+      {
+        "id": "verify",
+        "kind": "script",
+        "label": "Check the result and run checks",
+        "stage": "Implementation",
+        "stageId": "implementation",
+        "position": {
+          "x": 2740,
+          "y": 300
+        },
+        "inputSchema": {},
+        "outputSchema": {},
+        "language": "javascript",
+        "command": "// Check the build result, then run the check commands at its commit.\n// Bounded loops: two result corrections, three question rounds, one check repair.\nconst { execFileSync, spawnSync } = await import('node:child_process');\nconst { root, plan, spec, build, prior, review } = input;\nconst git = (...args) => execFileSync('git', args, { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] }).trim();\nconst tryGit = (...args) => { try { return git(...args); } catch { return null; } };\nconst reset = prior?.route === 'ask';\nconst state = { repairs: 0, questions: reset ? 0 : prior?.questions ?? 0, checkFixes: 0 };\nconst packet = { workdir: root.workdir, request: root.request, size: root.size, taskDir: root.taskDir,\n  planPath: plan.artifactPath, specPath: root.size === 'standard' ? spec?.artifactPath ?? null : null, baseCommit: root.baseCommit };\nconst out = (route, extra) => ({ route, ...state, ...packet, headCommit: null, changedFiles: [], diffStat: '', checks: [], checksPassed: null, checksNote: null,\n  priorReview: review ?? null, feedback: '', question: '', context: '', evidence: '', revision: '', resume: 'build', kind: route, ...extra });\nif (build.status === 'question') {\n  state.questions++;\n  const list = build.questions.map((q, n) => (n + 1) + '. ' + q.question + '\\n   Why it matters: ' + q.whyItMatters + '\\n   Recommended: ' + q.recommendation).join('\\n\\n');\n  if (state.questions > 3) return out('ask', { kind: 'questions', question: 'The build has asked three rounds of questions. Let it continue with its recommendations, or stop?', context: build.summary, evidence: list, revision: String(state.questions) });\n  return out('question', { question: ('The build needs a decision:\\n\\n' + list).slice(0, 4000), context: build.summary.slice(0, 32000) });\n}\nconst problems = [];\nconst head = tryGit('rev-parse', '--verify', (build.headCommit || 'missing') + '^{commit}');\nif (!head) problems.push('headCommit ' + JSON.stringify(build.headCommit) + ' is not a commit in the checkout.');\nelse {\n  if (tryGit('merge-base', '--is-ancestor', root.baseCommit, head) === null) problems.push('headCommit does not descend from root.baseCommit ' + root.baseCommit + '.');\n  else if (head === root.baseCommit) problems.push('headCommit equals root.baseCommit, so there is no change to review.');\n  if (git('rev-parse', 'HEAD') !== head) problems.push('The checkout is not at headCommit; check out the commit you want reviewed.');\n  if (git('status', '--porcelain', '--untracked-files=no') !== '') problems.push('Tracked files have uncommitted changes; commit or discard them.');\n}\nconst ids = new Set((review?.findings ?? []).filter((f) => f.owner === 'build').map((f) => f.id));\nconst missing = [...ids].filter((id) => !build.resolutions.some((r) => r.id === id));\nif (prior?.route !== 'build' && review?.route === 'build' && missing.length) problems.push('resolutions has no entry for finding ' + missing.join(', ') + '.');\nif (problems.length) {\n  state.repairs = prior?.route === 'build' && prior.kind === 'repair' ? prior.repairs + 1 : 1;\n  const feedback = 'Your last result could not be used: ' + problems.join(' ');\n  if (state.repairs > 2) return out('ask', { kind: 'repair', feedback, question: 'The build result is still unusable after two corrections. Let the builder try again, or stop?', context: build.summary, evidence: problems.join('\\n'), revision: String(state.repairs) });\n  return out('build', { kind: 'repair', feedback });\n}\nconst changedFiles = git('diff', '--name-only', root.baseCommit, head).split('\\n').filter(Boolean);\nconst commands = root.checkCommands ?? plan.checkCommands ?? [];\nconst checks = commands.map((command) => {\n  const run = () => spawnSync(command, { shell: true, encoding: 'utf8', timeout: 900000, maxBuffer: 64 * 1024 * 1024, env: { ...process.env, CI: '1' } });\n  let r = run(), attempts = 1, first = null;\n  // A failure is retried once; a pass on the second attempt is reported as flaky.\n  if (r.status !== 0 && !r.error) { first = ((r.stdout ?? '') + (r.stderr ?? '')).trim().slice(-1500); r = run(); attempts = 2; }\n  const exitCode = typeof r.status === 'number' ? r.status : null;\n  const tail = ((r.stdout ?? '') + (r.stderr ?? '')).trim().slice(-3000);\n  return { command, exitCode, attempts, status: exitCode === 0 ? 'passed' : 'failed',\n    output: (r.error ? r.error.message + '\\n' : '') + (exitCode === 0 && first !== null ? 'Passed on the second attempt (flaky). First attempt:\\n' + first : tail) };\n});\nconst failed = checks.filter((c) => c.status === 'failed');\nconst facts = { headCommit: head, changedFiles: changedFiles.slice(0, 400), diffStat: git('diff', '--shortstat', root.baseCommit, head), checks,\n  checksPassed: checks.length ? failed.length === 0 : null, checksNote: checks.length ? null : 'No check commands were set.' };\n// The builder gets one chance to fix failing checks; after that reviewers decide who owns the failure.\nif (failed.length && !(prior?.route === 'build' && prior.kind === 'checks')) {\n  state.checkFixes = 1;\n  return out('build', { ...facts, kind: 'checks', feedback: 'These check commands failed at ' + head + '. Fix them if the change caused them; otherwise say why in summary.\\n\\n' + failed.map((c) => '$ ' + c.command + ' (exit ' + c.exitCode + ')\\n' + c.output).join('\\n\\n') });\n}\nreturn out('review', facts);\n",
+        "timeoutMs": 3600000,
+        "inputBindings": {
+          "root": {
+            "source": "node",
+            "nodeId": "setup",
+            "path": ""
+          },
+          "plan": {
+            "source": "node",
+            "nodeId": "plan",
+            "path": ""
+          },
+          "spec": {
+            "source": "node",
+            "nodeId": "spec",
+            "path": "",
+            "sourceDefault": null
+          },
+          "build": {
+            "source": "input",
+            "path": ""
+          },
+          "prior": {
+            "source": "node",
+            "nodeId": "verify",
+            "path": "",
+            "sourceDefault": null
+          },
+          "review": {
+            "source": "node",
+            "nodeId": "reviewMerge",
+            "path": "",
+            "sourceDefault": null
+          }
+        },
+        "routing": {
+          "path": "route",
+          "cases": [
+            {
+              "port": "review",
+              "equals": "review"
+            },
+            {
+              "port": "build",
+              "equals": "build"
+            },
+            {
+              "port": "question",
+              "equals": "question"
+            },
+            {
+              "port": "ask",
+              "equals": "ask"
+            }
+          ]
+        }
+      },
+      {
+        "id": "questionHuman",
+        "kind": "input",
+        "label": "Answer the build's questions",
+        "stage": "Implementation",
+        "stageId": "implementation",
+        "position": {
+          "x": 2740,
+          "y": 520
+        },
+        "inputSchema": {},
+        "outputSchema": {},
+        "humanInput": {
+          "question": "Answer the build's questions",
+          "questionPath": "question",
+          "contextPath": "context",
+          "answer": {
+            "kind": "text"
+          }
+        }
+      },
+      {
+        "id": "review",
+        "kind": "parallel",
+        "label": "Independent reviews",
+        "stage": "Review",
+        "stageId": "review",
+        "position": {
+          "x": 3040,
+          "y": 300
+        },
+        "inputSchema": {},
+        "outputSchema": {},
+        "branches": [
+          {
+            "id": "spec",
+            "key": "specReview"
+          },
+          {
+            "id": "code",
+            "key": "codeReview"
+          }
+        ],
+        "concurrency": 2,
+        "inputBindings": {
+          "verify": {
+            "source": "node",
+            "nodeId": "verify",
+            "path": ""
+          },
+          "formatFeedback": {
+            "source": "node",
+            "nodeId": "reviewMerge",
+            "path": "formatFeedback",
+            "sourceDefault": ""
+          }
+        }
+      },
+      {
+        "id": "specReviewer",
+        "kind": "agent",
+        "label": "Check acceptance criteria (fresh)",
+        "stage": "Review",
+        "stageId": "review",
+        "position": {
+          "x": 3340,
+          "y": 180
+        },
+        "inputSchema": {},
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "verdict": {
+              "type": "string",
+              "enum": ["pass", "revise", "blocked"]
+            },
+            "summary": {
+              "type": "string",
+              "minLength": 1
+            },
+            "reviewedCommit": {
+              "type": "string"
+            },
+            "criteria": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": ["verified", "unverified", "gap"]
+                  },
+                  "evidence": {
+                    "type": "string"
+                  }
+                },
+                "required": ["id", "status", "evidence"],
+                "additionalProperties": false
+              }
+            },
+            "findings": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "owner": {
+                    "type": "string",
+                    "enum": ["spec", "plan", "build", "environment"]
+                  },
+                  "severity": {
+                    "type": "string",
+                    "enum": ["blocker", "major", "minor"]
+                  },
+                  "location": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "details": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": ["id", "owner", "severity", "location", "details"],
+                "additionalProperties": false
+              }
+            },
+            "resolutions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": ["resolved", "unresolved"]
+                  },
+                  "evidence": {
+                    "type": "string"
+                  }
+                },
+                "required": ["id", "status", "evidence"],
+                "additionalProperties": false
+              }
+            },
+            "deliveryNotes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "limitations": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "verdict",
+            "summary",
+            "reviewedCommit",
+            "criteria",
+            "findings",
+            "resolutions",
+            "deliveryNotes",
+            "limitations"
+          ],
+          "additionalProperties": false
+        },
+        "prompt": "Check a finished change against its acceptance criteria. You did not write it. Do not modify anything.\n\nAcceptance criteria are in input.specPath when set, otherwise in input.planPath. The change is the diff from input.baseCommit to input.headCommit; input.changedFiles lists the files.\n\n1. Read the criteria and the complete diff.\n2. For every criterion, find observable evidence that it holds: a test that asserts it, a check result, or behavior you exercised. A test count or the author's summary is not evidence. Report each criterion by id in criteria as verified, unverified (no evidence either way) or gap (evidence that it fails).\n3. Check scope against input.request: flag work nobody asked for and requested behavior that is missing.\n4. Exercise one boundary case the tests do not cover, chosen from the riskiest criterion.\n\nUse finding ids S1, S2, ...\n\nInterlock already checked out input.headCommit and ran the check commands there: input.checks holds each command, its exit code, attempts and output tail, and input.checksPassed is the overall result (null when none ran). Treat them as facts and do not rerun a command that passed. A check with attempts 2 that passed is flaky: mention it in limitations, not as a finding.\n\nEarlier review: input.priorReview is the previous merged review, or null. When set, read the diff from input.priorReview.reviewedCommit to input.headCommit first, give each earlier finding from your lane a resolutions entry under its original id, recheck only what the fixes affect, and carry earlier verified evidence forward, saying so.\n\nEvery finding has an owner:\n- spec: an acceptance criterion or the spec's scope is wrong or missing, so neither plan nor code can satisfy the request. Use only when input.specPath is set.\n- plan: the plan's approach or verification is wrong, so fixing the code alone cannot resolve it.\n- build: the code, tests or docs are wrong and the plan is right.\n- environment: a check failed for a reason this change did not cause and cannot fix within scope. Only with proof in details: the same command fails the same way at input.baseCommit, or the failure is in code the diff does not touch and does not reproduce on rerun. Put the exact command in location. These never hold the change.\nAnd a severity: blocker (wrong or harmful behavior), major (must be fixed before this ships), minor (worth fixing, should not hold the change).\n\nDo not raise findings about the pull request or anything that can exist only after delivery; put them in deliveryNotes. Put evidence you could not obtain in limitations.\n\nSet reviewedCommit to input.headCommit. Verdict: pass when no blocker or major finding remains in your lane, revise when one does, blocked only when you could not inspect what the review depends on.",
+        "context": {
+          "mode": "fresh",
+          "instructions": "Run in a new session or an isolated subagent with no inherited conversation. If that is unavailable, report the blocker; never claim fresh context from inside an existing conversation.\nWork read-only in input.workdir, your current directory: do not edit files, commit, or change Git state.",
+          "tools": [],
+          "skills": [],
+          "tier": "balanced"
+        },
+        "maxAttempts": 2,
+        "parallelId": "review",
+        "parallelBranchId": "spec",
+        "inputBindings": {
+          "workdir": {
+            "source": "input",
+            "path": "verify.workdir"
+          },
+          "request": {
+            "source": "input",
+            "path": "verify.request"
+          },
+          "specPath": {
+            "source": "input",
+            "path": "verify.specPath"
+          },
+          "planPath": {
+            "source": "input",
+            "path": "verify.planPath"
+          },
+          "baseCommit": {
+            "source": "input",
+            "path": "verify.baseCommit"
+          },
+          "headCommit": {
+            "source": "input",
+            "path": "verify.headCommit"
+          },
+          "changedFiles": {
+            "source": "input",
+            "path": "verify.changedFiles"
+          },
+          "checks": {
+            "source": "input",
+            "path": "verify.checks"
+          },
+          "checksPassed": {
+            "source": "input",
+            "path": "verify.checksPassed"
+          },
+          "priorReview": {
+            "source": "input",
+            "path": "verify.priorReview"
+          },
+          "formatFeedback": {
+            "source": "input",
+            "path": "formatFeedback"
+          }
+        }
+      },
+      {
+        "id": "codeReviewer",
+        "kind": "agent",
+        "label": "Review the code (fresh)",
+        "stage": "Review",
+        "stageId": "review",
+        "position": {
+          "x": 3340,
+          "y": 420
+        },
+        "inputSchema": {},
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "verdict": {
+              "type": "string",
+              "enum": ["pass", "revise", "blocked"]
+            },
+            "summary": {
+              "type": "string",
+              "minLength": 1
+            },
+            "reviewedCommit": {
+              "type": "string"
+            },
+            "criteria": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": ["verified", "unverified", "gap"]
+                  },
+                  "evidence": {
+                    "type": "string"
+                  }
+                },
+                "required": ["id", "status", "evidence"],
+                "additionalProperties": false
+              }
+            },
+            "findings": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "owner": {
+                    "type": "string",
+                    "enum": ["spec", "plan", "build", "environment"]
+                  },
+                  "severity": {
+                    "type": "string",
+                    "enum": ["blocker", "major", "minor"]
+                  },
+                  "location": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "details": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": ["id", "owner", "severity", "location", "details"],
+                "additionalProperties": false
+              }
+            },
+            "resolutions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": ["resolved", "unresolved"]
+                  },
+                  "evidence": {
+                    "type": "string"
+                  }
+                },
+                "required": ["id", "status", "evidence"],
+                "additionalProperties": false
+              }
+            },
+            "deliveryNotes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "limitations": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "verdict",
+            "summary",
+            "reviewedCommit",
+            "criteria",
+            "findings",
+            "resolutions",
+            "deliveryNotes",
+            "limitations"
+          ],
+          "additionalProperties": false
+        },
+        "prompt": "Review the quality of a finished change. You did not write it. Do not modify anything. Another reviewer checks the acceptance criteria; you check how the change is built.\n\nThe change is the diff from input.baseCommit to input.headCommit; input.changedFiles lists the files.\n\n1. Read the repository's instructions, then the complete diff.\n2. Look for regressions in neighbouring behavior, error handling, security, concurrency and data loss, and tests that would not fail without the change.\n3. Check the repository's conventions: structure, naming, reuse of existing helpers and components, and documentation it requires to stay current.\n4. If the change touches UI, compare it with the repository's design guidance and the screens it resembles, and check the loading, empty and error states it affects.\n\nUse finding ids C1, C2, ... Return criteria as an empty list.\n\nInterlock already checked out input.headCommit and ran the check commands there: input.checks holds each command, its exit code, attempts and output tail, and input.checksPassed is the overall result (null when none ran). Treat them as facts and do not rerun a command that passed. A check with attempts 2 that passed is flaky: mention it in limitations, not as a finding.\n\nEarlier review: input.priorReview is the previous merged review, or null. When set, read the diff from input.priorReview.reviewedCommit to input.headCommit first, give each earlier finding from your lane a resolutions entry under its original id, recheck only what the fixes affect, and carry earlier verified evidence forward, saying so.\n\nEvery finding has an owner:\n- spec: an acceptance criterion or the spec's scope is wrong or missing, so neither plan nor code can satisfy the request. Use only when input.specPath is set.\n- plan: the plan's approach or verification is wrong, so fixing the code alone cannot resolve it.\n- build: the code, tests or docs are wrong and the plan is right.\n- environment: a check failed for a reason this change did not cause and cannot fix within scope. Only with proof in details: the same command fails the same way at input.baseCommit, or the failure is in code the diff does not touch and does not reproduce on rerun. Put the exact command in location. These never hold the change.\nAnd a severity: blocker (wrong or harmful behavior), major (must be fixed before this ships), minor (worth fixing, should not hold the change).\n\nDo not raise findings about the pull request or anything that can exist only after delivery; put them in deliveryNotes. Put evidence you could not obtain in limitations.\n\nSet reviewedCommit to input.headCommit. Verdict: pass when no blocker or major finding remains in your lane, revise when one does, blocked only when you could not inspect what the review depends on.",
+        "context": {
+          "mode": "fresh",
+          "instructions": "Run in a new session or an isolated subagent with no inherited conversation. If that is unavailable, report the blocker; never claim fresh context from inside an existing conversation.\nWork read-only in input.workdir, your current directory: do not edit files, commit, or change Git state.",
+          "tools": [],
+          "skills": [],
+          "tier": "max"
+        },
+        "maxAttempts": 2,
+        "parallelId": "review",
+        "parallelBranchId": "code",
+        "inputBindings": {
+          "workdir": {
+            "source": "input",
+            "path": "verify.workdir"
+          },
+          "request": {
+            "source": "input",
+            "path": "verify.request"
+          },
+          "specPath": {
+            "source": "input",
+            "path": "verify.specPath"
+          },
+          "planPath": {
+            "source": "input",
+            "path": "verify.planPath"
+          },
+          "baseCommit": {
+            "source": "input",
+            "path": "verify.baseCommit"
+          },
+          "headCommit": {
+            "source": "input",
+            "path": "verify.headCommit"
+          },
+          "changedFiles": {
+            "source": "input",
+            "path": "verify.changedFiles"
+          },
+          "checks": {
+            "source": "input",
+            "path": "verify.checks"
+          },
+          "checksPassed": {
+            "source": "input",
+            "path": "verify.checksPassed"
+          },
+          "priorReview": {
+            "source": "input",
+            "path": "verify.priorReview"
+          },
+          "formatFeedback": {
+            "source": "input",
+            "path": "formatFeedback"
+          }
+        }
+      },
+      {
+        "id": "reviewMerge",
+        "kind": "script",
+        "label": "Merge reviews and route findings",
+        "stage": "Review",
+        "stageId": "review",
+        "position": {
+          "x": 3640,
+          "y": 300
+        },
+        "inputSchema": {},
+        "outputSchema": {},
+        "language": "javascript",
+        "command": "// Merge both reviews, apply the verdict rules and route findings to spec, plan or build.\nconst { root, verify, review, prior, grant } = input;\nconst lanes = [['specReview', 'S'], ['codeReview', 'C']];\nconst problems = [];\nlet findings = [];\nfor (const [key, prefix] of lanes) {\n  const r = review[key];\n  if (r.verdict !== 'blocked' && r.reviewedCommit !== verify.headCommit) problems.push(key + ' reviewed ' + JSON.stringify(r.reviewedCommit) + ' instead of ' + verify.headCommit + '.');\n  findings.push(...r.findings.map((f) => ({ ...f, id: f.id.startsWith(prefix) ? f.id : prefix + '-' + f.id })));\n}\nconst criteria = review.specReview.criteria;\nif (review.specReview.verdict !== 'blocked' && !criteria.length) problems.push('specReview returned no criteria.');\nconst earlier = (verify.priorReview?.findings ?? []).filter((f) => f.severity !== 'minor' && f.owner !== 'environment').map((f) => f.id);\nconst resolutions = [...review.specReview.resolutions, ...review.codeReview.resolutions];\nconst unanswered = earlier.filter((id) => !resolutions.some((r) => r.id === id));\nif (unanswered.length) problems.push('No resolutions entry for earlier finding ' + unanswered.join(', ') + '.');\n// Environment findings never hold the change. Small changes have no spec, so spec findings go to the plan.\nfindings = findings.map((f) => f.owner === 'environment' ? { ...f, severity: 'minor' } : root.size === 'small' && f.owner === 'spec' ? { ...f, owner: 'plan' } : f);\nconst add = (id, details) => findings.push({ id, owner: 'build', severity: 'major', location: 'review rules', details });\nif (verify.checksPassed === false) {\n  const excused = findings.filter((f) => f.owner === 'environment').map((f) => f.location + ' ' + f.details).join('\\n');\n  const owned = verify.checks.filter((c) => c.status === 'failed' && !excused.includes(c.command)).map((c) => c.command);\n  if (owned.length) add('R-checks', 'Check commands failed and no environment finding excuses them: ' + owned.join('; '));\n}\nconst open = criteria.filter((c) => c.status !== 'verified').map((c) => c.id);\nif (open.length && !findings.some((f) => f.severity !== 'minor')) add('R-criteria', 'Criteria not verified: ' + open.join(', '));\nconst stillOpen = resolutions.filter((r) => r.status === 'unresolved' && earlier.includes(r.id)).map((r) => r.id);\nif (stillOpen.length && !findings.some((f) => stillOpen.includes(f.id))) add('R-resolutions', 'Earlier findings remain unresolved: ' + stillOpen.join(', '));\nconst material = findings.filter((f) => f.severity !== 'minor');\nconst blocked = lanes.some(([key]) => review[key].verdict === 'blocked');\n// Bounded loops: one reviewer correction, three review rounds unless a person allows more.\nconst repairing = prior?.route === 'review' && prior.kind === 'format';\nconst round = (prior?.round ?? 0) + (repairing ? 0 : 1);\nconst until = grant?.kind === 'rounds' ? grant.until : 3;\nconst owner = ['spec', 'plan', 'build'].find((o) => material.some((f) => f.owner === o));\nlet route, kind = 'verdict';\nif (problems.length && !blocked) { kind = 'format'; route = repairing ? 'ask' : 'review'; }\nelse if (blocked) { kind = 'blocked'; route = 'ask'; }\nelse if (!material.length) route = 'deliver';\nelse if (round >= until) { kind = 'rounds'; route = 'ask'; }\nelse route = owner;\nconst list = findings.map((f) => '[' + f.id + ' ' + f.severity + ', ' + f.owner + '] ' + f.location + ': ' + f.details).join('\\n');\nconst summary = 'Criteria review: ' + review.specReview.summary + '\\nCode review: ' + review.codeReview.summary;\nconst limitations = [...review.specReview.limitations, ...review.codeReview.limitations];\nconst deliveryNotes = [...review.specReview.deliveryNotes, ...review.codeReview.deliveryNotes];\nconst question = kind === 'format' ? 'The reviewers returned unusable results twice: ' + problems.join(' ') + ' Run the review again, or stop?'\n  : kind === 'blocked' ? 'A reviewer could not complete the review. ' + limitations.join(' ') + ' Run the review again, or stop?'\n  : 'The change still has findings after ' + round + ' review rounds. Allow three more rounds, or stop and keep the work as it is?';\nconst target = material.filter((f) => f.owner === owner);\nreturn {\n  route, kind, round, verdict: route === 'deliver' ? 'pass' : blocked ? 'blocked' : 'revise', summary,\n  reviewedCommit: verify.headCommit, baseCommit: verify.baseCommit, checks: verify.checks, checksPassed: verify.checksPassed,\n  criteria, findings, resolutions, deliveryNotes, limitations,\n  formatFeedback: kind === 'format' ? 'Your previous review result was rejected: ' + problems.join(' ') : '',\n  resume: kind === 'format' || kind === 'blocked' ? 'review' : owner ?? 'build',\n  feedback: target.length ? 'Independent review found problems owned by ' + owner + '. Resolve each by id and keep ids stable:\\n' + target.map((f) => '[' + f.id + ' ' + f.severity + '] ' + f.location + ': ' + f.details).join('\\n') : '',\n  question: question.slice(0, 4000),\n  context: 'Continuing keeps the original requirements and the outstanding findings. It does not accept defects or authorize new scope.',\n  evidence: (summary + '\\n\\n' + (list || 'No findings.')).slice(0, 32000), revision: verify.headCommit,\n};\n",
+        "timeoutMs": 20000,
+        "inputBindings": {
+          "root": {
+            "source": "node",
+            "nodeId": "setup",
+            "path": ""
+          },
+          "verify": {
+            "source": "node",
+            "nodeId": "verify",
+            "path": ""
+          },
+          "review": {
+            "source": "input",
+            "path": ""
+          },
+          "prior": {
+            "source": "node",
+            "nodeId": "reviewMerge",
+            "path": "",
+            "sourceDefault": null
+          },
+          "grant": {
+            "source": "node",
+            "nodeId": "limitGrant",
+            "path": "",
+            "sourceDefault": null
+          }
+        },
+        "routing": {
+          "path": "route",
+          "cases": [
+            {
+              "port": "deliver",
+              "equals": "deliver"
+            },
+            {
+              "port": "build",
+              "equals": "build"
+            },
+            {
+              "port": "plan",
+              "equals": "plan"
+            },
+            {
+              "port": "spec",
+              "equals": "spec"
+            },
+            {
+              "port": "review",
+              "equals": "review"
+            },
+            {
+              "port": "ask",
+              "equals": "ask"
+            }
+          ]
+        }
+      },
+      {
+        "id": "limitAsk",
+        "kind": "script",
+        "label": "Explain the limit reached",
+        "stage": "Review",
+        "stageId": "review",
+        "position": {
+          "x": 3640,
+          "y": 560
+        },
+        "inputSchema": {},
+        "outputSchema": {},
+        "language": "javascript",
+        "command": "// One checkpoint for every exceeded limit: result corrections, question rounds, review rounds and blocked reviews.\nconst a = input.ask;\nreturn { kind: a.kind, resume: a.resume, round: a.round ?? 0, feedback: a.feedback ?? '', question: a.question, context: a.context || 'A limit was reached.', evidence: a.evidence || a.feedback || '(none)', revision: String(a.revision || a.kind) };\n",
+        "timeoutMs": 20000,
+        "inputBindings": {
+          "ask": {
+            "source": "input",
+            "path": ""
+          }
+        }
+      },
+      {
+        "id": "limitHuman",
+        "kind": "input",
+        "label": "Continue past the limit?",
+        "stage": "Review",
+        "stageId": "review",
+        "position": {
+          "x": 3940,
+          "y": 560
+        },
+        "inputSchema": {},
+        "outputSchema": {},
+        "humanInput": {
+          "question": "Continue past the limit?",
+          "questionPath": "question",
+          "contextPath": "context",
+          "evidence": {
+            "title": "Latest state",
+            "contentPath": "evidence",
+            "revisionPath": "revision"
+          },
+          "answer": {
+            "kind": "choice",
+            "choices": [
+              {
+                "label": "Continue",
+                "value": "continue"
+              },
+              {
+                "label": "Stop and keep the work as it is",
+                "value": "stop"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "limitGrant",
+        "kind": "script",
+        "label": "Record the limit decision",
+        "stage": "Review",
+        "stageId": "review",
+        "position": {
+          "x": 4240,
+          "y": 560
+        },
+        "inputSchema": {},
+        "outputSchema": {},
+        "language": "javascript",
+        "command": "const { asked, answer } = input;\nconst go = answer.choice === 'continue';\nreturn {\n  route: go ? asked.resume : 'stop', kind: asked.kind, until: asked.round + 3, humanResponse: JSON.stringify(answer),\n  feedback: (asked.kind === 'questions' ? 'A person asked you to continue without further questions, using your recommended options. ' : 'A person allowed the workflow to continue past a limit. ')\n    + (answer.comment ? 'Their words: ' + answer.comment + '\\n' : '') + asked.feedback,\n  summary: go ? 'A person allowed the workflow to continue (' + asked.kind + ').' : 'A person stopped the change (' + asked.kind + ').',\n};\n",
+        "timeoutMs": 20000,
+        "inputBindings": {
+          "asked": {
+            "source": "node",
+            "nodeId": "limitAsk",
+            "path": ""
+          },
+          "answer": {
+            "source": "input",
+            "path": ""
+          }
+        },
+        "routing": {
+          "path": "route",
+          "cases": [
+            {
+              "port": "build",
+              "equals": "build"
+            },
+            {
+              "port": "plan",
+              "equals": "plan"
+            },
+            {
+              "port": "spec",
+              "equals": "spec"
+            },
+            {
+              "port": "review",
+              "equals": "review"
+            },
+            {
+              "port": "stop",
+              "equals": "stop"
+            }
+          ]
+        }
+      },
+      {
+        "id": "deliverCheck",
+        "kind": "script",
+        "label": "Confirm the reviewed commit",
+        "stage": "Delivery",
+        "stageId": "delivery",
+        "position": {
+          "x": 3940,
+          "y": 300
+        },
+        "inputSchema": {},
+        "outputSchema": {},
+        "language": "javascript",
+        "command": "// Deliver only the commit that passed review.\nconst { execFileSync } = await import('node:child_process');\nconst git = (...args) => execFileSync('git', args, { encoding: 'utf8' }).trim();\nconst { root, review } = input;\nif (review.verdict !== 'pass') throw new Error('Delivery requires a passing review');\nconst head = git('rev-parse', 'HEAD');\nif (head !== review.reviewedCommit) throw new Error('The checkout is at ' + head + ' but review passed at ' + review.reviewedCommit + '. Review the new commit before delivery.');\nreturn { route: root.createPr ? 'pr' : 'local', branch: git('rev-parse', '--abbrev-ref', 'HEAD'), reviewedCommit: head };\n",
+        "timeoutMs": 20000,
+        "inputBindings": {
+          "root": {
+            "source": "node",
+            "nodeId": "setup",
+            "path": ""
+          },
+          "review": {
+            "source": "node",
+            "nodeId": "reviewMerge",
+            "path": ""
+          }
+        },
+        "routing": {
+          "path": "route",
+          "cases": [
+            {
+              "port": "local",
+              "equals": "local"
+            },
+            {
+              "port": "pr",
+              "equals": "pr"
+            }
+          ]
+        }
+      },
+      {
+        "id": "openPr",
+        "kind": "agent",
+        "label": "Open the pull request",
+        "stage": "Delivery",
+        "stageId": "delivery",
+        "position": {
+          "x": 4240,
+          "y": 180
+        },
+        "inputSchema": {},
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "prUrl": {
+              "type": ["string", "null"]
+            },
+            "summary": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": ["prUrl", "summary"],
+          "additionalProperties": false
+        },
+        "prompt": "Open or update a pull request for the reviewed change. It passed independent review at deliver.reviewedCommit on branch deliver.branch.\n\nPush that branch and create the pull request with the repository's own tooling and template, following its instructions. Base it on the branch root.baseCommit came from unless the repository says otherwise. In the description: what changed and why, the acceptance criteria and how each was verified (review.criteria), the checks Interlock ran (review.checks), minor findings left open, review.deliveryNotes, and a link to root.issue when set. Keep to the template's own sections.\n\nDo not change the reviewed code. If the branch must change to open the pull request, stop and report it. If no remote or credentials are available, return prUrl null and say what blocked delivery. Do not merge, and do not wait for the pull request's CI.\n\nReturn prUrl and summary.",
+        "context": {
+          "mode": "current",
+          "instructions": "Inputs: root is this run's setup (workdir, request, taskDir, size, issue, baseCommit, branch, dedicatedBranch, reviewPolicy, createPr, commitArtifacts). previous is the result of the step that routed here.\nWork in root.workdir, which is your current directory. Read the repository's own instructions (AGENTS.md, CLAUDE.md, README, contributing or design docs) and follow them; where they conflict with this workflow, they win.\nKeep every file you write inside root.workdir. Put notes and scratch files in root.taskDir, never in /tmp or your home directory.\nPreserve unrelated changes. Settle routine technical questions from the repository and record the assumption. Ask a person only about a decision that changes scope, public behavior, compatibility, consequential architecture or authorization and that nothing already settles.\nKeep workflow details such as root, previous and route values out of the artifacts. Report a real blocker as a failure; never invent a result.",
+          "tools": [],
+          "skills": [],
+          "continuityGroup": "author"
+        },
+        "maxAttempts": 2,
+        "inputBindings": {
+          "root": {
+            "source": "node",
+            "nodeId": "setup",
+            "path": ""
+          },
+          "review": {
+            "source": "node",
+            "nodeId": "reviewMerge",
+            "path": ""
+          },
+          "deliver": {
+            "source": "input",
+            "path": ""
+          }
+        }
+      },
+      {
+        "id": "finish",
+        "kind": "script",
+        "label": "Record verification and delivery",
+        "stage": "Delivery",
+        "stageId": "delivery",
+        "position": {
+          "x": 4540,
+          "y": 300
+        },
+        "inputSchema": {},
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "outcome": {
+              "type": "string",
+              "enum": ["finished", "stopped"]
+            },
+            "summary": {
+              "type": "string"
+            },
+            "taskDir": {
+              "type": "string"
+            },
+            "verification": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": ["passed", "incomplete", "not_reviewed"]
+                },
+                "baseCommit": {
+                  "type": ["string", "null"]
+                },
+                "reviewedCommit": {
+                  "type": ["string", "null"]
+                },
+                "reviewRounds": {
+                  "type": "integer"
+                },
+                "checksPassed": {
+                  "type": ["boolean", "null"]
+                },
+                "checks": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "command": {
+                        "type": "string"
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": ["passed", "failed", "not_run"]
+                      },
+                      "exitCode": {
+                        "type": ["integer", "null"]
+                      },
+                      "attempts": {
+                        "type": "integer"
+                      }
+                    },
+                    "required": ["command", "status", "exitCode", "attempts"],
+                    "additionalProperties": false
+                  }
+                },
+                "criteria": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": ["verified", "unverified", "gap"]
+                      },
+                      "evidence": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["id", "status", "evidence"],
+                    "additionalProperties": false
+                  }
+                },
+                "openFindings": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "owner": {
+                        "type": "string"
+                      },
+                      "severity": {
+                        "type": "string"
+                      },
+                      "location": {
+                        "type": "string"
+                      },
+                      "details": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "owner",
+                      "severity",
+                      "location",
+                      "details"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "notes": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "status",
+                "baseCommit",
+                "reviewedCommit",
+                "reviewRounds",
+                "checksPassed",
+                "checks",
+                "criteria",
+                "openFindings",
+                "notes"
+              ],
+              "additionalProperties": false
+            },
+            "delivery": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": ["local", "pr_opened", "blocked", "not_attempted"]
+                },
+                "branch": {
+                  "type": ["string", "null"]
+                },
+                "prUrl": {
+                  "type": ["string", "null"]
+                },
+                "ci": {
+                  "type": "string",
+                  "enum": ["not_awaited", "not_applicable"]
+                },
+                "notes": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": ["status", "branch", "prUrl", "ci", "notes"],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "outcome",
+            "summary",
+            "taskDir",
+            "verification",
+            "delivery"
+          ],
+          "additionalProperties": false
+        },
+        "language": "javascript",
+        "command": "// Final result: verification (what was proven) and delivery (what was done with it) are reported separately.\nconst { root, review, deliver, pr } = input;\nconst blocked = root.createPr && !pr?.prUrl;\nconst open = review.findings.map(({ id, owner, severity, location, details }) => ({ id, owner, severity, location, details }));\nreturn {\n  outcome: 'finished', summary: pr?.summary ?? review.summary, taskDir: root.taskDir,\n  verification: { status: 'passed', baseCommit: review.baseCommit, reviewedCommit: review.reviewedCommit, reviewRounds: review.round,\n    checksPassed: review.checksPassed, checks: review.checks.map(({ command, status, exitCode, attempts }) => ({ command, status, exitCode, attempts })),\n    criteria: review.criteria, openFindings: open,\n    notes: [...(review.checksPassed === null ? ['No check commands ran.'] : []), ...review.checks.filter((c) => c.attempts > 1 && c.status === 'passed').map((c) => 'Flaky check passed on retry: ' + c.command), ...review.limitations] },\n  delivery: { status: blocked ? 'blocked' : pr?.prUrl ? 'pr_opened' : 'local', branch: deliver.branch, prUrl: pr?.prUrl ?? null,\n    ci: pr?.prUrl ? 'not_awaited' : 'not_applicable',\n    notes: [...(blocked ? ['A pull request was requested but not opened. ' + (pr?.summary ?? '')] : []),\n      ...(pr?.prUrl ? [\"The pull request's own CI had not finished when this workflow ended.\"] : []),\n      ...review.deliveryNotes] },\n};\n",
+        "timeoutMs": 20000,
+        "inputBindings": {
+          "root": {
+            "source": "node",
+            "nodeId": "setup",
+            "path": ""
+          },
+          "review": {
+            "source": "node",
+            "nodeId": "reviewMerge",
+            "path": ""
+          },
+          "deliver": {
+            "source": "node",
+            "nodeId": "deliverCheck",
+            "path": ""
+          },
+          "pr": {
+            "source": "node",
+            "nodeId": "openPr",
+            "path": "",
+            "sourceDefault": null
+          }
+        }
+      },
+      {
+        "id": "stopOutput",
+        "kind": "script",
+        "label": "Record the stopped change",
+        "position": {
+          "x": 4540,
+          "y": 560
+        },
+        "inputSchema": {},
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "outcome": {
+              "type": "string",
+              "enum": ["finished", "stopped"]
+            },
+            "summary": {
+              "type": "string"
+            },
+            "taskDir": {
+              "type": "string"
+            },
+            "verification": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": ["passed", "incomplete", "not_reviewed"]
+                },
+                "baseCommit": {
+                  "type": ["string", "null"]
+                },
+                "reviewedCommit": {
+                  "type": ["string", "null"]
+                },
+                "reviewRounds": {
+                  "type": "integer"
+                },
+                "checksPassed": {
+                  "type": ["boolean", "null"]
+                },
+                "checks": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "command": {
+                        "type": "string"
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": ["passed", "failed", "not_run"]
+                      },
+                      "exitCode": {
+                        "type": ["integer", "null"]
+                      },
+                      "attempts": {
+                        "type": "integer"
+                      }
+                    },
+                    "required": ["command", "status", "exitCode", "attempts"],
+                    "additionalProperties": false
+                  }
+                },
+                "criteria": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": ["verified", "unverified", "gap"]
+                      },
+                      "evidence": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["id", "status", "evidence"],
+                    "additionalProperties": false
+                  }
+                },
+                "openFindings": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "owner": {
+                        "type": "string"
+                      },
+                      "severity": {
+                        "type": "string"
+                      },
+                      "location": {
+                        "type": "string"
+                      },
+                      "details": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "owner",
+                      "severity",
+                      "location",
+                      "details"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "notes": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "status",
+                "baseCommit",
+                "reviewedCommit",
+                "reviewRounds",
+                "checksPassed",
+                "checks",
+                "criteria",
+                "openFindings",
+                "notes"
+              ],
+              "additionalProperties": false
+            },
+            "delivery": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": ["local", "pr_opened", "blocked", "not_attempted"]
+                },
+                "branch": {
+                  "type": ["string", "null"]
+                },
+                "prUrl": {
+                  "type": ["string", "null"]
+                },
+                "ci": {
+                  "type": "string",
+                  "enum": ["not_awaited", "not_applicable"]
+                },
+                "notes": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": ["status", "branch", "prUrl", "ci", "notes"],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "outcome",
+            "summary",
+            "taskDir",
+            "verification",
+            "delivery"
+          ],
+          "additionalProperties": false
+        },
+        "language": "javascript",
+        "command": "const { root, previous, review, build } = input;\nconst committed = build && build.headCommit ? ' Work so far is committed at ' + build.headCommit + '.' : ' No code was reviewed.';\nreturn {\n  outcome: 'stopped', summary: (previous.summary ?? 'A person stopped the change.') + committed, taskDir: root.taskDir,\n  verification: { status: review ? 'incomplete' : 'not_reviewed', baseCommit: root.baseCommit, reviewedCommit: review?.reviewedCommit ?? null, reviewRounds: review?.round ?? 0,\n    checksPassed: review?.checksPassed ?? null, checks: (review?.checks ?? []).map(({ command, status, exitCode, attempts }) => ({ command, status, exitCode, attempts })),\n    criteria: review?.criteria ?? [], openFindings: (review?.findings ?? []).map(({ id, owner, severity, location, details }) => ({ id, owner, severity, location, details })),\n    notes: ['Human decision: ' + (previous.humanResponse ?? 'stop')] },\n  delivery: { status: 'not_attempted', branch: null, prUrl: null, ci: 'not_applicable', notes: [] },\n};\n",
+        "timeoutMs": 20000,
+        "inputBindings": {
+          "root": {
+            "source": "node",
+            "nodeId": "setup",
+            "path": ""
+          },
+          "previous": {
+            "source": "input",
+            "path": ""
+          },
+          "review": {
+            "source": "node",
+            "nodeId": "reviewMerge",
+            "path": "",
+            "sourceDefault": null
+          },
+          "build": {
+            "source": "node",
+            "nodeId": "build",
+            "path": "",
+            "sourceDefault": null
+          }
+        }
+      },
+      {
+        "id": "ready",
+        "kind": "exit",
+        "label": "Change finished",
+        "stage": "Delivery",
+        "stageId": "delivery",
+        "position": {
+          "x": 4840,
+          "y": 300
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "outcome": {
+              "type": "string",
+              "enum": ["finished", "stopped"]
+            },
+            "summary": {
+              "type": "string"
+            },
+            "taskDir": {
+              "type": "string"
+            },
+            "verification": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": ["passed", "incomplete", "not_reviewed"]
+                },
+                "baseCommit": {
+                  "type": ["string", "null"]
+                },
+                "reviewedCommit": {
+                  "type": ["string", "null"]
+                },
+                "reviewRounds": {
+                  "type": "integer"
+                },
+                "checksPassed": {
+                  "type": ["boolean", "null"]
+                },
+                "checks": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "command": {
+                        "type": "string"
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": ["passed", "failed", "not_run"]
+                      },
+                      "exitCode": {
+                        "type": ["integer", "null"]
+                      },
+                      "attempts": {
+                        "type": "integer"
+                      }
+                    },
+                    "required": ["command", "status", "exitCode", "attempts"],
+                    "additionalProperties": false
+                  }
+                },
+                "criteria": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": ["verified", "unverified", "gap"]
+                      },
+                      "evidence": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["id", "status", "evidence"],
+                    "additionalProperties": false
+                  }
+                },
+                "openFindings": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "owner": {
+                        "type": "string"
+                      },
+                      "severity": {
+                        "type": "string"
+                      },
+                      "location": {
+                        "type": "string"
+                      },
+                      "details": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "owner",
+                      "severity",
+                      "location",
+                      "details"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "notes": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "status",
+                "baseCommit",
+                "reviewedCommit",
+                "reviewRounds",
+                "checksPassed",
+                "checks",
+                "criteria",
+                "openFindings",
+                "notes"
+              ],
+              "additionalProperties": false
+            },
+            "delivery": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": ["local", "pr_opened", "blocked", "not_attempted"]
+                },
+                "branch": {
+                  "type": ["string", "null"]
+                },
+                "prUrl": {
+                  "type": ["string", "null"]
+                },
+                "ci": {
+                  "type": "string",
+                  "enum": ["not_awaited", "not_applicable"]
+                },
+                "notes": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": ["status", "branch", "prUrl", "ci", "notes"],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "outcome",
+            "summary",
+            "taskDir",
+            "verification",
+            "delivery"
+          ],
+          "additionalProperties": false
+        },
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "outcome": {
+              "type": "string",
+              "enum": ["finished", "stopped"]
+            },
+            "summary": {
+              "type": "string"
+            },
+            "taskDir": {
+              "type": "string"
+            },
+            "verification": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": ["passed", "incomplete", "not_reviewed"]
+                },
+                "baseCommit": {
+                  "type": ["string", "null"]
+                },
+                "reviewedCommit": {
+                  "type": ["string", "null"]
+                },
+                "reviewRounds": {
+                  "type": "integer"
+                },
+                "checksPassed": {
+                  "type": ["boolean", "null"]
+                },
+                "checks": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "command": {
+                        "type": "string"
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": ["passed", "failed", "not_run"]
+                      },
+                      "exitCode": {
+                        "type": ["integer", "null"]
+                      },
+                      "attempts": {
+                        "type": "integer"
+                      }
+                    },
+                    "required": ["command", "status", "exitCode", "attempts"],
+                    "additionalProperties": false
+                  }
+                },
+                "criteria": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": ["verified", "unverified", "gap"]
+                      },
+                      "evidence": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["id", "status", "evidence"],
+                    "additionalProperties": false
+                  }
+                },
+                "openFindings": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "owner": {
+                        "type": "string"
+                      },
+                      "severity": {
+                        "type": "string"
+                      },
+                      "location": {
+                        "type": "string"
+                      },
+                      "details": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "owner",
+                      "severity",
+                      "location",
+                      "details"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "notes": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "status",
+                "baseCommit",
+                "reviewedCommit",
+                "reviewRounds",
+                "checksPassed",
+                "checks",
+                "criteria",
+                "openFindings",
+                "notes"
+              ],
+              "additionalProperties": false
+            },
+            "delivery": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": ["local", "pr_opened", "blocked", "not_attempted"]
+                },
+                "branch": {
+                  "type": ["string", "null"]
+                },
+                "prUrl": {
+                  "type": ["string", "null"]
+                },
+                "ci": {
+                  "type": "string",
+                  "enum": ["not_awaited", "not_applicable"]
+                },
+                "notes": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": ["status", "branch", "prUrl", "ci", "notes"],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "outcome",
+            "summary",
+            "taskDir",
+            "verification",
+            "delivery"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "id": "stopped",
+        "kind": "exit",
+        "label": "Stopped by a person",
+        "position": {
+          "x": 4840,
+          "y": 560
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "outcome": {
+              "type": "string",
+              "enum": ["finished", "stopped"]
+            },
+            "summary": {
+              "type": "string"
+            },
+            "taskDir": {
+              "type": "string"
+            },
+            "verification": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": ["passed", "incomplete", "not_reviewed"]
+                },
+                "baseCommit": {
+                  "type": ["string", "null"]
+                },
+                "reviewedCommit": {
+                  "type": ["string", "null"]
+                },
+                "reviewRounds": {
+                  "type": "integer"
+                },
+                "checksPassed": {
+                  "type": ["boolean", "null"]
+                },
+                "checks": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "command": {
+                        "type": "string"
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": ["passed", "failed", "not_run"]
+                      },
+                      "exitCode": {
+                        "type": ["integer", "null"]
+                      },
+                      "attempts": {
+                        "type": "integer"
+                      }
+                    },
+                    "required": ["command", "status", "exitCode", "attempts"],
+                    "additionalProperties": false
+                  }
+                },
+                "criteria": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": ["verified", "unverified", "gap"]
+                      },
+                      "evidence": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["id", "status", "evidence"],
+                    "additionalProperties": false
+                  }
+                },
+                "openFindings": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "owner": {
+                        "type": "string"
+                      },
+                      "severity": {
+                        "type": "string"
+                      },
+                      "location": {
+                        "type": "string"
+                      },
+                      "details": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "owner",
+                      "severity",
+                      "location",
+                      "details"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "notes": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "status",
+                "baseCommit",
+                "reviewedCommit",
+                "reviewRounds",
+                "checksPassed",
+                "checks",
+                "criteria",
+                "openFindings",
+                "notes"
+              ],
+              "additionalProperties": false
+            },
+            "delivery": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": ["local", "pr_opened", "blocked", "not_attempted"]
+                },
+                "branch": {
+                  "type": ["string", "null"]
+                },
+                "prUrl": {
+                  "type": ["string", "null"]
+                },
+                "ci": {
+                  "type": "string",
+                  "enum": ["not_awaited", "not_applicable"]
+                },
+                "notes": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": ["status", "branch", "prUrl", "ci", "notes"],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "outcome",
+            "summary",
+            "taskDir",
+            "verification",
+            "delivery"
+          ],
+          "additionalProperties": false
+        },
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "outcome": {
+              "type": "string",
+              "enum": ["finished", "stopped"]
+            },
+            "summary": {
+              "type": "string"
+            },
+            "taskDir": {
+              "type": "string"
+            },
+            "verification": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": ["passed", "incomplete", "not_reviewed"]
+                },
+                "baseCommit": {
+                  "type": ["string", "null"]
+                },
+                "reviewedCommit": {
+                  "type": ["string", "null"]
+                },
+                "reviewRounds": {
+                  "type": "integer"
+                },
+                "checksPassed": {
+                  "type": ["boolean", "null"]
+                },
+                "checks": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "command": {
+                        "type": "string"
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": ["passed", "failed", "not_run"]
+                      },
+                      "exitCode": {
+                        "type": ["integer", "null"]
+                      },
+                      "attempts": {
+                        "type": "integer"
+                      }
+                    },
+                    "required": ["command", "status", "exitCode", "attempts"],
+                    "additionalProperties": false
+                  }
+                },
+                "criteria": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": ["verified", "unverified", "gap"]
+                      },
+                      "evidence": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["id", "status", "evidence"],
+                    "additionalProperties": false
+                  }
+                },
+                "openFindings": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "owner": {
+                        "type": "string"
+                      },
+                      "severity": {
+                        "type": "string"
+                      },
+                      "location": {
+                        "type": "string"
+                      },
+                      "details": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "owner",
+                      "severity",
+                      "location",
+                      "details"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "notes": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "status",
+                "baseCommit",
+                "reviewedCommit",
+                "reviewRounds",
+                "checksPassed",
+                "checks",
+                "criteria",
+                "openFindings",
+                "notes"
+              ],
+              "additionalProperties": false
+            },
+            "delivery": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": ["local", "pr_opened", "blocked", "not_attempted"]
+                },
+                "branch": {
+                  "type": ["string", "null"]
+                },
+                "prUrl": {
+                  "type": ["string", "null"]
+                },
+                "ci": {
+                  "type": "string",
+                  "enum": ["not_awaited", "not_applicable"]
+                },
+                "notes": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": ["status", "branch", "prUrl", "ci", "notes"],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "outcome",
+            "summary",
+            "taskDir",
+            "verification",
+            "delivery"
+          ],
+          "additionalProperties": false
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "entry-default-setup",
+        "source": "entry",
+        "target": "setup",
+        "port": "default"
+      },
+      {
+        "id": "setup-small-plan",
+        "source": "setup",
+        "target": "plan",
+        "port": "small"
+      },
+      {
+        "id": "setup-standard-spec",
+        "source": "setup",
+        "target": "spec",
+        "port": "standard"
+      },
+      {
+        "id": "spec-default-plan",
+        "source": "spec",
+        "target": "plan",
+        "port": "default"
+      },
+      {
+        "id": "plan-default-planGate",
+        "source": "plan",
+        "target": "planGate",
+        "port": "default"
+      },
+      {
+        "id": "planGate-build-build",
+        "source": "planGate",
+        "target": "build",
+        "port": "build"
+      },
+      {
+        "id": "planGate-review-planReview",
+        "source": "planGate",
+        "target": "planReview",
+        "port": "review"
+      },
+      {
+        "id": "planGate-ask-planAsk",
+        "source": "planGate",
+        "target": "planAsk",
+        "port": "ask"
+      },
+      {
+        "id": "planGate-repair-plan",
+        "source": "planGate",
+        "target": "plan",
+        "port": "repair"
+      },
+      {
+        "id": "planReview-default-planReviewRoute",
+        "source": "planReview",
+        "target": "planReviewRoute",
+        "port": "default"
+      },
+      {
+        "id": "planReviewRoute-build-build",
+        "source": "planReviewRoute",
+        "target": "build",
+        "port": "build"
+      },
+      {
+        "id": "planReviewRoute-plan-plan",
+        "source": "planReviewRoute",
+        "target": "plan",
+        "port": "plan"
+      },
+      {
+        "id": "planReviewRoute-spec-spec",
+        "source": "planReviewRoute",
+        "target": "spec",
+        "port": "spec"
+      },
+      {
+        "id": "planReviewRoute-ask-planAsk",
+        "source": "planReviewRoute",
+        "target": "planAsk",
+        "port": "ask"
+      },
+      {
+        "id": "planAsk-default-planHuman",
+        "source": "planAsk",
+        "target": "planHuman",
+        "port": "default"
+      },
+      {
+        "id": "planHuman-default-planDecision",
+        "source": "planHuman",
+        "target": "planDecision",
+        "port": "default"
+      },
+      {
+        "id": "planDecision-build-build",
+        "source": "planDecision",
+        "target": "build",
+        "port": "build"
+      },
+      {
+        "id": "planDecision-plan-plan",
+        "source": "planDecision",
+        "target": "plan",
+        "port": "plan"
+      },
+      {
+        "id": "planDecision-stop-stopOutput",
+        "source": "planDecision",
+        "target": "stopOutput",
+        "port": "stop"
+      },
+      {
+        "id": "build-default-verify",
+        "source": "build",
+        "target": "verify",
+        "port": "default"
+      },
+      {
+        "id": "verify-review-review",
+        "source": "verify",
+        "target": "review",
+        "port": "review"
+      },
+      {
+        "id": "verify-build-build",
+        "source": "verify",
+        "target": "build",
+        "port": "build"
+      },
+      {
+        "id": "verify-question-questionHuman",
+        "source": "verify",
+        "target": "questionHuman",
+        "port": "question"
+      },
+      {
+        "id": "verify-ask-limitAsk",
+        "source": "verify",
+        "target": "limitAsk",
+        "port": "ask"
+      },
+      {
+        "id": "questionHuman-default-build",
+        "source": "questionHuman",
+        "target": "build",
+        "port": "default"
+      },
+      {
+        "id": "review-branch-spec-specReviewer",
+        "source": "review",
+        "target": "specReviewer",
+        "port": "branch:spec"
+      },
+      {
+        "id": "review-branch-code-codeReviewer",
+        "source": "review",
+        "target": "codeReviewer",
+        "port": "branch:code"
+      },
+      {
+        "id": "specReviewer-join",
+        "source": "specReviewer",
+        "target": "review",
+        "port": "default",
+        "targetHandle": "join"
+      },
+      {
+        "id": "codeReviewer-join",
+        "source": "codeReviewer",
+        "target": "review",
+        "port": "default",
+        "targetHandle": "join"
+      },
+      {
+        "id": "review-complete-reviewMerge",
+        "source": "review",
+        "target": "reviewMerge",
+        "port": "complete"
+      },
+      {
+        "id": "reviewMerge-deliver-deliverCheck",
+        "source": "reviewMerge",
+        "target": "deliverCheck",
+        "port": "deliver"
+      },
+      {
+        "id": "reviewMerge-build-build",
+        "source": "reviewMerge",
+        "target": "build",
+        "port": "build"
+      },
+      {
+        "id": "reviewMerge-plan-plan",
+        "source": "reviewMerge",
+        "target": "plan",
+        "port": "plan"
+      },
+      {
+        "id": "reviewMerge-spec-spec",
+        "source": "reviewMerge",
+        "target": "spec",
+        "port": "spec"
+      },
+      {
+        "id": "reviewMerge-review-review",
+        "source": "reviewMerge",
+        "target": "review",
+        "port": "review"
+      },
+      {
+        "id": "reviewMerge-ask-limitAsk",
+        "source": "reviewMerge",
+        "target": "limitAsk",
+        "port": "ask"
+      },
+      {
+        "id": "limitAsk-default-limitHuman",
+        "source": "limitAsk",
+        "target": "limitHuman",
+        "port": "default"
+      },
+      {
+        "id": "limitHuman-default-limitGrant",
+        "source": "limitHuman",
+        "target": "limitGrant",
+        "port": "default"
+      },
+      {
+        "id": "limitGrant-build-build",
+        "source": "limitGrant",
+        "target": "build",
+        "port": "build"
+      },
+      {
+        "id": "limitGrant-plan-plan",
+        "source": "limitGrant",
+        "target": "plan",
+        "port": "plan"
+      },
+      {
+        "id": "limitGrant-spec-spec",
+        "source": "limitGrant",
+        "target": "spec",
+        "port": "spec"
+      },
+      {
+        "id": "limitGrant-review-review",
+        "source": "limitGrant",
+        "target": "review",
+        "port": "review"
+      },
+      {
+        "id": "limitGrant-stop-stopOutput",
+        "source": "limitGrant",
+        "target": "stopOutput",
+        "port": "stop"
+      },
+      {
+        "id": "deliverCheck-local-finish",
+        "source": "deliverCheck",
+        "target": "finish",
+        "port": "local"
+      },
+      {
+        "id": "deliverCheck-pr-openPr",
+        "source": "deliverCheck",
+        "target": "openPr",
+        "port": "pr"
+      },
+      {
+        "id": "openPr-default-finish",
+        "source": "openPr",
+        "target": "finish",
+        "port": "default"
+      },
+      {
+        "id": "finish-default-ready",
+        "source": "finish",
+        "target": "ready",
+        "port": "default"
+      },
+      {
+        "id": "stopOutput-default-stopped",
+        "source": "stopOutput",
+        "target": "stopped",
+        "port": "default"
+      }
+    ]
+  }
+}

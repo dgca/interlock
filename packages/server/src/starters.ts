@@ -14,6 +14,7 @@ import {
   previewBoardImport,
 } from '@interlock/runtime/boardImport';
 import sdlc from '../../../workflows/sdlc.json';
+import sdlcV2 from '../../../workflows/sdlc-v2.json';
 import evaluate from '../../../workflows/evaluate.json';
 
 const sdlcColumns = [
@@ -36,6 +37,16 @@ const catalog = [
     summary: 'Plan, implement, and review a software change.',
     requirements:
       'Needs a coding agent with repository access and a fresh final reviewer.',
+  },
+  {
+    // A separate identity: copies of the first SDLC starter keep theirs.
+    id: 'sdlc-v2',
+    template: sdlcV2,
+    boardSuggestion: sdlcBoard,
+    summary:
+      'Plan, build, and review a change with parallel reviewers and human checkpoints.',
+    requirements:
+      'Needs a coding agent and fresh reviewers. Set repoPath or a Git worktree per run.',
   },
   {
     id: 'evaluate-comparison',
