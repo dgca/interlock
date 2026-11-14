@@ -51,6 +51,7 @@ import {
   workflowBoardStageColumn,
 } from './workflowBoards.js';
 import { Transcripts } from './transcripts.js';
+import { documentPage, eventDeliveries } from './documentQueries.js';
 import { countReportRuns, runsForReport } from './report.js';
 export { runsForReport } from './report.js';
 export type { HistoryRun } from './history.js';
@@ -229,29 +230,16 @@ export class Store {
       .map((row) => JSON.parse(row.value as string));
   }
   eventDeliveries(triggerId: string, offset = 0, limit = 20) {
-    const total = Number(
-      this.db
-        .prepare(
-          "SELECT count(*) AS total FROM documents WHERE collection = 'eventDeliveries' AND json_extract(value, '$.triggerId') = ?",
-        )
-        .get(triggerId)!.total,
-    );
-    const items = this.db
-      .prepare(
-        "SELECT value FROM documents WHERE collection = 'eventDeliveries' AND json_extract(value, '$.triggerId') = ? ORDER BY json_extract(value, '$.createdAt') DESC, rowid DESC LIMIT ? OFFSET ?",
-      )
-      .all(triggerId, limit, offset)
-      .map(
-        (row) =>
-          JSON.parse(
-            row.value as string,
-          ) as import('@interlock/core').EventDelivery,
-      );
-    return {
-      items,
-      total,
-      nextOffset: offset + items.length < total ? offset + items.length : null,
-    };
+    return eventDeliveries(this.db, triggerId, offset, limit);
+  }
+  /** Page documents whose top-level fields equal the filters, newest first. */
+  where<T>(
+    collection: string,
+    filters: Record<string, string>,
+    offset = 0,
+    limit = 50,
+  ) {
+    return documentPage<T>(this.db, collection, filters, offset, limit);
   }
   pendingEventDeliveries(): import('@interlock/core').EventDelivery[] {
     return this.db

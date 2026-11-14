@@ -370,3 +370,6 @@ export class GithubImporter {
     }
   }
 }
+
+/** The shared importer behind the workflows router. */
+export const githubImporter = new GithubImporter();

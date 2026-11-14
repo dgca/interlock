@@ -27,6 +27,7 @@ const execute = [
   'manage_work_resources',
   'get_context_group',
   'handoff_context_group',
+  'propose_workflow_change',
   'work_memory',
 ];
 
@@ -40,6 +41,7 @@ const author = [
   'create_workflow',
   'update_workflow',
   'edit_workflow',
+  'propose_workflow_change',
   'validate_workflow',
   'publish_workflow',
   'list_workflow_versions',
