@@ -38,6 +38,11 @@ const unsafeArguments: Record<string, string[]> = {
   ],
   tar: ['--to-command', '--use-compress-program', '-I', '--checkpoint-action'],
 };
+/** Options whose value names a file or directory the program writes. */
+const outputOptions: Record<string, string[]> = {
+  git: ['--output', '--output-directory', '-o'],
+  sort: ['--output', '-o'],
+};
 const shells = new Set(['sh', 'bash', 'zsh']);
 
 /** Split a script into simple commands, or undefined for unsupported syntax. */
@@ -289,6 +294,7 @@ function segmentPattern(
   patterns: string[][],
   cwd: string,
   root: string,
+  canEdit: boolean,
 ) {
   const words = segment.words;
   const program = basename(words[0].text);
@@ -303,6 +309,15 @@ function segmentPattern(
   if (words.some((w) => denied.some((d) => deniedWord(w.text, d))))
     return undefined;
   if (!segment.targets.every((path) => writablePath(path, cwd, root)))
+    return undefined;
+  // Writing a file through a redirection or an output option is an edit.
+  if (
+    !canEdit &&
+    (segment.targets.some((path) => path !== '/dev/null') ||
+      words.some((w) =>
+        (outputOptions[program] ?? []).some((o) => deniedWord(w.text, o)),
+      ))
+  )
     return undefined;
   return patterns.find((pattern) => {
     const wildcard = pattern.at(-1) === '*';
@@ -327,13 +342,14 @@ export function commandAllowed(
   cwd: string,
   root: string,
   patterns: string[],
+  canEdit = false,
 ) {
   if (!patterns.length || !pathInside(cwd, sep, root)) return undefined;
   if (!onlyWorktreeRepository(physicalPath(cwd, sep), root)) return undefined;
   const segments = parseScript(unwrapShell(command));
   const split = patterns.map((p) => p.trim().split(/\s+/));
   const matched = segments?.map((segment) =>
-    segmentPattern(segment, split, cwd, root),
+    segmentPattern(segment, split, cwd, root, canEdit),
   );
   return matched?.length && matched.every(Boolean)
     ? [...new Set(matched.map((pattern) => pattern!.join(' ')))]

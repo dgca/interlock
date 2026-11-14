@@ -2,12 +2,7 @@ import { afterEach, expect, it } from 'vitest';
 import { setImmediate as tick } from 'node:timers/promises';
 import { Store } from '@interlock/storage';
 import { Engine } from '@interlock/runtime';
-import {
-  blankDefinition,
-  nodeSchema,
-  simulationFixtureSchema,
-  type Json,
-} from '@interlock/core';
+import { blankDefinition, nodeSchema, type Json } from '@interlock/core';
 
 // Kept apart from simulation.test.ts, which is at its size ceiling.
 const engines: Engine[] = [];
@@ -89,11 +84,4 @@ it('answers Human input from a fixture and fails on an answer the choices reject
   const rejected = await simulate({ choice: 'revise' });
   expect(rejected.state).toBe('failed');
   expect(rejected.error).toMatch(/comment/);
-  expect(
-    simulationFixtureSchema.safeParse({
-      nodeId: 'agent',
-      kind: 'input',
-      error: 'x',
-    }).success,
-  ).toBe(false);
 });

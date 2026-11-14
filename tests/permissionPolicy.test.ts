@@ -27,6 +27,7 @@ writeFileSync(join(root, '.git'), `gitdir: ${join(scratch, 'gitdir')}\n`);
 const patterns = [
   'git status',
   'git diff *',
+  'git log *',
   'git format-patch *',
   'cat *',
   'cp *',
@@ -139,6 +140,34 @@ it.each<[string, PermissionAction]>([
   ['read without a read rule', { kind: 'read', paths: ['src/a.ts'] }],
 ])('asks for %s', (_name, action) => {
   expect(allows(action)).toBeUndefined();
+});
+
+const readOnly: PermissionPolicy = permissionPolicySchema.parse({
+  allow: patterns.map((pattern) => ({ kind: 'command', pattern })),
+});
+it.each([
+  'git log --output=x',
+  'git diff --output x',
+  'git format-patch -o out HEAD',
+  'git diff > x',
+  'cat src/a.ts > b',
+  'cat src/a.ts >> b',
+  'sort -o x f',
+])('without an edit rule asks for %s, which writes a file', (text) => {
+  expect(
+    policyAllows(readOnly, command(text), root, 'claude-code'),
+  ).toBeUndefined();
+  expect(allows(command(text))).toBeDefined();
+});
+it('without an edit rule still allows reading and output to /dev/null', () => {
+  expect(
+    policyAllows(
+      readOnly,
+      command('git diff --stat 2>/dev/null'),
+      root,
+      'claude-code',
+    ),
+  ).toBeDefined();
 });
 
 it('asks for Git in a directory that looks like another repository', () => {

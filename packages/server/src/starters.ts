@@ -65,9 +65,9 @@ const catalog = [
     bundle: sdlcV2Bundle,
     boardSuggestion: sdlcBoard,
     summary:
-      'Plan, build, and review a change; adds the Plan review and Change review it calls.',
+      'Plan, build, and review a change, with its own Plan and Change review.',
     requirements:
-      'Needs a coding agent and a fresh reviewer. Set repoPath or a Git worktree per run.',
+      'Coding agent and fresh reviewer. Agents ask until its Git worktree is on. Plan check commands run unprompted; pin them with checkCommands.',
   },
   {
     id: 'evaluate-comparison',

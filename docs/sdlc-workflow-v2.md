@@ -2,6 +2,8 @@
 
 ## Run with few approvals
 
+On a default import, every Agent action asks a person, but the check commands Interlock runs before each review do not: they run as a Script with your permissions, not as an Agent action. When the plan chooses them and `reviewPolicy` is `auto` on a small change, nobody sees them before they run. Pin them with the `checkCommands` input, or use `reviewPolicy: "always"` to approve each plan first; plan approval lists the commands.
+
 A managed Agent session with **Standard** permissions asks a person before it edits a file or runs a command. SDLC v2 ships a conservative [permission policy](permission-policy.md) on **SDLC workflow v2** and a narrower one on **Change review**. They allow routine reading, editing and Git bookkeeping without asking. **Plan review** runs its reviewer with **Read only** permissions, which a policy never widens. A policy applies only inside a run's own [Git worktree](managed-workspaces.md), so turn that on first:
 
 1. Open **SDLC workflow v2**, then **Workflow settings**.
@@ -36,4 +38,4 @@ The workflows avoid most of those requests by design:
 
 To allow your repository's own commands, add rules such as `{ "kind": "command", "pattern": "pnpm test *" }` in **Workflow settings → Permission policy**. Treat each as code execution: an agent that can edit files can change what the command runs. See [the policy's limits](permission-policy.md#limits).
 
-The plan proposes the check commands from the repository's own instructions, and Interlock runs them without asking. Use `reviewPolicy: "always"` to read the plan, including its verification section, before any code is written.
+Without the worktree setting, a run must start from a checkout with no uncommitted changes to tracked files, so the checks test what was committed; the setup step refuses otherwise. A review round whose check commands were skipped cannot pass, and the result never reports `verification: "passed"` for it.

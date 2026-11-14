@@ -166,6 +166,7 @@ export function policyAllows(
     resolve(cwd, action.cwd),
     root,
     policy.allow.flatMap((r) => (r.kind === 'command' ? [r.pattern] : [])),
+    policy.allow.some((r) => r.kind === 'edit'),
   )?.map((pattern) => describeRule({ kind: 'command', pattern }));
 }
 
