@@ -7,6 +7,7 @@ import {
   setPriceTableSchema,
   type PriceTable,
   type PriceTableRef,
+  type Run,
   type RunUsageReport,
   type SetPriceTableInput,
   type UsageAttempt,
@@ -87,17 +88,35 @@ export class Pricing {
       return this.read();
     });
   }
-  /** Pin the current table to a run the first time it reports unpriced tokens. */
-  capture(runId: string, snapshot: UsageSnapshot) {
-    if (!needsPrice(snapshot) || this.store.get(captures, runId)) return;
-    const current = this.current();
-    if (!this.store.get(tables, current.id)) this.store.put(tables, current);
+  private pin(runId: string, table: { id: string } = this.stored()) {
     this.store.put<RunPricing>(captures, {
       id: runId,
       runId,
-      priceTableId: current.id,
+      priceTableId: table.id,
       capturedAt: new Date().toISOString(),
     });
+  }
+  private stored() {
+    const current = this.current();
+    if (!this.store.get(tables, current.id)) this.store.put(tables, current);
+    return current;
+  }
+  /**
+   * Capture the price table when a run is created. Continue-as-new successors,
+   * Batch items and Parallel branches inherit their source run's table, like
+   * variable captures; invoked child workflows capture the current table.
+   */
+  start(run: Run, continuedFromId?: string, sameWorkflowChild = false) {
+    const source =
+      continuedFromId ?? (sameWorkflowChild ? run.parentRunId : undefined);
+    const inherited =
+      source && this.store.get<RunPricing>(captures, source)?.priceTableId;
+    this.pin(run.id, inherited ? { id: inherited } : undefined);
+  }
+  /** Fallback for runs created before capture at start: pin on first use. */
+  capture(runId: string, snapshot: UsageSnapshot) {
+    if (!needsPrice(snapshot) || this.store.get(captures, runId)) return;
+    this.pin(runId);
   }
 
   forRuns(runIds: Set<string>) {

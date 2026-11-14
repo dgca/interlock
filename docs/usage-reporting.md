@@ -160,7 +160,7 @@ For [continue-as-new chains](continue-as-new.md), set `includeChain:true` to inc
 When a model's usage has tokens but no `cost`, Interlock prices it from a local price table. A cost the executor or observer reported always wins and is never replaced. Derived costs are added to `get_run_usage` totals, the run inspector, and workflow reports, and are marked so they stay distinguishable:
 
 - Each derived model in a `snapshot` carries `derivedCost` with the price table (`id`, `version`, `custom`) and the per-million-token rates used. Its `cost.source` reads `Interlock price table VERSION`. Reported costs have no `derivedCost`.
-- `totals.pricing` (and `usage.pricing` in reports) lists the tables and prices assumed, and the models with no price. A reason accompanies each gap: `no_price` (model not in the table), `incomplete_tokens` (input or output count unknown), or `no_table` (usage recorded before this feature, which stays unpriced). Lists are capped at 20 entries with `truncated`.
+- `totals.pricing` (and `usage.pricing` in reports) lists the tables and prices assumed, and the models with no price. A reason accompanies each gap: `no_price` (model not in the table), `incomplete_tokens` (input or output count unknown), or `no_table` (a run that finished before this feature, which stays unpriced). Lists are capped at 20 entries with `truncated`.
 
 Failed, expired, cancelled and held attempts are priced like completed ones whenever they reported tokens. Managed executors that fail before returning a result still record no usage for that attempt.
 
@@ -176,7 +176,7 @@ Token classes:
 
 ### Price table
 
-A run captures the current price table the first time it reports tokens without cost, and keeps that table for all its later usage. Editing the table changes derived cost for runs that capture it afterwards; runs that already captured a table keep their prices. Tables are stored by content, so a captured table never changes.
+A run captures the current price table when it starts and keeps it for all its usage. Continue-as-new successors, Batch items and Parallel branches inherit their source run's table, as they do variable captures; invoked child workflows capture the table current when they start. Editing the table therefore changes derived cost for runs started afterwards only. Runs started before this feature have no capture: they capture the current table at their next report of tokens without cost. Tables are stored by content, so a captured table never changes.
 
 Interlock ships a table of public list prices for Claude (`anthropic`) and OpenAI (`openai`) models, with its version, source URLs and retrieval dates. List prices change between releases. Unknown models get no price rather than an estimate. Models served through other providers, such as Bedrock or Vertex, are not in the shipped table.
 

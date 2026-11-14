@@ -156,6 +156,7 @@ it('derives cost from the table a run captured, keeps reported cost and names ga
 
   // Usage recorded before price capture existed stays unpriced.
   const legacy = engine.start(workflow.id, {}).run;
+  store.remove('runPricing', legacy.id);
   const work = engine.claim(engine.available(legacy.id)[0].id, worker, 10);
   const receipt = store.get<UsageAttempt>(
     'usageAttempts',
@@ -168,5 +169,30 @@ it('derives cost from the table a run captured, keeps reported cost and names ga
   expect(read(legacy.id).totals).toMatchObject({
     costs: [],
     pricing: { unpriced: [{ reason: 'no_table' }] },
+  });
+});
+
+it('prices a run with the table current when it started, not when it first reports', () => {
+  const store = new Store(':memory:'),
+    engine = new Engine(store, process.cwd());
+  open.push({ store, engine });
+  const workflow = engine.create('Started', '', blankDefinition());
+  engine.publish(workflow.id);
+  const run = engine.start(workflow.id, {}).run;
+  const current = engine.usage.prices.read();
+  engine.usage.prices.set({
+    expectedId: current.id,
+    table: { ...current.table, version: 'edited', models: [] },
+  });
+  const work = engine.claim(engine.available(run.id)[0].id, worker, 10);
+  engine.usage.report({
+    workId: work.id,
+    attempt: work.attempt,
+    token: work.token!,
+    snapshot: { sequence: 1, final: true, models: [opus] },
+  });
+  expect(engine.usage.read({ runId: run.id }).totals).toMatchObject({
+    costs: [{ amountMicros: { value: 2_020_020 } }],
+    pricing: { tables: [{ version: DEFAULT_PRICE_TABLE.version }] },
   });
 });
