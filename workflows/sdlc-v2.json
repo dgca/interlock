@@ -5,7 +5,7 @@
   "workflows": [
     {
       "id": "interlock-sdlc-v2",
-      "name": "SDLC workflow v2",
+      "name": "SDLC workflow",
       "description": "Plan, build and review a software change. A small change is planned, built and reviewed; a standard change adds a spec and an independent plan review. Interlock runs the checks, one fresh reviewer checks every round, and findings return to the build or to planning.",
       "ownerWorkflowId": null,
       "draft": {
@@ -1846,7 +1846,7 @@
     {
       "id": "interlock-sdlc-v2-plan-review",
       "name": "Plan review",
-      "description": "Review a plan or proposal with fresh context before anyone builds it. Called by SDLC workflow v2 for standard changes.",
+      "description": "Review a plan or proposal with fresh context before anyone builds it. Called by the SDLC workflow for standard changes.",
       "ownerWorkflowId": "interlock-sdlc-v2",
       "draft": {
         "cwd": {
@@ -2886,7 +2886,7 @@
     {
       "id": "interlock-sdlc-v2-change-review",
       "name": "Change review",
-      "description": "Run the check commands at a commit, then review the change with fresh context. Called by SDLC workflow v2 every review round.",
+      "description": "Run the check commands at a commit, then review the change with fresh context. Called by the SDLC workflow every review round.",
       "ownerWorkflowId": "interlock-sdlc-v2",
       "draft": {
         "cwd": {

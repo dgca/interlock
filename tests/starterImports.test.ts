@@ -11,6 +11,7 @@ import {
 } from '@interlock/core';
 import { importStarter, listStarters } from '../packages/server/src/starters';
 import sdlc from '../workflows/sdlc.json';
+import evaluate from '../workflows/evaluate.json';
 import { appRouter } from '../packages/server/src/router';
 import { exportWorkflows } from '../packages/runtime/src/transfer';
 const engines: Engine[] = [],
@@ -22,6 +23,15 @@ const setup = (path = ':memory:') => {
 };
 const add = (e: Engine, requestId = 'one', copy = false) =>
   importStarter(e, { starterId: 'sdlc', requestId, copy });
+// SDLC copies include the Plan review and Change review they own.
+const roots = (e: Engine) =>
+  e.store.workflows().filter((w) => !w.ownerWorkflowId);
+const listed = (e: Engine, id: string) =>
+  listStarters(e).find((s) => s.id === id);
+const addEvaluate = (e: Engine) =>
+  importStarter(e, { starterId: 'evaluate-comparison', requestId: 'eval' });
+const manualEvaluate = (e: Engine) =>
+  e.create('My evaluator', '', definitionSchema.parse(evaluate.definition));
 afterEach(() => {
   vi.restoreAllMocks();
   for (const e of engines.splice(0)) {
@@ -34,7 +44,6 @@ it('lists bundled choices without installing, publishing or starting anything', 
   const e = setup();
   expect(listStarters(e).map((s) => s.id)).toEqual([
     'sdlc',
-    'sdlc-v2',
     'pr-watcher',
     'evaluate-comparison',
     'github-issue-intake',
@@ -65,7 +74,6 @@ it.each(['draft', 'version'])(
 
     expect(listStarters(e).map((s) => s.id)).toEqual([
       'sdlc',
-      'sdlc-v2',
       'pr-watcher',
       'evaluate-comparison',
       'github-issue-intake',
@@ -79,7 +87,7 @@ it.each(['draft', 'version'])(
 );
 it('recognizes a retained starter after an incompatible draft and earlier version', () => {
   const e = setup(),
-    w = e.create('My SDLC', '', definitionSchema.parse(sdlc.definition));
+    w = manualEvaluate(e);
   e.publish(w.id);
   const first = e.store.getVersion(w.id, 1)!;
   e.publish(w.id);
@@ -92,8 +100,11 @@ it('recognizes a retained starter after an incompatible draft and earlier versio
   const before = e.workflow(w.id),
     versions = e.store.listVersions(w.id);
 
-  expect(listStarters(e)[0].existing?.id).toBe(w.id);
-  expect(add(e)).toMatchObject({ created: false, workflow: { id: w.id } });
+  expect(listed(e, 'evaluate-comparison')?.existing?.id).toBe(w.id);
+  expect(addEvaluate(e)).toMatchObject({
+    created: false,
+    workflow: { id: w.id },
+  });
   expect(e.store.workflows()).toHaveLength(1);
   expect(e.workflow(w.id)).toEqual(before);
   expect(e.store.listVersions(w.id)).toEqual(versions);
@@ -107,33 +118,68 @@ it('explicitly adds a published copy, recovers retries and offers the existing c
     created: false,
     workflow: { id: a.workflow.id },
   });
-  expect(e.store.workflows()).toHaveLength(1);
+  expect(roots(e)).toHaveLength(1);
   expect(listStarters(e)[0].existing?.id).toBe(a.workflow.id);
   expect(e.store.runs()).toEqual([]);
 });
-it('adds SDLC v2 as its own copy and leaves an existing v1 copy untouched', () => {
-  const e = setup(),
-    v1 = add(e).workflow.id,
-    before = e.workflow(v1),
-    versions = e.store.listVersions(v1);
-  const v2 = importStarter(e, { starterId: 'sdlc-v2', requestId: 'two' });
-  expect(v2).toMatchObject({ created: true });
-  expect(v2.workflow.id).not.toBe(v1);
-  expect(e.workflow(v1)).toEqual(before);
-  expect(e.store.listVersions(v1)).toEqual(versions);
-  const listed = new Map(listStarters(e).map((s) => [s.id, s.existing?.id]));
-  expect(listed.get('sdlc')).toBe(v1);
-  expect(listed.get('sdlc-v2')).toBe(v2.workflow.id);
-  expect(add(e, 'again')).toMatchObject({
+it('treats sdlc-v2 as the SDLC starter, for listing, importing and board setup', () => {
+  const e = setup();
+  expect(listStarters(e, { starterId: 'sdlc-v2' })).toEqual(
+    listStarters(e, { starterId: 'sdlc' }),
+  );
+  const requestId = 'alias-board';
+  const added = importStarter(e, {
+    starterId: 'sdlc-v2',
+    requestId,
+    boardSetup: {
+      requestId,
+      choices: [
+        {
+          suggestionId: 'sdlc-board',
+          action: 'create',
+          expectedBoards: { 'sdlc-v2': null },
+        },
+      ],
+    },
+  });
+  expect(e.boards.list()[0].workflowIds).toEqual([added.workflow.id]);
+  expect(add(e)).toMatchObject({
     created: false,
-    workflow: { id: v1 },
+    workflow: { id: added.workflow.id },
   });
   // A bundled starter is not an import: its permission policy needs no approval.
-  const definition = e.store.getVersion(v2.workflow.id, 1)!.definition;
+  const definition = e.store.getVersion(added.workflow.id, 1)!.definition;
   expect(definition.permissionPolicy?.allow.length).toBeGreaterThan(0);
   expect(
-    e.scriptApprovals.pendingPolicy(v2.workflow.id, definition),
+    e.scriptApprovals.pendingPolicy(added.workflow.id, definition),
   ).toBeFalsy();
+});
+it('reuses an earlier sdlc-v2 copy and adds a new copy beside an original SDLC copy', () => {
+  // Copy records as earlier releases wrote them.
+  const tracked = (id: string, starterId: string) =>
+    e.store.put('starterCopies', { id, starterId });
+  const e = setup(),
+    original = e.create(
+      'SDLC workflow',
+      '',
+      definitionSchema.parse(sdlc.definition),
+    );
+  e.publish(original.id);
+  tracked(original.id, 'sdlc');
+  const before = e.workflow(original.id),
+    versions = e.store.listVersions(original.id);
+  expect(listed(e, 'sdlc')?.existing).toBeUndefined();
+  const added = add(e);
+  expect(added).toMatchObject({ created: true });
+  expect(e.workflow(original.id)).toEqual(before);
+  expect(e.store.listVersions(original.id)).toEqual(versions);
+
+  const later = setup(),
+    v2 = later.create('SDLC workflow v2', '', blankDefinition());
+  later.store.put('starterCopies', { id: v2.id, starterId: 'sdlc-v2' });
+  expect(listed(later, 'sdlc')?.existing?.id).toBe(v2.id);
+  expect(add(later)).toMatchObject({ created: false, workflow: { id: v2.id } });
+  expect(later.store.workflows()).toHaveLength(1);
 });
 it('provisions a starter credential without a value, beside a variable of the same name, once for every copy', () => {
   const e = setup();
@@ -168,7 +214,7 @@ it('provisions a starter credential without a value, beside a variable of the sa
   expect(() => e.start(first.workflow.id, input)).toThrow(/no value/);
   expect(e.store.runs()).toEqual([]);
 });
-it('gives each SDLC v2 copy its own published Plan review and Change review', () => {
+it('gives each SDLC copy its own published Plan review and Change review, tracked as sdlc-v2', () => {
   const e = setup();
   const helpers = (rootId: string) => {
     const root = e.store.getVersion(rootId, 1)!.definition;
@@ -176,12 +222,8 @@ it('gives each SDLC v2 copy its own published Plan review and Change review', ()
       n.kind === 'workflow' ? [[n.workflowId, n.version]] : [],
     );
   };
-  const first = importStarter(e, { starterId: 'sdlc-v2', requestId: 'a' });
-  const second = importStarter(e, {
-    starterId: 'sdlc-v2',
-    requestId: 'b',
-    copy: true,
-  });
+  const first = add(e, 'a');
+  const second = add(e, 'b', true);
   for (const { workflow } of [first, second]) {
     const calls = helpers(workflow.id);
     expect(calls).toHaveLength(2);
@@ -211,7 +253,7 @@ it('gives each SDLC v2 copy its own published Plan review and Change review', ()
 });
 it('recognizes renamed legacy drafts and retained originals without changing them', () => {
   const e = setup(),
-    w = e.create('My SDLC', '', definitionSchema.parse(sdlc.definition));
+    w = manualEvaluate(e);
   e.publish(w.id);
   const draft = structuredClone(w.draft),
     n = draft.nodes.find((n) => n.kind === 'agent')!;
@@ -219,19 +261,13 @@ it('recognizes renamed legacy drafts and retained originals without changing the
   e.update(w.id, { draft, draftRevision: w.draftRevision });
   e.publish(w.id);
   const before = e.workflow(w.id);
-  expect(listStarters(e)[0].existing?.id).toBe(w.id);
-  expect(add(e)).toMatchObject({ created: false });
+  expect(listed(e, 'evaluate-comparison')?.existing?.id).toBe(w.id);
+  expect(addEvaluate(e)).toMatchObject({ created: false });
   expect(e.workflow(w.id)).toEqual(before);
 });
-it('recognizes pre-stage SDLC copies and sets up a board only for a new copy', () => {
-  const e = setup();
-  const staged = definitionSchema.parse(sdlc.definition);
-  const unstaged = {
-    ...staged,
-    nodes: staged.nodes.map(({ stage, stageId, ...node }) => node),
-  };
-  const old = e.create('Previously imported SDLC', '', unstaged);
-  e.publish(old.id);
+it('sets up a board only for a new SDLC copy', () => {
+  const e = setup(),
+    old = add(e, 'existing').workflow;
   const retained = e.store.getVersion(old.id, 1);
   const preview = listStarters(e, { boardSetup: true })[0];
   expect(preview.existing?.id).toBe(old.id);
@@ -258,9 +294,9 @@ it('recognizes pre-stage SDLC copies and sets up a board only for a new copy', (
   };
   const request = { starterId: 'sdlc', requestId, boardSetup };
   expect(() => importStarter(e, request)).toThrow(/another copy/);
-  expect(e.store.workflows()).toHaveLength(1);
   expect(e.boards.list()).toHaveLength(0);
   expect(add(e).workflow.id).toBe(old.id);
+  expect(roots(e)).toHaveLength(1);
 
   const copied = importStarter(e, { ...request, copy: true });
   expect(copied.workflow.id).not.toBe(old.id);
@@ -268,19 +304,8 @@ it('recognizes pre-stage SDLC copies and sets up a board only for a new copy', (
   const [board] = e.boards.list();
   expect(e.boards.list()).toHaveLength(1);
   expect(board.workflowIds).toEqual([copied.workflow.id]);
-  expect(e.store.getVersion(copied.workflow.id, 1)?.definition).toEqual(staged);
   expect(e.store.getVersion(old.id, 1)).toEqual(retained);
   expect(e.workflow(old.id).boardId).toBeUndefined();
-  const run = e.start(copied.workflow.id, {
-    request: 'Disposable board fixture',
-  }).run;
-  expect(
-    e.boards.read({ id: board.id, status: 'all', offset: 0, limit: 20 })
-      .columns[0],
-  ).toMatchObject({
-    name: 'Planning',
-    cards: [{ runId: run.id }],
-  });
 });
 
 it('rolls back starter publication when its destination board revision is stale', () => {
@@ -343,7 +368,7 @@ it('creates another copy only when requested and deduplicates its lost-response 
     b = add(e, 'copy-request', true);
   expect(b.workflow.id).not.toBe(a.workflow.id);
   expect(add(e, 'copy-request', true)).toEqual(b);
-  expect(e.store.workflows()).toHaveLength(2);
+  expect(roots(e)).toHaveLength(2);
   expect(() => add(e, 'copy-request', false)).toThrow(/different arguments/);
 });
 it('does not mistake a display-name collision for identity or overwrite it', () => {
@@ -357,12 +382,15 @@ it('does not mistake a display-name collision for identity or overwrite it', () 
 });
 it('allows intentional re-add after deletion while refusing an old delivered request', () => {
   const e = setup(),
-    a = add(e);
+    a = addEvaluate(e);
   e.deleteWorkflow(a.workflow.id);
-  expect(listStarters(e)[0].existing).toBeUndefined();
-  expect(() => add(e)).toThrow(/deleted/);
+  expect(listed(e, 'evaluate-comparison')?.existing).toBeUndefined();
+  expect(() => addEvaluate(e)).toThrow(/deleted/);
   expect(e.store.workflows()).toEqual([]);
-  expect(add(e, 'new-intent').created).toBe(true);
+  expect(
+    importStarter(e, { starterId: 'evaluate-comparison', requestId: 'new' })
+      .created,
+  ).toBe(true);
 });
 it('rolls back workflow, publication, copy tracking and request receipts on publication failure', () => {
   const e = setup(),
@@ -391,7 +419,7 @@ it('persists retry receipts across restart and excludes local tracking from port
   engines.splice(engines.indexOf(e), 1);
   const next = setup(path);
   expect(add(next)).toEqual(a);
-  expect(next.store.workflows()).toHaveLength(1);
+  expect(roots(next)).toHaveLength(1);
 });
 it('previews legacy and bundle metadata through the shared API without writes, preserving publish/import rules', async () => {
   const e = setup(),

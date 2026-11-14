@@ -506,7 +506,7 @@
   },
   "packages/server/src/starters.ts": {
     "@typescript-eslint/no-unused-vars": {
-      "count": 3
+      "count": 1
     }
   },
   "packages/storage/src/backgroundScripts.ts": {
@@ -2782,9 +2782,6 @@
     },
     "@typescript-eslint/no-unsafe-assignment": {
       "count": 2
-    },
-    "@typescript-eslint/no-unused-vars": {
-      "count": 2
     }
   },
   "tests/starterTransports.test.ts": {
@@ -2795,7 +2792,7 @@
       "count": 1
     },
     "@typescript-eslint/no-unsafe-argument": {
-      "count": 3
+      "count": 2
     },
     "@typescript-eslint/no-unsafe-assignment": {
       "count": 10
@@ -2804,7 +2801,7 @@
       "count": 1
     },
     "@typescript-eslint/no-unsafe-member-access": {
-      "count": 20
+      "count": 19
     },
     "@typescript-eslint/no-unsafe-return": {
       "count": 2

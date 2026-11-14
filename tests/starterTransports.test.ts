@@ -91,7 +91,6 @@ it.each(['http', 'stdio'])(
       const choices = await call('list_workflows', { source: 'starters' });
       expect(choices.map((s: any) => s.id)).toEqual([
         'sdlc',
-        'sdlc-v2',
         'pr-watcher',
         'evaluate-comparison',
         'github-issue-intake',
@@ -143,7 +142,8 @@ it.each(['http', 'stdio'])(
         copy: true,
       });
       expect(copy.workflow.id).not.toBe(a.workflow.id);
-      expect((await call('list_workflows')).length).toBe(2);
+      // Each SDLC copy adds the Plan review and Change review it owns.
+      expect((await call('list_workflows')).length).toBe(6);
       const bundle = exportWorkflows(e.store, a.workflow.id);
       expect(bundle.formatVersion).toBe(11);
       const preview = await call('import_workflows', { bundle, dryRun: true });
@@ -214,11 +214,18 @@ it.each(['http', 'stdio'])(
         arguments: { ...q, bundle },
       });
       expect(invalid.isError).toBe(true);
-      expect(e.store.workflows()).toHaveLength(3);
-      e.deleteWorkflow(copy.workflow.id);
+      expect(e.store.workflows()).toHaveLength(9);
+      const evaluator = {
+        starterId: 'evaluate-comparison',
+        requestId: 'evaluator',
+      };
+      const added = (await call('import_workflows', evaluator)) as {
+        workflow: { id: string };
+      };
+      e.deleteWorkflow(added.workflow.id);
       const old = await client.callTool({
         name: 'import_workflows',
-        arguments: { starterId: 'sdlc', requestId: 'another', copy: true },
+        arguments: evaluator,
       });
       expect(old.isError).toBe(true);
     } finally {

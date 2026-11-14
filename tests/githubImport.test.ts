@@ -1,14 +1,13 @@
 import { expect, it, vi } from 'vitest';
 import { Store } from '@interlock/storage';
 import { Engine } from '@interlock/runtime';
-import { blankDefinition, nodeSchema } from '@interlock/core';
+import { blankDefinition, definitionSchema, nodeSchema } from '@interlock/core';
 import { exportWorkflows } from '../packages/runtime/src/transfer';
 import {
   importSelection,
   inspectImportDocument,
 } from '../packages/runtime/src/importSelection';
 import { GithubImporter } from '../packages/server/src/githubImport';
-import { importStarter } from '../packages/server/src/starters';
 import sdlcWorkflow from '../workflows/sdlc.json';
 
 const commit = 'a'.repeat(40);
@@ -59,11 +58,16 @@ function fixture(entries: Record<string, unknown> = { 'good.json': legacy }) {
   }) as unknown as typeof fetch;
 }
 
-it('discovers and imports the shared SDLC starter without replacing an existing workflow', async () => {
+it('discovers and imports the original SDLC file without replacing an existing copy', async () => {
   const store = new Store(':memory:');
   const engine = new Engine(store, process.cwd());
   try {
-    importStarter(engine, { starterId: 'sdlc', requestId: 'github-fixture' });
+    const copy = engine.create(
+      sdlcWorkflow.name,
+      sdlcWorkflow.description,
+      definitionSchema.parse(sdlcWorkflow.definition),
+    );
+    engine.publish(copy.id);
     const existing = structuredClone(store.workflows()[0]);
     const existingVersion = store.getVersion(existing.id, 1);
     const importer = new GithubImporter(fixture({ 'sdlc.json': sdlcWorkflow }));

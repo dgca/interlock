@@ -14,7 +14,6 @@ import {
   applyBoardImport,
   previewBoardImport,
 } from '@interlock/runtime/boardImport';
-import sdlc from '../../../workflows/sdlc.json';
 import sdlcV2 from '../../../workflows/sdlc-v2.json';
 import prWatcher from '../../../workflows/pr-watcher.json';
 import evaluate from '../../../workflows/evaluate.json';
@@ -61,15 +60,9 @@ const intakeBundle = issueIntake as StarterBundle;
 const catalog = [
   {
     id: 'sdlc',
-    template: sdlc,
-    boardSuggestion: sdlcBoard,
-    summary: 'Plan, implement, and review a software change.',
-    requirements:
-      'Needs a coding agent with repository access and a fresh final reviewer.',
-  },
-  {
-    // A separate identity: copies of the first SDLC starter keep theirs.
-    id: 'sdlc-v2',
+    // Tracked as `sdlc-v2`, its catalog identity before it replaced the first
+    // SDLC starter: earlier copies stay recognized, copies of the first don't.
+    trackedAs: 'sdlc-v2',
     template: bundleRoot(sdlcV2Bundle),
     bundle: sdlcV2Bundle,
     boardSuggestion: sdlcBoard,
@@ -109,6 +102,12 @@ const catalog = [
 ] as const;
 type Starter = (typeof catalog)[number];
 const bundleOf = (s: Starter) => ('bundle' in s ? s.bundle : undefined);
+/** The identity copies are tracked under, and helper identities start with. */
+const trackedId = (s: Starter) => ('trackedAs' in s ? s.trackedAs : s.id);
+/** Earlier catalog identities that still select a starter. */
+const aliases: Record<string, string> = { 'sdlc-v2': 'sdlc' };
+const findStarter = (id: string) =>
+  catalog.find((s) => s.id === (aliases[id] ?? id));
 interface Copy {
   id: string;
   starterId: string;
@@ -131,14 +130,10 @@ function contentHash(definition: WorkflowDefinition) {
     edges: [...definition.edges].sort(order),
   });
 }
-function existing(
-  engine: Engine,
-  starterId: string,
-  definition: WorkflowDefinition,
-  hasPortableStages = false,
-  bundleId?: string,
-) {
+function existing(engine: Engine, starter: Starter) {
   const workflows = engine.store.workflows();
+  const starterId = trackedId(starter),
+    bundleId = bundleOf(starter)?.rootId;
   const known = new Set(
     engine.store
       .list<Copy>('starterCopies')
@@ -147,14 +142,7 @@ function existing(
   );
   const tracked = workflows.find((w) => known.has(w.id) || w.id === bundleId);
   if (tracked) return tracked;
-  const hashes = new Set([contentHash(definition)]);
-  if (hasPortableStages)
-    hashes.add(
-      contentHash({
-        ...definition,
-        nodes: definition.nodes.map(({ stageId, stage, ...node }) => node),
-      }),
-    );
+  const hash = contentHash(definitionSchema.parse(starter.template.definition));
   const retained = engine.store.listVersions();
   return workflows.find((w) =>
     [
@@ -163,7 +151,7 @@ function existing(
     ].some((d) => {
       // Historical definitions may use node kinds the current schema no longer supports.
       const parsed = definitionSchema.safeParse(d);
-      return parsed.success && hashes.has(contentHash(parsed.data));
+      return parsed.success && hash === contentHash(parsed.data);
     }),
   );
 }
@@ -209,13 +197,13 @@ function starterBoardPreview(
 
 function setupForCopy(
   setup: BoardImportSetup,
-  starterId: string,
+  starterIds: string[],
   workflowId: string,
 ): BoardImportSetup {
   const replaceId = <T>(record: Record<string, T>) =>
     Object.fromEntries(
       Object.entries(record).map(([key, value]) => [
-        key === starterId ? workflowId : key,
+        starterIds.includes(key) ? workflowId : key,
         value,
       ]),
     );
@@ -283,19 +271,13 @@ export function listStarters(
   q: { starterId?: string; boardSetup?: boolean } = {},
 ) {
   const detail = q.boardSetup || q.starterId !== undefined;
-  const chosen = catalog.filter(
-    (s) => q.starterId === undefined || s.id === q.starterId,
-  );
-  if (!chosen.length) throw new InterlockError('Starter not found');
+  const one = q.starterId === undefined ? undefined : findStarter(q.starterId);
+  if (q.starterId !== undefined && !one)
+    throw new InterlockError('Starter not found');
+  const chosen = one ? [one] : catalog;
   return chosen.map((s) => {
     const definition = definitionSchema.parse(s.template.definition),
-      copy = existing(
-        engine,
-        s.id,
-        definition,
-        !!s.boardSuggestion,
-        bundleOf(s)?.rootId,
-      );
+      copy = existing(engine, s);
     const boardSetup =
       detail &&
       s.boardSuggestion &&
@@ -334,7 +316,7 @@ export function importStarter(
     throw new InterlockError(
       'Use the same requestId for the starter and board setup.',
     );
-  const starter = catalog.find((s) => s.id === q.starterId);
+  const starter = findStarter(q.starterId);
   if (!starter) throw new InterlockError('Starter not found');
   return engine.store.transaction(() => {
     const id = fingerprint(q.requestId),
@@ -364,15 +346,7 @@ export function importStarter(
       };
     }
     const definition = definitionSchema.parse(starter.template.definition);
-    const found = q.copy
-      ? undefined
-      : existing(
-          engine,
-          starter.id,
-          definition,
-          !!starter.boardSuggestion,
-          bundleOf(starter)?.rootId,
-        );
+    const found = q.copy ? undefined : existing(engine, starter);
     if (q.boardSetup && !starter.boardSuggestion)
       throw new InterlockError('This starter has no suggested board.');
     if (q.boardSetup && found)
@@ -404,17 +378,17 @@ export function importStarter(
           boardSetup = applyBoardImport(
             engine.store,
             preview.suggestions,
-            setupForCopy(q.boardSetup, starter.id, workflow.id),
+            setupForCopy(q.boardSetup, [starter.id, q.starterId], workflow.id),
           );
         }
       }
       const bundle = bundleOf(starter);
-      if (bundle) addHelpers(engine, starter.id, bundle, workflow.id);
+      if (bundle) addHelpers(engine, trackedId(starter), bundle, workflow.id);
       engine.publish(workflow.id);
     }
     engine.store.put<Copy>('starterCopies', {
       id: workflow.id,
-      starterId: starter.id,
+      starterId: trackedId(starter),
     });
     engine.store.put<Receipt>('starterImports', {
       id,

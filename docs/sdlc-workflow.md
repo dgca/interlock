@@ -1,8 +1,8 @@
-# Use the SDLC workflow
+# Use the original SDLC workflow
 
-This page covers the original SDLC starter. [SDLC workflow v2](sdlc-workflow-v2.md) is offered beside it, with its own Plan review and Change review workflows, Interlock-run checks, Human input checkpoints and a permission policy for fewer approvals. Your copies of either are never changed by the other.
+This page covers the original SDLC workflow. The starter picker no longer offers it: **SDLC workflow** there is now [the newer workflow](sdlc-workflow-v2.md), with its own Plan review and Change review workflows, Interlock-run checks, Human input checkpoints and a permission policy for fewer approvals. Copies of the original you already have keep working and are never changed. To add the original, [import its file](#import-the-original-workflow).
 
-Add **SDLC workflow** through **Workflows → Import → Starters → Add to library**. This explicitly creates a published version 1 without starting a run. It takes a software change request through intent, specification, implementation planning, construction, and independent review. It records decisions and verification evidence in the target repository.
+The original takes a software change request through intent, specification, implementation planning, construction, and independent review. It records decisions and verification evidence in the target repository.
 
 ## Connect a coding agent
 
@@ -59,9 +59,9 @@ Final review checks the complete task diff, observable acceptance evidence, and 
 
 ## Existing libraries
 
-Startup does not install starters. Upgrades preserve existing workflows, including older seeded SDLC copies and their versions, edits and runs. The starter picker recognizes known copies and offers Open workflow; adding another copy is explicit. Deleting a copy leaves it absent until you deliberately add one again. Shipped template updates never overwrite your copy. See [starter workflows](starter-workflows.md).
+Startup does not install starters. Upgrades preserve existing workflows, including older seeded SDLC copies and their versions, edits and runs. The starter picker does not treat a copy of the original as a copy of the current SDLC starter. See [starter workflows](starter-workflows.md).
 
-### Import the starter into an existing library
+### Import the original workflow
 
 1. Open **Workflows → Import → GitHub folder**.
 2. Enter `https://github.com/dgca/interlock/tree/main/workflows` and select **Find workflows**.
@@ -75,4 +75,4 @@ interlock import @workflows/sdlc.json
 interlock publish WORKFLOW_ID
 ```
 
-Replace `WORKFLOW_ID` with the ID returned by import. The file contains the starter's name, description, and definition, shared with the bundled starter picker. Each import creates a separate draft with a new ID. It does not replace a customized SDLC, retain someone else's run history, or start a run. Publish the copy to make it runnable.
+Replace `WORKFLOW_ID` with the ID returned by import. The file contains the original workflow's name, description, and definition. Each import creates a separate draft with a new ID. It does not replace a customized SDLC, retain someone else's run history, or start a run. Publish the copy to make it runnable.
