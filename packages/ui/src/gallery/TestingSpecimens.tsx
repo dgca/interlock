@@ -116,7 +116,10 @@ export function Testing() {
       </Specimen>
       <Specimen name="CheckFields" wide>
         <CheckFields
-          checks={[answerCheck.assertion, routeCheck.assertion]}
+          checks={[
+            answerCheck.assertion,
+            { ...routeCheck.assertion, port: '' },
+          ]}
           onChange={() => {}}
           targets={[
             { id: 'review', label: 'Review', ports: ['true', 'false'] },
