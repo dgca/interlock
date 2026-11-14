@@ -4,6 +4,7 @@ export const usage = [
   'doctor [--live] [--json] (read-only system health and readiness check; returns non-zero on failure)',
   'triggers <read|manage> <json|@file> (schedule/event configuration; paged search/status filters and scoped counts; mutations use expectedRevision; create defaults disabled, enabled:true opts in; imports disabled; schedules alias retained)',
   'variables <read|manage> <json|@file> [--value-stdin] (metadata list/inspect, explicit config_value with valueRevision, write-only Secret creation/replacement through stdin)',
+  'memory <read|manage|work> <json|@file> (workflow memory; read action:list/history, manage action:configure/add/edit/approve/reject/revert/delete with the note revision, work action:read/write with workId and token during a claim)',
   'stalls [json|@file] (settings by default; configure with expectedRevision/policy, inspect with runId/offset/limit)',
   'executors [json|@file] (list by default; settings/save_settings, save profiles, models, inspect work, transcript by executionId with before/after paging, message with executionId/requestId/message, receipt with executionId/requestId, respond, retry_model, stop, reconcile)',
   'launcher <json|@file> (pull launcher profiles: credential with profileId rotates and prints the credential once; poll with profileId/clientId/waitMs/limit, complete with profileId/operationId/leaseToken/result, fail with profileId/operationId/leaseToken/error/retryable; the credential is read from INTERLOCK_LAUNCHER_CREDENTIAL unless given)',

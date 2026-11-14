@@ -11,11 +11,6 @@ import {
   pauseCreateSchema,
   pauseListSchema,
   pauseResumeSchema,
-} from '@interlock/core';
-import { startersQuery, importStarter } from './starters.js';
-import { callTool } from './toolCallProcedures.js';
-import { parseImportDocument } from '@interlock/core/importDocument';
-import {
   scriptOperationSchema,
   workResourceRequestSchema,
   variableReadSchema,
@@ -24,6 +19,9 @@ import {
   executorOperationSchema,
   executorModelsQuerySchema,
 } from '@interlock/core';
+import { startersQuery, importStarter } from './starters.js';
+import { callTool } from './toolCallProcedures.js';
+import { parseImportDocument } from '@interlock/core/importDocument';
 import { z } from 'zod';
 import { developmentConnection } from './connection.js';
 import {
@@ -107,6 +105,7 @@ import { runReadProcedures } from './runReadProcedures.js';
 import { reportRouter, systemReport } from './reportProcedures.js';
 import { id, inputMutation, p, t } from './trpc.js';
 import { boardTypesRouter, boardsRouter } from './boardProcedures.js';
+import { memoryRouter } from './memoryProcedures.js';
 import {
   agentDraftEdit,
   createWorkflow,
@@ -330,6 +329,7 @@ export const appRouter = t.router({
   }),
   boards: boardsRouter,
   boardTypes: boardTypesRouter,
+  memory: memoryRouter,
   requests: t.router({
     list: p
       .input(requestListSchema.default({}))

@@ -21,6 +21,7 @@ import type { Testbench } from './testbench.js';
 import type { Usage } from './usage.js';
 import type { WorkHolds } from './workHolds.js';
 import type { WorkResources } from './workResources.js';
+import { deleteWorkflowMemory } from './memory.js';
 
 const terminal = (s: string) =>
   ['completed', 'failed', 'cancelled'].includes(s);
@@ -196,6 +197,7 @@ export class WorkflowDeletion {
         this.store.deleteEventHistory(trigger.id);
       }
       this.retention.deleteWorkflow(id);
+      deleteWorkflowMemory(this.store, id);
       this.store.remove('workflowLayouts', id);
       this.store.remove('workflows', id);
       return { id };

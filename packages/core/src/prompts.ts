@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { WorkflowDefinition } from './index.js';
 import { startRequestIdSchema } from './runStarts.js';
+import { memorySection, type MemoryCapture } from './memory.js';
 
 export const promptRevisionConflict =
   'Prompt changed elsewhere. Reload before saving. Your edits have not been saved.';
@@ -83,12 +84,18 @@ export function snapshotPrompt(prompt: PromptSnapshot): PromptSnapshot {
   const { id, revision, name, description, content } = prompt;
   return { id, revision, name, description, content };
 }
-export function composePrompt(task: string, prompts: PromptSnapshot[]) {
-  if (!prompts.length) return task;
+/** Saved prompts, then captured memory for the node, then the task. */
+export function composePrompt(
+  task: string,
+  prompts: PromptSnapshot[],
+  memory?: { capture?: MemoryCapture; nodeId: string },
+) {
+  if (!prompts.length && !memory?.capture) return task;
   return [
     ...prompts.map(
       (prompt) => `## Saved prompt: ${prompt.name}\n\n${prompt.content}`,
     ),
+    ...(memory?.capture ? [memorySection(memory.capture, memory.nodeId)] : []),
     `## Task instructions\n\n${task}`,
   ].join('\n\n');
 }

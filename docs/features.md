@@ -74,6 +74,7 @@ What Interlock implements today, grouped by area. See [current limits](v1.md) fo
 ## Reuse, import and starters
 
 - Reusable Prompts library, ordered Agent references, latest content at each workflow run startup (with opt-in prompt pinning at publish via `pinPromptsAtPublish`), retained run captures, and portable prompt dependencies.
+- Opt-in per-workflow [memory](memory.md): revisioned workflow and step notes that agents write during a claim and people review, edit, revert and delete; live notes join Agent prompts within a budget and runs capture them at startup. Library-wide memory is not supported.
 - Instance-wide [Config and Secret variables](variables.md), protected value revisions with a separate key file, explicit Fetch header and Script environment delivery including polling checks, safe run captures, deliberate portable bindings, and bounded UI, CLI, and MCP management. Workflow-local overlays, implicit Agent/harness delivery, remote vaults, and encryption-key rotation are not supported.
 - Portable dependency bundles with transactional import, stable IDs and pins, semantic dry-run diffs (`--dry-run`), atomic cascade publication (`--publish --cascade`), and explicit draft-conflict handling.
 - Opt-in [repository folder sync](reuse-work.md#sync-workflows-with-a-repository-folder) (`INTERLOCK_SYNC_DIR`): publishing writes a sorted bundle file per workflow, a changed file imports into the draft only, and invalid or conflicting files show in Needs attention.
