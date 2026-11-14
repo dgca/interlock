@@ -173,7 +173,9 @@ function CaseFields({
               <SchemaInput
                 schema={schema}
                 value={value.input as Record<string, Json>}
-                onChange={(input) => onChange({ ...value, input })}
+                onChange={(input) =>
+                  onChange({ ...value, input, captured: undefined })
+                }
                 onValidityChange={(valid) =>
                   onValidityChange(`${own}.input`, valid)
                 }
@@ -183,11 +185,22 @@ function CaseFields({
                 label="Workflow input"
                 rows={6}
                 value={value.input}
-                onChange={(input: Json) => onChange({ ...value, input })}
+                onChange={(input: Json) =>
+                  onChange({ ...value, input, captured: undefined })
+                }
                 onValidityChange={(valid) =>
                   onValidityChange(`${own}.input`, valid)
                 }
               />
+            )}
+            {value.captured && (
+              <p className={styles.hint}>
+                Copied from run{' '}
+                <code className={styles.mono}>
+                  {value.captured.runId.slice(0, 8)}
+                </code>
+                . Editing the input saves it as entered.
+              </p>
             )}
             {problems.get(prefix) && (
               <p className={styles.fieldError}>{problems.get(prefix)}</p>
@@ -198,7 +211,10 @@ function CaseFields({
           <h4 className={styles.subheading}>Checks</h4>
           <CheckFields
             checks={value.assertions}
-            onChange={(assertions) => onChange({ ...value, assertions })}
+            keys={value.checkKeys}
+            onChange={(assertions, checkKeys) =>
+              onChange({ ...value, assertions, checkKeys })
+            }
             targets={checkTargets(workflow.draft)}
             problems={problems}
             prefix={`${prefix}.assertions`}
@@ -274,6 +290,7 @@ export function SuiteEditor({
     suite ? suiteDraft(suite) : emptySuite(),
   );
   const [savedDraft, setSavedDraft] = useState(draft);
+  const existing = useRef<Set<string>>(undefined);
   const [invalid, setInvalid] = useState<Set<string>>(new Set());
   const [submitted, setSubmitted] = useState(false);
   const [saveError, setSaveError] = useState('');
@@ -354,19 +371,41 @@ export function SuiteEditor({
     }
     if (!beginSave()) return;
     setSaveError('');
-    const content = suiteContent(draft);
     let result: TestSuite;
     try {
-      result = baseline
-        ? await api.testbench.updateSuite.mutate({
-            id: baseline.id,
-            revision: baseline.revision,
-            content,
-          })
-        : await api.testbench.createSuite.mutate({
-            workflowId: workflow.id,
-            content,
-          });
+      if (!baseline) {
+        // Creation has no request ID. Note the suites that exist now so an
+        // unconfirmed create can be matched to a new suite with this content.
+        const before = await api.testbench.suites.query({
+          workflowId: workflow.id,
+          limit: 100,
+        });
+        existing.current = new Set(before.items.map((item) => item.id));
+      }
+      const write = (content: ReturnType<typeof suiteContent>) =>
+        baseline
+          ? api.testbench.updateSuite.mutate({
+              id: baseline.id,
+              revision: baseline.revision,
+              content,
+            })
+          : api.testbench.createSuite.mutate({
+              workflowId: workflow.id,
+              content,
+            });
+      try {
+        result = await write(suiteContent(draft));
+      } catch (error) {
+        // A deleted source run cannot be re-read; keep its captured input.
+        if (
+          !isConfirmedWriteRejection(error) ||
+          !/^Source run .* is missing/.test(errorMessage(error)) ||
+          JSON.stringify(suiteContent(draft, false)) ===
+            JSON.stringify(suiteContent(draft))
+        )
+          throw error;
+        result = await write(suiteContent(draft, false));
+      }
     } catch (error) {
       if (!finishSave(false)) return;
       const message = errorMessage(error);
@@ -405,12 +444,22 @@ export function SuiteEditor({
             : 'Your changes were not saved. Save them again.',
         );
       } else {
-        const name = suiteContent(unconfirmed).name;
+        // Only a suite that did not exist before this save, with exactly the
+        // submitted content, is this save's result.
         const list = await api.testbench.suites.query({
           workflowId: workflow.id,
           limit: 100,
         });
-        const match = list.items.find((item) => item.name === name);
+        let match: TestSuite | undefined;
+        for (const item of list.items.filter(
+          (item) => !existing.current?.has(item.id),
+        )) {
+          const candidate = await api.testbench.suite.query({ id: item.id });
+          if (sameSuiteDraft(suiteDraft(candidate), unconfirmed)) {
+            match = candidate;
+            break;
+          }
+        }
         setUnconfirmed(undefined);
         if (match) {
           setLoadingLatest(false);

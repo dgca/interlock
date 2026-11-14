@@ -686,12 +686,11 @@ export class Simulations {
   latestForSuite(suiteId: string) {
     const suite = this.store.get<TestSuite>('testSuites', suiteId);
     if (!suite) throw new InterlockError('Test suite not found');
-    const latest = new Map<string, Record>();
-    for (const r of this.store.list<Record>(collection)) {
-      if (r.suiteId !== suiteId) continue;
-      const seen = latest.get(r.caseId);
-      if (!seen || r.createdAt >= seen.createdAt) latest.set(r.caseId, r);
-    }
+    const latest = new Map(
+      this.store
+        .latestSimulations<Record>(suiteId)
+        .map((r) => [r.caseId, r] as const),
+    );
     const result = (r: Record) => ({
       ...summary(r),
       unsupported: r.unsupported.slice(0, 10),

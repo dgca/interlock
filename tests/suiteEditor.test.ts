@@ -52,7 +52,7 @@ const suite: TestSuite = {
 
 afterEach(() => vi.clearAllMocks());
 
-it('saves an opened suite back in the strict suite shape without changes', () => {
+it('saves an opened suite back in the strict suite shape, keeping unchanged run sources', () => {
   const draft = suiteDraft(suite);
   // Read-only source metadata must not be sent back; the save schema is strict.
   const saved = createSuiteSchema.parse({
@@ -60,8 +60,22 @@ it('saves an opened suite back in the strict suite shape without changes', () =>
     content: suiteContent(draft),
   });
   expect(saved.content.cases[0]).not.toHaveProperty('source');
+  // An unchanged copied input is saved by its run, so provenance survives.
+  expect(saved.content.cases[0]).toMatchObject({ sourceRunId: 'run' });
+  expect(saved.content.cases[0]).not.toHaveProperty('input');
   expect(saved.content.cases[1].fixtures).toEqual(suite.cases[1].fixtures);
   expect(sameSuiteDraft(draft, suiteDraft(suite))).toBe(true);
+  const edited = {
+    ...draft,
+    cases: [
+      { ...draft.cases[0], input: { question: 'How?' }, captured: undefined },
+      draft.cases[1],
+    ],
+  };
+  expect(suiteContent(edited).cases[0]).toEqual(
+    expect.objectContaining({ input: { question: 'How?' } }),
+  );
+  expect(suiteContent(edited).cases[0]).not.toHaveProperty('sourceRunId');
 });
 
 it('runs cases one at a time against the saved revision, waiting for a free slot', async () => {

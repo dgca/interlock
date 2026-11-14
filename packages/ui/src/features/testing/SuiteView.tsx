@@ -57,9 +57,16 @@ export function SuiteView({
   suite: TestSuite;
 }) {
   const navigate = useNavigate();
-  const resultsQuery = useQuery(
-    trpc.testbench.suiteSimulations.queryOptions({ id: suite.id }),
-  );
+  // Simulations emit no engine events. Read on open, after each case this
+  // page runs, and every second while a result shown is still running.
+  const resultsQuery = useQuery({
+    ...trpc.testbench.suiteSimulations.queryOptions({ id: suite.id }),
+    meta: { engineRefresh: false },
+    refetchInterval: (query) =>
+      query.state.data?.cases.some((c) => c.simulation?.state === 'running')
+        ? 1000
+        : false,
+  });
   const versionsQuery = useQuery(
     trpc.workflows.versions.queryOptions({ id: workflow.id }),
   );
@@ -82,6 +89,9 @@ export function SuiteView({
     .filter((c) => c.count);
   const notRun = suite.cases.filter((c) => !byCase.get(c.id)).length;
   const coverage = results && suiteCoverage(results);
+  const earlier = results?.cases.some(
+    (c) => c.simulation && c.simulation.suiteRevision !== suite.revision,
+  );
   const unpublished = versionsQuery.data && !versions.length;
   const runningCase =
     running && progress?.caseId
@@ -180,6 +190,12 @@ export function SuiteView({
                   </div>
                 )}
               </dl>
+              {earlier && (
+                <p className={styles.hint}>
+                  Some results are from earlier suite revisions; run the cases
+                  again to check revision {suite.revision}.
+                </p>
+              )}
               {coverage && coverage.untested.length > 0 && (
                 <details className={styles.untested}>
                   <summary>

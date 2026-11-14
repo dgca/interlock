@@ -285,3 +285,28 @@
   color: var(--error-copy);
   font-size: 13px;
 }
+.sectionTitle {
+  margin: 8px 0 12px;
+  font-size: 18px;
+  font-weight: 600;
+}
+.sampleRow > * {
+  border-bottom: 0;
+}
+.sampleDetail {
+  padding: 0 18px 18px;
+}
+/* Measurement tables are dense comparisons, not navigation rows. */
+.compact tbody tr > * {
+  height: auto;
+  padding-block: 14px;
+}
+.tableNote {
+  margin-top: 8px;
+}
+.clamp {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}

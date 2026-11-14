@@ -112,6 +112,8 @@ export const paths = {
     `/workflows/${encodeURIComponent(id)}/tests/${encodeURIComponent(suiteId)}`,
   testSuiteEdit: (id: string, suiteId: string) =>
     `/workflows/${encodeURIComponent(id)}/tests/${encodeURIComponent(suiteId)}/edit`,
+  comparison: (id: string, comparisonId: string) =>
+    `/workflows/${encodeURIComponent(id)}/comparisons/${encodeURIComponent(comparisonId)}`,
   runs: (
     tab: RunTab = 'active',
     offset = 0,

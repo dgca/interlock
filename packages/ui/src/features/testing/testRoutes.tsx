@@ -9,6 +9,9 @@ import { SuitePageSkeleton } from './TestsViewSkeleton';
 const SuiteView = lazy(() =>
   import('./SuiteView').then((m) => ({ default: m.SuiteView })),
 );
+const ComparisonView = lazy(() =>
+  import('./ComparisonView').then((m) => ({ default: m.ComparisonView })),
+);
 const SuiteEditor = lazy(() =>
   import('./SuiteEditor').then((m) => ({ default: m.SuiteEditor })),
 );
@@ -76,7 +79,26 @@ function useSuite(id?: string) {
   );
 }
 
+function ComparisonPage() {
+  const { comparisonId } = useParams();
+  return (
+    <SuitePage
+      render={(workflow) => (
+        <ComparisonView
+          key={comparisonId}
+          workflow={workflow}
+          comparisonId={comparisonId!}
+        />
+      )}
+    />
+  );
+}
+
 export const testRoutes: RouteObject[] = [
+  {
+    path: 'workflows/:workflowId/comparisons/:comparisonId',
+    element: <ComparisonPage />,
+  },
   {
     path: 'workflows/:workflowId/tests/new',
     element: (
