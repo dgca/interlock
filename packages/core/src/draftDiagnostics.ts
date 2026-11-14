@@ -22,6 +22,7 @@ import {
 import { structuralEqual } from './jsonEquality.js';
 import { sameExecutionScope, validateParallelScopes } from './parallel.js';
 import { toolEdgeProblems, toolTargetIds } from './toolEdges.js';
+import { joinOutputSchema } from './parallelJoin.js';
 export interface DraftDiagnostic {
   severity: 'error' | 'warning';
   category: 'save' | 'publication' | 'contract';
@@ -593,7 +594,8 @@ function contractDiagnostics(d: WorkflowDefinition): DraftDiagnostic[] {
     else if (Object.keys(node.outputSchema).length)
       result = shape(node.outputSchema);
     else if (node.kind === 'batch') result = shape({ type: 'array' });
-    else if (node.kind === 'parallel') result = shape({ type: 'object' });
+    else if (node.kind === 'parallel')
+      result = shape(joinOutputSchema(node) ?? { type: 'object' });
     else result = unknownShape();
     visiting.delete(key);
     cache.set(key, result);
