@@ -1,6 +1,7 @@
 import { isDeepStrictEqual } from 'node:util';
 import type { DatabaseSync } from 'node:sqlite';
 import {
+  InterlockError,
   readPath,
   type Run,
   type RunAncestry,
@@ -43,6 +44,11 @@ export function findRuns(
     parameters.push(query.status);
   }
   if (query.rootOnly) filters.push('parent_id IS NULL');
+  if (query.afterRunId !== undefined) {
+    const cursor = runCursor(db, query.afterRunId);
+    filters.push('(created_at, position) < (?, ?)');
+    parameters.push(cursor.createdAt, cursor.position);
+  }
   const bounded = !query.inputMatch && query.limit !== undefined;
   if (bounded) parameters.push(query.limit);
   const rows = db
@@ -134,4 +140,19 @@ export function findRuns(
     if (result.length === query.limit) break;
   }
   return result;
+}
+
+/** Ordering keys of a page cursor, which must name a retained run. */
+export function runCursor(db: DatabaseSync, id: string) {
+  const row = db
+    .prepare('SELECT created_at, position FROM run_metadata WHERE id = ?')
+    .get(id);
+  if (!row)
+    throw new InterlockError(
+      `Run ${id} is not retained; restart paging without afterRunId`,
+    );
+  return {
+    createdAt: row.created_at as string,
+    position: row.position as number,
+  };
 }

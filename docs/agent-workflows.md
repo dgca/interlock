@@ -336,7 +336,7 @@ Pass `leaseSeconds: 300` explicitly when a renewal should grant five minutes reg
 
 ## Find runs
 
-MCP `list_runs` and the shared API `runs.find` return summaries in descending creation order. The default limit is 50, with a maximum of 1000. Equal timestamps use descending insertion order.
+MCP `list_runs` and the shared API `runs.find` return summaries in descending creation order. The default limit is 50, with a maximum of 1000. Equal timestamps use descending insertion order. To read the next page, repeat the query with `afterRunId` set to the last summary's `id`; an empty page means there are no more. `afterRunId` must name a retained run.
 
 Available filters include `requestId`, `externalTask:{system,id}`, `workflowId`, `status`, `rootOnly`, `chainRootRunId`, `tags`, and `inputMatch: {path, equals}`. Optional `startRequestId`, `externalTask`, and `tags` appear in summaries and inspection. Status accepts `queued`, `running`, `waiting`, `completed`, `failed`, or `cancelled`. `rootOnly` defaults to false, which includes nested Workflow, Batch item, and Parallel branch runs. A summary includes IDs, workflow name, version, status, timestamps, cursor, input, `parentRunId`, optional `parentMode: "detached"`, `rootRunId`, `rootWorkflowId`, and the owning group reference for a Batch item (`batchNodeId`) or Parallel branch (`parallelBranch`). Root IDs follow the same rules as work summaries. Use `get_run` for execution details.
 
@@ -346,9 +346,10 @@ Paths use dot-separated object keys or array indices. A blank path selects the c
 interlock runs --workflow WORKFLOW_ID --status waiting --root-only --limit 20
 interlock runs --tag repo=dgca/interlock --tag batch=factory-7
 interlock runs --input-path thread_ts --equals '"1787334538.500319"' --limit 10
+interlock runs --workflow WORKFLOW_ID --limit 50 --after-run LAST_RUN_ID
 ```
 
-Without flags, `interlock runs` retains its full history dump. The shared `runs.list` endpoint also retains its original response.
+Without flags, `interlock runs` prints full run records, newest first, through the shared `runs.list` endpoint. `runs.list` accepts optional `limit` (1 to 1000, default 1000) and `afterRunId` (the last run ID read), so stores with up to 1000 runs return whole as before.
 
 Use `start_run.requestId` for atomic redelivery safety. External-task lookup does not reserve a task: distinct keys can create concurrent attempts. Use an atomic `onActiveExternalTask` start policy when one active task owner is required. See [start identity and retention](idempotent-run-starts.md).
 

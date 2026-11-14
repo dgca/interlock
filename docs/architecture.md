@@ -479,7 +479,8 @@ optional filters for workflow ID, status, exact tag pairs, and Runs tab, plus an
 a limit from 1 to 200 (100 by default). It applies
 the scope before paging, so older active runs and runs needing attention stay
 accessible. The inspector loads run details by ID. `runs.list` and `runs.get`
-continue to serve full records.
+continue to serve full records. `runs.list` and `runs.find` page by the last run ID read (`afterRunId`);
+`runs.list` returns up to 1000 runs per page by default.
 
 Runs defaults to List with paged Active, Needs attention, and History tabs. The separate Overview mode hides those tabs and shows Active runs, Needs attention, and Completed runs in that order. Its active query always starts at offset zero, with separate scoped bounded attention and completed-run previews, including terminal runs that still need recovery. Main-page rows take precedence when previews contain an older copy of the same run. Links open the corresponding full List tab atomically. Mode, remembered List tab and offset, workflow scope, and tags persist through URLs and inspector navigation. Automation alerts remain reachable from Overview independently of run tags. The completed preview uses creation-time ordering. Cards show stage, actor, waits, and execution counts rather than inferring a total-step progress ratio.
 

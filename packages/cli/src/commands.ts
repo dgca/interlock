@@ -374,6 +374,7 @@ export async function runCommand(argv: string[]) {
           'root-only': { type: 'boolean' },
           chain: { type: 'string' },
           limit: { type: 'string' },
+          'after-run': { type: 'string' },
           'request-id': { type: 'string' },
           'external-task': { type: 'string' },
           'input-path': { type: 'string' },
@@ -390,10 +391,7 @@ export async function runCommand(argv: string[]) {
         runQuerySchema.parse({
           tags: parseTags(Array.isArray(values.tag) ? values.tag : undefined),
           workflowId: values.workflow,
-          requestId:
-            typeof values['request-id'] === 'string'
-              ? values['request-id']
-              : undefined,
+          requestId: values['request-id'],
           externalTask:
             typeof values['external-task'] === 'string'
               ? await parse(values['external-task'])
@@ -402,6 +400,7 @@ export async function runCommand(argv: string[]) {
           status: values.status,
           rootOnly: values['root-only'],
           limit: values.limit === undefined ? undefined : Number(values.limit),
+          afterRunId: values['after-run'],
           inputMatch:
             values['input-path'] === undefined
               ? undefined
