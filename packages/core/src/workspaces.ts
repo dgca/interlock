@@ -99,8 +99,9 @@ export interface ManagedWorkspace {
     | 'failed'
     | 'removing'
     | 'removed'
-    /** Kept by the retention setting after the run tree became quiescent. */
+    /** Kept by retention, uncommitted changes, or repeated removal failures. */
     | 'retained';
+  removalAttempts?: number;
   /** Set before `git worktree add -b`; the branch is then Interlock's own. */
   branchClaimed?: boolean;
   baseCommit?: string;

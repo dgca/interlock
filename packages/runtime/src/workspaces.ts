@@ -29,6 +29,7 @@ import {
 } from './workingDirectory.js';
 
 const collection = 'workspaces';
+const maxRemovalAttempts = 3;
 const terminal = (run: Run) =>
   ['completed', 'failed', 'cancelled'].includes(run.status);
 const usable = (w?: ManagedWorkspace) =>
@@ -360,17 +361,24 @@ export class ManagedWorkspaces {
     }
     for (const id of this.active) {
       const workspace = this.get(id);
-      if (!workspace || workspace.state === 'removed') {
+      if (
+        !workspace ||
+        workspace.state === 'removed' ||
+        workspace.state === 'retained'
+      ) {
         this.active.delete(id);
         continue;
       }
+      const owner = this.store.get<Run>('runs', workspace.runId);
+      // Cancelling the owning run stops a preparation still in progress.
+      if (workspace.state === 'preparing' && (!owner || terminal(owner)))
+        this.jobs.get(id)?.abort();
       if (
         this.jobs.has(id) ||
         workspace.state === 'preparing' ||
         (this.retryAt.get(id) ?? 0) > Date.now()
       )
         continue;
-      const owner = this.store.get<Run>('runs', workspace.runId);
       if (
         owner &&
         (!terminal(owner) ||
@@ -397,25 +405,25 @@ export class ManagedWorkspaces {
         )
           await this.hook('beforeRemove', workspace, settings, signal).catch(
             (error: unknown) => {
-              // Never run unapproved content; keep the checkout instead.
-              if (/needs approval/.test(errorText(error))) throw error;
               hookError = errorText(error);
             },
           );
+        // Never run unapproved content. No one is asked, so keep the checkout.
+        if (hookError && /needs approval/.test(hookError))
+          return this.update(id, (w) => {
+            w.state = 'retained';
+            w.error = `Kept: ${hookError}`;
+          });
         return removeWorktree(this.root, workspace).then(
-          () =>
+          (result) =>
             this.update(id, (w) => {
-              w.state = 'removed';
-              w.error = hookError;
+              w.state = result === 'dirty' ? 'retained' : 'removed';
+              w.error =
+                result === 'dirty'
+                  ? 'Kept: the worktree has uncommitted changes'
+                  : hookError;
             }),
-          (error: unknown) => {
-            this.retryAt.set(id, Date.now() + 60_000);
-            this.update(id, (w) => {
-              w.state = 'failed';
-              w.reported = true;
-              w.error = `Removal failed: ${errorText(error)}`;
-            });
-          },
+          (error: unknown) => this.removalFailed(id, errorText(error)),
         );
       });
     }
@@ -430,5 +438,15 @@ export class ManagedWorkspaces {
         .find((r) => r.chain?.rootRunId === owner.id && !r.chain.nextRunId) ??
       owner;
     return last.status === 'failed';
+  }
+  /** Retry a failed removal a few times, then keep the checkout and say why. */
+  private removalFailed(id: string, error: string) {
+    this.update(id, (w) => {
+      w.removalAttempts = (w.removalAttempts ?? 0) + 1;
+      w.reported = true;
+      w.error = `Removal failed: ${error}`;
+      w.state = w.removalAttempts >= maxRemovalAttempts ? 'retained' : 'failed';
+    });
+    this.retryAt.set(id, Date.now() + 60_000);
   }
 }

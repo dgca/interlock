@@ -30,7 +30,7 @@ You can also start Interlock with `npx -y @type_of/interlock@latest` without a g
 Interlock is a trusted local tool for one person. Workflows run Scripts, Fetch requests and agents with your user account's access, so treat a workflow like code you run.
 
 - The server listens only on `127.0.0.1`, and the listen address is not configurable. It rejects requests addressed to another host or sent from an untrusted browser origin. Do not expose the port through a tunnel, proxy, port forward or container port mapping.
-- Interlock creates a per-install [API token](docs/connect-harness.md#api-token) in an owner-only `api-token` file. The UI, the `interlock` CLI and the stdio bridge send it automatically, and **Connect with MCP** includes it in HTTP client configuration. On loopback the token is optional in 0.2. Set `INTERLOCK_REQUIRE_TOKEN=1` before starting Interlock to reject `/trpc`, `/mcp` and `/events` requests without it.
+- Interlock creates a per-install [API token](docs/connect-harness.md#api-token) in an owner-only `api-token` file. The UI, the `interlock` CLI and the stdio bridge send it automatically, and **Connect with MCP** includes it in HTTP client configuration. On loopback the token is optional in 0.2. Set `INTERLOCK_REQUIRE_TOKEN=1` before starting Interlock to reject `/api`, `/trpc`, `/mcp` and `/events` requests without it.
 - Scripts are not sandboxed. A Script's [server environment](docs/architecture.md#scripts-and-interruptions) mode decides which of Interlock's environment variables it receives. `minimal` passes only `PATH`, `HOME`, locale variables, `INTERLOCK_*` variables, bound saved variables, execution context and the names you list to pass through. Scripts and polling checks added in the editor start in `minimal`. A Script without a mode, or set to `inherit`, receives the whole server environment, including any credentials in it, so existing and imported workflows keep their behavior.
 - Imported Scripts wait for [one-time approval](docs/reuse-work.md#approve-imported-scripts) before their first run. Scripts you write, or that a connected agent writes over MCP, run without approval unless you extend approval to agent-authored Scripts.
 
@@ -63,6 +63,8 @@ Use a coding agent with access to your Git checkout, files, and development comm
 Replace the example request with the change you want. The workflow resolves the target repository and artifact directory, follows that repository's instructions, and asks when a consequential decision remains unresolved or planning repeatedly fails review. Set `reviewPolicy` to `always` to approve each planning artifact, or `createPr` to `true` to request PR delivery. Your agent's tool approval settings still apply. See [Use the SDLC workflow](docs/sdlc-workflow.md) for inputs, executor requirements, and resuming work.
 
 The connection uses Streamable HTTP at `http://127.0.0.1:4310/mcp`, served by the same process as the UI and engine. Keep that process running. Upgrading and restarting at the same address preserves your agent configuration. The dialog also provides a stdio fallback for clients that need it. Smaller [tool profiles](docs/connect-harness.md#choose-a-tool-profile) such as `/mcp/execute` reduce the context each agent spends on tool definitions. See [Connect a harness](docs/connect-harness.md) for configuration and the assignment loop.
+
+Scripts and other integrations that only need to start workflows and follow their runs can use the plain JSON [HTTP API](docs/http-api.md) at `http://127.0.0.1:4310/api` instead of MCP.
 
 ## Install workflow skills
 
@@ -401,6 +403,7 @@ Browse the [documentation site](https://dgca.github.io/interlock/docs/) or start
 - [Feature index](docs/features.md)
 - [Current limits](docs/v1.md)
 - [Harness integration](docs/connect-harness.md)
+- [Call Interlock over HTTP](docs/http-api.md)
 - [Create and reuse saved prompts](docs/prompts.md)
 - [Reuse configuration and credentials](docs/variables.md)
 - [Lifecycle event triggers and quiescent teardown](docs/events.md)

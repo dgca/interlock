@@ -1,6 +1,7 @@
 import {
   InterlockError,
   previewRunCancellationSchema,
+  type ManagedWorkspace,
   type RunCancellationPreview,
   type Run,
   type RunAncestry,
@@ -99,8 +100,10 @@ export class RunInspection {
       });
     const definition = this.store.getVersion(run.workflowId, run.version);
     const chain = this.chains.read(run);
+    const workspace = this.workspace(run);
     return {
       run: { ...run, ...this.projectRun(id) },
+      ...(workspace ? { workspace } : {}),
       externalInputHeldByRunId: this.store.externalInputHoldOwner(run.id),
       ...(handledFailure ? { handledFailure } : {}),
       ...(chain
@@ -125,6 +128,26 @@ export class RunInspection {
       quiescence: this.quiescence(id),
       children: descendants.filter((child) => child.parentRunId === id),
     };
+  }
+  /** The managed worktree this run works in: its own, or its owner's. */
+  private workspace(run: Run) {
+    let current: Run | undefined = run;
+    for (let depth = 0; current && depth < 64; depth++) {
+      const w = this.store.get<ManagedWorkspace>('workspaces', current.id);
+      if (w)
+        return {
+          path: w.path,
+          branch: w.branch,
+          state: w.state,
+          ...(w.error ? { error: w.error } : {}),
+        };
+      const next: string | undefined =
+        current.chain && current.chain.rootRunId !== current.id
+          ? current.chain.rootRunId
+          : current.parentRunId;
+      current = next ? this.store.get<Run>('runs', next) : undefined;
+    }
+    return undefined;
   }
   handledWorkflowFailure(run: Run) {
     if (

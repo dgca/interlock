@@ -62,6 +62,7 @@ What Interlock implements today, grouped by area. See [current limits](v1.md) fo
 ## MCP and CLI
 
 - HTTP MCP on the running server for authoring and execution, with a legacy stdio bridge and CLI access to the same service.
+- A small plain-JSON [HTTP API](http-api.md) under `/api` for scripts and integrations: list published workflows with input contracts, start runs with idempotency keys, read compact status and results, and cancel runs.
 - MCP workflow schemas, compact assignment discovery with root workflow identity, bounded run lookup with input matching, and CLI/MCP workflow archive, restore, and deletion.
 - Opt-in compact MCP authoring acknowledgments and edit diagnostics, with full defaults, shared API summary operations, and CLI start/submit `--summary` plus claim `--fresh`/`--lease`.
 - Compact MCP start/submission responses and work discovery by default, with lifecycle-scoped next work, wait cursors, suggested read-only calls, and explicit full options; see [compact mutation responses](agent-workflows.md#continue-with-compact-mutation-responses).
@@ -102,7 +103,7 @@ What Interlock implements today, grouped by area. See [current limits](v1.md) fo
 ## Local security
 
 - A loopback-only server that rejects requests addressed to other hosts or sent from untrusted browser origins. See [Security](../README.md#security).
-- An optional per-install [API token](connect-harness.md#api-token) in an owner-only file, sent automatically by the UI, CLI and stdio bridge and included in copied HTTP client configuration. `INTERLOCK_REQUIRE_TOKEN=1` requires it on `/trpc`, `/mcp` and `/events`; a server listening beyond loopback always requires it.
+- An optional per-install [API token](connect-harness.md#api-token) in an owner-only file, sent automatically by the UI, CLI and stdio bridge and included in copied HTTP client configuration. `INTERLOCK_REQUIRE_TOKEN=1` requires it on `/api`, `/trpc`, `/mcp` and `/events`; a server listening beyond loopback always requires it.
 - Script, polling Script check and custom harness command [server environment modes](architecture.md#scripts-and-interruptions): `inherit` passes the whole server environment and is the default for definitions without a mode; `minimal` passes `PATH`, `HOME`, locale and `INTERLOCK_*` variables plus listed `environmentPassthrough` names, and is the default for Scripts added in the editor. Minimal failures name withheld variables mentioned in the source or error output.
 - One-time [approval of imported Scripts](reuse-work.md#approve-imported-scripts) by workflow and content, with an `imports`, `imports_and_agents` or `off` library setting, an import preview of every Script, **Approve and run** in the UI and `interlock approve-script`.
 - Recorded [private-network Fetch targets](fetch.md) with a run event and doctor warning, and an optional `blockPrivateNetwork` setting that fails such requests before sending.
