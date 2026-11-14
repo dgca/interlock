@@ -32,7 +32,7 @@
     "tests/routes.test.ts": 1484,
     "tests/runList.test.ts": 1297,
     "tests/runVersions.test.ts": 1210,
-    "tests/simulation.test.ts": 928,
+    "tests/simulation.test.ts": 901,
     "tests/testbench.test.ts": 1161,
     "tests/transport.test.ts": 4273,
     "tests/trialEnvironments.test.ts": 1066,

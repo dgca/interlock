@@ -157,6 +157,7 @@ export function RunListBoard({
   returnTo,
   onTabChange,
   onClearFilters,
+  syncAlertCount = 0,
 }: {
   page: Page;
   preview: BoardPreview;
@@ -164,6 +165,7 @@ export function RunListBoard({
   returnTo: string;
   onTabChange: (tab: RunTab) => void;
   onClearFilters?: MouseEventHandler<HTMLButtonElement>;
+  syncAlertCount?: number;
 }) {
   // Keep every run in the bounded active preview visible. The bounded attention
   // preview also includes terminal runs still waiting for recovery confirmation.
@@ -227,7 +229,11 @@ export function RunListBoard({
       </BoardColumn>
       <BoardColumn
         title="Needs attention"
-        count={page.counts.attention + (page.scheduleAttentionCount ?? 0)}
+        count={
+          page.counts.attention +
+          (page.scheduleAttentionCount ?? 0) +
+          syncAlertCount
+        }
         tone="attention"
       >
         {cards(attention)}
@@ -252,6 +258,13 @@ export function RunListBoard({
             {page.scheduleAttentionCount} automation{' '}
             {page.scheduleAttentionCount === 1 ? 'alert' : 'alerts'}. View all
             attention to review.
+          </Text>
+        )}
+        {syncAlertCount > 0 && (
+          <Text size="sm" c="dimmed">
+            {syncAlertCount} workflow sync{' '}
+            {syncAlertCount === 1 ? 'alert' : 'alerts'}. View all attention to
+            review.
           </Text>
         )}
         {attention.length > 0 && page.counts.attention > attention.length && (

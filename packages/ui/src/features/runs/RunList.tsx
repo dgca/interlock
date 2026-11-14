@@ -21,6 +21,10 @@ import {
 } from '../../components/WorkspaceReads';
 import { runTable, runViews, type RunMode } from './runListConfig';
 import { AutomationAlerts } from '../automations/AutomationAlerts';
+import {
+  WorkflowSyncAlertList,
+  useWorkflowSyncAlerts,
+} from '../workflows/WorkflowSyncAlerts';
 
 import { RunBoardSkeleton, RunRowsSkeleton } from './RunListSkeleton';
 import classes from './RunList.module.css';
@@ -155,6 +159,7 @@ export function RunList({
     ),
   );
   const page = runs.data;
+  const sync = useWorkflowSyncAlerts(workflowId);
   const read = workspaceRead('runs', runs, tagFilterTrigger);
   const counts = page?.counts;
   const filtered = Object.keys(selectedTags ?? {}).length > 0;
@@ -221,7 +226,9 @@ export function RunList({
     ...view,
     count: counts
       ? counts[view.value] +
-        (view.value === 'attention' ? (page?.scheduleAttentionCount ?? 0) : 0)
+        (view.value === 'attention'
+          ? (page?.scheduleAttentionCount ?? 0) + sync.items.length
+          : 0)
       : undefined,
   }));
   const content = (
@@ -231,6 +238,9 @@ export function RunList({
           key={workflowId === undefined ? 'library' : `workflow:${workflowId}`}
           workflowId={workflowId}
         />
+      )}
+      {selectedMode === 'list' && tab === 'attention' && (
+        <WorkflowSyncAlertList {...sync} />
       )}
       <WorkspaceReadWarning reads={[read]} inline showDetails />
       {!page ? (
@@ -248,6 +258,7 @@ export function RunList({
           returnTo={returnTo}
           onTabChange={showListTab}
           onClearFilters={filtered ? clearFilters : undefined}
+          syncAlertCount={sync.items.length}
         />
       ) : page.items.length ? (
         <ListTable {...runTable} label="Runs">
@@ -339,7 +350,8 @@ export function RunList({
         </ListTable>
       ) : offset > 0 ? (
         <Text role="status">No runs on this page.</Text>
-      ) : tab === 'attention' && page.scheduleAttentionCount > 0 ? null : (
+      ) : tab === 'attention' &&
+        page.scheduleAttentionCount + sync.items.length > 0 ? null : (
         <EmptyState
           title={
             filtered

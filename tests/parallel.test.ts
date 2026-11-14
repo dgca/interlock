@@ -474,39 +474,6 @@ it('keeps branch history local while retaining the original workflow input', () 
   });
 });
 
-it('rejects Parallel in fixture preflight without creating live work', () => {
-  const engine = setup(),
-    workflowId = publish(engine);
-  const suite = engine.testbench.createSuite({
-    workflowId,
-    content: {
-      name: 'Parallel case',
-      cases: [
-        {
-          id: 'case',
-          name: 'Case',
-          input: {},
-          fixtures: [{ kind: 'agent', nodeId: 'r0', output: 'never read' }],
-          assertions: [],
-        },
-      ],
-    },
-  });
-  const simulation = engine.simulations.request({
-    action: 'run',
-    suiteId: suite.id,
-    suiteRevision: suite.revision,
-    caseId: 'case',
-    version: 1,
-    requestId: 'reject-parallel',
-  });
-  expect(simulation).toMatchObject({ state: 'unsupported' });
-  expect(JSON.stringify(simulation)).toContain(
-    'Parallel is unsupported in fixture simulation',
-  );
-  expect(engine.available()).toEqual([]);
-});
-
 it('validates the joined contract without replaying successful branches on retry', () => {
   const engine = setup(),
     d = parallelDefinition();

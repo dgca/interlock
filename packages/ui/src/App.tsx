@@ -19,6 +19,7 @@ import type { Action } from './lib/useActionFeedback';
 import { aiSettingsTab } from './features/executors/aiSettingsNavigation';
 import { DiscardChangesDialog } from './components/DiscardChangesDialog';
 import { WorkflowLayoutNotice } from './features/workflows/WorkflowLayoutNotice';
+import { useWorkflowSyncAlerts } from './features/workflows/WorkflowSyncAlerts';
 
 function isRetryableReadFailure(error: unknown) {
   if (
@@ -99,9 +100,12 @@ export function App() {
     ...trpc.connection.queryOptions(),
     meta: { engineRefresh: false },
   });
+  const syncAlerts = useWorkflowSyncAlerts();
   const attentionCount =
     attentionQuery.data && scheduleQuery.data
-      ? attentionQuery.data.total + scheduleQuery.data.total
+      ? attentionQuery.data.total +
+        scheduleQuery.data.total +
+        syncAlerts.items.length
       : undefined;
   const attentionFailures: AttentionFailure[] = [];
   if (attentionQuery.error)

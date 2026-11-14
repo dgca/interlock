@@ -1,5 +1,5 @@
 import { serve } from '@hono/node-server';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { Store } from '@interlock/storage';
 import { Engine } from '@interlock/runtime';
 import { JsonLog, parseLogLevel } from '@interlock/runtime/log';
@@ -9,6 +9,10 @@ import { apiTokenPath, ensureApiToken } from '@interlock/core/apiToken';
 import type { ConnectionConfig } from './connection.js';
 import { checkPort, lockDatabase, startupError } from './startup.js';
 import { nativeAdapters } from '@interlock/runtime/executors/native';
+import {
+  startWorkflowSync,
+  type WorkflowSync,
+} from '@interlock/runtime/workflowSync';
 
 export function parseAllowedRoots(value?: string): string[] | undefined {
   if (!value || !value.trim()) return undefined;
@@ -58,6 +62,8 @@ export async function startServer(options: {
   port: number;
   connection: ConnectionConfig;
   allowedRoots?: string[];
+  /** Folder of workflow bundles to sync with. Off when unset. */
+  syncDir?: string;
   /** Listen address. Not user-configurable yet; a non-loopback address requires the API token. */
   hostname?: string;
 }) {
@@ -77,6 +83,7 @@ export async function startServer(options: {
       `Database upgraded from schema ${store.migration.from} to ${store.migration.to}. Backup: ${store.migration.backup}`,
     );
   let engine: Engine | undefined;
+  let sync: WorkflowSync | undefined;
   try {
     const allowedRoots =
       options.allowedRoots ??
@@ -96,8 +103,11 @@ export async function startServer(options: {
       ),
     );
     engine.executors.start(nativeAdapters);
+    const syncDir = options.syncDir ?? process.env.INTERLOCK_SYNC_DIR?.trim();
+    if (syncDir) sync = startWorkflowSync(engine, resolve(syncDir));
     engine.pump();
   } catch (error) {
+    sync?.stop();
     engine?.stop();
     store.close();
     unlock();
@@ -122,6 +132,7 @@ export async function startServer(options: {
       );
       clearInterval(timer);
       server.close();
+      sync?.stop();
       engine.stop();
       store.close();
       unlock();
@@ -136,6 +147,7 @@ export async function startServer(options: {
       // Persist uncertainty immediately; bound shutdown even if a native transport stalls.
       setTimeout(() => process.exit(0), 6000).unref();
       clearInterval(timer);
+      sync?.stop();
       await engine.executors.stop();
       engine.stop();
       server.close(() => {

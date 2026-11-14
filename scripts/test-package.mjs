@@ -308,13 +308,7 @@ try {
   const choices = await call('list_workflows', { source: 'starters' });
   assert.deepEqual(
     choices.map((s) => s.id),
-    [
-      'sdlc',
-      'sdlc-v2',
-      'pr-watcher',
-      'evaluate-comparison',
-      'github-issue-intake',
-    ],
+    ['sdlc', 'pr-watcher', 'evaluate-comparison', 'github-issue-intake'],
   );
   const cliStarters = JSON.parse(
     execFileSync(bin, ['starters'], {
@@ -336,23 +330,23 @@ try {
   assert.equal(repeatSdlc.workflow.id, addedSdlc.workflow.id);
   const starter = await call('get_workflow', { id: addedSdlc.workflow.id });
   assert.equal(starter.latestVersion, 1);
+  assert.equal(starter.name, 'SDLC workflow');
   assert.deepEqual(starter.draft.inputSchema.required, ['request']);
-  assert.equal(
-    starter.draft.nodes.find((node) => node.id === 'review').context.mode,
-    'fresh',
-  );
-  const starterRun = await call('start_run', {
-    workflowId: starter.id,
-    input: {
-      request:
-        "Improve this project's setup instructions and verify the documented commands.",
-    },
+  const changeReview = await call('get_workflow', {
+    id: starter.draft.nodes.find((node) => node.id === 'changeReview')
+      .workflowId,
   });
-  assert.equal(starterRun.runStatus, 'waiting');
-  const starterWork = await call('list_work', { runId: starterRun.runId });
-  assert.equal(starterWork.length, 1);
-  assert.equal(starterWork[0].nodeId, 'configure');
-  await call('cancel_run', { id: starterRun.runId });
+  assert.equal(changeReview.ownerWorkflowId, starter.id);
+  assert.equal(changeReview.latestVersion, 1);
+  const aliasSdlc = JSON.parse(
+    execFileSync(
+      bin,
+      ['import-starter', 'sdlc-v2', '--request-id', 'package-sdlc-v2'],
+      { cwd: workdir, env: { ...env, INTERLOCK_URL: url }, encoding: 'utf8' },
+    ),
+  );
+  assert.equal(aliasSdlc.created, false);
+  assert.equal(aliasSdlc.workflow.id, starter.id);
   const starterFile = join(
     prefix,
     'lib/node_modules/@type_of/interlock/workflows/sdlc.json',
@@ -365,9 +359,11 @@ try {
       stdio: ['ignore', 'pipe', 'pipe'],
     }),
   );
-  assert.notEqual(importedStarter.id, starter.id);
+  // The original SDLC workflow stays importable as a file.
   assert.equal(importedStarter.latestVersion, 0);
-  assert.deepEqual(importedStarter.draft, starter.draft);
+  assert.ok(
+    importedStarter.draft.nodes.some((node) => node.id === 'configure'),
+  );
   const publishedStarter = JSON.parse(
     execFileSync(bin, ['publish', importedStarter.id], {
       cwd: workdir,
