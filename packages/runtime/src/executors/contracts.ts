@@ -28,6 +28,8 @@ export interface HarnessRun {
   onSession: (id: string, model?: string) => void;
   onProgress: (message: string) => void;
   onTranscript?: (event: TranscriptEvent) => void;
+  /** Cumulative usage while running; 'attempt' scope restarts each run call. */
+  onUsage?: (usage: ModelUsage[], scope?: 'attempt') => void;
   onMessageChannel?: (
     send: ((message: string) => Promise<void>) | undefined,
   ) => void;

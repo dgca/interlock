@@ -1,4 +1,9 @@
-import type { Run, RunProjection, RunWaiting } from '@interlock/core';
+import {
+  budgetWaitMessage,
+  type Run,
+  type RunProjection,
+  type RunWaiting,
+} from '@interlock/core';
 import type { ProjectionState, Store } from '@interlock/storage';
 
 const active = (status: string) =>
@@ -179,7 +184,7 @@ export function createRunProjector(
         wait(
           'budget',
           'person',
-          'Claim blocked by run budget',
+          budgetWaitMessage(work.budgetBlocked, work.attempt),
           work.budgetBlocked.since,
         );
       else if (work?.resourceBlocked)

@@ -2,6 +2,7 @@ import { query } from '@anthropic-ai/claude-agent-sdk/core';
 import type { SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import { MessageInput } from './messageInput.js';
 import { transcriptText } from './transcriptEvents.js';
+import { anthropicStreamUsage } from './budgetStops.js';
 import { jsonSchema, type ModelUsage } from '@interlock/core';
 import {
   HarnessResultError,
@@ -91,6 +92,7 @@ export const claudeAdapter: HarnessAdapter = {
     let taskStarted = false;
     let modelRefused = false;
     let capturedSessionId: string | undefined = input.sessionId;
+    const streamedUsage = anthropicStreamUsage();
     const abortController = new AbortController();
     const abort = () => abortController.abort();
     input.signal.addEventListener('abort', abort, { once: true });
@@ -237,7 +239,9 @@ export const claudeAdapter: HarnessAdapter = {
         },
       });
       for await (const message of stream) {
-        if (input.signal.aborted) throw new Error('Execution stopped');
+        // A result that arrives after a stop is returned; the host decides.
+        if (input.signal.aborted && message.type !== 'result')
+          throw new Error('Execution stopped');
         if (message.type === 'system' && message.subtype === 'init') {
           if (input.sessionId && message.session_id !== input.sessionId)
             throw new Error(
@@ -273,6 +277,8 @@ export const claudeAdapter: HarnessAdapter = {
         if (message.type === 'assistant') {
           if (message.error === 'model_not_found') modelRefused = true;
           else if (!message.error) taskStarted = true;
+          const usage = streamedUsage(message.message);
+          if (usage) input.onUsage?.(usage, 'attempt');
           for (const [index, block] of message.message.content.entries()) {
             if (block.type === 'text')
               input.onTranscript?.({

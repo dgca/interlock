@@ -957,7 +957,7 @@ export class Engine {
       run.schedule = schedule ?? continuedFrom?.schedule;
     new RunAdmission(this.store).queue(run, definition, startOptions);
     this.save(run);
-    this.usage.prices.start(run, continuedFrom?.id, sameWorkflowChild);
+    this.usage.prices.start(run, continuedFrom?.id);
     this.event(
       run,
       run.status === 'queued' ? 'run.queued' : 'run.started',

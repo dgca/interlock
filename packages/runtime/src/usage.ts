@@ -60,6 +60,8 @@ function assertCumulative(before: UsageSnapshot, after: UsageSnapshot) {
 
 export class Usage {
   readonly prices: Pricing;
+  /** Live figures of active managed attempts, for budget checks; not stored. */
+  readonly streamed = new Map<string, UsageSnapshot>();
   constructor(
     private store: Store,
     private notify: (runId: string) => void,
@@ -262,6 +264,19 @@ export class Usage {
     for (const report of this.store.list<RunUsageReport>(runUsageCollection))
       if (runIds.has(report.runId))
         this.store.remove(runUsageCollection, report.id);
+  }
+
+  /** Claimed attempts without a report count their streamed figures. */
+  withStreamed(attempts: UsageAttempt[]) {
+    return attempts.map((attempt) => {
+      const live = this.streamed.get(attempt.id);
+      return live &&
+        attempt.outcome === 'claimed' &&
+        !attempt.snapshot &&
+        !attempt.observerReport
+        ? { ...attempt, snapshot: live }
+        : attempt;
+    });
   }
 
   runReportsForRuns(scope: Set<string>): RunUsageReport[] {

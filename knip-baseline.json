@@ -6,11 +6,6 @@
       "symbol": "BackgroundScript"
     },
     {
-      "file": "packages/core/src/budgets.ts",
-      "type": "types",
-      "symbol": "BudgetBlock"
-    },
-    {
       "file": "packages/core/src/continuation.ts",
       "type": "exports",
       "symbol": "continuationWorkSchema"

@@ -102,13 +102,13 @@ export class Pricing {
     return current;
   }
   /**
-   * Capture the price table when a run is created. Continue-as-new successors,
-   * Batch items and Parallel branches inherit their source run's table, like
-   * variable captures; invoked child workflows capture the current table.
+   * Capture the price table when a run is created. One table prices a run
+   * tree: continue-as-new successors, Batch items, Parallel branches and
+   * invoked child workflows (waited or detached) inherit their source run's
+   * table, so a budget spanning the tree uses one set of prices.
    */
-  start(run: Run, continuedFromId?: string, sameWorkflowChild = false) {
-    const source =
-      continuedFromId ?? (sameWorkflowChild ? run.parentRunId : undefined);
+  start(run: Run, continuedFromId?: string) {
+    const source = continuedFromId ?? run.parentRunId;
     const inherited =
       source && this.store.get<RunPricing>(captures, source)?.priceTableId;
     this.pin(run.id, inherited ? { id: inherited } : undefined);
@@ -125,7 +125,7 @@ export class Pricing {
       this.store.forRuns<RunUsageReport>('runUsage', runIds),
     );
   }
-  /** Add derived costs to reads. Stored reports, and budgets, stay unchanged. */
+  /** Add derived costs to reads and budget checks. Stored reports stay unchanged. */
   price(attempts: UsageAttempt[], runReports: RunUsageReport[] = []) {
     const runIds = new Set([
       ...attempts.map((attempt) => attempt.runId),
