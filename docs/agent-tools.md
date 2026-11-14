@@ -1,16 +1,25 @@
+---
+title: Tools for agents
+description: Let an Agent step call a Script or Fetch step as a tool during its turn.
+---
+
 # Agent tool calls
 
-A tool edge connects an Agent node to a Script or Fetch node. During its turn, the agent can call that step as a tool. Interlock runs the step with its declared command or request, timeout, working directory, resources and variables, records the call, and returns the step's output to the agent, which keeps working.
+A tool edge lets an Agent step call a Script or Fetch step as a tool during its turn. Use it when an agent needs a fixed action several times in one turn, such as running the project's checks, and you want each call recorded and limited to an approved command.
 
-Use a tool edge when an agent needs a deterministic action several times inside one turn, such as running a project's checks, and you want each run recorded and limited to an approved command. Use ordinary routes when the step should run once, before or after the agent.
-
-Child Workflow targets are not supported.
+Use an ordinary route instead when the step should run once, before or after the agent. Workflow steps cannot be tools.
 
 ## Connect a tool in the editor
 
-Drag from an Agent's **Tools** handle, at the bottom of its card, to the **Tool** handle at the top of a Script or Fetch card, or open the Agent's settings and choose the step under **Add a tool** in **Assignment**. Only Script and Fetch steps in the Agent's Batch or Parallel scope that have no routes are listed. Tool edges are dashed. A step connected as a tool hides its route ports, because it runs only through calls. **Tools** in the Agent's settings lists its tools with **Calls per attempt** and **Calls per execution**; leave a limit blank to use the default.
+1. Drag from the Agent's **Tools** handle, at the bottom of its card, to the **Tool** handle at the top of a Script or Fetch card. Or open the Agent's settings and pick the step under **Add a tool** in **Assignment**.
+2. In the Agent's settings, **Tools** lists its tools. Set **Calls per attempt** and **Calls per execution**, or leave them blank for the defaults.
+3. Save and publish.
 
-In the run inspector, the Agent step lists its **Tool calls** with each call's attempt, start time and status. Select one to inspect the step's input, output and error. The tool step's card shows how many calls finished or failed.
+**Add a tool** lists only Script and Fetch steps in the Agent's Batch or Parallel scope that have no routes. Tool edges are dashed. A step connected as a tool hides its route ports, because it runs only when called.
+
+## See the calls in a run
+
+In the run inspector, the Agent step lists its **Tool calls** with each call's attempt, start time and status. Select a call to see the step's input, output and error. The tool step's card shows how many calls finished or failed.
 
 ## Define a tool edge
 
@@ -27,24 +36,15 @@ A tool edge is an edge with `"kind": "tool"`. It is never followed as a route.
 }
 ```
 
-- The tool's name comes from the target's label in lowercase with `_` between words: a Script labelled `Run checks` is the tool `run_checks`. Names must start with a letter, use at most 64 letters, digits and `_`, and be unique for each Agent node.
-- The target's input contract is the tool's input schema. Calls whose arguments do not match are rejected before anything runs.
-- `maxCallsPerAttempt` limits calls during one claim attempt (default 10, at most 100). `maxCallsPerExecution` limits calls across every attempt of one Agent execution (default 30, at most 1000). A call over a limit is rejected with an error that names the limit, and nothing runs.
+- **Name**: the target's label in lowercase, with `_` between words. A Script labelled `Run checks` becomes the tool `run_checks`.
+- **Input schema**: the target's input contract. Calls whose arguments do not match are rejected before anything runs.
+- **Call limits**: see [Limits](#limits). A call over a limit is rejected with an error that names the limit, and nothing runs.
 
-Publication rejects a tool edge when:
-
-- its source is not an Agent node, or its target is not a Script or Fetch node;
-- the target is also connected by routes, uses result routing, or has a Failed route (a tool step runs only through calls);
-- the target is a background Script;
-- the target's timeout is longer than the Agent's claim lease (`leaseSeconds`, 300 seconds by default), because a call blocks the agent's turn;
-- the target is in a different Batch or Parallel scope from the Agent;
-- the target names an exclusive resource the Agent also declares, since the Agent holds it during the call.
-
-Drafts with these problems still save and report diagnostics. Workflows without tool edges behave as before.
+Drafts with a problem still save and show diagnostics; publication rejects them. See [Publication rules](#publication-rules). Workflows without tool edges behave as before.
 
 ## Call a tool
 
-An assignment whose Agent has tool edges lists them in `tools`, with each tool's `name`, `description`, `inputSchema` and call limits, and its `executionInstructions` explain how to call them. An Agent can have at most 20 tools; each tool's input contract can be at most 8 KiB of JSON and the whole list at most 32 KiB. `inspect_assignment_size` reports the list as the `tools` component.
+The assignment lists the Agent's tools in `tools`, with each tool's `name`, `description`, `inputSchema` and call limits. Its `executionInstructions` explain how to call them.
 
 Connected agents call MCP `call_work_tool` (shared API `work.callTool`) with the assignment's `workId`, their claim `token`, the tool `name` and `arguments`:
 
@@ -57,32 +57,105 @@ Connected agents call MCP `call_work_tool` (shared API `work.callTool`) with the
 }
 ```
 
-Only the current claim on that Agent execution can call its tools. Another worker's token, an expired claim, or the name of a tool on a different node is rejected. The response has `callId`, `runId`, `executionId`, `status`, the step's `output` (or `outputBytes` when it is larger than 64 KiB; read it with `get_run_result`), `error`, `blockedBy` (`pause`, `resource` or `approval`) and `calls`: the number of calls so far in this claim attempt (`inAttempt`) and this Agent execution (`inExecution`), with their limits (`maxPerAttempt`, `maxPerExecution`).
+Only the current claim on that Agent execution can call its tools. Interlock rejects another worker's token, an expired claim, or the name of a tool on a different node.
 
-The call waits up to `waitMs` (default 50 seconds, at most 10 minutes), and never longer than the claim's remaining lease minus 5 seconds, so the agent can renew in time. Waiting does not renew the claim. If `status` is still `running` or `waiting`, call again with the returned `callId` to keep waiting for the same call. A repeated `callId` never starts a second call.
+### The response
 
-Managed sessions (Claude Code, Codex and others that Interlock launches) never receive the claim token. Each claim attempt has a tool-only credential derived from its claim: `call_work_tool` accepts it as `token`, every other operation (submit, fail, renew, hold) rejects it, and it stops working when the attempt ends. Interlock sets `INTERLOCK_WORK_ID` and `INTERLOCK_TOOL_TOKEN` in the Claude Code and Codex session environment, and the stdio MCP bridge (`interlock mcp`) fills in `workId` and `token` from them when a call omits them. Sessions connected over HTTP MCP cannot read that environment, so the assignment prompt also gives the work ID and the tool-only credential; Interlock redacts the credential from its transcripts. The harness needs the Interlock MCP server configured, as in [Connect a harness](connect-harness.md); without it, a managed session cannot call tools.
+| Field         | Meaning                                                                                                                                |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `callId`      | The call's ID. Pass it again to keep waiting for the same call.                                                                        |
+| `runId`       | The call's child run.                                                                                                                  |
+| `executionId` | The tool step's execution.                                                                                                             |
+| `status`      | The call's status. `running` or `waiting` means it has not finished.                                                                   |
+| `output`      | The step's output. Above 64 KiB you get `outputBytes` instead; read the output with `get_run_result`.                                  |
+| `error`       | The step's error, if it failed.                                                                                                        |
+| `blockedBy`   | `pause`, `resource` or `approval` when the call is waiting on one of them.                                                             |
+| `calls`       | Calls so far in this claim attempt (`inAttempt`) and this Agent execution (`inExecution`), with `maxPerAttempt` and `maxPerExecution`. |
+
+### Waiting for a call
+
+The call waits up to `waitMs` for the step to finish. It never waits past the claim's remaining lease minus 5 seconds, so the agent can renew in time. Waiting does not renew the claim.
+
+If `status` is still `running` or `waiting`, call again with the returned `callId`. A repeated `callId` never starts a second call.
+
+### Managed sessions
+
+Managed sessions (Claude Code, Codex and others that Interlock launches) never receive the claim token. Instead, each claim attempt gets a tool-only credential:
+
+- `call_work_tool` accepts it as `token`. Submit, fail, renew and hold reject it.
+- It stops working when the attempt ends.
+- Interlock sets `INTERLOCK_WORK_ID` and `INTERLOCK_TOOL_TOKEN` in the Claude Code and Codex session environment. The stdio MCP bridge (`interlock mcp`) fills in `workId` and `token` from them when a call omits them.
+- Sessions connected over HTTP MCP cannot read that environment. Their assignment prompt gives the work ID and the credential, and Interlock redacts the credential from transcripts.
+
+The harness needs the Interlock MCP server configured, as in [Connect a harness](https://github.com/dgca/interlock/blob/main/docs/connect-harness.md). Without it, a managed session cannot call tools.
 
 ## How a call runs
 
-Each call is a child run of the Agent's run, linked to the calling execution and claim attempt in its `toolCall` field (`workId`, `executionId`, `attempt`, `edgeId`, `name`, `callId`). The child run executes the one target step in the same published version as the Agent and ends with the step's result. It follows the same rules as a routed Script or Fetch:
+Each call is a child run of the Agent's run. Its `toolCall` field links it to the calling execution and attempt: `workId`, `executionId`, `attempt`, `edgeId`, `name` and `callId`. The child run executes the one target step, in the same published version as the Agent, and ends with that step's result.
 
-- exclusive resources, pause holds and imported-Script approval: a call waits at the same boundaries, and a Script from an import or an agent-written draft waits for a person's approval before it runs;
-- workflow variables, the Script environment and the working directory;
-- input bindings, which read the Agent's run (its input, earlier node outputs and Batch item input);
-- the working directory: a call runs in the calling run's managed workspace, so it sees the Agent's uncommitted edits; it never creates a worktree of its own;
-- inspection: the call appears in the Agent execution's child runs, in run events (`tool.called`) and in the run inspector, even if the agent's attempt later fails. Run lists, counts and reports do not count calls as runs; the tool step's executions appear in the report's step statistics.
+A call follows the same rules as a routed Script or Fetch:
 
-Tool calls are not route steps and do not count toward `maxSteps`; the per-edge limits bound them. They report no model usage of their own. The agent's own usage covers its turn.
+- **Gates**: it waits at exclusive resources, pause holds and Script approval. A Script from an import or an agent-written draft waits for a person's approval before it runs.
+- **Configuration**: workflow variables, the Script environment and input bindings apply. Bindings read the Agent's run: its input, earlier node outputs and Batch item input.
+- **Working directory**: a call runs in the calling run's managed workspace, so it sees the Agent's uncommitted edits. It never creates a worktree of its own.
+- **Records**: the call appears in the Agent execution's child runs, in run events (`tool.called`) and in the run inspector, even if the agent's attempt later fails.
+
+Run lists, counts and reports do not count calls as runs. The tool step's executions appear in the report's step statistics.
+
+Calls are not route steps and do not count toward `maxSteps`; the per-edge limits bound them. They report no model usage of their own; the agent's usage covers its turn.
 
 ## In-flight calls
 
-- **Claim attempt ends** (submission, reported failure, expiry, external hold): the attempt's unfinished calls are cancelled, including a call whose Script or Fetch is running, so no call outlives the Agent's result. A later claim attempt cannot read an earlier attempt's call through `callId`.
-- **Run cancelled**: the call is cancelled with its run tree, like any attached child. A running Script is stopped; a Fetch already sent may still complete remotely.
-- **Paused**: a call that is already running finishes. A new call waits until every applicable pause hold is released; the response reports `blockedBy: "pause"`.
-- **Server restart**: a running Script or Fetch fails as `Service interrupted during … execution`, the same as a routed step. A call that had not started resumes when its claim is still active.
-- A call blocked by a resource its own Agent holds fails instead of waiting.
+| Event              | What happens to calls                                                                                                                                                                                                            |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Claim attempt ends | Submission, reported failure, expiry or an external hold cancels the attempt's unfinished calls, including running ones. No call outlives the Agent's result. A later attempt cannot read an earlier attempt's call by `callId`. |
+| Run cancelled      | The call is cancelled with its run tree, like any attached child. A running Script is stopped. A Fetch already sent may still complete remotely.                                                                                 |
+| Paused             | A running call finishes. A new call waits until every applicable pause hold is released, and reports `blockedBy: "pause"`.                                                                                                       |
+| Server restart     | A running Script or Fetch fails as `Service interrupted during … execution`, like a routed step. A call that had not started resumes if its claim is still active.                                                               |
+| Resource conflict  | A call blocked by a resource its own Agent holds fails instead of waiting.                                                                                                                                                       |
 
 ## Simulate tool calls
 
-In a [simulation](workflow-simulation.md) fixture, an Agent fixture can list `toolCalls: [{"name": "run_checks", "arguments": {...}}]`. The simulated agent makes those calls in order before it returns its `output` or `error`. Each call takes the next unused `script` or `fetch` fixture for the tool's node, like a step inside a Batch item. A call that is rejected, for example over a limit or with invalid arguments, fails the simulation. Route coverage ignores tool edges; `coverage.tools` reports how many of the workflow's tools the case called and lists the uncalled edge IDs.
+In a [simulation](https://github.com/dgca/interlock/blob/main/docs/workflow-simulation.md) fixture, an Agent fixture can list the calls it makes:
+
+```json
+{
+  "nodeId": "implement",
+  "kind": "agent",
+  "toolCalls": [{ "name": "run_checks", "arguments": { "target": "all" } }],
+  "output": { "summary": "Done" }
+}
+```
+
+- The simulated agent makes the calls in order, then returns its `output` or `error`.
+- Each call takes the next unused `script` or `fetch` fixture for the tool's node, like a step inside a Batch item.
+- A rejected call, for example over a limit or with invalid arguments, fails the simulation.
+- Route coverage ignores tool edges. `coverage.tools` reports how many of the workflow's tools the case called and lists the uncalled edge IDs.
+
+## Reference
+
+### Limits
+
+| Limit                     | Value                                                                        |
+| ------------------------- | ---------------------------------------------------------------------------- |
+| `maxCallsPerAttempt`      | Calls in one claim attempt. Default 10, at most 100.                         |
+| `maxCallsPerExecution`    | Calls across every attempt of one Agent execution. Default 30, at most 1000. |
+| Tools per Agent           | 20                                                                           |
+| One tool's input contract | 8 KiB of JSON                                                                |
+| The whole tool list       | 32 KiB of JSON                                                               |
+| Tool name                 | Starts with a letter; at most 64 letters, digits and `_`; unique per Agent   |
+| `waitMs`                  | Default 50 seconds, at most 10 minutes                                       |
+| Inline `output`           | 64 KiB                                                                       |
+
+`inspect_assignment_size` reports the tool list as the `tools` component.
+
+### Publication rules
+
+Publication rejects a tool edge when:
+
+- its source is not an Agent, or its target is not a Script or Fetch;
+- the target also has routes, uses result routing, or has a Failed route;
+- the target is a background Script;
+- the target's timeout is longer than the Agent's claim lease (`leaseSeconds`, 300 seconds by default), because a call blocks the agent's turn;
+- the target is in a different Batch or Parallel scope from the Agent;
+- the target names an exclusive resource the Agent also declares, since the Agent holds it during the call.

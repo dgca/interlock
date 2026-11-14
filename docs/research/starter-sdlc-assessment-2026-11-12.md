@@ -68,7 +68,7 @@ The default decision rule should remain conditional:
 - Ask when a choice changes scope, public behavior, compatibility, consequential architecture, or authorization and existing instructions do not settle it.
 - Honor explicit review requirements. Silence and elapsed time never supply approval.
 
-A complete brief can therefore run unattended. An incomplete brief can enter a durable wait without leaving an Agent claim open. The same Human input can appear on a Workflow Board or be handled by a connected agent through `workflow_requests`. The integration remains responsible for authenticating external respondents. [Human input](../workflow-boards.md#add-human-input-to-a-workflow), [external input](../external-input.md).
+A complete brief can therefore run unattended. An incomplete brief can enter a durable wait without leaving an Agent claim open. The same Human input can appear on a Workflow Board or be handled by a connected agent through `workflow_requests`. The integration remains responsible for authenticating external respondents. [Human input](../build-workflow.md#add-human-input-to-a-workflow), [external input](../external-input.md).
 
 Factory completion needs a stronger contract. Proposed fields include the outcome, reviewed commit, artifact references, verification summary, delivery status, PR URL, and outstanding limitations. Local completion is valid when requested. If a PR is required and cannot be created, retain verified implementation while exposing delivery as blocked. Do not require another build or pretend delivery succeeded. This is a proposed contract, not the current one.
 

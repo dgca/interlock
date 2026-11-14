@@ -135,6 +135,16 @@ Run-level usage is added once into `get_run_usage` totals (and scoped descendant
 
 Run budgets evaluate run-level usage under the same rules as attempt usage. Token and cost limits include run-level metrics, and `unknownUsage: "block"` blocks new claims if any run stream lacks final figures for configured metrics. Claims limits count assignment reservations only and are unaffected by run streams.
 
+## Streamed usage from managed sessions
+
+Managed executors stream usage while an attempt runs. [Run budgets](run-budgets.md#stop-managed-sessions-at-the-limit) use these figures to stop a session at its limit.
+
+- While an attempt runs, its streamed figures count in budget checks but are not stored. The final result's usage replaces them.
+- If an attempt ends without final usage while a budget governs its run, the streamed figures are stored as its non-final report.
+- Streamed Claude Code figures are attributed to the `anthropic` provider until the final report.
+- A resumed attempt's final report is differenced against the stopped attempt's streamed figures, so it is stored as final and nothing is counted twice.
+- Claude Code streams no cost, so that report's cost is derived from the price table, not taken from Claude Code's session total.
+
 ## Inspect totals and attribution
 
 MCP `get_run_usage` and the shared API `runs.usage` require `runId`. The default scope is that run alone. Set `includeDescendants:true` to include all descendants, including Batch item runs and detached runs, exactly once. The response reports `includedRuns` and `includedDetachedRuns`. Inclusion in a usage total does not change cancellation or lifetime rules.

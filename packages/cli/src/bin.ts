@@ -68,7 +68,7 @@ INTERLOCK_SYNC_DIR=PATH syncs workflow drafts with bundle files in PATH.
 INTERLOCK_OTEL_TRACES=1 exports run traces to OTEL_EXPORTER_OTLP_ENDPOINT (OTLP/HTTP JSON).
 Variable encryption keys are held separately from the database. Back up keys separately.
 INTERLOCK_REQUIRE_TOKEN=1 rejects API, MCP and event requests without the API token.
-Commands and the mcp bridge read the token from the api-token file beside the key folder.`);
+Commands and the mcp bridge read the token from the api-token file in the key folder.`);
     return;
   }
   if (argv[0] === 'mcp') {

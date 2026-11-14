@@ -57,7 +57,7 @@ The `prepack` hook rebuilds the package when it is packed. Local `.interlock` da
 
 ## Check database upgrades
 
-Before releasing a persistence change, follow [Add a database migration](upgrading.md#add-a-database-migration). Test the previous release's database fixture and include any upgrade steps in the changeset. Users can follow [Upgrade Interlock](upgrading.md) to install updates and restore backups.
+Before releasing a persistence change, follow [Add a database migration](development.md#add-a-database-migration). Test the previous release's database fixture and include any upgrade steps in the changeset. Users can follow [Upgrade Interlock](upgrading.md) to install updates and restore backups.
 
 ## Retry a failed release
 

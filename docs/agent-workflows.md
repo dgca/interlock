@@ -28,6 +28,8 @@ Polling detail includes deadlines and `lastCheck` with count, at, optional error
 
 Optional [run budgets](run-budgets.md) stop new Agent claims when limits are reached. Use `get_run_budget` to inspect policy and usage, and `set_run_budget` for an authorized adjustment. `next:adjust_budget` and budget blockers identify recoverable gates; already claimed work can finish. Keep detached scope and incomplete-report policy explicit.
 
+Blocked assignments are left out of discovery and continuation next-work lists; full inspection keeps them with a `budgetBlocked` marker. Briefings expose `budgetBlocked` and `budget_blocked` blockers, and mutation summaries include bounded `budgetBlocked` references with `next:adjust_budget`, for which MCP suggests a read-only briefing. Reported usage that changes admission updates assignment markers and continuation cursors; usage-only updates without an admission change do not. Budget adjustments also wake continuation readers.
+
 ## Report usage
 
 For executor-supplied or observer-supplied token counts and costs, use `report_usage` and `get_run_usage`. [Usage reporting](usage-reporting.md) defines cumulative snapshots, attempt identity, delayed reports, descendant scope, and coverage. A successful assignment does not imply complete usage data.

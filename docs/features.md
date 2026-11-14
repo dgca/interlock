@@ -111,7 +111,7 @@ What Interlock implements today, grouped by area. See [current limits](v1.md) fo
 
 ## Local security
 
-- A loopback-only server that rejects requests addressed to other hosts or sent from untrusted browser origins. See [Security](../README.md#security).
+- A loopback-only server that rejects requests addressed to other hosts or sent from untrusted browser origins. See [Security](security.md).
 - An optional per-install [API token](connect-harness.md#api-token) in an owner-only file, sent automatically by the UI, CLI and stdio bridge and included in copied HTTP client configuration. `INTERLOCK_REQUIRE_TOKEN=1` requires it on `/api`, `/trpc`, `/mcp` and `/events`; a server listening beyond loopback always requires it.
 - Script, polling Script check and custom harness command [server environment modes](architecture.md#scripts-and-interruptions): `inherit` passes the whole server environment and is the default for definitions without a mode; `minimal` passes `PATH`, `HOME`, locale and `INTERLOCK_*` variables plus listed `environmentPassthrough` names, and is the default for Scripts added in the editor. Minimal failures name withheld variables mentioned in the source or error output.
 - One-time [approval of imported Scripts](reuse-work.md#approve-imported-scripts) by workflow and content, with an `imports`, `imports_and_agents` or `off` library setting, an import preview of every Script, **Approve and run** in the UI and `interlock approve-script`.
