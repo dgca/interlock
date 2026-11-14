@@ -7,6 +7,7 @@ import {
   readFileSync,
   realpathSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { join } from 'node:path';
@@ -124,7 +125,7 @@ it('gives concurrent runs separate worktrees, keeps continuity there, and remove
         label: 'Edit',
         language: 'javascript',
         command:
-          "require('node:fs').appendFileSync('file.txt', 'run\\n'); return { cwd: process.cwd() };",
+          "require('node:fs').appendFileSync('file.txt', 'run\\n'); require('node:child_process').execFileSync('git', ['-c', 'user.name=T', '-c', 'user.email=t@example.invalid', 'commit', '-qam', 'run']); return { cwd: process.cwd() };",
       },
       agent('first'),
       agent('second'),
@@ -168,7 +169,9 @@ it('gives concurrent runs separate worktrees, keeps continuity there, and remove
     'original\n',
   );
   expect(f.git('branch', '--show-current')).toBe('main');
-  for (const runId of runs) f.git('rev-parse', '--verify', `agent/${runId}`);
+  // Removal keeps the branch and its commits.
+  for (const runId of runs)
+    expect(f.git('log', '-1', '--format=%s', `agent/${runId}`)).toBe('run');
 });
 
 it('shares the workspace with Batch items and removes it after the tree is cancelled', async () => {
@@ -232,14 +235,106 @@ it('reconciles after a restart without touching directories Interlock did not cr
     join(workspaces, `${orphan}.owner.json`),
     JSON.stringify({ id: orphan, ownerToken: 'x', repository: f.repository }),
   );
-  mkdirSync(join(workspaces, 'foreign'));
-  writeFileSync(join(workspaces, 'foreign.owner.json'), '{}');
+  // Directories under valid run IDs that Interlock cannot prove it made.
+  const unmarked = '11111111-1111-4111-8111-111111111111';
+  const linked = '22222222-2222-4222-8222-222222222222';
+  const outside = join(f.root, 'outside');
+  mkdirSync(join(workspaces, unmarked));
+  mkdirSync(outside);
+  writeFileSync(join(outside, 'keep.txt'), 'keep');
+  symlinkSync(outside, join(workspaces, linked));
+  writeFileSync(
+    join(workspaces, `${linked}.owner.json`),
+    JSON.stringify({ id: linked, ownerToken: 'x', repository: f.repository }),
+  );
   const second = f.open();
   await until(second, () => !existsSync(join(workspaces, orphan)));
   expect(existsSync(path)).toBe(true);
   second.cancelRunTree({ id: runId, reason: 'stop' });
   await until(second, () => !existsSync(path));
   expect(f.worktrees()).toEqual([realpathSync(f.repository)]);
-  expect(existsSync(join(workspaces, 'foreign'))).toBe(true);
+  expect(existsSync(join(workspaces, unmarked))).toBe(true);
+  expect(readFileSync(join(workspaces, linked, 'keep.txt'), 'utf8')).toBe(
+    'keep',
+  );
   f.git('rev-parse', '--verify', 'orphan');
+});
+
+it('keeps a worktree with uncommitted changes on completion and on cancel', async () => {
+  const f = setup();
+  const engine = f.open();
+  const id = publish(engine, {
+    workspace: { repository: f.repository },
+    nodes: [
+      { id: 'entry', kind: 'entry', label: 'In' },
+      {
+        id: 'script',
+        kind: 'script',
+        label: 'Edit',
+        language: 'javascript',
+        command:
+          "require('node:fs').writeFileSync('new.txt', 'x'); return input;",
+      },
+      agent('work'),
+      { id: 'exit', kind: 'exit', label: 'Out' },
+    ],
+    edges: [
+      { id: 'a', source: 'entry', target: 'script' },
+      { id: 'b', source: 'script', target: 'work' },
+      { id: 'c', source: 'work', target: 'exit' },
+    ],
+  });
+  const completed = engine.start(id, {}).run.id;
+  const cancelled = engine.start(id, {}).run.id;
+  const work = await until(engine, () => engine.available(completed)[0]);
+  await until(engine, () => engine.available(cancelled)[0]);
+  const claimed = engine.claim(work.id, worker);
+  engine.submit(work.id, claimed.token!, {});
+  engine.cancelRunTree({ id: cancelled, reason: 'stop' });
+  for (const runId of [completed, cancelled]) {
+    await until(
+      engine,
+      () => engine.workspaces.get(runId)?.state === 'retained',
+    );
+    const { workspace } = engine.inspect(runId);
+    expect(workspace?.error).toMatch(/uncommitted changes/);
+    expect(readFileSync(join(workspace!.path, 'new.txt'), 'utf8')).toBe('x');
+  }
+});
+
+it('fails a run whose branch already exists and leaves that branch alone', async () => {
+  const f = setup();
+  const engine = f.open();
+  const id = publish(engine, {
+    workspace: { repository: f.repository },
+    nodes: [
+      { id: 'entry', kind: 'entry', label: 'In' },
+      agent('work'),
+      { id: 'exit', kind: 'exit', label: 'Out' },
+    ],
+    edges: [
+      { id: 'a', source: 'entry', target: 'work' },
+      { id: 'b', source: 'work', target: 'exit' },
+    ],
+  });
+  f.git(
+    '-c',
+    'user.name=T',
+    '-c',
+    'user.email=t@example.invalid',
+    'commit',
+    '-q',
+    '--allow-empty',
+    '-m',
+    'Mine',
+  );
+  const mine = f.git('rev-parse', 'HEAD');
+  f.git('checkout', '-q', 'HEAD~1');
+  const runId = engine.start(id, {}).run.id;
+  // Git runs asynchronously, so the branch exists before the run checks it.
+  f.git('branch', `interlock/${runId}`, mine);
+  await until(engine, () => engine.run(runId).status === 'failed');
+  expect(engine.run(runId).error).toMatch(/already exists/);
+  expect(f.git('rev-parse', `interlock/${runId}`)).toBe(mine);
+  expect(f.worktrees()).toEqual([realpathSync(f.repository)]);
 });

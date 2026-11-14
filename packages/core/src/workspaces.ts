@@ -71,7 +71,15 @@ export interface ManagedWorkspace {
   path: string;
   branch: string;
   ownerToken: string;
-  state: 'preparing' | 'ready' | 'failed' | 'removing' | 'removed';
+  state:
+    | 'preparing'
+    | 'ready'
+    | 'failed'
+    | 'removing'
+    | 'removed'
+    /** Kept by retention, uncommitted changes, or repeated removal failures. */
+    | 'retained';
+  removalAttempts?: number;
   /** Set before `git worktree add -b`; the branch is then Interlock's own. */
   branchClaimed?: boolean;
   baseCommit?: string;

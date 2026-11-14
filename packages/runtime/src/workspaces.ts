@@ -27,8 +27,11 @@ import {
 } from './workingDirectory.js';
 
 const collection = 'workspaces';
+const maxRemovalAttempts = 3;
 const terminal = (run: Run) =>
   ['completed', 'failed', 'cancelled'].includes(run.status);
+const usable = (w?: ManagedWorkspace) =>
+  (w?.state === 'ready' || w?.state === 'retained') && existsSync(w.path);
 const errorText = (error: unknown) =>
   (error instanceof Error ? error.message : String(error)).slice(0, 512);
 type Host = {
@@ -65,7 +68,8 @@ export class ManagedWorkspaces {
       root ?? join(dirname(resolve(store.path)), 'workspaces'),
     );
     for (const workspace of store.list<ManagedWorkspace>(collection)) {
-      if (workspace.state === 'removed') continue;
+      if (workspace.state === 'removed' || workspace.state === 'retained')
+        continue;
       this.active.add(workspace.id);
       // A process interruption leaves no evidence of how far Git got.
       if (workspace.state === 'preparing')
@@ -133,7 +137,7 @@ export class ManagedWorkspaces {
     const id = this.ownerId(run, definition);
     if (!id) return undefined;
     const workspace = this.get(id);
-    if (workspace?.state !== 'ready' || !existsSync(workspace.path))
+    if (!workspace || !usable(workspace))
       throw new InterlockError(
         `The run's workspace is ${workspace?.state ?? 'missing'}; no work runs outside it`,
       );
@@ -147,8 +151,16 @@ export class ManagedWorkspaces {
     if (!this.owns(run, definition)) return undefined;
     const settings = definition.workspace!;
     const existing = this.get(run.id);
-    if (existing?.state === 'ready' && existsSync(existing.path))
+    if (usable(existing)) {
+      // A retried run takes its kept checkout back.
+      if (existing?.state === 'retained') {
+        this.update(run.id, (w) => {
+          w.state = 'ready';
+        });
+        this.active.add(run.id);
+      }
       return undefined;
+    }
     if (existing?.state === 'preparing' || existing?.state === 'removing')
       return false;
     if (existing?.state === 'failed' && !existing.reported) {
@@ -280,24 +292,31 @@ export class ManagedWorkspaces {
         this.job('reconcile', () =>
           reconcileWorktrees(
             this.root,
-            (id) => this.active.has(id),
+            (id) => ![undefined, 'removed'].includes(this.get(id)?.state),
             repositories,
           ),
         );
     }
     for (const id of this.active) {
       const workspace = this.get(id);
-      if (!workspace || workspace.state === 'removed') {
+      if (
+        !workspace ||
+        workspace.state === 'removed' ||
+        workspace.state === 'retained'
+      ) {
         this.active.delete(id);
         continue;
       }
+      const owner = this.store.get<Run>('runs', workspace.runId);
+      // Cancelling the owning run stops a preparation still in progress.
+      if (workspace.state === 'preparing' && (!owner || terminal(owner)))
+        this.jobs.get(id)?.abort();
       if (
         this.jobs.has(id) ||
         workspace.state === 'preparing' ||
         (this.retryAt.get(id) ?? 0) > Date.now()
       )
         continue;
-      const owner = this.store.get<Run>('runs', workspace.runId);
       if (
         owner &&
         (!terminal(owner) ||
@@ -309,21 +328,27 @@ export class ManagedWorkspaces {
       });
       this.job(id, () =>
         removeWorktree(this.root, workspace).then(
-          () =>
+          (result) =>
             this.update(id, (w) => {
-              w.state = 'removed';
-              delete w.error;
+              w.state = result === 'dirty' ? 'retained' : 'removed';
+              w.error =
+                result === 'dirty'
+                  ? 'Kept: the worktree has uncommitted changes'
+                  : undefined;
             }),
-          (error: unknown) => {
-            this.retryAt.set(id, Date.now() + 60_000);
-            this.update(id, (w) => {
-              w.state = 'failed';
-              w.reported = true;
-              w.error = `Removal failed: ${errorText(error)}`;
-            });
-          },
+          (error: unknown) => this.removalFailed(id, errorText(error)),
         ),
       );
     }
+  }
+  /** Retry a failed removal a few times, then keep the checkout and say why. */
+  private removalFailed(id: string, error: string) {
+    this.update(id, (w) => {
+      w.removalAttempts = (w.removalAttempts ?? 0) + 1;
+      w.reported = true;
+      w.error = `Removal failed: ${error}`;
+      w.state = w.removalAttempts >= maxRemovalAttempts ? 'retained' : 'failed';
+    });
+    this.retryAt.set(id, Date.now() + 60_000);
   }
 }
