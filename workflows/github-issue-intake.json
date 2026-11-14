@@ -13,7 +13,7 @@
     {
       "id": "interlock-github-issue-intake",
       "name": "GitHub issue intake",
-      "description": "Run on a schedule. Lists open issues with a label, starts one run of a target workflow per issue with a request key, then replaces the label with a picked-up label.",
+      "description": "Experimental. Run on a schedule. Lists open issues with a label, starts one run of a target workflow per issue with a request key, then replaces the label with a picked-up label.",
       "ownerWorkflowId": null,
       "draftRevision": 1,
       "versions": [],
@@ -110,7 +110,7 @@
                 "name": "per_page",
                 "value": {
                   "kind": "fixed",
-                  "value": "20"
+                  "value": "100"
                 }
               }
             ],
@@ -148,7 +148,8 @@
             "body": {
               "kind": "none"
             },
-            "timeoutMs": 15000
+            "timeoutMs": 15000,
+            "failOnHttpError": true
           },
           {
             "id": "select",
@@ -168,7 +169,7 @@
                 "path": "body"
               }
             },
-            "command": "// Issue text is untrusted. It reaches the target workflow only as data.\nconst { config, issues } = input;\nconst repository = `${config.owner}/${config.repo}`;\nconst items = [];\nfor (const issue of issues) {\n  const labels = issue.labels.map((label) => label.name ?? label);\n  // The issues API also lists pull requests; skip them and picked-up issues.\n  if (issue.pull_request || labels.includes(config.pickedUpLabel)) continue;\n  // One request key per issue: Interlock never starts the same key twice.\n  let requestId = `github:${repository}#${issue.number}`;\n  if (requestId.length > 120) {\n    const { createHash } = await import('node:crypto');\n    const digest = createHash('sha256').update(repository).digest('hex');\n    requestId = `github:${digest.slice(0, 40)}#${issue.number}`;\n  }\n  items.push({\n    owner: config.owner,\n    repo: config.repo,\n    number: issue.number,\n    labels: [\n      ...labels.filter((label) => label !== config.label),\n      config.pickedUpLabel,\n    ],\n    start: {\n      workflowId: config.targetWorkflowId,\n      requestId,\n      title: `${repository}#${issue.number}`.slice(0, 200),\n      tags: { source: 'github-issue', issue: String(issue.number) },\n      input: {\n        issue: {\n          repository,\n          number: issue.number,\n          url: issue.html_url,\n          author: issue.user?.login ?? null,\n          labels,\n        },\n        untrustedIssueText: {\n          title: issue.title,\n          body: (issue.body ?? '').slice(0, 20000),\n        },\n      },\n    },\n  });\n}\nreturn { items };",
+            "command": "// Issue text is untrusted. It reaches the target workflow only as data.\nconst { config, issues } = input;\nconst repository = `${config.owner}/${config.repo}`;\nconst same = (a, b) => a.toLowerCase() === b.toLowerCase();\nconst items = [];\nfor (const issue of issues) {\n  // The issues API also lists pull requests; drop them before the limit.\n  if (issue.pull_request) continue;\n  if (items.length === 20) break;\n  const labels = issue.labels.map((label) => label.name ?? label);\n  // One request key per issue and target workflow: a key starts one run, ever.\n  let requestId = `github:${repository}#${issue.number}:${config.targetWorkflowId}`;\n  if (requestId.length > 120) {\n    const { createHash } = await import('node:crypto');\n    const digest = createHash('sha256')\n      .update(`${repository}:${config.targetWorkflowId}`)\n      .digest('hex');\n    requestId = `github:${digest.slice(0, 48)}#${issue.number}`;\n  }\n  const kept = labels.filter((label) => !same(label, config.label));\n  items.push({\n    owner: config.owner,\n    repo: config.repo,\n    number: issue.number,\n    // Already picked up: only remove the trigger label, never start again.\n    pickedUp: labels.some((label) => same(label, config.pickedUpLabel)),\n    labels: kept.some((label) => same(label, config.pickedUpLabel))\n      ? kept\n      : [...kept, config.pickedUpLabel],\n    start: {\n      workflowId: config.targetWorkflowId,\n      requestId,\n      title: `${repository}#${issue.number}`.slice(0, 200),\n      tags: { source: 'github-issue', issue: String(issue.number) },\n      input: {\n        issue: {\n          repository,\n          number: issue.number,\n          url: issue.html_url,\n          author: issue.user?.login ?? null,\n          labels,\n        },\n        untrustedIssueText: {\n          title: issue.title,\n          body: (issue.body ?? '').slice(0, 20000),\n        },\n      },\n    },\n  });\n}\nreturn { items };",
             "timeoutMs": 10000
           },
           {
@@ -186,80 +187,16 @@
           },
           {
             "id": "start",
-            "kind": "fetch",
+            "kind": "script",
             "label": "Start target run",
             "batchId": "each",
             "position": {
               "x": 40,
               "y": 120
             },
-            "url": "http://127.0.0.1:4310/api/runs",
-            "method": "POST",
-            "query": [],
-            "headers": [],
-            "body": {
-              "kind": "fields",
-              "fields": [
-                {
-                  "name": "workflowId",
-                  "value": {
-                    "kind": "input",
-                    "path": "start.workflowId"
-                  }
-                },
-                {
-                  "name": "input",
-                  "value": {
-                    "kind": "input",
-                    "path": "start.input"
-                  }
-                },
-                {
-                  "name": "requestId",
-                  "value": {
-                    "kind": "input",
-                    "path": "start.requestId"
-                  }
-                },
-                {
-                  "name": "title",
-                  "value": {
-                    "kind": "input",
-                    "path": "start.title"
-                  }
-                },
-                {
-                  "name": "tags",
-                  "value": {
-                    "kind": "input",
-                    "path": "start.tags"
-                  }
-                }
-              ]
-            },
-            "timeoutMs": 15000,
-            "failOnHttpError": false
-          },
-          {
-            "id": "started",
-            "kind": "switch",
-            "label": "Started or already started?",
-            "batchId": "each",
-            "position": {
-              "x": 340,
-              "y": 120
-            },
-            "path": "status",
-            "cases": [
-              {
-                "port": "started",
-                "equals": 202
-              },
-              {
-                "port": "already",
-                "equals": 409
-              }
-            ]
+            "language": "javascript",
+            "command": "// Start the target run through this Interlock's HTTP API. INTERLOCK_API_TOKEN\n// is set only when the server requires it; it is never logged or returned.\nif (input.pickedUp) return { started: false, runId: null };\nconst headers = { 'content-type': 'application/json' };\nconst token = process.env.INTERLOCK_API_TOKEN;\nif (token) headers.authorization = `Bearer ${token}`;\nconst response = await fetch(`${process.env.INTERLOCK_URL}/api/runs`, {\n  method: 'POST',\n  headers,\n  body: JSON.stringify(input.start),\n  signal: AbortSignal.timeout(15000),\n});\nconst body = await response.json().catch(() => ({}));\n// 202: started, or the same request again. 409: this issue's key for this\n// target was used before (the issue changed since). Both mean: do not start.\nif (response.status === 202 || response.status === 409)\n  return { started: response.status === 202, runId: body.runId ?? null };\nthrow new Error(`Interlock answered HTTP ${response.status}: ${body.error ?? ''}`);",
+            "timeoutMs": 20000
           },
           {
             "id": "mark",
@@ -267,7 +204,7 @@
             "label": "Swap labels",
             "batchId": "each",
             "position": {
-              "x": 640,
+              "x": 340,
               "y": 120
             },
             "inputBindings": {
@@ -296,7 +233,7 @@
               "runId": {
                 "source": "node",
                 "nodeId": "start",
-                "path": "body.runId",
+                "path": "runId",
                 "default": null
               }
             },
@@ -346,14 +283,15 @@
                 }
               ]
             },
-            "timeoutMs": 15000
+            "timeoutMs": 15000,
+            "failOnHttpError": true
           },
           {
             "id": "summary",
             "kind": "script",
             "label": "Report picked-up issues",
             "position": {
-              "x": 1900,
+              "x": 1600,
               "y": 100
             },
             "language": "javascript",
@@ -375,7 +313,7 @@
             "kind": "exit",
             "label": "Picked-up issues",
             "position": {
-              "x": 2200,
+              "x": 1900,
               "y": 100
             }
           }
@@ -406,22 +344,10 @@
             "port": "item"
           },
           {
-            "id": "start-started",
+            "id": "start-mark",
             "source": "start",
-            "target": "started",
+            "target": "mark",
             "port": "default"
-          },
-          {
-            "id": "started-mark",
-            "source": "started",
-            "target": "mark",
-            "port": "started"
-          },
-          {
-            "id": "already-mark",
-            "source": "started",
-            "target": "mark",
-            "port": "already"
           },
           {
             "id": "mark-each",

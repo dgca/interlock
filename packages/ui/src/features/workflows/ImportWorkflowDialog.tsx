@@ -99,7 +99,7 @@ export function ImportWorkflowDialog({
     load('starters', true);
     error('starters');
     try {
-      const rows = await api.workflows.starters.query();
+      const rows = await api.workflows.starters.query({ boardSetup: true });
       if (mounted.current) setCatalog(rows);
     } catch (e) {
       error('starters', errorMessage(e));

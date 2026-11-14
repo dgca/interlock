@@ -45,7 +45,7 @@ For MCP, discover choices on demand:
 { "source": "starters" }
 ```
 
-Pass that to `list_workflows`; the normal default still lists the library. Choices include metadata, existing-copy references, and optional board setup. They omit definitions and prompts.
+Pass that to `list_workflows`; the normal default still lists the library. Choices include metadata, existing-copy references, and the ID of a suggested board. Add `"starterId"` to read one choice with its full board setup. They omit definitions and prompts.
 
 Pass the chosen identity to `import_workflows`:
 

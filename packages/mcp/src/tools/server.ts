@@ -86,13 +86,11 @@ import {
   sharedDefinitionSchema,
   sharedBundle,
 } from './schemas.js';
-
 // SDK enum errors may quote malformed input; validate sensitive bodies first.
 const safeVariableMutationSchema = z.preprocess(
   (input) => (variableMutationSchema.safeParse(input).success ? input : {}),
   variableMutationSchema,
 );
-
 /** Profile names come from the HTTP path, header or stdio environment. */
 export function createMcpServer(
   client: ReturnType<typeof createMcpClient>,
@@ -425,15 +423,17 @@ export function createMcpServer(
   );
   tool(
     'list_workflows',
-    'List compact workflow summaries. Use source:starters for bundled choices and board setup or includeDraft:true for full records; get_workflow reads one draft. ownerWorkflowId:null lists library workflows, a parent ID lists its children, and omission lists all. draftRevision ignores layout-only edits; draftMatchesLatest is null before publication. latestVersion is a publication counter; retained versions can have gaps.',
+    'List compact workflow summaries. Use source:starters for bundled choices, plus starterId for one with its board setup, or includeDraft:true for full records; get_workflow reads one draft. ownerWorkflowId:null lists library workflows, a parent ID lists its children, and omission lists all. draftRevision ignores layout-only edits; draftMatchesLatest is null before publication. latestVersion is a publication counter; retained versions can have gaps.',
     {
       source: z.enum(['library', 'starters']).default('library'),
+      starterId: z.string().min(1).max(64).optional(),
       includeDraft: z.boolean().default(false),
       ownerWorkflowId: z.string().nullable().optional(),
       includeArchived: z.boolean().default(true),
     },
-    async ({ includeDraft, source, ...input }) => {
-      if (source === 'starters') return client.workflows.starters();
+    async ({ includeDraft, source, starterId, ...input }) => {
+      if (source === 'starters')
+        return client.workflows.starters({ starterId });
       const workflows = await client.workflows.list(input);
       return includeDraft
         ? workflows

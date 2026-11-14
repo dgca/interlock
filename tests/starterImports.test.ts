@@ -233,7 +233,7 @@ it('recognizes pre-stage SDLC copies and sets up a board only for a new copy', (
   const old = e.create('Previously imported SDLC', '', unstaged);
   e.publish(old.id);
   const retained = e.store.getVersion(old.id, 1);
-  const preview = listStarters(e)[0];
+  const preview = listStarters(e, { boardSetup: true })[0];
   expect(preview.existing?.id).toBe(old.id);
   expect(preview.boardSetup?.suggestions[0]).toMatchObject({
     id: 'sdlc-board',

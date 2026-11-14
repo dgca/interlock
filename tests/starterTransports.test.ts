@@ -96,10 +96,16 @@ it.each(['http', 'stdio'])(
         'github-issue-intake',
         'run-notifications',
       ]);
-      // About 300 bytes per starter without a board suggestion.
-      expect(JSON.stringify(choices).length).toBeLessThan(3500);
+      expect(JSON.stringify(choices).length).toBeLessThan(2000);
       expect(e.store.workflows()).toEqual([]);
-      expect(choices[0].boardSetup?.suggestions[0]).toMatchObject({
+      // The listing names the board; one starter's detail carries its setup.
+      expect(JSON.stringify(choices)).not.toContain('boardSetup');
+      expect(JSON.stringify(choices)).toContain('"board":"sdlc-board"');
+      const [detail] = (await call('list_workflows', {
+        source: 'starters',
+        starterId: 'sdlc',
+      })) as { boardSetup: { suggestions: unknown[] } }[];
+      expect(detail.boardSetup.suggestions[0]).toMatchObject({
         id: 'sdlc-board',
         workflows: [{ workflowId: 'sdlc', currentBoardId: null }],
       });

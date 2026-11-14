@@ -483,6 +483,7 @@ export class Engine {
       this.variables,
       this.backgroundScripts,
       () => this.stopped,
+      () => this.executors,
     );
     this.scriptControl = new BackgroundScriptControl(
       store,
@@ -2105,7 +2106,6 @@ export class Engine {
       throw new InterlockError(
         `Parallel branch "${failed.parallelBranch?.key}" ${failed.status}: ${failed.error ?? failed.id}`,
       ); // The ordinary failure path cancels unfinished waited descendants.
-
     let changed = starting;
     let active = children.filter((child) => !terminal(child.status)).length;
     while (execution.retryChildRunIds?.length && active < node.concurrency) {

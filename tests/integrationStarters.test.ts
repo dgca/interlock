@@ -79,13 +79,11 @@ function setSecret(e: Engine, id: string, value: string) {
     value,
   });
 }
-// Point the template's fixed hosts at the stub, as a user edits a copy.
+// Point the template's GitHub host at the stub, as a user edits a copy.
 function retarget(e: Engine, id: string, base: string) {
   const w = e.workflow(id);
   const draft = JSON.parse(
-    JSON.stringify(w.draft)
-      .replaceAll('https://api.github.com', base)
-      .replaceAll('http://127.0.0.1:4310', base),
+    JSON.stringify(w.draft).replaceAll('https://api.github.com', base),
   ) as typeof w.draft;
   e.update(id, { draftRevision: w.draftRevision, draft });
   e.publish(id);
@@ -122,7 +120,8 @@ it('starts one run per labeled issue, once, and swaps its label even across a re
     { id: 'e', source: 'entry', target: 'exit', port: 'default' },
   ];
   const targetId = e.create('Triage issue', '', target).id;
-  e.publish(targetId);
+  const reviewId = e.create('Review issue', '', target).id;
+  e.publish([targetId, reviewId]);
 
   const issue = (number: number, labels: string[], extra = {}) => ({
     number,
@@ -134,22 +133,39 @@ it('starts one run per labeled issue, once, and swaps its label even across a re
     ...extra,
   });
   const issues = [
-    issue(1, ['bug', 'ready']),
-    issue(2, ['ready', 'started']),
+    issue(1, ['bug', 'ready', 'review']),
+    // Picked up before but labeled again: relabelled, never started.
+    issue(2, ['Ready', 'Started']),
     issue(3, ['ready'], { pull_request: {} }),
   ];
+  const labels = (n: number) =>
+    issues.find((i) => i.number === n)!.labels.map((l) => l.name);
   let failPatch = true;
   const { base, seen } = await stub(
     (r) => {
-      if (r.method === 'GET') return { status: 200, body: issues };
-      const n = Number(r.url.split('/').at(-1));
-      if (failPatch) return { status: 502, body: { message: 'Bad gateway' } };
-      issues[0].labels = r.body!.labels!.map((name) => ({ name }));
+      const url = new URL(r.url, 'http://x');
+      if (r.method === 'GET') {
+        const wanted = url.searchParams.get('labels')!.toLowerCase();
+        return {
+          status: 200,
+          body: issues.filter((i) =>
+            i.labels.some((l) => l.name.toLowerCase() === wanted),
+          ),
+        };
+      }
+      const n = Number(url.pathname.split('/').at(-1));
+      if (failPatch && n === 1)
+        return { status: 502, body: { message: 'Bad gateway' } };
+      issues.find((i) => i.number === n)!.labels = r.body!.labels!.map(
+        (name) => ({ name }),
+      );
       return { status: 200, body: { number: n } };
     },
     () => e,
   );
   retarget(e, intake, base);
+  // Scripts reach this server's HTTP API through INTERLOCK_URL.
+  e.executors.mcpUrl = `${base}/mcp/execute`;
   const config = {
     owner: 'o',
     repo: 'r',
@@ -157,29 +173,29 @@ it('starts one run per labeled issue, once, and swaps its label even across a re
     pickedUpLabel: 'started',
     targetWorkflowId: targetId,
   };
-  const targetRuns = () =>
-    e.store.runs().filter((r) => r.workflowId === targetId);
+  const runsOf = (id: string) =>
+    e.store.runs().filter((r) => r.workflowId === id);
 
   // The label swap fails after the start: the poll fails and names the issue.
   const first = await settle(e, e.start(intake, config).run.id);
   expect(first.status).toBe('failed');
   expect(first.error).toMatch(/#1: .*502/);
-  expect(targetRuns()).toHaveLength(1);
-  expect(targetRuns()[0]).toMatchObject({
-    startRequestId: 'github:o/r#1',
+  expect(runsOf(targetId)).toHaveLength(1);
+  expect(runsOf(targetId)[0]).toMatchObject({
+    startRequestId: `github:o/r#1:${targetId}`,
     tags: { source: 'github-issue', issue: '1' },
     input: {
       issue: { repository: 'o/r', number: 1, author: 'someone' },
       untrustedIssueText: { title: 'Issue 1' },
     },
   });
+  expect(labels(2)).toEqual(['Started']);
   expect(seen[0].url).toBe(
-    '/repos/o/r/issues?state=open&labels=ready&sort=created&direction=asc&per_page=20',
+    '/repos/o/r/issues?state=open&labels=ready&sort=created&direction=asc&per_page=100',
   );
-  expect(seen[1]).toMatchObject({
+  expect(seen.find((r) => r.url === '/repos/o/r/issues/1')).toMatchObject({
     method: 'PATCH',
-    url: '/repos/o/r/issues/1',
-    body: { labels: ['bug', 'started'] },
+    body: { labels: ['bug', 'review', 'started'] },
   });
   // The token travels only in the header and is never stored with the run.
   expect(seen.every((r) => r.auth === 'Bearer ghs_test_token')).toBe(true);
@@ -192,12 +208,28 @@ it('starts one run per labeled issue, once, and swaps its label even across a re
     old.store.close();
   });
   e = open();
+  e.executors.mcpUrl = `${base}/mcp/execute`;
   issues[0].body = 'Edited after the first poll';
   failPatch = false;
   const second = await settle(e, e.start(intake, config).run.id);
   expect(second.status, second.error).toBe('completed');
-  expect(targetRuns()).toHaveLength(1);
-  expect(issues[0].labels).toEqual([{ name: 'bug' }, { name: 'started' }]);
+  expect(runsOf(targetId)).toHaveLength(1);
+  expect(labels(1)).toEqual(['bug', 'review', 'started']);
+
+  // A second intake for another label and target starts its own run.
+  const third = await settle(
+    e,
+    e.start(intake, {
+      ...config,
+      label: 'review',
+      pickedUpLabel: 'reviewed',
+      targetWorkflowId: reviewId,
+    }).run.id,
+  );
+  expect(third.status, third.error).toBe('completed');
+  expect(runsOf(reviewId)).toHaveLength(1);
+  expect(runsOf(targetId)).toHaveLength(1);
+  expect(labels(1)).toEqual(['bug', 'started', 'reviewed']);
 });
 
 it('posts one escaped message per lifecycle event and never exposes the webhook URL', async () => {
