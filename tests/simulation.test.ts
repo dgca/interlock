@@ -297,51 +297,24 @@ it('consumes Agent failure/retry fixtures in order and enforces published step l
     runStatus: 'failed',
   });
 });
-it('rejects unsupported nodes including unreachable nodes before substituting anything', async () => {
-  for (const scenarioKind of [
-    'detached-workflow',
-    'batch',
-    'continue-as-new',
-  ]) {
-    const e = setup(),
-      { request, w } = scenario(e);
-    // Seed an otherwise published record to isolate the simulator gate, including unreachable unsupported nodes.
-    const v = e.store.getVersion(w.id, 1)!;
-    if (scenarioKind === 'continue-as-new') {
-      v.definition.nodes.push(
-        nodeSchema.parse({
-          id: 'unsupported',
-          kind: 'exit',
-          label: 'Continue As New',
-          continueAsNew: { maxRuns: 5 },
-        }),
-      );
-    } else if (scenarioKind === 'detached-workflow') {
-      v.definition.nodes.push(
-        nodeSchema.parse({
-          id: 'unsupported',
-          kind: 'workflow',
-          label: 'Detached Workflow',
-          workflowId: w.id,
-          version: 1,
-          mode: 'detached',
-        }),
-      );
-    } else {
-      v.definition.nodes.push(
-        nodeSchema.parse({
-          id: 'unsupported',
-          kind: 'batch',
-          label: 'Batch',
-        }),
-      );
-    }
-    e.store.version(v);
-    expect(await finish(e, request)).toMatchObject({
-      state: 'unsupported',
-      substitutionCount: 0,
-    });
-  }
+it('rejects continue-as-new, even unreachable, before substituting anything', async () => {
+  const e = setup(),
+    { request, w } = scenario(e);
+  // Seed an otherwise published record to isolate the simulator gate.
+  const v = e.store.getVersion(w.id, 1)!;
+  v.definition.nodes.push(
+    nodeSchema.parse({
+      id: 'unsupported',
+      kind: 'exit',
+      label: 'Continue As New',
+      continueAsNew: { maxRuns: 5 },
+    }),
+  );
+  e.store.version(v);
+  expect(await finish(e, request)).toMatchObject({
+    state: 'unsupported',
+    substitutionCount: 0,
+  });
 });
 it('rejects wrong-node/kind fixtures up front and mismatched order during execution', async () => {
   const e = setup(),

@@ -461,11 +461,6 @@
       "symbol": "routeCoverageSchema"
     },
     {
-      "file": "packages/core/src/simulation.ts",
-      "type": "types",
-      "symbol": "SimulationFixture"
-    },
-    {
       "file": "packages/core/src/testbench.ts",
       "type": "exports",
       "symbol": "comparisonExecutorSchema"
