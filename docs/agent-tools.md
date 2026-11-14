@@ -36,6 +36,27 @@ Publication rejects a tool edge when:
 
 Drafts with these problems still save and report diagnostics. Workflows without tool edges behave as before.
 
+## Call a tool
+
+An assignment whose Agent has tool edges lists them in `tools`, with each tool's `name`, `description`, `inputSchema` and call limits, and its `executionInstructions` explain how to call them. An Agent can have at most 20 tools.
+
+Connected agents call MCP `call_work_tool` (shared API `work.callTool`) with the assignment's `workId`, their claim `token`, the tool `name` and `arguments`:
+
+```json
+{
+  "workId": "…",
+  "token": "…",
+  "name": "run_checks",
+  "arguments": { "target": "all" }
+}
+```
+
+Only the current claim on that Agent execution can call its tools. Another worker's token, an expired claim, or the name of a tool on a different node is rejected. The response has `callId`, `runId`, `executionId`, `status`, the step's `output` (or `outputBytes` when it is larger than 64 KiB; read it with `get_run_result`), `error`, `blockedBy` (`pause`, `resource` or `approval`) and the call counts so far.
+
+The call waits up to `waitMs` (default 50 seconds, at most 10 minutes), and never longer than the claim's remaining lease minus 5 seconds, so the agent can renew in time. Waiting does not renew the claim. If `status` is still `running` or `waiting`, call again with the returned `callId` to keep waiting for the same call. A repeated `callId` never starts a second call.
+
+Managed sessions (Claude Code, Codex and others that Interlock launches) use the same MCP tool. Their assignment prompt lists the tools and gives the session the assignment ID and claim token for `call_work_tool` only; the host still renews and submits, and recorded transcripts redact the token. The harness needs the Interlock MCP server configured, as in [Connect a harness](connect-harness.md); without it, a managed session cannot call tools.
+
 ## How a call runs
 
 Each call is a child run of the Agent's run, linked to the calling execution and claim attempt in its `toolCall` field (`workId`, `executionId`, `attempt`, `edgeId`, `name`, `callId`). The child run executes the one target step in the same published version as the Agent and ends with the step's result. It follows the same rules as a routed Script or Fetch:

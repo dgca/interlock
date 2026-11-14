@@ -69,6 +69,7 @@ import {
   type PathBinding,
   toolCallRequestSchema,
   type ToolCallInput,
+  workTools,
   workHoldRequestSchema,
   HoldDeadlineError,
   type WorkHoldRequest,
@@ -233,15 +234,13 @@ export class Engine {
     this.simulations = new Simulations(store, cwd);
     this.chains = new RunChains(store);
     this.toolCalls = new ToolCalls(store, {
-      run: (id) => this.run(id),
+      engine: this,
       definition: (run) => this.definition(run),
       save: (run) => this.save(run),
       event: (run, type, text) => this.event(run, type, text),
       fail: (run, execution, error) => this.fail(run, execution, error),
       cancel: (run, reason) => this.cancelOne(run, undefined, reason),
       paused: (run) => this.pauses.applicable(run.workflowId).length > 0,
-      subscribe: (listener) => this.subscribe(listener),
-      nowMs: () => this.nowMs(),
     });
     this.continuation = new Continuation(
       store,
@@ -1615,6 +1614,7 @@ export class Engine {
               }
             : {}),
           outputSchema: node.outputSchema,
+          ...workTools(definition, node.id),
           ...(node.resultRules ? { resultRules: node.resultRules } : {}),
           status: 'available',
           attempt: 0,
@@ -2906,8 +2906,7 @@ export class Engine {
       this.toolCalls.begin(work, q),
     );
     this.pump();
-    const work = this.store.get<WorkRequest>('work', q.workId)!;
-    return this.toolCalls.wait(runId, work, q.waitMs, signal);
+    return this.toolCalls.wait(runId, q.workId, q.waitMs, signal);
   }
   renew(id: string, token: string, leaseSeconds?: number) {
     return this.withClaim(id, token, (work) => {

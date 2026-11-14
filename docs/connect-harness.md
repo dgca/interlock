@@ -95,7 +95,7 @@ Every tool definition a client lists costs context in each conversation. Profile
 | Profile   | Tools                                                                                                                      | Endpoint             |
 | --------- | -------------------------------------------------------------------------------------------------------------------------- | -------------------- |
 | `all`     | Every tool. The default, so existing configurations keep the same tools.                                                   | `/mcp` or `/mcp/all` |
-| `execute` | Assignment execution: list, claim, renew, preflight, submit, fail and hold work, usage, resources, run reads.              | `/mcp/execute`       |
+| `execute` | Assignment execution: list, claim, renew, preflight, submit, fail and hold work, tool calls, usage, resources, run reads.  | `/mcp/execute`       |
 | `author`  | Workflows, versions, ownership, prompts, variables, presets, triggers, boards and the testbench.                           | `/mcp/author`        |
 | `operate` | Starting, inspecting, waiting on, pausing, holding, retrying and cancelling runs, resource release, executors and budgets. | `/mcp/operate`       |
 
@@ -252,6 +252,7 @@ Set Agent `promptIds` to distinct IDs in the desired order, alongside the node `
 | `get_run_briefing`, `get_run_result`, `wait_for_run_change`                     | Resume with bounded snapshots, selected values, and finite scoped change waits.                   |
 | `list_work`, `claim_work`                                                       | Discover available assignments and reserve one with declared capabilities.                        |
 | `submit_result`, `fail_work`, `renew_claim`                                     | Complete or fail claimed work, or extend its lease.                                               |
+| `call_work_tool`                                                                | Run a Script or Fetch step offered in a claimed assignment's `tools`.                             |
 | `manage_work_hold`                                                              | Hold/resume one assignment or read its bounded external-blocker history.                          |
 | `cancel_run`, `retry_run`                                                       | Cancel unfinished work or explicitly retry a failed run.                                          |
 | `preview_run_cancellation`, `cancel_run_tree`                                   | Preview active descendants, then atomically cancel with a reason and explicit detached inclusion. |

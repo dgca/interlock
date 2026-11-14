@@ -133,6 +133,7 @@ export function createMcpClient(url?: string) {
       submit: client.work.submit.mutate,
       renew: client.work.renew.mutate,
       fail: client.work.fail.mutate,
+      callTool: client.work.callTool.mutate,
     },
   };
 }
