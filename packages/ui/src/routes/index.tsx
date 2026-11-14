@@ -41,11 +41,9 @@ import {
 } from '../features/report/ReportSkeleton';
 import { DiagnosticsPageSkeleton } from '../features/diagnostics/DiagnosticsSkeleton';
 import { workflowSection } from '../features/workflows/workflowListConfig';
-import {
-  ProposalsSection,
-  useOpenProposalCount,
-} from '../features/proposals/proposalRoutes';
+import { ProposalsSection } from '../features/proposals/proposalRoutes';
 import { TestsViewSkeleton } from '../features/testing/TestsViewSkeleton';
+import { MemoryViewSkeleton } from '../features/memory/MemoryViewSkeleton';
 import { testRoutes } from '../features/testing/testRoutes';
 
 const Automations = lazy(() =>
@@ -56,6 +54,11 @@ const Automations = lazy(() =>
 const TestsView = lazy(() =>
   import('../features/testing/TestsView').then((m) => ({
     default: m.TestsView,
+  })),
+);
+const MemoryView = lazy(() =>
+  import('../features/memory/MemoryView').then((m) => ({
+    default: m.MemoryView,
   })),
 );
 const WorkflowLibrary = lazy(() =>
@@ -395,10 +398,10 @@ function WorkflowRoute() {
         section !== 'runs' &&
         section !== 'tests' &&
         section !== 'report' &&
-        section !== 'proposals',
+        section !== 'proposals' &&
+        section !== 'memory',
     }),
   );
-  const proposalCount = useOpenProposalCount(workflowId!, !redirectToSchedules);
   const ownerId = workflow?.ownerWorkflowId ?? undefined;
   const owner = useQuery(
     trpc.workflows.get.queryOptions(
@@ -463,7 +466,6 @@ function WorkflowRoute() {
           );
         }}
         section={section}
-        proposalCount={proposalCount}
         onSectionChange={(section) => {
           setSearch((previous) => {
             const next = new URLSearchParams(previous);
@@ -479,6 +481,10 @@ function WorkflowRoute() {
             </Suspense>
           ) : section === 'proposals' ? (
             <ProposalsSection workflow={workflow} act={context.act} />
+          ) : section === 'memory' ? (
+            <Suspense fallback={<MemoryViewSkeleton />}>
+              <MemoryView workflow={workflow} act={context.act} />
+            </Suspense>
           ) : section === 'report' ? (
             <Suspense fallback={<ReportLoadingContent />}>
               <WorkflowReportView workflowId={workflow.id} />

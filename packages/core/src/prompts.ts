@@ -83,12 +83,18 @@ export function snapshotPrompt(prompt: PromptSnapshot): PromptSnapshot {
   const { id, revision, name, description, content } = prompt;
   return { id, revision, name, description, content };
 }
-export function composePrompt(task: string, prompts: PromptSnapshot[]) {
-  if (!prompts.length) return task;
+/** Saved prompts, then captured memory for the node, then the task. */
+export function composePrompt(
+  task: string,
+  prompts: PromptSnapshot[],
+  memory?: string,
+) {
+  if (!prompts.length && !memory) return task;
   return [
     ...prompts.map(
       (prompt) => `## Saved prompt: ${prompt.name}\n\n${prompt.content}`,
     ),
+    ...(memory ? [memory] : []),
     `## Task instructions\n\n${task}`,
   ].join('\n\n');
 }

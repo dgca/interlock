@@ -33,6 +33,7 @@ const gallerySections = [
   'proposals',
   'boards',
   'agent-tools',
+  'memory',
 ];
 
 /** Main screens, each with a locator that proves the screen finished loading. */
@@ -155,7 +156,7 @@ describe.each(widths)('gallery at %dpx', (width) => {
     await target.blur();
   });
 
-  it.for(['modal', 'busy', 'discard'])(
+  it.for(['modal', 'busy', 'discard', 'memory-note'])(
     'checks the %s dialog',
     async (dialog) => {
       await page.goto(`${app.url}/-/gallery?open=${dialog}`);

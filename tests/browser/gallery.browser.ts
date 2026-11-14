@@ -18,6 +18,7 @@ const sections = [
   'Workflow proposals',
   'Boards',
   'Agent tools',
+  'Memory',
 ];
 
 let browser: Browser;

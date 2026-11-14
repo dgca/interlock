@@ -20,6 +20,7 @@ import { aiSettingsTab } from './features/executors/aiSettingsNavigation';
 import { DiscardChangesDialog } from './components/DiscardChangesDialog';
 import { WorkflowLayoutNotice } from './features/workflows/WorkflowLayoutNotice';
 import { useWorkflowSyncAlerts } from './features/workflows/WorkflowSyncAlerts';
+import { useMemoryReviews } from './features/memory/MemoryReviews';
 
 function isRetryableReadFailure(error: unknown) {
   if (
@@ -99,11 +100,13 @@ export function App() {
     meta: { engineRefresh: false },
   });
   const syncAlerts = useWorkflowSyncAlerts();
+  const memoryReviews = useMemoryReviews();
   const attentionCount =
     attentionQuery.data && scheduleQuery.data
       ? attentionQuery.data.total +
         scheduleQuery.data.total +
-        syncAlerts.items.length
+        syncAlerts.items.length +
+        memoryReviews.total
       : undefined;
   const attentionFailures: AttentionFailure[] = [];
   if (attentionQuery.error)

@@ -112,10 +112,7 @@ export function wideningChanges(
   }
   const edges = new Map(before.edges.map((e) => [e.id, e]));
   for (const edge of after.edges)
-    if (
-      field(edge, 'kind') === 'tool' &&
-      !structuralEqual(edges.get(edge.id), edge)
-    )
+    if (edge.kind === 'tool' && !structuralEqual(edges.get(edge.id), edge))
       push(`Route ${edge.id}`, 'tool', 'Agent tool', edges.get(edge.id), edge);
   return changes;
 }

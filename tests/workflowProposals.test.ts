@@ -3,6 +3,7 @@ import { setImmediate as tick } from 'node:timers/promises';
 import { Store } from '@interlock/storage';
 import { Engine } from '@interlock/runtime';
 import { blankDefinition } from '@interlock/core';
+import { wideningChanges } from '@interlock/core/proposals';
 import { appRouter } from '../packages/server/src/router';
 
 const engines: Engine[] = [];
@@ -400,4 +401,43 @@ it('replaces a simulation that was running when the proposal was re-applied', as
       draftRevision: revision,
     }),
   );
+});
+
+it('treats a tool edge like other routes in the agent scope and calls it out', async () => {
+  const { engine, w, person, agent } = setup();
+  engine.editDraft(w.id, engine.workflow(w.id).draftRevision, [
+    {
+      op: 'add_node',
+      node: {
+        id: 'lookup',
+        kind: 'script',
+        label: 'Lookup',
+        command: 'console.log("{}")',
+        position: { x: 0, y: 300 },
+      },
+    },
+  ]);
+  await person.proposals.saveSettings({
+    workflowId: w.id,
+    settings: { agents: true, nodeKinds: ['agent'], otherWorkflows: true },
+  });
+  const tool = {
+    op: 'add_edge',
+    edge: { id: 't1', source: 'agent', target: 'lookup', kind: 'tool' },
+  };
+  const base = {
+    workflowId: w.id,
+    title: 'Offer lookup',
+    rationale: 'Faster.',
+  };
+  await expect(
+    agent.proposals.create({ ...base, edits: [tool] }),
+  ).rejects.toThrow('route endpoint is outside');
+  const proposal = await person.proposals.create({ ...base, edits: [tool] });
+  const view = await person.proposals.get({ id: proposal.id });
+  if (!('proposed' in view) || !view.proposed || !view.draft)
+    throw new Error('No draft');
+  expect(wideningChanges(view.draft, view.proposed)).toMatchObject([
+    { subject: 'Route t1', reason: 'Agent tool' },
+  ]);
 });

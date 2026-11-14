@@ -14,6 +14,7 @@ import {
 } from '@interlock/core';
 import type { Store } from '@interlock/storage';
 import type { Prompts } from './prompts.js';
+import { memoryPreview } from './memory.js';
 const known = (value: unknown): SizePart => ({ state: 'known', value });
 const unknown: SizePart = { state: 'unknown' };
 const absent: SizePart = { state: 'absent' };
@@ -170,7 +171,13 @@ export class AssignmentSizes {
     const report = measureAssignment(
       {
         prompt: promptKnown
-          ? known(composePrompt(node.prompt, snapshots))
+          ? known(
+              composePrompt(
+                node.prompt,
+                snapshots,
+                memoryPreview(this.store, workflow.id, node.id),
+              ),
+            )
           : unknown,
         context: known(node.context),
         input: resolved === undefined ? unknown : known(resolved),

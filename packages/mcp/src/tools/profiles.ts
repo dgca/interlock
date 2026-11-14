@@ -28,6 +28,7 @@ const execute = [
   'get_context_group',
   'handoff_context_group',
   'propose_workflow_change',
+  'work_memory',
 ];
 
 const author = [

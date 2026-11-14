@@ -54,6 +54,7 @@ function WorkflowLoading() {
               { value: 'tests', label: 'Tests' },
               { value: 'report', label: 'Report' },
               { value: 'proposals', label: 'Proposals' },
+              { value: 'memory', label: 'Memory' },
               { value: 'children', label: 'Child workflows' },
             ]}
             value={section}

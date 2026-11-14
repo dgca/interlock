@@ -5,10 +5,7 @@ import {
   InterlockError,
   ResultRejection,
   simulationRequestSchema,
-  assertionProblems,
   evaluateAssertions,
-  promptIds,
-  isPollWait,
   type CapturedCase,
   type WorkflowDefinition,
   type Workflow,
@@ -22,6 +19,12 @@ import {
 } from '@interlock/core';
 import { Engine } from './index.js';
 import { definitionHash, fingerprint } from './versionIdentity.js';
+import { prepareSimulation } from './simulationPrepare.js';
+import {
+  seedSimulationMemory,
+  simulationMemory,
+  type SimulationMemory,
+} from './memory.js';
 import {
   computeCoverage,
   forSimulation,
@@ -61,6 +64,7 @@ type Record = {
     definition: WorkflowDefinition;
     case: CapturedCase;
     prompts: SavedPrompt[];
+    memory?: SimulationMemory;
   };
   state: State;
   substitutions: Receipt[];
@@ -109,6 +113,7 @@ type Active = {
   engine?: Engine;
   childWorkflows?: Workflow[];
   childVersions?: NonNullable<ReturnType<Store['getVersion']>>[];
+  /** Proposal simulations stay in memory and outside the four-active limit. */
   persist?: boolean;
 };
 
@@ -204,7 +209,7 @@ export class Simulations {
       throw new InterlockError('Published workflow version not found');
     const definition = version.definition;
     const { unsupported, childWorkflows, childVersions, prompts } =
-      this.prepare(definition, testCase);
+      prepareSimulation(this.store, definition, testCase);
     const record: Record = {
       id: q.requestId,
       requestHash,
@@ -220,6 +225,13 @@ export class Simulations {
         definition,
         case: testCase,
         prompts: unsupported.length ? [] : prompts,
+        ...(() => {
+          const memory = simulationMemory(this.store, [
+            workflow.id,
+            ...childWorkflows.map((cw) => cw.id),
+          ]);
+          return memory && !unsupported.length ? { memory } : {};
+        })(),
       },
       state: unsupported.length ? 'unsupported' : 'running',
       substitutions: [],
@@ -254,7 +266,11 @@ export class Simulations {
     testCase: CapturedCase,
   ) {
     const { unsupported, childWorkflows, childVersions, prompts } =
-      this.prepare(definition, testCase);
+      prepareSimulation(this.store, definition, testCase);
+    const memory = simulationMemory(this.store, [
+      workflow.id,
+      ...childWorkflows.map((cw) => cw.id),
+    ]);
     const record: Record = {
       id: randomUUID(),
       requestHash: '',
@@ -266,7 +282,12 @@ export class Simulations {
       version: 1,
       definitionHash: definitionHash(definition),
       caseHash: fingerprint(testCase),
-      capture: { definition, case: testCase, prompts },
+      capture: {
+        definition,
+        case: testCase,
+        prompts,
+        ...(memory ? { memory } : {}),
+      },
       state: unsupported.length ? 'unsupported' : 'running',
       substitutions: [],
       executions: [],
@@ -285,97 +306,12 @@ export class Simulations {
     );
     return record;
   }
-  /** Check a definition and case for simulation and collect what the scratch engine needs. */
-  private prepare(definition: WorkflowDefinition, testCase: CapturedCase) {
-    const unsupported = definition.nodes.flatMap((node) => {
-      if (node.kind === 'exit' && node.continueAsNew)
-        return [
-          `Node ${node.id}: continue as new is unsupported in simulation`,
-        ];
-      if (
-        ![
-          'entry',
-          'exit',
-          'agent',
-          'script',
-          'fetch',
-          'condition',
-          'switch',
-          'workflow',
-          'wait',
-          'input',
-          'batch',
-          'parallel',
-        ].includes(node.kind)
-      )
-        return [`Node ${node.id}: ${node.kind} is unsupported`];
-      return [];
-    });
-    unsupported.push(...assertionProblems(testCase.assertions, definition));
-    const childWorkflows: Workflow[] = [];
-    const childVersions: NonNullable<ReturnType<Store['getVersion']>>[] = [];
-    const queue = [...definition.nodes];
-    const visitedWorkflows = new Set<string>();
-    while (queue.length) {
-      const node = queue.shift()!;
-      if (node.kind === 'workflow') {
-        const cw = this.store.get<Workflow>('workflows', node.workflowId);
-        if (cw && !visitedWorkflows.has(cw.id)) {
-          visitedWorkflows.add(cw.id);
-          childWorkflows.push(cw);
-          const cv = this.store.getVersion(node.workflowId, node.version ?? 1);
-          if (cv) {
-            childVersions.push(cv);
-            queue.push(...cv.definition.nodes);
-          }
-        }
-      }
-    }
-    const allPrompts = [...promptIds(definition)];
-    for (const cv of childVersions) {
-      allPrompts.push(...promptIds(cv.definition));
-    }
-    const prompts = [...new Set(allPrompts)]
-      .map((id) => {
-        const p = this.store.get<SavedPrompt>('prompts', id);
-        if (!p) unsupported.push(`Saved prompt ${id} is missing`);
-        return p;
-      })
-      .filter((p): p is SavedPrompt => !!p);
-    if (
-      prompts.length > 64 ||
-      Buffer.byteLength(JSON.stringify(prompts)) > 1048576
-    )
-      unsupported.push('Saved prompt capture exceeds 64 prompts or 1 MiB');
-    const allNodes = [...definition.nodes];
-    for (const cv of childVersions) {
-      allNodes.push(...cv.definition.nodes);
-    }
-    for (const [index, fixture] of (testCase.fixtures ?? []).entries()) {
-      if (
-        !allNodes.some(
-          (n) =>
-            n.id === fixture.nodeId &&
-            (n.kind === fixture.kind ||
-              (n.kind === 'wait' &&
-                isPollWait(n) &&
-                fixture.kind === n.timing.check.kind) ||
-              (n.kind === 'wait' && fixture.kind === 'wait')),
-        )
-      )
-        unsupported.push(
-          `Fixture ${index}: node or kind does not match the pinned definition`,
-        );
-    }
-    return { unsupported, childWorkflows, childVersions, prompts };
-  }
   private async execute(
     active: Active,
     workflow: Workflow,
     version: NonNullable<ReturnType<Store['getVersion']>>,
   ) {
     const r = active.record;
-    // Proposal simulations stay in memory.
     const save = (record: Record) =>
       active.persist !== false && this.save(record);
     let scratch: Store | undefined;
@@ -461,6 +397,7 @@ export class Simulations {
         scratch.version(forSimulation(cv, substituted));
       }
       for (const prompt of r.capture.prompts) scratch.put('prompts', prompt);
+      seedSimulationMemory(scratch, r.capture.memory);
       // Detached calls with a workflow fixture take it for their run reference.
       const detached = new Set(
         [version, ...(active.childVersions ?? [])].flatMap((v) =>

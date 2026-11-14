@@ -9,6 +9,7 @@ import { runLauncherCommand } from './launcher.js';
 import { parseSummaryArgs } from './args.js';
 import { runBoardCommand } from './boards.js';
 import { runProposalsCommand } from './proposals.js';
+import { runMemoryCommand } from './memory.js';
 import { runStartCommand } from './start.js';
 import { parseTags, runQuery, runsCommand } from './runsCommand.js';
 import {
@@ -42,6 +43,8 @@ export async function runCommand(argv: string[]) {
         ? client.triggers.read.query(request)
         : client.triggers.manage.mutate(request);
     }
+    case 'memory':
+      return runMemoryCommand(args);
     case 'variables': {
       const { values, positionals } = parseArgs({
         args,

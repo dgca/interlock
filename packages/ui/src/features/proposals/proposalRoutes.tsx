@@ -16,11 +16,8 @@ export function ProposalsSection(props: ComponentProps<typeof ProposalsView>) {
 }
 
 /** Open proposals for the workflow tab count; unknown while loading or failed. */
-export function useOpenProposalCount(workflowId: string, enabled: boolean) {
+export function useOpenProposalCount(workflowId: string) {
   return useQuery(
-    trpc.proposals.list.queryOptions(
-      { workflowId, status: 'open', limit: 1 },
-      { enabled },
-    ),
+    trpc.proposals.list.queryOptions({ workflowId, status: 'open', limit: 1 }),
   ).data?.total;
 }

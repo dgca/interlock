@@ -127,6 +127,7 @@ import { TrialEnvironments } from './trialEnvironments.js';
 import { ManagedWorkspaces } from './workspaces.js';
 import { Continuation } from './continuation.js';
 import { Prompts } from './prompts.js';
+import { WorkflowMemory } from './memory.js';
 import { Variables } from './variables.js';
 import { ModelAliases } from './modelAliases.js';
 export { ModelAliases } from './modelAliases.js';
@@ -164,6 +165,7 @@ export class Engine {
   readonly continuation: Continuation;
   readonly toolCalls: ToolCalls;
   readonly prompts: Prompts;
+  readonly memory: WorkflowMemory;
   readonly variables: Variables;
   readonly modelAliases: ModelAliases;
   readonly versions: VersionCleanup;
@@ -287,6 +289,7 @@ export class Engine {
       (runId, type, message) => this.event(this.run(runId), type, message),
     );
     this.prompts = new Prompts(store);
+    this.memory = new WorkflowMemory(store, this);
     this.variables = new Variables(store);
     this.authoring = new WorkflowAuthoring(
       store,
@@ -752,6 +755,9 @@ export class Engine {
     const capturedPrompts = comparison
       ? this.testbench.promptsFor(comparison)
       : undefined;
+    const inherit =
+      continuedFrom ??
+      (sameWorkflowChild && parentRunId ? this.run(parentRunId) : undefined);
     const time = now();
     triggerChain ??=
       continuedFrom?.triggerChain ??
@@ -800,57 +806,46 @@ export class Engine {
       executions: [],
       createdAt: time,
       updatedAt: time,
-      promptSnapshots: continuedFrom
-        ? continuedFrom.promptSnapshots
-        : sameWorkflowChild && parentRunId
-          ? this.run(parentRunId).promptSnapshots
-          : capturedPrompts
-            ? promptIds(definition).map((id) => {
-                const prompt = capturedPrompts.find((p) => p.id === id);
-                if (!prompt)
-                  throw new InterlockError(
-                    `Comparison prompt capture ${id} is missing`,
-                  );
-                return prompt;
-              })
-            : this.prompts.capture(
-                definition,
-                targetVersion?.pinnedPromptRevisions,
-              ),
+      promptSnapshots: inherit
+        ? inherit.promptSnapshots
+        : capturedPrompts
+          ? promptIds(definition).map((id) => {
+              const prompt = capturedPrompts.find((p) => p.id === id);
+              if (!prompt)
+                throw new InterlockError(
+                  `Comparison prompt capture ${id} is missing`,
+                );
+              return prompt;
+            })
+          : this.prompts.capture(
+              definition,
+              targetVersion?.pinnedPromptRevisions,
+            ),
       ...(variableReferences(definition).length
         ? {
             variableCaptures: this.options.substituteOperation
               ? []
-              : continuedFrom
+              : inherit
                 ? this.variables.capture(
                     definition,
-                    continuedFrom.variableCaptures ?? [],
+                    inherit.variableCaptures ?? [],
                   )
-                : sameWorkflowChild && parentRunId
+                : comparison
                   ? this.variables.capture(
                       definition,
-                      this.run(parentRunId).variableCaptures ?? [],
+                      this.testbench.variablesFor(comparison),
                     )
-                  : comparison
-                    ? this.variables.capture(
-                        definition,
-                        this.testbench.variablesFor(comparison),
-                      )
-                    : this.variables.capture(definition),
+                  : this.variables.capture(definition),
           }
         : {}),
+      ...this.memory.capture(workflowId, inherit, comparison),
       ...(() => {
-        const parent =
-          continuedFrom ??
-          (sameWorkflowChild && parentRunId
-            ? this.run(parentRunId)
-            : undefined);
         const captures = this.options.substituteOperation
           ? []
           : this.modelAliases.capture(
               definition,
-              parent
-                ? (parent.modelAliasCaptures ?? [])
+              inherit
+                ? (inherit.modelAliasCaptures ?? [])
                 : comparison
                   ? this.testbench.modelAliasesFor(comparison)
                   : undefined,
@@ -858,8 +853,8 @@ export class Engine {
         const ref = definition.agentModel;
         const ignored =
           ref &&
-          (parent
-            ? parent.ignoredWorkflowModelAlias === ref
+          (inherit
+            ? inherit.ignoredWorkflowModelAlias === ref
             : !this.options.substituteOperation &&
               !this.modelAliases.usesReference(definition, ref) &&
               !this.modelAliases.capturedAlias(captures, ref) &&
@@ -1589,7 +1584,11 @@ export class Engine {
           executionId: execution.id,
           nodeId: node.id,
           label: node.label,
-          prompt: composePrompt(node.prompt, savedPrompts),
+          prompt: composePrompt(
+            node.prompt,
+            savedPrompts,
+            this.memory.section(run, node.id, executorSettings),
+          ),
           ...(savedPrompts.length ? { savedPrompts } : {}),
           input: execution.input,
           context: trialEnvironment
