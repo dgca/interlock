@@ -20,6 +20,7 @@ const startBody = runStartSchema
     requestId: true,
     title: true,
     tags: true,
+    hold: true,
   })
   .strict();
 const resultQuery = z.object({
@@ -124,6 +125,23 @@ export function createHttpApi(
               .inputSchema ?? null,
         }));
       return c.json({ items });
+    } catch (error) {
+      return rejection(c, error);
+    }
+  });
+
+  api.get('/boards/view', async (c) => {
+    try {
+      const { id, workflowId, lane, offset, limit } = c.req.query();
+      return c.json(
+        await caller(c).boards.view({
+          id,
+          workflowId,
+          lane,
+          offset: offset === undefined ? undefined : Number(offset),
+          limit: limit === undefined ? undefined : Number(limit),
+        }),
+      );
     } catch (error) {
       return rejection(c, error);
     }

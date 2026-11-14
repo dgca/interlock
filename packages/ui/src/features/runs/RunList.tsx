@@ -19,7 +19,8 @@ import {
   WorkspaceReadWarning,
   workspaceRead,
 } from '../../components/WorkspaceReads';
-import { runTable, runViews, type RunMode } from './runListConfig';
+import { runMode, runTable, runViews, type RunMode } from './runListConfig';
+import { BoardLanes } from '../boards/BoardLanes';
 import { AutomationAlerts } from '../automations/AutomationAlerts';
 import {
   WorkflowSyncAlertList,
@@ -98,7 +99,9 @@ export function RunList({
     changeTags(undefined);
   };
   const [localMode, setLocalMode] = useState<RunMode>('list');
-  const selectedMode = mode ?? localMode;
+  const requestedMode = mode ?? localMode;
+  const selectedMode =
+    requestedMode === 'stages' && !workflowId ? 'list' : requestedMode;
   const changeMode = (next: RunMode) => {
     if (onModeChange) onModeChange(next);
     else setLocalMode(next);
@@ -205,21 +208,22 @@ export function RunList({
       <SegmentedControl
         aria-label="Run presentation"
         value={selectedMode}
-        onChange={(value) =>
-          changeMode(value === 'overview' ? 'overview' : 'list')
-        }
+        onChange={(value) => changeMode(runMode(value))}
         data={[
           { value: 'list', label: 'List' },
           { value: 'overview', label: 'Overview' },
+          ...(workflowId ? [{ value: 'stages', label: 'Stages' }] : []),
         ]}
       />
-      <RunTagFilter
-        key={workflowId ?? 'library'}
-        filterId={tagFilterId}
-        triggerRef={tagFilterTrigger}
-        value={selectedTags}
-        onChange={changeTags}
-      />
+      {selectedMode !== 'stages' && (
+        <RunTagFilter
+          key={workflowId ?? 'library'}
+          filterId={tagFilterId}
+          triggerRef={tagFilterTrigger}
+          value={selectedTags}
+          onChange={changeTags}
+        />
+      )}
     </>
   );
   const tabItems = runViews.map((view) => ({
@@ -470,12 +474,26 @@ export function RunList({
               {historyActions}
             </PageToolbar>
           )}
-          <AppliedRunTagFilters
-            filterId={tagFilterId}
-            value={selectedTags}
-            onChange={changeTags}
-          />
-          <div className={workspacePage.content}>{content}</div>
+          {selectedMode === 'stages' && workflowId ? (
+            <BoardLanes
+              scope={{ workflowId }}
+              returnTo={returnTo}
+              empty={
+                <Text size="sm" c="dimmed">
+                  No active runs or runs finished today.
+                </Text>
+              }
+            />
+          ) : (
+            <>
+              <AppliedRunTagFilters
+                filterId={tagFilterId}
+                value={selectedTags}
+                onChange={changeTags}
+              />
+              <div className={workspacePage.content}>{content}</div>
+            </>
+          )}
         </div>
       )}
       {retention && (

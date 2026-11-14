@@ -129,8 +129,11 @@ export function exportBoardSuggestion(
   }
 }
 
+/** Column boards only: typed boards place runs by rules, not membership. */
 export function boardImportCatalog(store: Store) {
-  return store.list<WorkflowBoard>(boardCollection);
+  return store
+    .list<WorkflowBoard>(boardCollection)
+    .filter((board) => !board.typeId);
 }
 
 export function previewBoardImport(
@@ -244,6 +247,8 @@ export function applyBoardImport(
     let board: WorkflowBoard;
     if (choice.action === 'existing') {
       board = loadBoard(choice.boardId);
+      if (board.typeId)
+        throw new InterlockError('Typed boards select runs by scope');
       if (board.revision !== choice.expectedRevision)
         throw new InterlockError(boardSettingsRevisionConflict);
     } else {

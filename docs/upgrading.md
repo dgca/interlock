@@ -61,6 +61,8 @@ longer on larger histories.
 
 Database schema 18 adds indexes for open Human input requests, uncertain background steps, and board stage entries. Startup backs up the database before creating the indexes. The migration preserves existing definitions, run history, and integration-owned External input waits.
 
+Database schema 22 adds an index of finished runs by finish time, which boards use to show the most recently finished runs. Startup backs up the database before creating it. No stored data changes.
+
 Database schema 19 builds SQLite tables for current run and assignment state. Startup backs up existing databases before backfilling these tables. The migration preserves execution history, assignments, and published definitions.
 
 ## Upgrading unreleased development databases

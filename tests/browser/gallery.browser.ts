@@ -15,6 +15,7 @@ const sections = [
   'Editors',
   'Dialogs',
   'Test suites',
+  'Boards',
 ];
 
 let browser: Browser;

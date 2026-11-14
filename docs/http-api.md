@@ -2,15 +2,16 @@
 
 Scripts and applications can start published workflows and follow their runs with plain JSON requests under `/api` on the running server, by default `http://127.0.0.1:4310/api`. The routes call the same server operations as the UI, the CLI and MCP, so input contracts, start receipts, admission and cancellation follow the same rules.
 
-| Route                                       | Purpose                                                         |
-| ------------------------------------------- | --------------------------------------------------------------- |
-| `GET /api/workflows`                        | List published workflows with their IDs and input contracts.    |
-| `POST /api/runs`                            | Start a run of a published workflow.                            |
-| `GET /api/runs/{id}`                        | Read a run's compact status.                                    |
-| `GET /api/runs/{id}/result`                 | Read a completed run's output.                                  |
-| `POST /api/runs/{id}/cancel`                | Cancel a queued or active run and its ordinary active children. |
-| `GET /api/comparisons/{id}/evaluation-plan` | Select the samples an evaluation run grades.                    |
-| `POST /api/comparisons/{id}/judgments`      | Record a Batch item's accepted grade once.                      |
+| Route                                       | Purpose                                                                                   |
+| ------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `GET /api/workflows`                        | List published workflows with their IDs and input contracts.                              |
+| `POST /api/runs`                            | Start a run of a published workflow.                                                      |
+| `GET /api/runs/{id}`                        | Read a run's compact status.                                                              |
+| `GET /api/runs/{id}/result`                 | Read a completed run's output.                                                            |
+| `POST /api/runs/{id}/cancel`                | Cancel a queued or active run and its ordinary active children.                           |
+| `GET /api/boards/view`                      | Read a board's lanes and cards: `id` or `workflowId`, optional `lane`, `offset`, `limit`. |
+| `GET /api/comparisons/{id}/evaluation-plan` | Select the samples an evaluation run grades.                                              |
+| `POST /api/comparisons/{id}/judgments`      | Record a Batch item's accepted grade once.                                                |
 
 The API is local, like the rest of Interlock. It accepts requests only for `127.0.0.1`, `localhost` or `[::1]`, rejects untrusted browser origins, and limits request bodies to 2 MiB. When `INTERLOCK_REQUIRE_TOKEN=1` is set, every `/api` request needs the [API token](connect-harness.md#api-token):
 
@@ -51,7 +52,7 @@ curl -s http://127.0.0.1:4310/api/workflows
 
 `inputSchema` is the JSON Schema of the latest published version, or `null` when that version was deleted.
 
-Start the run. The body accepts `workflowId`, `input`, and optionally `version` (a retained published version; the latest by default), `requestId`, `title` and `tags`. Other fields are rejected.
+Start the run. The body accepts `workflowId`, `input`, and optionally `version` (a retained published version; the latest by default), `requestId`, `title`, `tags` and `hold` (`{"reason": "..."}`, which keeps the run queued until `interlock board release` or MCP `manage_pause` `release_start` releases it). Other fields are rejected.
 
 ```sh
 curl -s -i http://127.0.0.1:4310/api/runs \

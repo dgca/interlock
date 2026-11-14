@@ -1,6 +1,10 @@
 import type { BoardQuery, BoardRun, WorkflowBoard } from '@interlock/core';
 import type { DatabaseSync } from 'node:sqlite';
 
+export type Tail<T extends unknown[]> = T extends [unknown, ...infer R]
+  ? R
+  : never;
+
 export function referencedBoardColumns(db: DatabaseSync, ids: string[]) {
   if (!ids.length) return [];
   const rows = db
@@ -205,4 +209,56 @@ export function boardRuns(
       ) as BoardRun,
     })),
   };
+}
+
+/**
+ * Newest root lifecycles (and detached runs) that finished since `since`, by
+ * finish time through the schema 22 index, scoped like a typed board.
+ */
+export function finishedBoardRuns(
+  db: DatabaseSync,
+  scope: {
+    since: string;
+    limit: number;
+    workflowIds?: string[];
+    systems?: string[];
+    tags?: Record<string, string>;
+  },
+) {
+  const filters = [
+    "status IN ('completed','failed','cancelled')",
+    "json_extract(value, '$.updatedAt') >= ?",
+    "(parent_id IS NULL OR json_extract(value, '$.parentMode') = 'detached')",
+    "json_extract(value, '$.batchNodeId') IS NULL",
+    "json_extract(value, '$.parallelBranch') IS NULL",
+  ];
+  const parameters: string[] = [scope.since];
+  if (scope.workflowIds) {
+    filters.push('workflow_id IN (SELECT value FROM json_each(?))');
+    parameters.push(JSON.stringify(scope.workflowIds));
+  }
+  if (scope.systems) {
+    filters.push('task_system IN (SELECT value FROM json_each(?))');
+    parameters.push(JSON.stringify(scope.systems));
+  }
+  for (const [key, value] of Object.entries(scope.tags ?? {})) {
+    filters.push(
+      'id IN (SELECT run_id FROM run_tags WHERE tag_key = ? AND tag_value = ?)',
+    );
+    parameters.push(key, value);
+  }
+  const where = filters.join(' AND ');
+  const total = db
+    .prepare(
+      `SELECT count(*) AS total FROM run_metadata INDEXED BY run_metadata_finished WHERE ${where}`,
+    )
+    .get(...parameters)!.total as number;
+  const ids = db
+    .prepare(
+      `SELECT id FROM run_metadata INDEXED BY run_metadata_finished WHERE ${where}
+       ORDER BY json_extract(value, '$.updatedAt') DESC, position DESC LIMIT ?`,
+    )
+    .all(...parameters, scope.limit)
+    .map((row) => row.id as string);
+  return { ids, total };
 }

@@ -31,10 +31,7 @@ import {
   externalInputStatusSchema,
   blankDefinition,
   importReview,
-  boardMembershipSchema,
   boardImportSetupSchema,
-  boardQuerySchema,
-  saveBoardSchema,
   humanResponseSchema,
   requestListSchema,
   requestTargetSchema,
@@ -109,6 +106,7 @@ import { evaluationProcedures } from './evaluationProcedures.js';
 import { runReadProcedures } from './runReadProcedures.js';
 import { reportRouter, systemReport } from './reportProcedures.js';
 import { id, inputMutation, p, t } from './trpc.js';
+import { boardTypesRouter, boardsRouter } from './boardProcedures.js';
 import {
   agentDraftEdit,
   createWorkflow,
@@ -330,23 +328,8 @@ export const appRouter = t.router({
       .input(id)
       .mutation(({ ctx, input }) => ctx.engine.prompts.delete(input.id)),
   }),
-  boards: t.router({
-    list: p.query(({ ctx }) => ctx.engine.boards.list()),
-    get: p
-      .input(boardQuerySchema)
-      .query(({ ctx, input }) => ctx.engine.boards.read(input)),
-    settings: p
-      .input(id)
-      .query(({ ctx, input }) => ctx.engine.boards.settings(input.id)),
-    save: p
-      .input(saveBoardSchema)
-      .mutation(({ ctx, input }) => ctx.engine.boards.save(input)),
-    assign: p
-      .input(boardMembershipSchema)
-      .mutation(({ ctx, input }) =>
-        ctx.engine.describeWorkflow(ctx.engine.boards.assign(input)),
-      ),
-  }),
+  boards: boardsRouter,
+  boardTypes: boardTypesRouter,
   requests: t.router({
     list: p
       .input(requestListSchema.default({}))
