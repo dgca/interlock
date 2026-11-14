@@ -111,6 +111,8 @@ import {
 import { UncertainFetch } from './fetch.js';
 import { ScriptApprovals } from './scriptApprovals.js';
 import { RunStarts } from './runStarts.js';
+import { StartCosts } from './startCosts.js';
+import { automatedStarts } from './automatedStarts.js';
 import { RunAdmission } from './runAdmission.js';
 import { HistoryRetention } from './historyRetention.js';
 import { RunHistory } from './runHistory.js';
@@ -192,6 +194,7 @@ export class Engine {
   private readonly resources: WorkResources;
   readonly contextGroups: ContextContinuityGroups;
   private readonly starts: RunStarts;
+  readonly startCosts: StartCosts;
   private readonly trials: TrialEnvironments;
   readonly workspaces: ManagedWorkspaces;
   private readonly inspection: RunInspection;
@@ -382,76 +385,34 @@ export class Engine {
         this.event(this.run(id), 'work.resources', message);
     });
     this.starts = new RunStarts(store);
+    this.startCosts = new StartCosts(store, this.usage, (run, text) =>
+      this.event(run, 'run.cost_warning', text),
+    );
+    const automated = automatedStarts({
+      store,
+      starts: this.starts,
+      costs: this.startCosts,
+      workflow: (id) => this.workflow(id),
+      run: (id) => this.run(id),
+      newRun: (q, schedule, chain) =>
+        this.newRun(
+          q.workflowId,
+          q.version,
+          q.input,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          q,
+          schedule,
+          chain,
+        ),
+    });
     this.triggers = new WorkflowTriggers(
       store,
-      (trigger, input, slot) => {
-        const workflow = this.workflow(trigger.workflowId);
-        const q = {
-          workflowId: trigger.workflowId,
-          input,
-          version: workflow.latestVersion,
-          requestId: `schedule:${trigger.id}:${slot}`,
-          ...(trigger.runTitle !== undefined
-            ? { title: trigger.runTitle }
-            : {}),
-          ...(trigger.tags !== undefined ? { tags: trigger.tags } : {}),
-        };
-        const result = this.starts.resolve(q, () => ({
-          run: this.newRun(
-            trigger.workflowId,
-            q.version,
-            input,
-            undefined,
-            undefined,
-            undefined,
-            undefined,
-            q,
-            {
-              triggerId: trigger.id,
-              scheduledAt: slot,
-              waitForPrevious: trigger.overlapPolicy === 'queue',
-              previousRunIds: store
-                .activeRuns()
-                .filter((r) => r.schedule?.triggerId === trigger.id)
-                .map((r) => r.id),
-            },
-          ),
-          reused: false,
-        }));
-        return this.run(result.id);
-      },
-      new EventTriggers(
-        store,
-        (trigger, payload, eventId, chain) => {
-          const workflow = this.workflow(trigger.workflowId);
-          const q = {
-            workflowId: trigger.workflowId,
-            version: workflow.latestVersion,
-            input: payload as unknown as Json,
-            requestId: `event:${trigger.id}:${eventId}`,
-            ...(trigger.runTitle !== undefined
-              ? { title: trigger.runTitle }
-              : {}),
-            ...(trigger.tags !== undefined ? { tags: trigger.tags } : {}),
-          };
-          const result = this.starts.resolve(q, () => ({
-            run: this.newRun(
-              trigger.workflowId,
-              q.version,
-              q.input,
-              undefined,
-              undefined,
-              undefined,
-              undefined,
-              q,
-              undefined,
-              chain,
-            ),
-            reused: false,
-          }));
-          return this.run(result.id);
-        },
-        (runId) => this.quiescence(runId),
+      automated.schedule,
+      new EventTriggers(store, automated.event, (runId) =>
+        this.quiescence(runId),
       ),
     );
     this.history = new RunHistory(
@@ -972,8 +933,9 @@ export class Engine {
     budget?: BudgetPolicy,
     options?: RunStartOptions,
   ) {
-    return this.inspect(
-      this.startRun(workflowId, input, version, budget, options),
+    return this.startCosts.attach(
+      workflowId,
+      this.inspect(this.startRun(workflowId, input, version, budget, options)),
     );
   }
   startSummary(
@@ -985,9 +947,12 @@ export class Engine {
     options?: RunStartOptions,
   ) {
     const bounded = continuationLimitSchema.parse(limit);
-    return this.continuation.summary(
-      this.startRun(workflowId, input, version, budget, options),
-      bounded,
+    return this.startCosts.attach(
+      workflowId,
+      this.continuation.summary(
+        this.startRun(workflowId, input, version, budget, options),
+        bounded,
+      ),
     );
   }
   private startRun(

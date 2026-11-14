@@ -182,6 +182,8 @@ Interlock ships a table of public list prices for Claude (`anthropic`) and OpenA
 
 Table entries match the reported provider exactly (case-insensitive) and the model by exact ID first, then with a trailing date (`-20251001` or `@20251001`) and a trailing bracketed tag such as `[1m]` removed from both sides. An exact entry can therefore price one dated snapshot differently.
 
+A [start warning threshold](run-budgets.md#warn-before-large-runs) uses these costs to project a workflow's cost before it starts.
+
 Read and replace the table with the CLI or the shared API `prices.read` and `prices.set`:
 
 ```sh

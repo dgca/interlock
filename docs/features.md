@@ -58,7 +58,7 @@ What Interlock implements today, grouped by area. See [current limits](v1.md) fo
 - Managed [session visibility](managed-executors.md#session-visibility-name-templates-deep-links-and-live-tail) with dynamic session name templates evaluated from run context (`{{externalTask.id}}`, `{{node.label}}`), native `sessionId` tracking, copyable CLI resume commands, clickable deep links (with unsafe URI scheme sanitization), and a bounded 20-message in-memory live progress tail in Run Inspector.
 - Browser-managed [Agent presets](managed-executors.md#model-aliases) mapping logical roles to ordered candidate models (`{ model, effort?, profileId? }`), dynamic references in workflows and Agent nodes, deterministic run-start revision pinning (`modelAliasCaptures`), eligible harness fallback, preset permissions, and portable named requirements export (format version 6). Format 10 preserves authored alias IDs for local name binding. Missing known aliases reject startup before claims; existing captures remain pinned.
 - Optional advisory Agent [model tiers](model-tiers.md) for current and fresh context, with pre-claim discovery and per-attempt requested, declared, and usage-reported model attribution.
-- Opt-in [run budgets](run-budgets.md) gate Agent claims with explicit scope, incomplete-usage policies, derived costs, and recoverable blocks, and stop managed sessions at the limit.
+- Opt-in [run budgets](run-budgets.md) gate Agent claims with explicit scope, incomplete-usage policies, derived costs, and recoverable blocks, and stop managed sessions at the limit. An optional start warning projects a workflow's median recent cost and asks for confirmation in the UI above a threshold.
 
 ## MCP and CLI
 

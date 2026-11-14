@@ -11,11 +11,16 @@ import {
 } from '@interlock/core';
 import { RunDialog } from '../packages/ui/src/features/runs/RunDialog';
 
-const calls = vi.hoisted(() => ({ versions: vi.fn(), start: vi.fn() }));
+const calls = vi.hoisted(() => ({
+  versions: vi.fn(),
+  start: vi.fn(),
+  cost: vi.fn(),
+}));
 vi.mock('../packages/ui/src/lib/api', () => ({
   api: {
     workflows: { versions: { query: calls.versions } },
     runs: { start: { mutate: calls.start } },
+    prices: { startCost: { query: calls.cost } },
   },
   errorMessage: (error: Error) => error.message,
 }));
@@ -38,6 +43,7 @@ beforeEach(() => {
   );
   calls.versions.mockReset();
   calls.start.mockReset().mockResolvedValue({ run: { id: 'new-run' } });
+  calls.cost.mockReset().mockResolvedValue(null);
   started.mockReset();
   container = document.createElement('div');
   document.body.append(container);
@@ -230,4 +236,21 @@ it('honors examples on the complete input', async () => {
   expect(calls.start).toHaveBeenCalledWith(
     expect.objectContaining({ input: { title: 'Supplied example' } }),
   );
+});
+
+it('asks to start anyway when recent runs cost more than the warning threshold', async () => {
+  calls.cost.mockResolvedValue({
+    currency: 'USD',
+    medianMicros: 4_200_000,
+    sampleSize: 5,
+    thresholdMicros: 2_000_000,
+    exceedsThreshold: true,
+  });
+  await render(agentDefinition());
+  expect(calls.cost).toHaveBeenCalledWith({ workflowId: 'workflow' });
+  expect(document.body.textContent).toContain(
+    'cost a median of USD 4.20 (5 runs), above the USD 2.00 warning threshold',
+  );
+  await click('Start anyway');
+  expect(calls.start).toHaveBeenCalled();
 });

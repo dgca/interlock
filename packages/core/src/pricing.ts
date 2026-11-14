@@ -265,3 +265,31 @@ export function pricingLines(usage: { pricing?: PricingSummary }) {
     ...(pricing.truncated ? ['  Price details truncated.'] : []),
   ];
 }
+
+const currency = z.string().regex(/^[A-Z]{3}$/);
+const micros = z.number().int().min(1).max(Number.MAX_SAFE_INTEGER);
+export const setStartCostWarningSchema = z
+  .object({
+    threshold: z
+      .object({ currency, amountMicros: micros })
+      .strict()
+      .nullable()
+      .describe(
+        'Warn before starting a workflow whose median recent run cost exceeds this, in millionths of the currency; null turns the warning off.',
+      ),
+  })
+  .strict();
+export type SetStartCostWarningInput = z.input<
+  typeof setStartCostWarningSchema
+>;
+/** A workflow's median cost over its recent completed runs. */
+export const startCostProjectionSchema = z
+  .object({
+    currency,
+    medianMicros: z.number().int().min(0),
+    sampleSize: z.number().int().min(1),
+    thresholdMicros: micros,
+    exceedsThreshold: z.boolean(),
+  })
+  .strict();
+export type StartCostProjection = z.infer<typeof startCostProjectionSchema>;

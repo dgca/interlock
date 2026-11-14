@@ -119,6 +119,28 @@ Reported usage that changes admission updates assignment markers and continuatio
 
 [External holds](work-holds.md) are separate from budget gates. Resume never resets usage or changes a governing policy. Held attempts may still report usage with their retained attempt token, without restoring claim authority.
 
+## Warn before large runs
+
+Set a library threshold to be warned before starting a workflow whose recent runs were expensive:
+
+```sh
+interlock prices start-warning '{"threshold":{"currency":"USD","amountMicros":2000000}}'
+interlock prices start-warning
+interlock prices start-warning '{"threshold":null}'
+```
+
+The shared API operations are `prices.startWarning`, `prices.setStartWarning` and `prices.startCost`. Without a threshold nothing is computed and no caller sees a prompt or a new field.
+
+The projection is the median cost of the workflow's 20 most recent completed top-level runs, each with its ordinary descendants (the `lifecycle` scope), in the threshold's currency. Costs include [derived costs](usage-reporting.md#derived-cost). A run counts only when its cost is completely known: runs with unreported or unpriced usage are left out rather than counted as zero. With fewer than three such runs there is no projection. `sampleSize` states how many runs the median uses.
+
+| Caller                                    | Behavior                                                                                                                                              |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| UI **Start run**                          | When the median exceeds the threshold, the dialog states the median, the sample size and the threshold, and the button reads **Start anyway**.        |
+| CLI `start`, MCP `start_run`, HTTP `/api` | The start response includes `costProjection` with `medianMicros`, `sampleSize`, `thresholdMicros` and `exceedsThreshold`. The start is never refused. |
+| Schedules and event triggers              | They start without asking. When the median exceeds the threshold, the run records a `run.cost_warning` event saying it started without confirmation.  |
+
+The warning is advisory. To limit spending, set a [run budget](#configure-a-budget).
+
 ## Budget comparison work separately
 
 Comparison roots are independent runs, so they do not inherit the workflow budget of an agent that starts the comparison. Optional comparison `sampleBudget` installs a tree policy on every root before its work becomes eligible. Each root has its own allowance, shared with all descendants. Multiply it by the maximum root count when allocating an experiment budget, and account for proposal, coordination and grading separately. See [comparison budgets](workflow-testbench.md#budget-independent-samples) and the [bounded improvement starter](workflow-improvement.md).
