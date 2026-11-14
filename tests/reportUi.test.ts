@@ -75,11 +75,11 @@ vi.mock('../packages/ui/src/lib/api', async () => {
 vi.mock('../packages/ui/src/features/workflows/WorkflowEditor', () => ({
   WorkflowEditor: ({
     section,
-    reportView,
+    sectionView,
   }: {
     section: string;
-    reportView: unknown;
-  }) => (section === 'report' ? reportView : h('p', null, 'Workflow editor')),
+    sectionView: unknown;
+  }) => (section === 'report' ? sectionView : h('p', null, 'Workflow editor')),
 }));
 vi.mock('../packages/ui/src/features/runs/RunList', () => ({
   RunList: () => h('div', null, 'Runs route'),

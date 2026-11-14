@@ -48,12 +48,14 @@ import {
   TrendBars,
   workspacePage,
 } from '../design-system';
-import { useState, type ReactNode } from 'react';
+import { useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { EllipsisVertical, Plus, Trash2 } from 'lucide-react';
 import type { Contract, Json } from '@interlock/core';
 import { ContractEditor } from '../components/ContractEditor/ContractEditor';
 import { WorkflowSyncAlertList } from '../features/workflows/WorkflowSyncAlerts';
+import { Section, Specimen } from './GalleryLayout';
+import { Testing } from './TestingSpecimens';
 import {
   ListTable,
   ListTableRow,
@@ -113,44 +115,6 @@ const schema = {
 const script = `export default async function run({ input }) {
   return { summary: input.title.trim() };
 }`;
-
-function Specimen({
-  name,
-  wide = false,
-  children,
-}: {
-  name: string;
-  wide?: boolean;
-  children: ReactNode;
-}) {
-  return (
-    <div className={classes.specimen} data-wide={wide || undefined}>
-      <span className={classes.caption}>{name}</span>
-      <div className={classes.sample}>{children}</div>
-    </div>
-  );
-}
-
-function Section({
-  id,
-  title,
-  children,
-}: {
-  id: string;
-  title: string;
-  children: ReactNode;
-}) {
-  return (
-    <section
-      className={classes.section}
-      aria-labelledby={`gallery-${id}`}
-      data-gallery-section={id}
-    >
-      <h2 id={`gallery-${id}`}>{title}</h2>
-      <div className={classes.grid}>{children}</div>
-    </section>
-  );
-}
 
 function Buttons() {
   return (
@@ -696,6 +660,7 @@ export default function Gallery() {
         <Layout />
         <Editors />
         <Dialogs />
+        <Testing />
       </div>
     </main>
   );

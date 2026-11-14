@@ -42,7 +42,7 @@ import {
 } from './currentState.js';
 export type { ProjectionState } from './currentState.js';
 import { runSummaries } from './runSummaries.js';
-import { workflowCatalog, promptCatalog } from './catalogs.js';
+import { workflowCatalog, promptCatalog, suiteRuns } from './catalogs.js';
 import {
   boardRuns,
   referencedBoardColumns,
@@ -75,7 +75,6 @@ import type {
   WorkflowComparison,
   ResourceReservation,
 } from '@interlock/core';
-
 /** One service owns the database. Each runtime operation commits as one transaction. */
 export class Store {
   readonly transcripts: Transcripts;
@@ -404,6 +403,9 @@ export class Store {
       .all(collection, JSON.stringify([...runIds]))
       .map((row) => JSON.parse(row.value as string) as T);
   }
+  latestSimulations<T>(suiteId: string): T[] {
+    return suiteRuns(this.db, suiteId) as T[];
+  }
   forWork<T>(collection: string, workId: string): T[] {
     return this.db
       .prepare(
@@ -423,12 +425,10 @@ export class Store {
       FROM documents WHERE collection = 'events'
       AND json_extract(value, '$.runId') IN (SELECT value FROM json_each(?)) ORDER BY rowid`,
       )
-      .all(JSON.stringify([...runIds]))
-      .map((row) => ({
-        runId: row.runId as string,
-        type: row.type as string,
-        at: row.at as string,
-      }));
+      .all(JSON.stringify([...runIds])) as unknown as Pick<
+      RunEvent,
+      'runId' | 'type' | 'at'
+    >[];
   }
   put<T extends { id: string }>(collection: string, value: T): void {
     if (collection === 'runs') writeRun(this.db, value as unknown as Run);

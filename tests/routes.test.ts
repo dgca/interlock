@@ -153,7 +153,7 @@ vi.mock('../packages/ui/src/features/workflows/WorkflowEditor', () => ({
     onPublicationChecked,
     section,
     onSectionChange,
-    runsView,
+    sectionView,
     onDeleted,
     workflowsRead,
   }: any) => {
@@ -175,7 +175,7 @@ vi.mock('../packages/ui/src/features/workflows/WorkflowEditor', () => ({
         { onClick: () => onPublicationChecked(workflow.id, 2) },
         'Acknowledge publication',
       ),
-      section === 'runs' ? runsView : null,
+      section === 'runs' ? sectionView : null,
       section === 'children' ? 'Child workflows content' : null,
       section === 'editor' && workflowsRead
         ? h(WorkspaceReadWarning, { reads: [workflowsRead] })

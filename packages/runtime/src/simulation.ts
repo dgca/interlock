@@ -682,6 +682,39 @@ export class Simulations {
       engine?.stop();
     }
   }
+  /** Latest simulation of each case in one saved suite, with its check results. */
+  latestForSuite(suiteId: string) {
+    const suite = this.store.get<TestSuite>('testSuites', suiteId);
+    if (!suite) throw new InterlockError('Test suite not found');
+    const latest = new Map(
+      this.store
+        .latestSimulations<Record>(suiteId)
+        .map((r) => [r.caseId, r] as const),
+    );
+    const result = (r: Record) => ({
+      ...summary(r),
+      unsupported: r.unsupported.slice(0, 10),
+      checks: r.checks.map((check) => {
+        const assertion = { ...r.capture.case.assertions[check.index] };
+        // Keep large expected values out of the summary, as comparison reports do.
+        const expectedOmitted =
+          assertion.kind === 'output' &&
+          assertion.expected !== undefined &&
+          Buffer.byteLength(JSON.stringify(assertion.expected)) > 1024;
+        if (assertion.kind === 'output' && expectedOmitted)
+          delete assertion.expected;
+        return { ...check, assertion, expectedOmitted };
+      }),
+    });
+    return {
+      suiteId: suite.id,
+      suiteRevision: suite.revision,
+      cases: suite.cases.map((c) => {
+        const r = latest.get(c.id);
+        return { caseId: c.id, simulation: r ? result(r) : null };
+      }),
+    };
+  }
   assertDeletable(workflowId: string) {
     if (
       [...this.active.values()].some((a) => a.record.workflowId === workflowId)

@@ -25,7 +25,6 @@ import { workflowCatalogEntry } from '@interlock/core';
 import { errorMessage } from '../lib/api';
 import { trpc, useQuery } from '../lib/query';
 import { RouteSkeleton } from './RouteSkeleton';
-import { workflowSection } from '../features/workflows/workflowSections';
 
 import { RunListSkeleton } from '../features/runs/RunListSkeleton';
 import { BoardLibrarySkeleton } from '../features/boards/BoardSkeleton';
@@ -41,10 +40,18 @@ import {
   ReportPageSkeleton,
 } from '../features/report/ReportSkeleton';
 import { DiagnosticsPageSkeleton } from '../features/diagnostics/DiagnosticsSkeleton';
+import { workflowSection } from '../features/workflows/workflowListConfig';
+import { TestsViewSkeleton } from '../features/testing/TestsViewSkeleton';
+import { testRoutes } from '../features/testing/testRoutes';
 
 const Automations = lazy(() =>
   import('../features/automations/Automations').then((m) => ({
     default: m.Automations,
+  })),
+);
+const TestsView = lazy(() =>
+  import('../features/testing/TestsView').then((m) => ({
+    default: m.TestsView,
   })),
 );
 const WorkflowLibrary = lazy(() =>
@@ -371,7 +378,9 @@ function WorkflowRoute() {
       enabled:
         Boolean(workflow) &&
         !redirectToSchedules &&
-        (section === 'editor' || section === 'children'),
+        section !== 'runs' &&
+        section !== 'tests' &&
+        section !== 'report',
     }),
   );
   const ownerId = workflow?.ownerWorkflowId ?? undefined;
@@ -446,20 +455,25 @@ function WorkflowRoute() {
             return next;
           });
         }}
-        reportView={
-          <Suspense fallback={<ReportLoadingContent />}>
-            <WorkflowReportView workflowId={workflow.id} />
-          </Suspense>
-        }
-        runsView={
-          <Suspense fallback={<RunListSkeleton embedded />}>
-            <RunList
-              {...page}
-              act={context.act}
-              workflowId={workflow.id}
-              workflowName={workflow.name}
-            />
-          </Suspense>
+        sectionView={
+          section === 'tests' ? (
+            <Suspense fallback={<TestsViewSkeleton />}>
+              <TestsView workflow={workflow} />
+            </Suspense>
+          ) : section === 'report' ? (
+            <Suspense fallback={<ReportLoadingContent />}>
+              <WorkflowReportView workflowId={workflow.id} />
+            </Suspense>
+          ) : (
+            <Suspense fallback={<RunListSkeleton embedded />}>
+              <RunList
+                {...page}
+                act={context.act}
+                workflowId={workflow.id}
+                workflowName={workflow.name}
+              />
+            </Suspense>
+          )
         }
       />
     </Suspense>
@@ -696,6 +710,7 @@ export const routes: RouteObject[] = [
         path: 'workflows/:workflowId/report',
         Component: WorkflowReportRedirect,
       },
+      ...testRoutes,
       { path: 'runs', Component: RunsRoute },
       {
         path: 'runs/request',
