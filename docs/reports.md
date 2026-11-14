@@ -11,7 +11,7 @@ Open **Report** for a library-wide view, or a workflow's **Report** tab for that
 
 The top of the report compares the selected period with the previous period of the same length:
 
-- **Runs** started and their outcomes, and **Success rate**: completed runs as a share of completed and failed runs. Cancelled runs are excluded from the rate.
+- **Runs** started and their outcomes, and **Success rate**: completed runs as a share of completed and failed runs. Cancelled runs are excluded from the rate. Parallel branch runs cancelled because their group's join was satisfied are not counted as runs or outcomes; their usage still counts.
 - **Median run duration** with its p90, and **Attributed spend** with how many attempts reported usage. A spend change appears only when both periods' usage coverage is within 10 percentage points; otherwise both coverages are shown.
 - Small bar charts show runs started and the median duration per interval; **Runs over time** lists the same values. **All time** has no previous period or intervals.
 
