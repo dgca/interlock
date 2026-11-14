@@ -64,7 +64,7 @@ interlock start WORKFLOW_ID @input.json
 
 Append a version number to select a publication, for example `interlock start WORKFLOW_ID @input.json 2`. Otherwise, start uses the latest published version.
 
-When a [start warning threshold](run-budgets.md#warn-before-large-runs) is set, the start output includes `costProjection`, the median cost of recent runs. The CLI does not ask for confirmation.
+When a start warning threshold is set with `interlock prices start-warning`, the start output includes `costProjection`, the median cost of recent runs. The CLI does not ask for confirmation.
 
 | Command                                            | Purpose                               |
 | -------------------------------------------------- | ------------------------------------- |
