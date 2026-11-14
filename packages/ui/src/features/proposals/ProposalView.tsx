@@ -1,5 +1,6 @@
 import {
   ActionError,
+  Alert,
   Anchor,
   Button,
   JsonEditor,
@@ -13,7 +14,11 @@ import { useState } from 'react';
 import { Link } from 'react-router';
 import { ArrowLeft } from 'lucide-react';
 import { applyWorkflowEdits, type Workflow } from '@interlock/core';
-import type { ProposalConflict } from '@interlock/core/proposals';
+import {
+  wideningChanges,
+  type ProposalConflict,
+  type WideningChange,
+} from '@interlock/core/proposals';
 import { StatusBadge } from '../../components/StatusBadge/StatusBadge';
 import {
   WorkspaceReadWarning,
@@ -24,7 +29,7 @@ import { trpc, useQuery } from '../../lib/query';
 import type { Action } from '../../lib/useActionFeedback';
 import { paths } from '../../routes/paths';
 import { compareWorkflow } from '../workflows/workflowDiff';
-import { WorkflowDiffList } from '../workflows/WorkflowDiffList';
+import { DiffValues, WorkflowDiffList } from '../workflows/WorkflowDiffList';
 import { ProposalSimulation } from './ProposalSimulation';
 import styles from './Proposals.module.css';
 
@@ -83,6 +88,39 @@ export function ProposalConflictNotice({
         </ul>
       </div>
     </div>
+  );
+}
+
+/** Changes that let the workflow do more, shown expanded before anything else. */
+export function WideningChanges({
+  changes,
+  after,
+}: {
+  changes: WideningChange[];
+  after: string;
+}) {
+  if (!changes.length) return null;
+  return (
+    <Alert
+      color="yellow"
+      title={`Widens what this workflow can do: ${changes.length} ${changes.length === 1 ? 'change' : 'changes'}`}
+    >
+      <ul className={styles.risks}>
+        {changes.map((change) => (
+          <li key={`${change.subject}:${change.field}`}>
+            <strong>
+              {change.subject} · {change.reason}
+            </strong>
+            <DiffValues
+              path={change.field}
+              before={change.before}
+              after={change.after}
+              labels={{ before: 'Current draft', after }}
+            />
+          </li>
+        ))}
+      </ul>
+    </Alert>
   );
 }
 
@@ -224,6 +262,10 @@ export function ProposalView({
     draft && applied?.definition
       ? compareWorkflow(applied.definition, draft)
       : undefined;
+  const risks =
+    draft && applied?.definition
+      ? wideningChanges(draft, applied.definition)
+      : [];
   const edited =
     edits !== undefined &&
     JSON.stringify(edits) !== JSON.stringify(proposal.edits);
@@ -338,6 +380,12 @@ export function ProposalView({
               'Proposal moved onto the current draft.',
             )
           }
+        />
+      )}
+      {open && (
+        <WideningChanges
+          changes={risks}
+          after={edited ? 'Edited proposal' : 'Proposed'}
         />
       )}
       <section className={styles.section} aria-labelledby="proposal-rationale">

@@ -14,7 +14,8 @@ function changeCount(count: number, subject: string): string {
 
 type Labels = { before: string; after: string };
 
-function Detail({
+/** One field's value before and after, labelled for the comparison. */
+export function DiffValues({
   path,
   before,
   after,
@@ -67,7 +68,7 @@ function ChangeGroup({
           </summary>
           <div className={styles.details}>
             {item.details.map((detail) => (
-              <Detail key={detail.path} {...detail} labels={labels} />
+              <DiffValues key={detail.path} {...detail} labels={labels} />
             ))}
           </div>
         </details>
@@ -99,7 +100,7 @@ export function WorkflowDiffList({
         <span>{changeCount(diff.workflow.length, 'workflow')}</span>
       </div>
       {children}
-      <div>
+      <div className={styles.list}>
         <ChangeGroup title="Nodes" items={diff.nodes} labels={labels} />
         <ChangeGroup title="Routes" items={diff.routes} labels={labels} />
         <ChangeGroup

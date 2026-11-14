@@ -169,3 +169,16 @@
   justify-self: start;
   font-size: 13px;
 }
+.risks {
+  display: grid;
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+.risks li {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}

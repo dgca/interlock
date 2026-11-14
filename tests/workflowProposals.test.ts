@@ -13,6 +13,7 @@ const worker = {
   freshContext: true,
 };
 afterEach(async () => {
+  vi.restoreAllMocks();
   for (const e of engines.splice(0)) {
     e.stop();
     e.store.close();
@@ -133,11 +134,34 @@ it('keeps agent proposals behind the workflow setting and applies them only on a
 
 it('limits agents to the allowed scope, merges duplicates and caps open proposals', async () => {
   const { engine, w, person, agent } = setup();
+  const base = { workflowId: w.id, title: 'Change', rationale: 'Because.' };
+  const settings = { agents: true, nodeKinds: ['agent' as const] };
+  await person.proposals.saveSettings({ workflowId: w.id, settings });
+  // Without a claim on one of its runs, the workflow must allow it.
+  await expect(
+    agent.proposals.create({ ...base, edits: prompt('x') }),
+  ).rejects.toThrow('Propose during a claim');
+  const c = claim(engine, w.id);
+  const claimed = { ...base, workId: c.workId, token: c.token };
+  // Moving a route onto a kind outside the list is refused like adding one.
+  await expect(
+    agent.proposals.create({
+      ...claimed,
+      edits: [{ op: 'update_edge', id: 'e2', set: { target: 'entry' } }],
+    }),
+  ).rejects.toThrow('route endpoint is outside');
+  await expect(
+    agent.proposals.create({
+      ...claimed,
+      edits: [
+        { op: 'update_settings', set: { agentPermissions: 'full-access' } },
+      ],
+    }),
+  ).rejects.toThrow('workflow settings');
   await person.proposals.saveSettings({
     workflowId: w.id,
-    settings: { agents: true, nodeKinds: ['agent'], fields: ['prompt'] },
+    settings: { ...settings, fields: ['prompt'], otherWorkflows: true },
   });
-  const base = { workflowId: w.id, title: 'Change', rationale: 'Because.' };
   await expect(
     agent.proposals.create({
       ...base,
@@ -166,30 +190,31 @@ it('limits agents to the allowed scope, merges duplicates and caps open proposal
   const again = await agent.proposals.create({
     ...base,
     title: 'Same change, new title',
-    edits: prompt('v1'),
+    edits: [
+      { op: 'update_node', id: 'agent', set: { prompt: 'v1' }, unset: [] },
+    ],
   });
   expect(again).toMatchObject({ id: first.id, deduplicated: true });
+  for (const text of ['c1', 'c2', 'c3', 'c4'])
+    await agent.proposals.create({ ...base, edits: prompt(text) });
+  await expect(
+    agent.proposals.create({ ...base, edits: prompt('c5') }),
+  ).rejects.toThrow('5 open agent proposals made without a claim');
 
-  const c = claim(engine, w.id);
   for (const text of ['r1', 'r2', 'r3'])
-    await agent.proposals.create({
-      ...base,
-      workId: c.workId,
-      token: c.token,
-      edits: prompt(text),
-    });
+    await agent.proposals.create({ ...claimed, edits: prompt(text) });
   await expect(
-    agent.proposals.create({
-      ...base,
-      workId: c.workId,
-      token: c.token,
-      edits: prompt('r4'),
-    }),
+    agent.proposals.create({ ...claimed, edits: prompt('r4') }),
   ).rejects.toThrow('This run already has 3 open proposals');
-  for (let i = 0; i < 15; i++)
-    await agent.proposals.create({ ...base, edits: prompt(`w${i}`) });
+  // 1 person + 5 claimless + 3 above; 11 more across new runs reach 20.
+  for (let i = 0; i < 11; i++) {
+    const next = i % 3 === 0 ? claim(engine, w.id) : undefined;
+    if (next)
+      Object.assign(claimed, { workId: next.workId, token: next.token });
+    await agent.proposals.create({ ...claimed, edits: prompt(`w${i}`) });
+  }
   await expect(
-    agent.proposals.create({ ...base, edits: prompt('one too many') }),
+    agent.proposals.create({ ...claimed, edits: prompt('one too many') }),
   ).rejects.toThrow('already has 20 open proposals');
 });
 
@@ -319,4 +344,60 @@ it('attaches a fixture simulation of the draft with and without the proposal', a
   // Proposal simulations leave no stored simulation records and no draft change.
   expect(engine.store.list('workflowSimulations')).toEqual([]);
   expect(engine.workflow(w.id).draftRevision).toBe(proposal.baseDraftRevision);
+});
+
+it('replaces a simulation that was running when the proposal was re-applied', async () => {
+  const { engine, w, person } = setup();
+  engine.testbench.createSuite({
+    workflowId: w.id,
+    content: {
+      name: 'Fixtures',
+      cases: [
+        {
+          id: 'ok',
+          name: 'Returns ok',
+          input: {},
+          fixtures: [{ nodeId: 'agent', kind: 'agent', output: { ok: true } }],
+          assertions: [],
+        },
+      ],
+    },
+  });
+  // Hold the first case until the draft has changed and been re-applied.
+  const simulate = engine.simulations.simulateDefinition.bind(
+    engine.simulations,
+  );
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => (release = resolve));
+  vi.spyOn(engine.simulations, 'simulateDefinition').mockImplementationOnce(
+    async (...args) => {
+      await held;
+      return simulate(...args);
+    },
+  );
+  const proposal = await person.proposals.create({
+    workflowId: w.id,
+    title: 'Change',
+    rationale: 'Because.',
+    edits: prompt('x'),
+  });
+  await vi.waitFor(async () =>
+    expect(
+      (await person.proposals.get({ id: proposal.id })).simulation?.state,
+    ).toBe('running'),
+  );
+  engine.editDraft(w.id, proposal.baseDraftRevision, [
+    { op: 'update_node', id: 'agent', set: { label: 'Renamed' } },
+  ]);
+  await person.proposals.decide({ action: 'reapply', id: proposal.id });
+  const revision = engine.workflow(w.id).draftRevision;
+  release();
+  await vi.waitFor(async () =>
+    expect(
+      (await person.proposals.get({ id: proposal.id })).simulation,
+    ).toMatchObject({
+      state: 'completed',
+      draftRevision: revision,
+    }),
+  );
 });

@@ -1,6 +1,10 @@
 import { blankDefinition } from '@interlock/core';
+import { wideningChanges } from '@interlock/core/proposals';
 import { ProposalSimulation } from '../features/proposals/ProposalSimulation';
-import { ProposalConflictNotice } from '../features/proposals/ProposalView';
+import {
+  ProposalConflictNotice,
+  WideningChanges,
+} from '../features/proposals/ProposalView';
 import { compareWorkflow } from '../features/workflows/workflowDiff';
 import { WorkflowDiffList } from '../features/workflows/WorkflowDiffList';
 import { Section, Specimen } from './GalleryLayout';
@@ -27,6 +31,16 @@ export function Proposals() {
           diff={compareWorkflow(after, before)}
           before="Current draft"
           after="Proposed"
+        />
+      </Specimen>
+      <Specimen name="WideningChanges" wide>
+        <WideningChanges
+          after="Proposed"
+          changes={wideningChanges(before, {
+            ...after,
+            agentPermissions: 'full-access',
+            maxSteps: before.maxSteps + 100,
+          })}
         />
       </Specimen>
       <Specimen name="ProposalSimulation with a failing case" wide>

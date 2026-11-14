@@ -56,6 +56,7 @@ export function ProposalSettingsDialog({
       if (!next.nodeKinds?.length) delete next.nodeKinds;
       if (!next.fields?.length) delete next.fields;
       if (!next.otherWorkflows) delete next.otherWorkflows;
+      if (!next.workflowSettings) delete next.workflowSettings;
       return next;
     });
   const save = () => {
@@ -109,7 +110,17 @@ export function ProposalSettingsDialog({
             onChange={(value) => set({ fields: value })}
           />
           <Checkbox
-            label="Accept proposals from claims in other workflows' runs"
+            label="Let agents change workflow settings"
+            description="Permissions, permission policy, workspace, limits and other workflow-level settings."
+            checked={Boolean(draft.workflowSettings)}
+            disabled={!draft.agents}
+            onChange={(event) =>
+              set({ workflowSettings: event.currentTarget.checked })
+            }
+          />
+          <Checkbox
+            label="Accept proposals without a claim on this workflow's runs"
+            description="From claims in other workflows' runs and from connected clients."
             checked={Boolean(draft.otherWorkflows)}
             disabled={!draft.agents}
             onChange={(event) =>

@@ -10,22 +10,23 @@ Agent proposals are off for every workflow until a person turns them on. With th
 
 The setting is per workflow:
 
-| Field            | Default | Meaning                                                                                                                                                |
-| ---------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `agents`         | `false` | Whether agents may propose changes to this workflow.                                                                                                   |
-| `nodeKinds`      | all     | Node kinds an agent's edits may add, change or remove. Route edits need both endpoints in the list. Workflow settings are not node edits.              |
-| `fields`         | all     | Fields an agent's `update_node`, `update_edge` and `update_settings` edits may set or unset. With a list, agents cannot add or remove nodes or routes. |
-| `otherWorkflows` | `false` | Whether a claim in a run of another workflow may propose changes to this one. Without it, a claim can only propose changes to its own run's workflow.  |
+| Field              | Default | Meaning                                                                                                                                                 |
+| ------------------ | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `agents`           | `false` | Whether agents may propose changes to this workflow.                                                                                                    |
+| `nodeKinds`        | all     | Node kinds an agent's edits may add, change or remove. Route edits need both endpoints, before and after the edit, in the list.                         |
+| `fields`           | all     | Fields an agent's `update_node`, `update_edge` and `update_settings` edits may set or unset. With a list, agents cannot add or remove nodes or routes.  |
+| `otherWorkflows`   | `false` | Whether agents may propose without a claim on a run of this workflow: from a claim in another workflow's run, or as a connected client without a claim. |
+| `workflowSettings` | `false` | Whether agents may propose `update_settings` edits: permissions, permission policy, workspace, limits and other workflow-level settings.                |
 
 ```sh
 interlock proposals settings WORKFLOW_ID '{"agents":true,"nodeKinds":["agent"],"fields":["prompt"]}'
 ```
 
-The scope applies to agents only. A person can propose or approve any edit.
+The scope applies to agents only, and is checked again when a proposal is re-applied to a changed draft. A person can propose or approve any edit.
 
 ## Propose a change
 
-During a claim, an agent calls `propose_workflow_change` with its `workId` and claim `token`. The proposal links to that run and execution, and its workflow defaults to the run's. A connected client without a claim passes `workflowId`. `sources` adds other runs or executions that show the problem.
+During a claim, an agent calls `propose_workflow_change` with its `workId` and claim `token`. The proposal links to that run and execution, and its workflow defaults to the run's. Without a claim on a run of the target workflow, the agent passes `workflowId`, and the workflow must allow it with `otherWorkflows`. `sources` adds other runs or executions that show the problem.
 
 ```json
 {
@@ -47,12 +48,16 @@ The edits must apply to the current draft; a proposal that would not save is ref
 
 To keep a looping agent from flooding the queue:
 
-- An identical open proposal (the same edits for the same workflow) returns the existing proposal with `deduplicated: true`.
-- An agent cannot propose while the workflow has 20 open proposals, or while the run of its claim has 3.
+- An identical open proposal (equivalent edits for the same workflow) returns the existing proposal with `deduplicated: true`.
+- An agent cannot propose while the workflow has 20 open proposals, while the run of its claim has 3, or, without a claim, while the workflow has 5 open proposals made without one.
+- Edits are limited to 256 KiB, the title to 200 characters and the rationale to 4,000.
+- Interlock keeps the newest 100 approved and the newest 100 rejected proposals per workflow, and removes a workflow's proposals when the workflow is deleted.
 
 ## Review a proposal
 
 Open the workflow's **Proposals** tab. The tab shows the number of open proposals; the list filters by Open, Approved and Rejected. **Proposal settings** turns agent proposals on and sets their scope.
+
+Changes that widen what the workflow can do are listed first, expanded, before anything else: agent permission mode, permission policy, workspace and working directory, executors, Script code, language and environment, Fetch URL, method, headers and query, polling checks, new Secret or Config references, called workflows, Agent tool routes, and raised limits.
 
 A proposal shows its rationale, links to its source runs, its changes against the current draft in the same layout as publication review, and its simulation result. **Edit before approving** opens the operations for editing; the changes update as you edit, and **Approve edited** applies your version. **Reject** asks for a reason. In the run inspector, a step that proposed a change lists the proposal with its status.
 

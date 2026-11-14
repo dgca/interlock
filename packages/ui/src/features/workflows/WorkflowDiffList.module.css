@@ -25,6 +25,7 @@
   font-size: 12px;
 }
 .item {
+  min-width: 0;
   border: 1px solid var(--border);
   border-radius: 6px;
   margin-bottom: 6px;
@@ -50,6 +51,8 @@
   transform: rotate(180deg);
 }
 .item summary small {
+  flex: 1 1 0;
+  min-width: 0;
   color: var(--muted);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -96,6 +99,7 @@
   margin-bottom: 4px;
 }
 .values pre {
+  max-width: 100%;
   margin: 0;
   padding: 9px;
   border: 1px solid var(--border);
@@ -106,4 +110,7 @@
   font-size: 12px;
   max-height: 300px;
   overflow: auto;
+}
+.list {
+  min-width: 0;
 }

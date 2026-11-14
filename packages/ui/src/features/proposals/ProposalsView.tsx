@@ -204,6 +204,9 @@ export function ProposalsView({
               : {}),
             ...(settings.data.fields ? { fields: settings.data.fields } : {}),
             ...(settings.data.otherWorkflows ? { otherWorkflows: true } : {}),
+            ...(settings.data.workflowSettings
+              ? { workflowSettings: true }
+              : {}),
           }}
           act={act}
           onClose={() => setConfiguring(false)}
