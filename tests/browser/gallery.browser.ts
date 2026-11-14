@@ -14,6 +14,7 @@ const sections = [
   'Page layout',
   'Editors',
   'Dialogs',
+  'Test suites',
   'Boards',
 ];
 

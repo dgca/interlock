@@ -51,6 +51,7 @@ export { Button, type ButtonProps, type ButtonVariant } from './Button';
 export { Modal } from './Modal/Modal';
 export { ModalBody, ModalFooter } from './Modal/ModalLayout';
 export { EmptyState } from './EmptyState/EmptyState';
+export { TrendBars } from './TrendBars/TrendBars';
 export {
   LoadingSkeleton,
   Placeholder,

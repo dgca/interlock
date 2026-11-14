@@ -45,14 +45,17 @@ import {
   TextInput,
   Textarea,
   Title,
+  TrendBars,
   workspacePage,
 } from '../design-system';
-import { useState, type ReactNode } from 'react';
+import { useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { EllipsisVertical, Plus, Trash2 } from 'lucide-react';
 import type { BoardTypeContent, Contract, Json } from '@interlock/core';
 import { ContractEditor } from '../components/ContractEditor/ContractEditor';
 import { WorkflowSyncAlertList } from '../features/workflows/WorkflowSyncAlerts';
+import { Section, Specimen } from './GalleryLayout';
+import { Testing } from './TestingSpecimens';
 import { BoardCard, type BoardCardData } from '../features/boards/BoardCard';
 import { LanesEditor } from '../features/boards/BoardTypeFields';
 import boardClasses from '../features/boards/Boards.module.css';
@@ -115,44 +118,6 @@ const schema = {
 const script = `export default async function run({ input }) {
   return { summary: input.title.trim() };
 }`;
-
-function Specimen({
-  name,
-  wide = false,
-  children,
-}: {
-  name: string;
-  wide?: boolean;
-  children: ReactNode;
-}) {
-  return (
-    <div className={classes.specimen} data-wide={wide || undefined}>
-      <span className={classes.caption}>{name}</span>
-      <div className={classes.sample}>{children}</div>
-    </div>
-  );
-}
-
-function Section({
-  id,
-  title,
-  children,
-}: {
-  id: string;
-  title: string;
-  children: ReactNode;
-}) {
-  return (
-    <section
-      className={classes.section}
-      aria-labelledby={`gallery-${id}`}
-      data-gallery-section={id}
-    >
-      <h2 id={`gallery-${id}`}>{title}</h2>
-      <div className={classes.grid}>{children}</div>
-    </section>
-  );
-}
 
 function Buttons() {
   return (
@@ -478,6 +443,26 @@ function Collections() {
       <Specimen name="Pagination">
         <Pagination total={5} defaultValue={2} />
       </Specimen>
+      <Specimen name="TrendBars">
+        <TrendBars
+          label="Runs started per day"
+          values={[4, 9, 0, 6, 14, 11, 7].map((value, index) => ({
+            label: `Day ${index + 1}`,
+            value,
+            display: `${value} runs`,
+          }))}
+        />
+      </Specimen>
+      <Specimen name="TrendBars with unmeasured intervals">
+        <TrendBars
+          label="Median run duration per day"
+          values={[null, 52, null, 71, 64].map((value, index) => ({
+            label: `Day ${index + 1}`,
+            value,
+            display: value === null ? 'No runs' : `${value} min`,
+          }))}
+        />
+      </Specimen>
     </Section>
   );
 }
@@ -760,6 +745,7 @@ export default function Gallery() {
         <Layout />
         <Editors />
         <Dialogs />
+        <Testing />
         <Boards />
       </div>
     </main>

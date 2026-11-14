@@ -29,6 +29,7 @@ const gallerySections = [
   'layout',
   'editors',
   'dialogs',
+  'testing',
   'boards',
 ];
 

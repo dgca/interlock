@@ -4,6 +4,7 @@ import {
   waitingHumanInputs,
   uncertainResourceAttempts,
   uncertainBackgroundSteps,
+  currentStalls,
 } from './runAttention.js';
 import { waitingScriptApprovals } from './scriptApprovals.js';
 export * from './scriptApprovals.js';
@@ -19,29 +20,36 @@ import {
   type WorkflowCatalogQuery,
 } from '@interlock/core';
 import { migrate, type MigrationResult } from './migrations.js';
-import { batchSize, readRuns, writeRun } from './runExecutions.js';
+import {
+  batchSize,
+  executionSteps,
+  readRuns,
+  writeRun,
+} from './runExecutions.js';
 import { findRuns } from './runQueries.js';
 import { RunScopes } from './runScopes.js';
 import {
   continuationState,
+  runsChangedSince,
   touchRunRevision,
-  type ExecutionMetadata,
 } from './continuation.js';
 import {
+  activeRunState,
+  dueAgentExecutions,
   currentProjection,
   type CurrentRun,
   type CurrentWork,
 } from './currentState.js';
 export type { ProjectionState } from './currentState.js';
 import { runSummaries } from './runSummaries.js';
-import { workflowCatalog, promptCatalog } from './catalogs.js';
+import { workflowCatalog, promptCatalog, suiteRuns } from './catalogs.js';
 import {
   boardRuns,
   referencedBoardColumns,
   workflowBoardStageColumn,
 } from './workflowBoards.js';
 import { Transcripts } from './transcripts.js';
-import { runsForReport } from './report.js';
+import { countReportRuns, runsForReport } from './report.js';
 export { runsForReport } from './report.js';
 export type { HistoryRun } from './history.js';
 import {
@@ -50,6 +58,7 @@ import {
   historyReferences,
   deleteHistoryDocuments,
   storageSpace,
+  quickCheck,
 } from './history.js';
 import type {
   Run,
@@ -66,7 +75,6 @@ import type {
   WorkflowComparison,
   ResourceReservation,
 } from '@interlock/core';
-
 /** One service owns the database. Each runtime operation commits as one transaction. */
 export class Store {
   readonly transcripts: Transcripts;
@@ -100,19 +108,19 @@ export class Store {
       if (touchRunRevision(this.db, id)) this.changed('runs');
     });
   }
-  currentStalls(runId?: string): import('@interlock/core').StallRecord[] {
-    const scoped =
-      runId === undefined ? '' : " AND json_extract(value, '$.runId') = ?";
-    return this.db
-      .prepare(
-        "SELECT value FROM documents INDEXED BY stalls_unresolved WHERE collection = 'stalls' AND json_extract(value, '$.resolvedAt') IS NULL" +
-          scoped,
-      )
-      .all(...(runId === undefined ? [] : [runId]))
-      .map((row) => JSON.parse(row.value as string));
+  currentStalls(runId?: string) {
+    return currentStalls(this.db, runId);
   }
   continuation(id: string) {
     return continuationState(this.db, id);
+  }
+  /** Runs changed after a continuation revision; omit it to read the current revision. */
+  runsChangedSince(revision?: number) {
+    return runsChangedSince(this.db, revision);
+  }
+  /** Execution metadata from `from` on, without inputs, outputs or results. */
+  executionSteps(runId: string, from = 0) {
+    return executionSteps(this.db, runId, from);
   }
   currentProjection(ids: readonly string[]) {
     return currentProjection(this.db, ids);
@@ -123,32 +131,11 @@ export class Store {
       .get(id);
     return row && JSON.parse(row.value as string);
   }
-  activeRunState(): {
-    run: CurrentRun;
-    execution: ExecutionMetadata | undefined;
-  }[] {
-    return this.db
-      .prepare(
-        "SELECT value, execution FROM run_metadata INDEXED BY run_metadata_status WHERE status IN ('queued', 'running', 'waiting') ORDER BY position",
-      )
-      .all()
-      .map((row) => ({
-        run: JSON.parse(row.value as string),
-        execution:
-          row.execution === null
-            ? undefined
-            : JSON.parse(row.execution as string),
-      }));
+  activeRunState() {
+    return activeRunState(this.db);
   }
-  dueAgentExecutions(at: string): Set<string> {
-    return new Set(
-      this.db
-        .prepare(
-          "SELECT execution_id FROM work_metadata WHERE status = 'available' AND available_until <= ?",
-        )
-        .all(at)
-        .map((row) => row.execution_id as string),
-    );
+  dueAgentExecutions(at: string) {
+    return dueAgentExecutions(this.db, at);
   }
   attentionWork() {
     return attentionWork(this.db);
@@ -180,11 +167,8 @@ export class Store {
   storageSpace() {
     return storageSpace(this.db);
   }
-  quickCheck(): string[] {
-    const rows = this.db.prepare('PRAGMA quick_check').all() as {
-      quick_check?: string;
-    }[];
-    return rows.map((r) => r.quick_check ?? String(r));
+  quickCheck() {
+    return quickCheck(this.db);
   }
   deleteHistoryDocuments(ids: Set<string>) {
     deleteHistoryDocuments(this.db, ids);
@@ -419,6 +403,9 @@ export class Store {
       .all(collection, JSON.stringify([...runIds]))
       .map((row) => JSON.parse(row.value as string) as T);
   }
+  latestSimulations<T>(suiteId: string): T[] {
+    return suiteRuns(this.db, suiteId) as T[];
+  }
   forWork<T>(collection: string, workId: string): T[] {
     return this.db
       .prepare(
@@ -438,12 +425,10 @@ export class Store {
       FROM documents WHERE collection = 'events'
       AND json_extract(value, '$.runId') IN (SELECT value FROM json_each(?)) ORDER BY rowid`,
       )
-      .all(JSON.stringify([...runIds]))
-      .map((row) => ({
-        runId: row.runId as string,
-        type: row.type as string,
-        at: row.at as string,
-      }));
+      .all(JSON.stringify([...runIds])) as unknown as Pick<
+      RunEvent,
+      'runId' | 'type' | 'at'
+    >[];
   }
   put<T extends { id: string }>(collection: string, value: T): void {
     if (collection === 'runs') writeRun(this.db, value as unknown as Run);
@@ -543,9 +528,8 @@ export class Store {
       terminalLimit,
     );
   }
-  runsForReport(filter: ReportFilter): Run[] {
-    return runsForReport(this.db, filter);
-  }
+  runsForReport = (filter: ReportFilter) => runsForReport(this.db, filter);
+  countReportRuns = (filter: ReportFilter) => countReportRuns(this.db, filter);
   queuedRuns(): Run[] {
     return readRuns(
       this.db,

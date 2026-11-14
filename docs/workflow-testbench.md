@@ -127,7 +127,7 @@ Optional `environment` has a nonblank `identity` up to 200 characters and option
 
 ## Inspect results and record quality
 
-Use `read_workflow_comparisons` with `request.action: "list"` for compact progress, or `request: {"action":"report","id":"COMPARISON_ID"}` for paged results. Each sample identifies its case, side, repetition, run URL and counterpart. Open these runs in the existing Runs UI to inspect graphs and full values. Labels include the short comparison ID, suite, case, side and repetition. Comparison labels appear in run rows and inspection, with counterpart navigation. Suite editing and comparison controls remain MCP/shared-API operations.
+Use `read_workflow_comparisons` with `request.action: "list"` for compact progress, or `request: {"action":"report","id":"COMPARISON_ID"}` for paged results. Each sample identifies its case, side, repetition, run URL and counterpart. Open these runs in the existing Runs UI to inspect graphs and full values. Labels include the short comparison ID, suite, case, side and repetition. Comparison labels appear in run rows and inspection, with counterpart navigation. Suites can also be edited in the workflow's **Tests** tab, which lists the latest 20 comparisons and opens a read-only, paged view of each report. Preview, start, cancellation and quality judgments remain MCP/shared-API operations.
 
 Execution failures, structural checks and quality judgments are separate. A completed run can fail checks. A passed check does not establish semantic accuracy. Root observations are recorded after the execution tree finishes; later explicit retries do not silently rescore that evidence. Reports show current run status separately from the observed status. Missing underlying history is explicit.
 
@@ -187,7 +187,7 @@ Shared server API operations are `testbench.suites`, `suite`, `createSuite`, `up
 | `read_workflow_comparisons`   | `list`, `report`, `case`   |
 | `update_workflow_comparison`  | `cancel`, `record_quality` |
 
-The four grouped tools require a `request` object with one explicit `action`. Each action accepts only its own fields. Read actions cannot save or execute work. Preview and start retain their separate top-level parameters. These tools expose the shared operations above without changing their behavior. Comparison preview, start and report remain MCP/shared-API operations; no comparison CLI commands or dedicated dashboard are included.
+The four grouped tools require a `request` object with one explicit `action`. Each action accepts only its own fields. Read actions cannot save or execute work. Preview and start retain their separate top-level parameters. These tools expose the shared operations above without changing their behavior. Comparison preview and start remain MCP/shared-API operations; there are no comparison CLI commands. The UI reads reports only.
 
 Output assertions use `kind: "output"`, optional root-scope `nodeId`, positive `visit` (default 1), `path` (default empty), and `operator`. `exists` has no expected value. `equals` requires a JSON `expected` value and ignores object key order. `gte` and `lte` require numeric expected and actual values. Paths use Interlock's dot-separated object keys and array indices; an empty path selects the entire value. Route assertions require `kind: "route"`, `nodeId`, positive `visit` and expected `port`.
 

@@ -123,7 +123,7 @@ In the editor, disabling the timeout removes its outgoing Timeout edge when sett
 
 Use `get_run_briefing` for current blockers and active deadlines, then `wait_for_run_change` with its cursor for a finite wait. These reads do not advance timers. Polling blockers include `nextCheckAt`, optional `timeoutAt`, and latest check metadata (`count`, `at`, optional `error`) without check output. Active polling deadlines have kinds `poll_check` and `poll_timeout`; `nextDeadline` selects the earliest across all timer kinds. Use `get_run` to inspect the latest probe output. See [continuation fields, cursor recovery, and cancellation](agent-workflows.md#resume-a-run-with-a-briefing).
 
-`get_run` returns the root run, its executions, descendants, assignments, and events. Timer state appears in these fields:
+`get_run` returns the root run, its executions, descendants, assignments, and events. Above 64 KiB it drops large fields such as `check` and keeps only recent list items; pass `full: true` for everything. Timer state appears in these fields:
 
 | Field                                                       | Meaning                                                                                        |
 | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |

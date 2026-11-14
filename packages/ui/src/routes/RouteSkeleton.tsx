@@ -15,6 +15,7 @@ import {
 } from '../features/prompts/PromptSkeleton';
 import editor from '../features/workflows/WorkflowEditor.module.css';
 import { WorkflowLibrarySkeleton } from '../features/workflows/WorkflowLibrarySkeleton';
+import { workflowSection } from '../features/workflows/workflowListConfig';
 
 export type LoadingSubject = 'workflows' | 'workflow' | 'prompts' | 'prompt';
 
@@ -28,7 +29,7 @@ export function RouteSkeleton({ subject }: { subject: LoadingSubject }) {
 function WorkflowLoading() {
   const [search] = useSearchParams();
   const view = search.get('view');
-  const section = view === 'runs' || view === 'children' ? view : 'editor';
+  const section = workflowSection(view);
   return (
     <>
       <VisuallyHidden role="status">Loading workflow…</VisuallyHidden>
@@ -50,6 +51,7 @@ function WorkflowLoading() {
             items={[
               { value: 'editor', label: 'Editor' },
               { value: 'runs', label: 'Runs' },
+              { value: 'tests', label: 'Tests' },
               { value: 'children', label: 'Child workflows' },
             ]}
             value={section}

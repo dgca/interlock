@@ -108,7 +108,117 @@ it('pages projected run rows after applying the Runs scope and tab', async () =>
     ).toMatchObject([{ id: 'older-attention' }]);
     const fullRun = (await runs.list()).find((run) => run.id === 'parent');
     expect(fullRun?.executions[0].output).toBe(large);
-    expect((await runs.get({ id: 'parent' })).run).toEqual(fullRun);
+    expect((await runs.get({ id: 'parent', full: true })).run).toEqual(fullRun);
+  } finally {
+    engine.stop();
+    store.close();
+  }
+});
+
+it('compacts get_run above 64 KiB and keeps full step data reachable', async () => {
+  const store = new Store(':memory:');
+  const engine = new Engine(store, process.cwd());
+  try {
+    const payload = (step: number) => ({ step, text: 'x'.repeat(20_000) });
+    const bytes = (value: unknown) => JSON.stringify(value).length;
+    const step = (index: number, fields: Record<string, unknown> = {}) => ({
+      id: `e${index}`,
+      nodeId: `n${index}`,
+      kind: 'script',
+      label: `Step ${index}`,
+      status: 'completed',
+      startedAt: '2026-01-01T00:00:00.000Z',
+      childRunIds: [],
+      nextItem: 0,
+      ...fields,
+    });
+    const put = (id: string, executions: object[], input: unknown = null) =>
+      store.put('runs', {
+        id,
+        workflowId: 'main',
+        workflowName: 'Main',
+        version: 1,
+        status: 'completed',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+        cursor: 'done',
+        value: null,
+        input,
+        output: { ok: true },
+        executions,
+      });
+    const error = 'Script failed: '.repeat(400);
+    const children = Array.from({ length: 200 }, (_, i) => `child-${i}`);
+    put('small', [step(0)]);
+    put(
+      'long',
+      Array.from({ length: 25 }, (_, i) =>
+        step(i, {
+          input: payload(i),
+          output: payload(i),
+          ...(i === 1 ? { status: 'failed', error } : {}),
+          ...(i === 2 ? { kind: 'batch', childRunIds: children } : {}),
+        }),
+      ),
+      payload(-1),
+    );
+    put(
+      'many',
+      Array.from({ length: 500 }, (_, i) =>
+        step(i, { output: { note: 'n'.repeat(250) } }),
+      ),
+    );
+    for (let i = 0; i < 1000; i++)
+      store.put('events', {
+        id: `event-${i}`,
+        runId: 'many',
+        type: 'node.completed',
+        message: `Step ${i} completed`,
+        at: '2026-01-01T00:00:00.000Z',
+      });
+    const { runs } = appRouter.createCaller({ engine });
+
+    // Responses under the limit keep their exact shape.
+    expect(await runs.get({ id: 'small' })).toEqual(engine.inspect('small'));
+
+    const compact = await runs.get({ id: 'long' });
+    expect(bytes(compact)).toBeLessThan(65536);
+    expect(compact.compacted).toMatchObject({ limitBytes: 65536 });
+    expect(compact.compacted!.fullBytes).toBeGreaterThan(1_000_000);
+    expect(compact.run.executions).toHaveLength(25);
+    expect(compact.run.executions[3]).toMatchObject({
+      id: 'e3',
+      label: 'Step 3',
+      omitted: {
+        input: { bytes: bytes(payload(3)), via: 'get_run_result' },
+        output: { bytes: bytes(payload(3)), via: 'get_run_result' },
+      },
+    });
+    expect(compact.run.executions[3]).not.toHaveProperty('output');
+    expect(compact.run.executions[1].error).toMatch(
+      /^Script failed: .*truncated from \d+ bytes/,
+    );
+    expect(compact.run.executions[2].childRunIds).toEqual(children);
+    expect(compact.run).toMatchObject({
+      output: { ok: true },
+      omitted: { input: { bytes: bytes(payload(-1)) } },
+    });
+
+    // Many small steps and events: list items are trimmed, not only fields.
+    const many = await runs.get({ id: 'many' });
+    expect(bytes(many)).toBeLessThan(65536);
+    expect(bytes(many)).toBeLessThan(many.compacted!.fullBytes);
+    expect(many.run.executions.at(-1)).toMatchObject({ id: 'e499' });
+    expect(many.run).toMatchObject({
+      omitted: { executions: { count: 500 - many.run.executions.length } },
+    });
+
+    expect((await runs.get({ id: 'long', full: true })).run).toEqual(
+      engine.inspect('long').run,
+    );
+    expect(
+      await runs.result({ id: 'long', executionId: 'e3', path: 'step' }),
+    ).toMatchObject({ value: 3 });
   } finally {
     engine.stop();
     store.close();

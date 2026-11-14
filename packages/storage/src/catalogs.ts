@@ -63,3 +63,20 @@ export function promptCatalog(db: DatabaseSync) {
     )
     .all() as unknown as PromptCatalogEntry[];
 }
+
+/** Newest simulation of each case in one suite; parses only those records. */
+export function suiteRuns(db: DatabaseSync, suiteId: string): unknown[] {
+  return db
+    .prepare(
+      `SELECT value FROM (
+        SELECT value, ROW_NUMBER() OVER (
+          PARTITION BY json_extract(value, '$.caseId')
+          ORDER BY json_extract(value, '$.createdAt') DESC, rowid DESC
+        ) AS n
+        FROM documents WHERE collection = 'workflowSimulations'
+          AND json_extract(value, '$.suiteId') = ?
+      ) WHERE n = 1`,
+    )
+    .all(suiteId)
+    .map((row) => JSON.parse(row.value as string) as unknown);
+}

@@ -1,0 +1,50 @@
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+}
+.row:first-child {
+  border-top: 0;
+}
+.rowMain {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.rowValue {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.metricValue {
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.change {
+  font-variant-numeric: tabular-nums;
+}
+.trend {
+  margin-top: 8px;
+}
+.numeric {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+.name {
+  overflow-wrap: anywhere;
+  min-width: 160px;
+}
+.share {
+  min-width: 96px;
+}
+.status {
+  flex: 0 0 96px;
+}

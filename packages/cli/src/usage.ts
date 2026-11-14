@@ -24,7 +24,7 @@ export const usage = [
   'runs [--tag KEY=VALUE ...] [--request-id KEY] [--external-task json|@file] [--workflow ID] [--chain ROOT_RUN_ID] [--status STATUS] [--root-only] [--limit N] [--after-run RUN_ID] [--input-path PATH --equals JSON] (without filters: full runs, newest first, 1000 per page; filters: summaries)',
   "board view [board-id] [--workflow ID] [--lane LANE] [--offset N] [--limit N] (lanes and cards computed from run state; --workflow alone reads that workflow's stage board)",
   'board types | board save-type <json|@file: {"id"?,"expectedRevision"?,"type":{...}}> (list, create or update board types)',
-  'run <id> (inspect the run, including Parallel branch runs linked to each group execution)',
+  'run <id> [--full] (inspect the run, including Parallel branch runs linked to each group execution; above 64 KiB large payloads are omitted unless --full)',
   'run-version <json|@file> (action: read with runId/offset/limit; policy with expectedRevision and pinned|latest-compatible; preview with newer version and optional recapturePrompts; apply requires the exact preview confirmation and reason)',
   'run-history <json|@file> (action: settings/configure/status for opt-in retention; configure requires expectedRevision, policy thresholds or null to disable or inherit for workflow overrides; preview with workflowId/before/rootRunIds and offset/limit; delete requires roots with preview confirmations and acknowledgeHistoryLoss:true; workflows and published versions remain)',
   'context-group <run-id> <group> [options-json|@file] (binding and history; offset, limit)',

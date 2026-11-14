@@ -279,7 +279,18 @@ Call `claim_work` for the full assignment. For one persisted value, call `get_ru
 }
 ```
 
-Omit `executionId` for run data. `field` is `input` or `output`, defaulting to `output`. Blank `path` selects the whole field; dot-separated paths select object keys or array indices. JSON null is a value. Missing runs, foreign execution IDs, unavailable outputs, missing paths, and unsafe property paths return errors. `maxBytes` limits the selected value's UTF-8 JSON encoding, defaults to 65536, and accepts 1 through 262144. Oversized values return an error with their size; select a narrower path. It limits the value, not the complete response envelope. `get_run` remains full inspection, including execution errors and resolved Fetch requests.
+Omit `executionId` for run data. `field` is `input` or `output`, defaulting to `output`. Blank `path` selects the whole field; dot-separated paths select object keys or array indices. JSON null is a value. Missing runs, foreign execution IDs, unavailable outputs, missing paths, and unsafe property paths return errors. `maxBytes` limits the selected value's UTF-8 JSON encoding, defaults to 65536, and accepts 1 through 262144. Oversized values return an error with their size; select a narrower path. It limits the value, not the complete response envelope.
+
+### Inspect a run
+
+`get_run` (shared API `runs.get`, CLI `interlock run RUN_ID`) returns full inspection, including execution errors and resolved Fetch requests, when its JSON is at most 64 KiB (65536 bytes). Above that, the response is compacted and gets `compacted: {limitBytes, fullBytes, read}`:
+
+- The workflow `definition` and other fields over 1 KiB on the run, its descendants, their executions and assignments are dropped. IDs (including `childRunIds`), status, stage, waiting, port, labels and timestamps always stay.
+- An `error` over 1 KiB is truncated and states its full size.
+- `children` lists only `{id, status}`; `descendants` carries the details.
+- If the response is still over 64 KiB, only the most recent items of `events`, `descendants`, `children`, `work`, `descendantWork` and each run's `executions` are kept.
+
+Each object that lost something gets `omitted`, mapping the field to `{bytes, via}` or `{count, via}`. `via: "get_run_result"` means read it with `get_run_result`, passing the run that owns the execution and `field` `input`, `output` or `result`. `via: "full"` means pass `full: true` (CLI `--full`) for the complete response. A compacted response is never larger than the full one, but a run with very large ID lists can still exceed 64 KiB. The UI requests the full response.
 
 ## Wait for a scoped change
 
