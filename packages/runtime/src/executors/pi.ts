@@ -200,6 +200,7 @@ export const piAdapter: HarnessAdapter = {
         ) {
           finalMessage = event.message;
           addUsage(usage, event.message);
+          input.onUsage?.([...usage.values()], 'attempt');
           if (
             event.message.stopReason !== 'error' &&
             event.message.stopReason !== 'aborted'
@@ -278,7 +279,12 @@ export const piAdapter: HarnessAdapter = {
         await rpc!.request('steer', { message }, 10000);
       });
       const ended = await Promise.race([completed, rpc.ended()]);
-      if (input.signal.aborted)
+      // A final answer given before a stop keeps its result; the host decides.
+      if (
+        input.signal.aborted &&
+        (finalMessage as { stopReason?: string } | undefined)?.stopReason !==
+          'stop'
+      )
         throw input.signal.reason ?? new Error('Execution stopped');
       if (ended.error) throw ended.error;
       if (ended.aborted || finalMessage?.stopReason !== 'stop')

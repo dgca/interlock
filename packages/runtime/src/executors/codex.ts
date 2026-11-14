@@ -319,6 +319,7 @@ export const codexAdapter: HarnessAdapter = {
             reasoningOutputTokens: t.reasoningOutputTokens,
           },
         ];
+        input.onUsage?.(usage);
       }
       if (message.method === 'turn/completed') complete(params.turn);
     };
@@ -382,7 +383,12 @@ export const codexAdapter: HarnessAdapter = {
         );
       });
       const finished = await Promise.race([completed, rpc.ended()]);
-      if (input.signal.aborted) throw new Error('Execution stopped');
+      // A turn that completed before a stop keeps its result; the host decides.
+      if (
+        input.signal.aborted &&
+        (finished as { status?: string } | undefined)?.status !== 'completed'
+      )
+        throw new Error('Execution stopped');
       if (finished.id !== turnId)
         throw new Error('Codex completed an unexpected native turn');
       if (finished.status !== 'completed')

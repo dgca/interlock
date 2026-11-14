@@ -18,7 +18,7 @@ import {
   type Json,
   type WorkRequest,
 } from '@interlock/core';
-import { usageDelta } from '../packages/runtime/src/executors/manager';
+import { usageDelta } from '../packages/runtime/src/executors/budgetStops';
 import { HarnessModelError } from '../packages/runtime/src/executors/contracts';
 import { exportWorkflows } from '../packages/runtime/src/transfer';
 

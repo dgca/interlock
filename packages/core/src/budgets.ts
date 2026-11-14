@@ -7,6 +7,7 @@ import {
   type RunUsageReport,
   type UsageMetric,
 } from './usage.js';
+import { summarizePricing } from './pricing.js';
 
 const count = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
 const limit = z
@@ -76,6 +77,25 @@ export interface BudgetBlock {
   runIds: string[];
   since: string;
   remainingMs?: number;
+  /** Blocking reasons across the governing budgets. */
+  reasons?: ('limit_reached' | 'usage_incomplete')[];
+  /** A managed attempt was stopped at the limit; the next claim resumes it. */
+  stopped?: { attempt: number; reason: string };
+}
+const incomplete =
+  'usage is incomplete under unknownUsage:block; report final figures for the attempt, or set unknownUsage to allow';
+/** The waiting reason for a budget-blocked assignment, from its live reasons. */
+export function budgetWaitMessage(block: BudgetBlock, attempt: number) {
+  const limit = block.reasons?.includes('limit_reached') ?? true,
+    unknown = block.reasons?.includes('usage_incomplete') ?? false;
+  const stopped = block.stopped?.attempt === attempt ? block.stopped : null;
+  if (!stopped)
+    return unknown && !limit
+      ? `Claim blocked: ${incomplete}.`
+      : 'Claim blocked by run budget';
+  return limit
+    ? `Stopped at the run budget limit: ${stopped.reason}. Raise the budget to resume${unknown ? `; the stopped attempt's ${incomplete}` : ''}.`
+    : `Stopped at the run budget limit (${stopped.reason}). The limit now allows it, but the stopped attempt's ${incomplete}.`;
 }
 
 export function evaluateBudget(
@@ -98,6 +118,7 @@ export function evaluateBudget(
     limit: z.infer<typeof limit>;
     usage: UsageMetric;
     currency?: string;
+    pricing?: ReturnType<typeof summarizePricing>;
   }[] = [];
   if (policy.limits.claims)
     metrics.push({
@@ -131,8 +152,10 @@ export function evaluateBudget(
             ) && runReports.every((report) => report.snapshot.final),
           )
         : zero,
+      // Derived costs and unpriced models, when the caller priced the usage.
+      pricing: summarizePricing(models),
     });
-  const checks = metrics.map(({ metric, currency, limit, usage }) => {
+  const checks = metrics.map(({ metric, currency, limit, usage, pricing }) => {
     const reasons: string[] = [],
       warnings: string[] = [];
     if (usage.overflow || (usage.value !== null && usage.value >= limit.max))
@@ -151,6 +174,7 @@ export function evaluateBudget(
       ...(currency ? { currency } : {}),
       ...limit,
       ...usage,
+      ...(pricing ? { pricing } : {}),
       reasons,
       warnings,
     };

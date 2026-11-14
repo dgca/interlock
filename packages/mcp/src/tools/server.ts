@@ -302,13 +302,13 @@ export function createMcpServer(
   );
   tool(
     'get_run_budget',
-    "Read a run's local budget revision and policy and the budgets that govern it, with scoped totals, warnings and blocking reasons. Every scope includes the run chain: run counts chain members only, while lifecycle and tree add their descendants. A policy on any member also counts earlier chain history. Reported usage can overshoot because of late reports and in-flight work; it is not a billing cap. Missing or non-final figures follow the explicit unknownUsage policy. claims counts all reservations, including retries.",
+    "Read a run's local budget revision and policy and the budgets that govern it, with scoped totals, warnings and blocking reasons. Every scope includes the run chain: run counts chain members only, while lifecycle and tree add their descendants. A policy on any member also counts earlier chain history. Tokens without reported cost count at the run's captured prices. Usage can overshoot because of late reports and in-flight work; it is not a billing cap. Missing or non-final figures follow the explicit unknownUsage policy. claims counts all reservations, including retries.",
     { runId: z.string().min(1) },
     ({ runId }) => client.runs.budget({ runId }),
   );
   tool(
     'set_run_budget',
-    'Respect the budget authorized by the user. Replace a run budget using its current expectedRevision, initially 0. Re-evaluates all retained usage; never resets counters. Raising limits, changing unknownUsage, or budget:null can resume blocked claims. Inherited budgets still apply. Already claimed work may renew, report and finish. Unclaimed timers pause while blocked. Cancellation remains cancel_run with its existing detached boundaries.',
+    'Respect the budget authorized by the user. Replace a run budget using its current expectedRevision, initially 0. Re-evaluates all retained usage; never resets counters. Raising limits, changing unknownUsage, or budget:null can resume blocked claims. Inherited budgets still apply. Managed sessions stop at a token or cost limit and resume after a raise; other claimed work may renew, report and finish. Unclaimed timers pause while blocked. Cancellation remains cancel_run with its existing detached boundaries.',
     setBudgetSchema.shape,
     (input) => client.runs.setBudget(input),
   );

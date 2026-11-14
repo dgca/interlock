@@ -3,6 +3,7 @@ import {
   DEFAULT_PRICE_TABLE,
   blankDefinition,
   findModelPrice,
+  nodeSchema,
   priceTokens,
   type ModelUsage,
   type PricedModelUsage,
@@ -192,6 +193,56 @@ it('prices a run with the table current when it started, not when it first repor
     snapshot: { sequence: 1, final: true, models: [opus] },
   });
   expect(engine.usage.read({ runId: run.id }).totals).toMatchObject({
+    costs: [{ amountMicros: { value: 2_020_020 } }],
+    pricing: { tables: [{ version: DEFAULT_PRICE_TABLE.version }] },
+  });
+});
+
+it('prices an invoked child workflow with its caller table even after a table edit', () => {
+  const store = new Store(':memory:'),
+    engine = new Engine(store, process.cwd());
+  open.push({ store, engine });
+  const child = engine.create('Child', '', blankDefinition());
+  engine.publish(child.id);
+  // The parent's Agent step runs before its Workflow step starts the child.
+  const definition = blankDefinition();
+  definition.nodes.splice(
+    2,
+    0,
+    nodeSchema.parse({
+      id: 'call',
+      kind: 'workflow',
+      label: 'Child',
+      workflowId: child.id,
+      version: 1,
+    }),
+  );
+  definition.edges[1].target = 'call';
+  definition.edges.push({
+    id: 'e3',
+    source: 'call',
+    target: 'exit',
+    port: 'default',
+  });
+  const parent = engine.create('Parent', '', definition);
+  engine.publish(parent.id);
+  const run = engine.start(parent.id, {}).run;
+  const current = engine.usage.prices.read();
+  engine.usage.prices.set({
+    expectedId: current.id,
+    table: { ...current.table, version: 'edited', models: [] },
+  });
+  const step = engine.claim(engine.available(run.id)[0].id, worker, 10);
+  engine.submit(step.id, step.token!, {});
+  const childRun = engine.store.runs().find((r) => r.parentRunId === run.id)!;
+  const work = engine.claim(engine.available(childRun.id)[0].id, worker, 10);
+  engine.usage.report({
+    workId: work.id,
+    attempt: work.attempt,
+    token: work.token!,
+    snapshot: { sequence: 1, final: true, models: [opus] },
+  });
+  expect(engine.usage.read({ runId: childRun.id }).totals).toMatchObject({
     costs: [{ amountMicros: { value: 2_020_020 } }],
     pricing: { tables: [{ version: DEFAULT_PRICE_TABLE.version }] },
   });
