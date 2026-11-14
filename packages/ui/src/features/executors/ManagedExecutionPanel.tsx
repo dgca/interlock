@@ -28,6 +28,7 @@ import type {
 import { api, errorMessage } from '../../lib/api';
 import styles from './ManagedExecutionPanel.module.css';
 import { permissionLabels } from './permissions';
+import { managedStateLabels as stateLabels } from './managedStatus';
 import { ModelPicker } from './ModelPicker';
 import {
   ManagedTranscript,
@@ -35,15 +36,6 @@ import {
 } from './ManagedTranscript';
 
 type Inspection = Awaited<ReturnType<typeof api.executors.inspect.query>>;
-const stateLabels = {
-  starting: 'Starting',
-  running: 'Working',
-  needs_human: 'Waiting for you',
-  needs_model: 'Choose a model',
-  completed: 'Completed',
-  failed: 'Attempt ended',
-  interrupted: 'Recovery needed',
-};
 
 export function ManagedExecutionPanel({
   work,

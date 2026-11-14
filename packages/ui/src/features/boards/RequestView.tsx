@@ -37,7 +37,7 @@ import { ManagedRequestControls } from '../executors/ManagedExecutionPanel';
 import { ModelPicker } from '../executors/ModelPicker';
 import { ExternalTaskLink } from '../../components/ExternalTaskLink';
 import classes from './Boards.module.css';
-import { approvedLabel, RequestEvidence, ReviewText } from './RequestEvidence';
+import { decision, RequestEvidence, ReviewText } from './RequestEvidence';
 
 type Detail = Awaited<ReturnType<typeof api.requests.get.query>>;
 type HumanDetail = Extract<Detail, { kind: 'human' }>;
@@ -345,7 +345,9 @@ function RequestAnswer({
           : detail.state === 'resolved'
             ? detail.kind === 'stalled'
               ? 'Investigation cleared.'
-              : 'Recovery resolved.'
+              : detail.kind === 'budget'
+                ? 'Budget block cleared.'
+                : 'Recovery resolved.'
             : undefined;
   const held =
     detail.kind === 'human' &&
@@ -637,36 +639,6 @@ function RequestAnswer({
       )}
     </>
   );
-}
-
-function decision(detail: Detail) {
-  if (detail.kind === 'human' && typeof detail.value === 'string') {
-    const value =
-      detail.value.length > 100
-        ? detail.value.slice(0, 100) + '…'
-        : detail.value;
-    return `Accepted “${value}”`;
-  }
-  if (
-    detail.kind === 'human' &&
-    detail.answer.kind === 'choice' &&
-    detail.value &&
-    typeof detail.value === 'object' &&
-    'choice' in detail.value
-  ) {
-    const label = detail.answer.choices.find(
-      (choice) => choice.value === (detail.value as { choice: Json }).choice,
-    )?.label;
-    if (label === 'Approve') return 'Approved';
-    if (label === 'Request changes') return 'Changes requested';
-    return label ? `Answer accepted: ${label}` : 'Answer accepted';
-  }
-  if (detail.kind === 'permission')
-    return detail.request.answer?.allow ? 'Allowed once' : 'Denied';
-  if (detail.kind === 'model') return 'Replacement model recorded';
-  if (detail.kind === 'recovery') return 'Stop confirmed';
-  if (detail.kind === 'scriptApproval') return approvedLabel(detail);
-  return 'Answer accepted';
 }
 
 function HumanForm({

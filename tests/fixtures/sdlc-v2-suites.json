@@ -1,0 +1,2160 @@
+{
+  "interlock-sdlc-v2": {
+    "name": "Routes and contracts",
+    "cases": [
+      {
+        "id": "small-happy",
+        "name": "Small change passes first review",
+        "input": {
+          "request": "Fix it",
+          "repoPath": "/tmp"
+        },
+        "fixtures": [
+          {
+            "nodeId": "setup",
+            "kind": "script",
+            "output": {
+              "repoPath": "/tmp",
+              "request": "Fix it",
+              "taskDir": ".tasks/fix-it",
+              "size": "small",
+              "issue": null,
+              "baseCommit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "reviewPolicy": "auto",
+              "createPr": false,
+              "commitArtifacts": false
+            }
+          },
+          {
+            "nodeId": "plan",
+            "kind": "agent",
+            "output": {
+              "artifactPath": ".tasks/fix-it/plan.md",
+              "summary": "plan",
+              "checkCommands": ["pnpm test"],
+              "decisions": []
+            }
+          },
+          {
+            "nodeId": "planGate",
+            "kind": "script",
+            "output": {
+              "route": "build",
+              "decisions": [],
+              "summary": "plan",
+              "question": "q",
+              "context": "c"
+            }
+          },
+          {
+            "nodeId": "build",
+            "kind": "agent",
+            "output": {
+              "summary": "built",
+              "branch": "task/fix-it",
+              "headCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "checks": [
+                {
+                  "name": "pnpm test",
+                  "result": "passed",
+                  "details": "ok"
+                }
+              ],
+              "status": "done",
+              "questions": [],
+              "resolutions": []
+            }
+          },
+          {
+            "nodeId": "changeReview",
+            "kind": "workflow",
+            "output": {
+              "verdict": "pass",
+              "summary": "review",
+              "reviewedCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "reviewScope": "full",
+              "criteria": [
+                {
+                  "id": "AC1",
+                  "status": "verified",
+                  "evidence": "e"
+                }
+              ],
+              "findings": [],
+              "resolutions": [],
+              "limitations": [],
+              "baseCommit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "headCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "checksPassed": true,
+              "checks": [
+                {
+                  "command": "pnpm test",
+                  "exitCode": 0,
+                  "status": "passed"
+                }
+              ]
+            }
+          },
+          {
+            "nodeId": "reviewRoute",
+            "kind": "script",
+            "output": {
+              "route": "deliver",
+              "repair": "fix",
+              "count": 1,
+              "summary": "s",
+              "feedback": "fb",
+              "question": "q",
+              "context": "c",
+              "evidence": "e",
+              "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "kind": "rounds",
+              "resume": "build"
+            }
+          },
+          {
+            "nodeId": "deliverCheck",
+            "kind": "script",
+            "output": {
+              "route": "local",
+              "branch": "task/fix-it",
+              "reviewedCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+          },
+          {
+            "nodeId": "result",
+            "kind": "script",
+            "output": {
+              "outcome": "local_complete",
+              "verification": "passed",
+              "taskDir": ".tasks/fix-it",
+              "branch": "task/fix-it",
+              "reviewedCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "prUrl": null,
+              "summary": "done",
+              "limitations": []
+            }
+          }
+        ],
+        "assertions": [
+          {
+            "kind": "output",
+            "path": "outcome",
+            "operator": "equals",
+            "expected": "local_complete"
+          },
+          {
+            "kind": "route",
+            "nodeId": "setup",
+            "visit": 1,
+            "port": "small"
+          },
+          {
+            "kind": "route",
+            "nodeId": "reviewRoute",
+            "visit": 1,
+            "port": "deliver"
+          }
+        ]
+      },
+      {
+        "id": "standard-revise-fix-pr",
+        "name": "Standard change: plan revised once, one repair, PR opened",
+        "input": {
+          "request": "Fix it",
+          "repoPath": "/tmp",
+          "size": "standard",
+          "createPr": true
+        },
+        "fixtures": [
+          {
+            "nodeId": "setup",
+            "kind": "script",
+            "output": {
+              "repoPath": "/tmp",
+              "request": "Fix it",
+              "taskDir": ".tasks/fix-it",
+              "size": "standard",
+              "issue": null,
+              "baseCommit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "reviewPolicy": "auto",
+              "createPr": true,
+              "commitArtifacts": false
+            }
+          },
+          {
+            "nodeId": "spec",
+            "kind": "agent",
+            "output": {
+              "artifactPath": ".tasks/fix-it/spec.md",
+              "summary": "spec",
+              "decisions": []
+            }
+          },
+          {
+            "nodeId": "plan",
+            "kind": "agent",
+            "output": {
+              "artifactPath": ".tasks/fix-it/plan.md",
+              "summary": "plan",
+              "checkCommands": ["pnpm test"],
+              "decisions": []
+            }
+          },
+          {
+            "nodeId": "planGate",
+            "kind": "script",
+            "output": {
+              "route": "review",
+              "decisions": [],
+              "summary": "plan",
+              "question": "q",
+              "context": "c"
+            }
+          },
+          {
+            "nodeId": "planReview",
+            "kind": "workflow",
+            "output": {
+              "verdict": "revise",
+              "proposalSummary": "p",
+              "systemSummary": "s",
+              "summary": "sum",
+              "reviewedSources": ["plan.md"],
+              "findings": [
+                {
+                  "id": "F1",
+                  "severity": "major",
+                  "location": "plan",
+                  "details": "d",
+                  "recommendation": "r"
+                }
+              ],
+              "limitations": []
+            }
+          },
+          {
+            "nodeId": "planReviewRoute",
+            "kind": "script",
+            "output": {
+              "route": "revise",
+              "feedback": "f",
+              "review": {},
+              "decisions": [],
+              "summary": "s",
+              "question": "q",
+              "context": "c"
+            }
+          },
+          {
+            "nodeId": "plan",
+            "kind": "agent",
+            "output": {
+              "artifactPath": ".tasks/fix-it/plan.md",
+              "summary": "plan",
+              "checkCommands": ["pnpm test"],
+              "decisions": []
+            }
+          },
+          {
+            "nodeId": "planGate",
+            "kind": "script",
+            "output": {
+              "route": "review",
+              "decisions": [],
+              "summary": "plan",
+              "question": "q",
+              "context": "c"
+            }
+          },
+          {
+            "nodeId": "planReview",
+            "kind": "workflow",
+            "output": {
+              "verdict": "ready",
+              "proposalSummary": "p",
+              "systemSummary": "s",
+              "summary": "sum",
+              "reviewedSources": ["plan.md"],
+              "findings": [],
+              "limitations": []
+            }
+          },
+          {
+            "nodeId": "planReviewRoute",
+            "kind": "script",
+            "output": {
+              "route": "build",
+              "feedback": "f",
+              "review": {},
+              "decisions": [],
+              "summary": "s",
+              "question": "q",
+              "context": "c"
+            }
+          },
+          {
+            "nodeId": "build",
+            "kind": "agent",
+            "output": {
+              "summary": "built",
+              "branch": "task/fix-it",
+              "headCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "checks": [
+                {
+                  "name": "pnpm test",
+                  "result": "passed",
+                  "details": "ok"
+                }
+              ],
+              "status": "done",
+              "questions": [],
+              "resolutions": []
+            }
+          },
+          {
+            "nodeId": "changeReview",
+            "kind": "workflow",
+            "output": {
+              "verdict": "revise",
+              "summary": "review",
+              "reviewedCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "reviewScope": "full",
+              "criteria": [
+                {
+                  "id": "AC1",
+                  "status": "gap",
+                  "evidence": "e"
+                }
+              ],
+              "findings": [
+                {
+                  "id": "X1",
+                  "owner": "implementation",
+                  "severity": "major",
+                  "location": "src/a.ts",
+                  "details": "wrong"
+                }
+              ],
+              "resolutions": [],
+              "limitations": [],
+              "baseCommit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "headCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "checksPassed": true,
+              "checks": [
+                {
+                  "command": "pnpm test",
+                  "exitCode": 0,
+                  "status": "passed"
+                }
+              ]
+            }
+          },
+          {
+            "nodeId": "reviewRoute",
+            "kind": "script",
+            "output": {
+              "route": "fix",
+              "repair": "fix",
+              "count": 1,
+              "summary": "s",
+              "feedback": "fb",
+              "question": "q",
+              "context": "c",
+              "evidence": "e",
+              "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "kind": "rounds",
+              "resume": "build"
+            }
+          },
+          {
+            "nodeId": "build",
+            "kind": "agent",
+            "output": {
+              "summary": "built",
+              "branch": "task/fix-it",
+              "headCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "checks": [
+                {
+                  "name": "pnpm test",
+                  "result": "passed",
+                  "details": "ok"
+                }
+              ],
+              "status": "done",
+              "questions": [],
+              "resolutions": []
+            }
+          },
+          {
+            "nodeId": "changeReview",
+            "kind": "workflow",
+            "output": {
+              "verdict": "pass",
+              "summary": "review",
+              "reviewedCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "reviewScope": "full",
+              "criteria": [
+                {
+                  "id": "AC1",
+                  "status": "verified",
+                  "evidence": "e"
+                }
+              ],
+              "findings": [],
+              "resolutions": [],
+              "limitations": [],
+              "baseCommit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "headCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "checksPassed": true,
+              "checks": [
+                {
+                  "command": "pnpm test",
+                  "exitCode": 0,
+                  "status": "passed"
+                }
+              ]
+            }
+          },
+          {
+            "nodeId": "reviewRoute",
+            "kind": "script",
+            "output": {
+              "route": "deliver",
+              "repair": "fix",
+              "count": 1,
+              "summary": "s",
+              "feedback": "fb",
+              "question": "q",
+              "context": "c",
+              "evidence": "e",
+              "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "kind": "rounds",
+              "resume": "build"
+            }
+          },
+          {
+            "nodeId": "deliverCheck",
+            "kind": "script",
+            "output": {
+              "route": "pr",
+              "branch": "task/fix-it",
+              "reviewedCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+          },
+          {
+            "nodeId": "openPr",
+            "kind": "agent",
+            "output": {
+              "prUrl": "https://example.test/pr/1",
+              "summary": "opened"
+            }
+          },
+          {
+            "nodeId": "result",
+            "kind": "script",
+            "output": {
+              "outcome": "pr_created",
+              "verification": "passed",
+              "taskDir": ".tasks/fix-it",
+              "branch": "task/fix-it",
+              "reviewedCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "prUrl": "https://example.test/pr/1",
+              "summary": "done",
+              "limitations": []
+            }
+          }
+        ],
+        "assertions": [
+          {
+            "kind": "output",
+            "path": "outcome",
+            "operator": "equals",
+            "expected": "pr_created"
+          },
+          {
+            "kind": "route",
+            "nodeId": "planReviewRoute",
+            "visit": 1,
+            "port": "revise"
+          },
+          {
+            "kind": "route",
+            "nodeId": "reviewRoute",
+            "visit": 1,
+            "port": "fix"
+          },
+          {
+            "kind": "route",
+            "nodeId": "deliverCheck",
+            "visit": 1,
+            "port": "pr"
+          }
+        ]
+      },
+      {
+        "id": "replan",
+        "name": "Review finds a plan defect and routes back to planning",
+        "input": {
+          "request": "Fix it",
+          "repoPath": "/tmp"
+        },
+        "fixtures": [
+          {
+            "nodeId": "setup",
+            "kind": "script",
+            "output": {
+              "repoPath": "/tmp",
+              "request": "Fix it",
+              "taskDir": ".tasks/fix-it",
+              "size": "small",
+              "issue": null,
+              "baseCommit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "reviewPolicy": "auto",
+              "createPr": false,
+              "commitArtifacts": false
+            }
+          },
+          {
+            "nodeId": "plan",
+            "kind": "agent",
+            "output": {
+              "artifactPath": ".tasks/fix-it/plan.md",
+              "summary": "plan",
+              "checkCommands": ["pnpm test"],
+              "decisions": []
+            }
+          },
+          {
+            "nodeId": "planGate",
+            "kind": "script",
+            "output": {
+              "route": "build",
+              "decisions": [],
+              "summary": "plan",
+              "question": "q",
+              "context": "c"
+            }
+          },
+          {
+            "nodeId": "build",
+            "kind": "agent",
+            "output": {
+              "summary": "built",
+              "branch": "task/fix-it",
+              "headCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "checks": [
+                {
+                  "name": "pnpm test",
+                  "result": "passed",
+                  "details": "ok"
+                }
+              ],
+              "status": "done",
+              "questions": [],
+              "resolutions": []
+            }
+          },
+          {
+            "nodeId": "changeReview",
+            "kind": "workflow",
+            "output": {
+              "verdict": "revise",
+              "summary": "review",
+              "reviewedCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "reviewScope": "full",
+              "criteria": [
+                {
+                  "id": "AC1",
+                  "status": "gap",
+                  "evidence": "e"
+                }
+              ],
+              "findings": [
+                {
+                  "id": "X1",
+                  "owner": "plan",
+                  "severity": "major",
+                  "location": "src/a.ts",
+                  "details": "wrong"
+                }
+              ],
+              "resolutions": [],
+              "limitations": [],
+              "baseCommit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "headCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "checksPassed": true,
+              "checks": [
+                {
+                  "command": "pnpm test",
+                  "exitCode": 0,
+                  "status": "passed"
+                }
+              ]
+            }
+          },
+          {
+            "nodeId": "reviewRoute",
+            "kind": "script",
+            "output": {
+              "route": "replan",
+              "repair": "replan",
+              "count": 1,
+              "summary": "s",
+              "feedback": "fb",
+              "question": "q",
+              "context": "c",
+              "evidence": "e",
+              "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "kind": "rounds",
+              "resume": "plan"
+            }
+          },
+          {
+            "nodeId": "plan",
+            "kind": "agent",
+            "output": {
+              "artifactPath": ".tasks/fix-it/plan.md",
+              "summary": "plan",
+              "checkCommands": ["pnpm test"],
+              "decisions": []
+            }
+          },
+          {
+            "nodeId": "planGate",
+            "kind": "script",
+            "output": {
+              "route": "build",
+              "decisions": [],
+              "summary": "plan",
+              "question": "q",
+              "context": "c"
+            }
+          },
+          {
+            "nodeId": "build",
+            "kind": "agent",
+            "output": {
+              "summary": "built",
+              "branch": "task/fix-it",
+              "headCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "checks": [
+                {
+                  "name": "pnpm test",
+                  "result": "passed",
+                  "details": "ok"
+                }
+              ],
+              "status": "done",
+              "questions": [],
+              "resolutions": []
+            }
+          },
+          {
+            "nodeId": "changeReview",
+            "kind": "workflow",
+            "output": {
+              "verdict": "pass",
+              "summary": "review",
+              "reviewedCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "reviewScope": "full",
+              "criteria": [
+                {
+                  "id": "AC1",
+                  "status": "verified",
+                  "evidence": "e"
+                }
+              ],
+              "findings": [],
+              "resolutions": [],
+              "limitations": [],
+              "baseCommit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "headCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "checksPassed": true,
+              "checks": [
+                {
+                  "command": "pnpm test",
+                  "exitCode": 0,
+                  "status": "passed"
+                }
+              ]
+            }
+          },
+          {
+            "nodeId": "reviewRoute",
+            "kind": "script",
+            "output": {
+              "route": "deliver",
+              "repair": "fix",
+              "count": 1,
+              "summary": "s",
+              "feedback": "fb",
+              "question": "q",
+              "context": "c",
+              "evidence": "e",
+              "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "kind": "rounds",
+              "resume": "build"
+            }
+          },
+          {
+            "nodeId": "deliverCheck",
+            "kind": "script",
+            "output": {
+              "route": "local",
+              "branch": "task/fix-it",
+              "reviewedCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+          },
+          {
+            "nodeId": "result",
+            "kind": "script",
+            "output": {
+              "outcome": "local_complete",
+              "verification": "passed",
+              "taskDir": ".tasks/fix-it",
+              "branch": "task/fix-it",
+              "reviewedCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "prUrl": null,
+              "summary": "done",
+              "limitations": []
+            }
+          }
+        ],
+        "assertions": [
+          {
+            "kind": "route",
+            "nodeId": "reviewRoute",
+            "visit": 1,
+            "port": "replan"
+          },
+          {
+            "kind": "output",
+            "path": "verification",
+            "operator": "equals",
+            "expected": "passed"
+          }
+        ]
+      },
+      {
+        "id": "bad-contracts",
+        "name": "Contracts reject malformed agent results",
+        "input": {
+          "request": "Fix it",
+          "repoPath": "/tmp"
+        },
+        "fixtures": [
+          {
+            "nodeId": "setup",
+            "kind": "script",
+            "output": {
+              "repoPath": "/tmp",
+              "request": "Fix it",
+              "taskDir": ".tasks/fix-it",
+              "size": "small",
+              "issue": null,
+              "baseCommit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "reviewPolicy": "auto",
+              "createPr": false,
+              "commitArtifacts": false
+            }
+          },
+          {
+            "nodeId": "plan",
+            "kind": "agent",
+            "output": {
+              "artifactPath": ".tasks/fix-it/plan.md",
+              "summary": "plan",
+              "checkCommands": "pnpm test",
+              "decisions": []
+            },
+            "expectRejection": true
+          },
+          {
+            "nodeId": "plan",
+            "kind": "agent",
+            "output": {
+              "artifactPath": ".tasks/fix-it/plan.md",
+              "summary": "plan",
+              "checkCommands": ["pnpm test"],
+              "decisions": []
+            }
+          },
+          {
+            "nodeId": "planGate",
+            "kind": "script",
+            "output": {
+              "route": "build",
+              "decisions": [],
+              "summary": "plan",
+              "question": "q",
+              "context": "c"
+            }
+          },
+          {
+            "nodeId": "build",
+            "kind": "agent",
+            "output": {
+              "summary": "built",
+              "branch": "task/fix-it",
+              "headCommit": "HEAD",
+              "checks": [
+                {
+                  "name": "pnpm test",
+                  "result": "passed",
+                  "details": "ok"
+                }
+              ],
+              "status": "done",
+              "questions": [],
+              "resolutions": []
+            },
+            "expectRejection": true
+          },
+          {
+            "nodeId": "build",
+            "kind": "agent",
+            "output": {
+              "summary": "built",
+              "branch": "task/fix-it",
+              "headCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "checks": [
+                {
+                  "name": "pnpm test",
+                  "result": "passed",
+                  "details": "ok"
+                }
+              ],
+              "status": "done",
+              "questions": [],
+              "resolutions": []
+            }
+          },
+          {
+            "nodeId": "changeReview",
+            "kind": "workflow",
+            "output": {
+              "verdict": "pass",
+              "summary": "review",
+              "reviewedCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "reviewScope": "full",
+              "criteria": [
+                {
+                  "id": "AC1",
+                  "status": "verified",
+                  "evidence": "e"
+                }
+              ],
+              "findings": [],
+              "resolutions": [],
+              "limitations": [],
+              "baseCommit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "headCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "checksPassed": true,
+              "checks": [
+                {
+                  "command": "pnpm test",
+                  "exitCode": 0,
+                  "status": "passed"
+                }
+              ]
+            }
+          },
+          {
+            "nodeId": "reviewRoute",
+            "kind": "script",
+            "output": {
+              "route": "deliver",
+              "repair": "fix",
+              "count": 1,
+              "summary": "s",
+              "feedback": "fb",
+              "question": "q",
+              "context": "c",
+              "evidence": "e",
+              "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "kind": "rounds",
+              "resume": "build"
+            }
+          },
+          {
+            "nodeId": "deliverCheck",
+            "kind": "script",
+            "output": {
+              "route": "local",
+              "branch": "task/fix-it",
+              "reviewedCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+          },
+          {
+            "nodeId": "result",
+            "kind": "script",
+            "output": {
+              "outcome": "local_complete",
+              "verification": "passed",
+              "taskDir": ".tasks/fix-it",
+              "branch": "task/fix-it",
+              "reviewedCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "prUrl": null,
+              "summary": "done",
+              "limitations": []
+            }
+          }
+        ],
+        "assertions": [
+          {
+            "kind": "output",
+            "path": "outcome",
+            "operator": "equals",
+            "expected": "local_complete"
+          }
+        ]
+      },
+      {
+        "id": "human-approval",
+        "name": "A person asks for plan changes, then approves",
+        "input": {
+          "request": "Fix it",
+          "repoPath": "/tmp",
+          "reviewPolicy": "always"
+        },
+        "fixtures": [
+          {
+            "nodeId": "setup",
+            "kind": "script",
+            "output": {
+              "repoPath": "/tmp",
+              "request": "Fix it",
+              "taskDir": ".tasks/fix-it",
+              "size": "small",
+              "issue": null,
+              "baseCommit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "reviewPolicy": "always",
+              "createPr": false,
+              "commitArtifacts": false
+            }
+          },
+          {
+            "nodeId": "plan",
+            "kind": "agent",
+            "output": {
+              "artifactPath": ".tasks/fix-it/plan.md",
+              "summary": "plan",
+              "checkCommands": ["pnpm test"],
+              "decisions": []
+            }
+          },
+          {
+            "nodeId": "planGate",
+            "kind": "script",
+            "output": {
+              "route": "ask",
+              "decisions": [],
+              "summary": "plan",
+              "question": "q",
+              "context": "c"
+            }
+          },
+          {
+            "nodeId": "planAsk",
+            "kind": "script",
+            "output": {
+              "question": "q",
+              "context": "c",
+              "feedback": "",
+              "file": "/tmp/.tasks/fix-it/plan.md",
+              "revision": "r",
+              "evidence": "plan"
+            }
+          },
+          {
+            "nodeId": "planHuman",
+            "kind": "input",
+            "output": {
+              "choice": "revise",
+              "comment": "Name the flag"
+            }
+          },
+          {
+            "nodeId": "planDecision",
+            "kind": "script",
+            "output": {
+              "route": "revise",
+              "feedback": "",
+              "humanResponse": "{}",
+              "summary": "decided"
+            }
+          },
+          {
+            "nodeId": "plan",
+            "kind": "agent",
+            "output": {
+              "artifactPath": ".tasks/fix-it/plan.md",
+              "summary": "plan",
+              "checkCommands": ["pnpm test"],
+              "decisions": []
+            }
+          },
+          {
+            "nodeId": "planGate",
+            "kind": "script",
+            "output": {
+              "route": "ask",
+              "decisions": [],
+              "summary": "plan",
+              "question": "q",
+              "context": "c"
+            }
+          },
+          {
+            "nodeId": "planAsk",
+            "kind": "script",
+            "output": {
+              "question": "q",
+              "context": "c",
+              "feedback": "",
+              "file": "/tmp/.tasks/fix-it/plan.md",
+              "revision": "r",
+              "evidence": "plan"
+            }
+          },
+          {
+            "nodeId": "planHuman",
+            "kind": "input",
+            "output": {
+              "choice": "approved"
+            }
+          },
+          {
+            "nodeId": "planDecision",
+            "kind": "script",
+            "output": {
+              "route": "build",
+              "feedback": "",
+              "humanResponse": "{}",
+              "summary": "decided"
+            }
+          },
+          {
+            "nodeId": "build",
+            "kind": "agent",
+            "output": {
+              "summary": "built",
+              "branch": "task/fix-it",
+              "headCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "checks": [
+                {
+                  "name": "pnpm test",
+                  "result": "passed",
+                  "details": "ok"
+                }
+              ],
+              "status": "done",
+              "questions": [],
+              "resolutions": []
+            }
+          },
+          {
+            "nodeId": "changeReview",
+            "kind": "workflow",
+            "output": {
+              "verdict": "pass",
+              "summary": "review",
+              "reviewedCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "reviewScope": "full",
+              "criteria": [
+                {
+                  "id": "AC1",
+                  "status": "verified",
+                  "evidence": "e"
+                }
+              ],
+              "findings": [],
+              "resolutions": [],
+              "limitations": [],
+              "baseCommit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "headCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "checksPassed": true,
+              "checks": [
+                {
+                  "command": "pnpm test",
+                  "exitCode": 0,
+                  "status": "passed"
+                }
+              ]
+            }
+          },
+          {
+            "nodeId": "reviewRoute",
+            "kind": "script",
+            "output": {
+              "route": "deliver",
+              "repair": "fix",
+              "count": 1,
+              "summary": "s",
+              "feedback": "fb",
+              "question": "q",
+              "context": "c",
+              "evidence": "e",
+              "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "kind": "rounds",
+              "resume": "build"
+            }
+          },
+          {
+            "nodeId": "deliverCheck",
+            "kind": "script",
+            "output": {
+              "route": "local",
+              "branch": "task/fix-it",
+              "reviewedCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+          },
+          {
+            "nodeId": "result",
+            "kind": "script",
+            "output": {
+              "outcome": "local_complete",
+              "verification": "passed",
+              "taskDir": ".tasks/fix-it",
+              "branch": "task/fix-it",
+              "reviewedCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "prUrl": null,
+              "summary": "done",
+              "limitations": []
+            }
+          }
+        ],
+        "assertions": [
+          {
+            "kind": "route",
+            "nodeId": "planDecision",
+            "visit": 1,
+            "port": "revise"
+          },
+          {
+            "kind": "route",
+            "nodeId": "planDecision",
+            "visit": 2,
+            "port": "build"
+          },
+          {
+            "kind": "output",
+            "path": "outcome",
+            "operator": "equals",
+            "expected": "local_complete"
+          }
+        ]
+      },
+      {
+        "id": "plan-review-blocked-stop",
+        "name": "A blocked plan review asks a person, who stops",
+        "input": {
+          "request": "Fix it",
+          "repoPath": "/tmp",
+          "size": "standard"
+        },
+        "fixtures": [
+          {
+            "nodeId": "setup",
+            "kind": "script",
+            "output": {
+              "repoPath": "/tmp",
+              "request": "Fix it",
+              "taskDir": ".tasks/fix-it",
+              "size": "standard",
+              "issue": null,
+              "baseCommit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "reviewPolicy": "auto",
+              "createPr": false,
+              "commitArtifacts": false
+            }
+          },
+          {
+            "nodeId": "spec",
+            "kind": "agent",
+            "output": {
+              "artifactPath": ".tasks/fix-it/spec.md",
+              "summary": "spec",
+              "decisions": []
+            }
+          },
+          {
+            "nodeId": "plan",
+            "kind": "agent",
+            "output": {
+              "artifactPath": ".tasks/fix-it/plan.md",
+              "summary": "plan",
+              "checkCommands": ["pnpm test"],
+              "decisions": []
+            }
+          },
+          {
+            "nodeId": "planGate",
+            "kind": "script",
+            "output": {
+              "route": "review",
+              "decisions": [],
+              "summary": "plan",
+              "question": "q",
+              "context": "c"
+            }
+          },
+          {
+            "nodeId": "planReview",
+            "kind": "workflow",
+            "output": {
+              "verdict": "blocked",
+              "proposalSummary": "p",
+              "systemSummary": "s",
+              "summary": "sum",
+              "reviewedSources": ["plan.md"],
+              "findings": [],
+              "limitations": ["no access"]
+            }
+          },
+          {
+            "nodeId": "planReviewRoute",
+            "kind": "script",
+            "output": {
+              "route": "ask",
+              "feedback": "f",
+              "review": {},
+              "decisions": [],
+              "summary": "s",
+              "question": "q",
+              "context": "c"
+            }
+          },
+          {
+            "nodeId": "planAsk",
+            "kind": "script",
+            "output": {
+              "question": "q",
+              "context": "c",
+              "feedback": "",
+              "file": "/tmp/.tasks/fix-it/plan.md",
+              "revision": "r",
+              "evidence": "plan"
+            }
+          },
+          {
+            "nodeId": "planHuman",
+            "kind": "input",
+            "output": {
+              "choice": "stop"
+            }
+          },
+          {
+            "nodeId": "planDecision",
+            "kind": "script",
+            "output": {
+              "route": "stop",
+              "feedback": "",
+              "humanResponse": "{}",
+              "summary": "decided"
+            }
+          },
+          {
+            "nodeId": "stopOutput",
+            "kind": "script",
+            "output": {
+              "outcome": "stopped",
+              "verification": "incomplete",
+              "taskDir": ".tasks/fix-it",
+              "branch": null,
+              "reviewedCommit": null,
+              "prUrl": null,
+              "summary": "stopped",
+              "limitations": []
+            }
+          }
+        ],
+        "assertions": [
+          {
+            "kind": "route",
+            "nodeId": "planReviewRoute",
+            "visit": 1,
+            "port": "ask"
+          },
+          {
+            "kind": "output",
+            "path": "outcome",
+            "operator": "equals",
+            "expected": "stopped"
+          }
+        ]
+      },
+      {
+        "id": "review-limit",
+        "name": "The review round limit asks a person: continue, replan, then stop",
+        "input": {
+          "request": "Fix it",
+          "repoPath": "/tmp"
+        },
+        "fixtures": [
+          {
+            "nodeId": "setup",
+            "kind": "script",
+            "output": {
+              "repoPath": "/tmp",
+              "request": "Fix it",
+              "taskDir": ".tasks/fix-it",
+              "size": "small",
+              "issue": null,
+              "baseCommit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "reviewPolicy": "auto",
+              "createPr": false,
+              "commitArtifacts": false
+            }
+          },
+          {
+            "nodeId": "plan",
+            "kind": "agent",
+            "output": {
+              "artifactPath": ".tasks/fix-it/plan.md",
+              "summary": "plan",
+              "checkCommands": ["pnpm test"],
+              "decisions": []
+            }
+          },
+          {
+            "nodeId": "planGate",
+            "kind": "script",
+            "output": {
+              "route": "build",
+              "decisions": [],
+              "summary": "plan",
+              "question": "q",
+              "context": "c"
+            }
+          },
+          {
+            "nodeId": "build",
+            "kind": "agent",
+            "output": {
+              "summary": "built",
+              "branch": "task/fix-it",
+              "headCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "checks": [
+                {
+                  "name": "pnpm test",
+                  "result": "passed",
+                  "details": "ok"
+                }
+              ],
+              "status": "done",
+              "questions": [],
+              "resolutions": []
+            }
+          },
+          {
+            "nodeId": "changeReview",
+            "kind": "workflow",
+            "output": {
+              "verdict": "revise",
+              "summary": "review",
+              "reviewedCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "reviewScope": "full",
+              "criteria": [
+                {
+                  "id": "AC1",
+                  "status": "gap",
+                  "evidence": "e"
+                }
+              ],
+              "findings": [
+                {
+                  "id": "X1",
+                  "owner": "implementation",
+                  "severity": "major",
+                  "location": "src/a.ts",
+                  "details": "wrong"
+                }
+              ],
+              "resolutions": [],
+              "limitations": [],
+              "baseCommit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "headCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "checksPassed": true,
+              "checks": [
+                {
+                  "command": "pnpm test",
+                  "exitCode": 0,
+                  "status": "passed"
+                }
+              ]
+            }
+          },
+          {
+            "nodeId": "reviewRoute",
+            "kind": "script",
+            "output": {
+              "route": "ask",
+              "repair": "fix",
+              "count": 1,
+              "summary": "s",
+              "feedback": "fb",
+              "question": "q",
+              "context": "c",
+              "evidence": "e",
+              "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "kind": "rounds",
+              "resume": "build"
+            }
+          },
+          {
+            "nodeId": "limitAsk",
+            "kind": "script",
+            "output": {
+              "kind": "rounds",
+              "resume": "build",
+              "round": 3,
+              "feedback": "fb",
+              "question": "q",
+              "context": "c",
+              "evidence": "e",
+              "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+          },
+          {
+            "nodeId": "limitHuman",
+            "kind": "input",
+            "output": {
+              "choice": "continue"
+            }
+          },
+          {
+            "nodeId": "limitGrant",
+            "kind": "script",
+            "output": {
+              "route": "build",
+              "kind": "rounds",
+              "until": 6,
+              "feedback": "fb",
+              "humanResponse": "{}",
+              "summary": "s"
+            }
+          },
+          {
+            "nodeId": "build",
+            "kind": "agent",
+            "output": {
+              "summary": "built",
+              "branch": "task/fix-it",
+              "headCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "checks": [
+                {
+                  "name": "pnpm test",
+                  "result": "passed",
+                  "details": "ok"
+                }
+              ],
+              "status": "done",
+              "questions": [],
+              "resolutions": []
+            }
+          },
+          {
+            "nodeId": "changeReview",
+            "kind": "workflow",
+            "output": {
+              "verdict": "revise",
+              "summary": "review",
+              "reviewedCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "reviewScope": "full",
+              "criteria": [
+                {
+                  "id": "AC1",
+                  "status": "gap",
+                  "evidence": "e"
+                }
+              ],
+              "findings": [
+                {
+                  "id": "X1",
+                  "owner": "plan",
+                  "severity": "major",
+                  "location": "src/a.ts",
+                  "details": "wrong"
+                }
+              ],
+              "resolutions": [],
+              "limitations": [],
+              "baseCommit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "headCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "checksPassed": true,
+              "checks": [
+                {
+                  "command": "pnpm test",
+                  "exitCode": 0,
+                  "status": "passed"
+                }
+              ]
+            }
+          },
+          {
+            "nodeId": "reviewRoute",
+            "kind": "script",
+            "output": {
+              "route": "ask",
+              "repair": "replan",
+              "count": 1,
+              "summary": "s",
+              "feedback": "fb",
+              "question": "q",
+              "context": "c",
+              "evidence": "e",
+              "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "kind": "rounds",
+              "resume": "plan"
+            }
+          },
+          {
+            "nodeId": "limitAsk",
+            "kind": "script",
+            "output": {
+              "kind": "rounds",
+              "resume": "plan",
+              "round": 3,
+              "feedback": "fb",
+              "question": "q",
+              "context": "c",
+              "evidence": "e",
+              "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+          },
+          {
+            "nodeId": "limitHuman",
+            "kind": "input",
+            "output": {
+              "choice": "continue"
+            }
+          },
+          {
+            "nodeId": "limitGrant",
+            "kind": "script",
+            "output": {
+              "route": "plan",
+              "kind": "rounds",
+              "until": 6,
+              "feedback": "fb",
+              "humanResponse": "{}",
+              "summary": "s"
+            }
+          },
+          {
+            "nodeId": "plan",
+            "kind": "agent",
+            "output": {
+              "artifactPath": ".tasks/fix-it/plan.md",
+              "summary": "plan",
+              "checkCommands": ["pnpm test"],
+              "decisions": []
+            }
+          },
+          {
+            "nodeId": "planGate",
+            "kind": "script",
+            "output": {
+              "route": "build",
+              "decisions": [],
+              "summary": "plan",
+              "question": "q",
+              "context": "c"
+            }
+          },
+          {
+            "nodeId": "build",
+            "kind": "agent",
+            "output": {
+              "summary": "built",
+              "branch": "task/fix-it",
+              "headCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "checks": [
+                {
+                  "name": "pnpm test",
+                  "result": "passed",
+                  "details": "ok"
+                }
+              ],
+              "status": "done",
+              "questions": [],
+              "resolutions": []
+            }
+          },
+          {
+            "nodeId": "changeReview",
+            "kind": "workflow",
+            "output": {
+              "verdict": "revise",
+              "summary": "review",
+              "reviewedCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "reviewScope": "full",
+              "criteria": [
+                {
+                  "id": "AC1",
+                  "status": "gap",
+                  "evidence": "e"
+                }
+              ],
+              "findings": [
+                {
+                  "id": "X1",
+                  "owner": "implementation",
+                  "severity": "major",
+                  "location": "src/a.ts",
+                  "details": "wrong"
+                }
+              ],
+              "resolutions": [],
+              "limitations": [],
+              "baseCommit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "headCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "checksPassed": true,
+              "checks": [
+                {
+                  "command": "pnpm test",
+                  "exitCode": 0,
+                  "status": "passed"
+                }
+              ]
+            }
+          },
+          {
+            "nodeId": "reviewRoute",
+            "kind": "script",
+            "output": {
+              "route": "ask",
+              "repair": "fix",
+              "count": 1,
+              "summary": "s",
+              "feedback": "fb",
+              "question": "q",
+              "context": "c",
+              "evidence": "e",
+              "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "kind": "rounds",
+              "resume": "build"
+            }
+          },
+          {
+            "nodeId": "limitAsk",
+            "kind": "script",
+            "output": {
+              "kind": "rounds",
+              "resume": "stop",
+              "round": 3,
+              "feedback": "fb",
+              "question": "q",
+              "context": "c",
+              "evidence": "e",
+              "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+          },
+          {
+            "nodeId": "limitHuman",
+            "kind": "input",
+            "output": {
+              "choice": "stop"
+            }
+          },
+          {
+            "nodeId": "limitGrant",
+            "kind": "script",
+            "output": {
+              "route": "stop",
+              "kind": "rounds",
+              "until": 6,
+              "feedback": "fb",
+              "humanResponse": "{}",
+              "summary": "s"
+            }
+          },
+          {
+            "nodeId": "stopOutput",
+            "kind": "script",
+            "output": {
+              "outcome": "stopped",
+              "verification": "incomplete",
+              "taskDir": ".tasks/fix-it",
+              "branch": null,
+              "reviewedCommit": null,
+              "prUrl": null,
+              "summary": "stopped",
+              "limitations": []
+            }
+          }
+        ],
+        "assertions": [
+          {
+            "kind": "route",
+            "nodeId": "reviewRoute",
+            "visit": 1,
+            "port": "ask"
+          },
+          {
+            "kind": "output",
+            "path": "outcome",
+            "operator": "equals",
+            "expected": "stopped"
+          }
+        ]
+      },
+      {
+        "id": "build-questions",
+        "name": "The build asks questions, a person answers, then the limit asks",
+        "input": {
+          "request": "Fix it",
+          "repoPath": "/tmp"
+        },
+        "fixtures": [
+          {
+            "nodeId": "setup",
+            "kind": "script",
+            "output": {
+              "repoPath": "/tmp",
+              "request": "Fix it",
+              "taskDir": ".tasks/fix-it",
+              "size": "small",
+              "issue": null,
+              "baseCommit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "reviewPolicy": "auto",
+              "createPr": false,
+              "commitArtifacts": false
+            }
+          },
+          {
+            "nodeId": "plan",
+            "kind": "agent",
+            "output": {
+              "artifactPath": ".tasks/fix-it/plan.md",
+              "summary": "plan",
+              "checkCommands": ["pnpm test"],
+              "decisions": []
+            }
+          },
+          {
+            "nodeId": "planGate",
+            "kind": "script",
+            "output": {
+              "route": "build",
+              "decisions": [],
+              "summary": "plan",
+              "question": "q",
+              "context": "c"
+            }
+          },
+          {
+            "nodeId": "build",
+            "kind": "agent",
+            "output": {
+              "summary": "built",
+              "branch": "task/fix-it",
+              "headCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "checks": [
+                {
+                  "name": "pnpm test",
+                  "result": "passed",
+                  "details": "ok"
+                }
+              ],
+              "status": "question",
+              "questions": [
+                {
+                  "question": "Keep the flag?",
+                  "whyItMatters": "API",
+                  "recommendation": "Yes"
+                }
+              ],
+              "resolutions": []
+            }
+          },
+          {
+            "nodeId": "questionGate",
+            "kind": "script",
+            "output": {
+              "route": "ask",
+              "kind": "questions",
+              "resume": "build",
+              "round": 1,
+              "feedback": "",
+              "question": "q",
+              "context": "c",
+              "evidence": "e",
+              "revision": "1"
+            }
+          },
+          {
+            "nodeId": "questionHuman",
+            "kind": "input",
+            "output": "Keep it"
+          },
+          {
+            "nodeId": "build",
+            "kind": "agent",
+            "output": {
+              "summary": "built",
+              "branch": "task/fix-it",
+              "headCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "checks": [
+                {
+                  "name": "pnpm test",
+                  "result": "passed",
+                  "details": "ok"
+                }
+              ],
+              "status": "question",
+              "questions": [
+                {
+                  "question": "Keep the flag?",
+                  "whyItMatters": "API",
+                  "recommendation": "Yes"
+                }
+              ],
+              "resolutions": []
+            }
+          },
+          {
+            "nodeId": "questionGate",
+            "kind": "script",
+            "output": {
+              "route": "limit",
+              "kind": "questions",
+              "resume": "build",
+              "round": 1,
+              "feedback": "",
+              "question": "q",
+              "context": "c",
+              "evidence": "e",
+              "revision": "1"
+            }
+          },
+          {
+            "nodeId": "limitAsk",
+            "kind": "script",
+            "output": {
+              "kind": "questions",
+              "resume": "build",
+              "round": 0,
+              "feedback": "",
+              "question": "q",
+              "context": "c",
+              "evidence": "e",
+              "revision": "3"
+            }
+          },
+          {
+            "nodeId": "limitHuman",
+            "kind": "input",
+            "output": {
+              "choice": "continue"
+            }
+          },
+          {
+            "nodeId": "limitGrant",
+            "kind": "script",
+            "output": {
+              "route": "build",
+              "kind": "questions",
+              "until": 3,
+              "feedback": "fb",
+              "humanResponse": "{}",
+              "summary": "s"
+            }
+          },
+          {
+            "nodeId": "build",
+            "kind": "agent",
+            "output": {
+              "summary": "built",
+              "branch": "task/fix-it",
+              "headCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "checks": [
+                {
+                  "name": "pnpm test",
+                  "result": "passed",
+                  "details": "ok"
+                }
+              ],
+              "status": "done",
+              "questions": [],
+              "resolutions": []
+            }
+          },
+          {
+            "nodeId": "changeReview",
+            "kind": "workflow",
+            "output": {
+              "verdict": "pass",
+              "summary": "review",
+              "reviewedCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "reviewScope": "full",
+              "criteria": [
+                {
+                  "id": "AC1",
+                  "status": "verified",
+                  "evidence": "e"
+                }
+              ],
+              "findings": [],
+              "resolutions": [],
+              "limitations": [],
+              "baseCommit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "headCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "checksPassed": true,
+              "checks": [
+                {
+                  "command": "pnpm test",
+                  "exitCode": 0,
+                  "status": "passed"
+                }
+              ]
+            }
+          },
+          {
+            "nodeId": "reviewRoute",
+            "kind": "script",
+            "output": {
+              "route": "deliver",
+              "repair": "fix",
+              "count": 1,
+              "summary": "s",
+              "feedback": "fb",
+              "question": "q",
+              "context": "c",
+              "evidence": "e",
+              "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "kind": "rounds",
+              "resume": "build"
+            }
+          },
+          {
+            "nodeId": "deliverCheck",
+            "kind": "script",
+            "output": {
+              "route": "local",
+              "branch": "task/fix-it",
+              "reviewedCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+          },
+          {
+            "nodeId": "result",
+            "kind": "script",
+            "output": {
+              "outcome": "local_complete",
+              "verification": "passed",
+              "taskDir": ".tasks/fix-it",
+              "branch": "task/fix-it",
+              "reviewedCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "prUrl": null,
+              "summary": "done",
+              "limitations": []
+            }
+          }
+        ],
+        "assertions": [
+          {
+            "kind": "route",
+            "nodeId": "build",
+            "visit": 1,
+            "port": "question"
+          },
+          {
+            "kind": "route",
+            "nodeId": "questionGate",
+            "visit": 2,
+            "port": "limit"
+          },
+          {
+            "kind": "output",
+            "path": "outcome",
+            "operator": "equals",
+            "expected": "local_complete"
+          }
+        ]
+      }
+    ]
+  },
+  "interlock-sdlc-v2-plan-review": {
+    "name": "Routes and contracts",
+    "cases": [
+      {
+        "id": "ready",
+        "name": "Ready verdict, after a malformed finding",
+        "input": {
+          "repoPath": "/tmp",
+          "proposalText": "Do X"
+        },
+        "fixtures": [
+          {
+            "nodeId": "review",
+            "kind": "agent",
+            "output": {
+              "verdict": "ready",
+              "proposalSummary": "p",
+              "systemSummary": "s",
+              "summary": "sum",
+              "reviewedSources": ["plan.md"],
+              "findings": [
+                {
+                  "id": "F1"
+                }
+              ],
+              "limitations": []
+            },
+            "expectRejection": true
+          },
+          {
+            "nodeId": "review",
+            "kind": "agent",
+            "output": {
+              "verdict": "ready",
+              "proposalSummary": "p",
+              "systemSummary": "s",
+              "summary": "sum",
+              "reviewedSources": ["plan.md"],
+              "findings": [],
+              "limitations": []
+            }
+          },
+          {
+            "nodeId": "normalize",
+            "kind": "script",
+            "output": {
+              "verdict": "ready",
+              "proposalSummary": "p",
+              "systemSummary": "s",
+              "summary": "sum",
+              "reviewedSources": ["plan.md"],
+              "findings": [],
+              "limitations": []
+            }
+          }
+        ],
+        "assertions": [
+          {
+            "kind": "output",
+            "path": "verdict",
+            "operator": "equals",
+            "expected": "ready"
+          }
+        ]
+      }
+    ]
+  },
+  "interlock-sdlc-v2-change-review": {
+    "name": "Routes and contracts",
+    "cases": [
+      {
+        "id": "pass",
+        "name": "Passing review, after a rejected verdict value",
+        "input": {
+          "repoPath": "/tmp",
+          "baseRef": "main",
+          "criteria": "AC1"
+        },
+        "fixtures": [
+          {
+            "nodeId": "checks",
+            "kind": "script",
+            "output": {
+              "repoPath": "/tmp",
+              "baseCommit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "headCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "changedFiles": ["a"],
+              "changedFileCount": 1,
+              "diffStat": "1 file",
+              "checks": [],
+              "checksPassed": null,
+              "checksNote": "none",
+              "criteria": "AC1",
+              "criteriaPath": null,
+              "priorReview": null,
+              "focus": null
+            }
+          },
+          {
+            "nodeId": "review",
+            "kind": "agent",
+            "output": {
+              "verdict": "approved",
+              "summary": "review",
+              "reviewedCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "reviewScope": "full",
+              "criteria": [
+                {
+                  "id": "AC1",
+                  "status": "verified",
+                  "evidence": "e"
+                }
+              ],
+              "findings": [],
+              "resolutions": [],
+              "limitations": []
+            },
+            "expectRejection": true
+          },
+          {
+            "nodeId": "review",
+            "kind": "agent",
+            "output": {
+              "verdict": "pass",
+              "summary": "review",
+              "reviewedCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "reviewScope": "full",
+              "criteria": [
+                {
+                  "id": "AC1",
+                  "status": "verified",
+                  "evidence": "e"
+                }
+              ],
+              "findings": [],
+              "resolutions": [],
+              "limitations": []
+            }
+          },
+          {
+            "nodeId": "normalize",
+            "kind": "script",
+            "output": {
+              "verdict": "pass",
+              "summary": "review",
+              "reviewedCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "reviewScope": "full",
+              "criteria": [
+                {
+                  "id": "AC1",
+                  "status": "verified",
+                  "evidence": "e"
+                }
+              ],
+              "findings": [],
+              "resolutions": [],
+              "limitations": [],
+              "baseCommit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "headCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "checksPassed": true,
+              "checks": [
+                {
+                  "command": "pnpm test",
+                  "exitCode": 0,
+                  "status": "passed"
+                }
+              ]
+            }
+          }
+        ],
+        "assertions": [
+          {
+            "kind": "output",
+            "path": "verdict",
+            "operator": "equals",
+            "expected": "pass"
+          }
+        ]
+      }
+    ]
+  }
+}

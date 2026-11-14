@@ -1,502 +1,268 @@
-import { afterAll, afterEach, expect, it, vi } from 'vitest';
+import { afterEach, expect, it } from 'vitest';
+import { setImmediate as tick } from 'node:timers/promises';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 import { Engine } from '@interlock/runtime';
 import { Store } from '@interlock/storage';
-import type { Json, WorkflowDefinition } from '@interlock/core';
+import type { Json, TestSuite } from '@interlock/core';
 import { importStarter } from '../packages/server/src/starters';
-
-// Fixture simulation of SDLC v2 against a temporary Git repository. Agent
-// results and human answers are scripted; Script nodes run for real, so
-// result checks, check commands and routing are exercised. Each case lists the
-// steps it expects in order, so a wrong route stops the case.
-
-type Finding = { id: string; severity: string };
-type WorkInput = {
-  headCommit?: string;
-  planPath?: string | null;
-  formatFeedback?: string;
-  priorReview?: { findings: Finding[] } | null;
-  previous?: string | { feedback?: string; humanResponse?: string };
-  review?: { deliveryNotes: string[] };
-};
-type Ctx = { repo: string; input: WorkInput };
-const feedback = (input: WorkInput) =>
-  typeof input.previous === 'object' ? input.previous.feedback : undefined;
-type Step = ['agent', string, (ctx: Ctx) => Json] | ['human', string, Json];
+import bundle from '../workflows/sdlc-v2.json';
+import suites from './fixtures/sdlc-v2-suites.json';
 
 const engines: Engine[] = [],
   dirs: string[] = [];
-const covered = new Set<string>();
-let definition: WorkflowDefinition | undefined;
 afterEach(() => {
-  for (const engine of engines.splice(0)) {
-    engine.stop();
-    engine.store.close();
+  for (const e of engines.splice(0)) {
+    e.stop();
+    e.store.close();
   }
-  for (const dir of dirs.splice(0))
-    rmSync(dir, { recursive: true, force: true });
-});
-afterAll(() => {
-  for (const dir of dirs) rmSync(dir, { recursive: true, force: true });
+  for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
 });
 
-const git = (repo: string, ...args: string[]) =>
-  execFileSync('git', args, { cwd: repo, encoding: 'utf8' }).trim();
-function repository() {
-  const repo = mkdtempSync(join(tmpdir(), 'interlock-sdlc-v2-'));
-  dirs.push(repo);
-  git(repo, 'init', '-q', '-b', 'main');
-  git(repo, 'config', 'user.email', 'fixture@example.com');
-  git(repo, 'config', 'user.name', 'Fixture');
-  git(repo, 'config', 'commit.gpgsign', 'false');
-  writeFileSync(join(repo, 'README.md'), 'Fixture\n');
-  git(repo, 'add', '.');
-  git(repo, 'commit', '-q', '-m', 'Initial');
-  return repo;
-}
-function write(repo: string, file: string, text = 'text\n') {
-  mkdirSync(dirname(join(repo, file)), { recursive: true });
-  writeFileSync(join(repo, file), text);
-}
-let commits = 0;
-function commit(repo: string, file = `change-${++commits}.txt`) {
-  write(repo, file, `${commits}\n`);
-  git(repo, 'add', file);
-  git(repo, 'commit', '-q', '-m', `Change ${commits}`);
-  return git(repo, 'rev-parse', 'HEAD');
-}
-
-// ── Agent results ──
-const spec = ({ repo }: Ctx) => {
-  write(repo, 'notes/spec.md', '# Spec\nAC1\n');
-  return { artifactPath: 'notes/spec.md', summary: 'Spec', decisions: [] };
+type Report = {
+  state: string;
+  error?: string;
+  unsupported: { items: string[] };
+  coverage?: { untested: { edgeId: string }[] };
 };
-const plan =
-  (extra: Record<string, Json> = {}) =>
-  ({ repo }: Ctx) => {
-    write(repo, 'notes/plan.md', `# Plan ${commits}\nAC1\n`);
-    return {
-      artifactPath: 'notes/plan.md',
-      summary: 'Plan',
-      checkCommands: ['git diff --quiet'],
-      decisions: [],
-      ...extra,
-    };
-  };
-const badPlan = () => ({
-  artifactPath: 'notes/missing.md',
-  summary: 'Plan',
-  checkCommands: [],
-  decisions: [],
-});
-const build =
-  (resolutions: Json[] = [], file?: string) =>
-  ({ repo }: Ctx) => ({
-    status: 'done',
-    summary: 'Built',
-    headCommit: commit(repo, file),
-    questions: [],
-    resolutions,
+async function simulate(e: Engine, suite: TestSuite, caseId: string) {
+  const requestId = `${suite.workflowId}-${caseId}`;
+  e.simulations.request({
+    action: 'run',
+    suiteId: suite.id,
+    suiteRevision: suite.revision,
+    caseId,
+    version: e.workflow(suite.workflowId).latestVersion,
+    requestId,
   });
-const question = ({ repo }: Ctx) => ({
-  status: 'question',
-  summary: 'Need a decision',
-  headCommit: git(repo, 'rev-parse', 'HEAD'),
-  questions: [
-    {
-      question: 'Keep the old flag?',
-      whyItMatters: 'API',
-      recommendation: 'Yes',
-    },
-  ],
-  resolutions: [],
-});
-const unusableBuild = () => ({
-  status: 'done',
-  summary: 'Built',
-  headCommit: 'not-a-commit',
-  questions: [],
-  resolutions: [],
-});
-const finding = (id: string, owner: string, severity = 'major') => ({
-  id,
-  owner,
-  severity,
-  location: 'src/file.ts',
-  details: 'Fixture finding',
-});
-const reviewer =
-  (
-    verdict: 'pass' | 'revise' | 'blocked',
-    findings: Json[] = [],
-    extra: Record<string, Json> = {},
-  ) =>
-  ({ input }: Ctx) => ({
-    verdict,
-    summary: `Review ${verdict}`,
-    reviewedCommit: input.headCommit ?? null,
-    criteria:
-      input.planPath && !('criteria' in extra)
-        ? [{ id: 'AC1', status: 'verified', evidence: 'Fixture test' }]
-        : [],
-    findings,
-    resolutions: (input.priorReview?.findings ?? [])
-      .filter((f) => f.severity !== 'minor')
-      .map((f) => ({ id: f.id, status: 'resolved', evidence: 'Fixed' })),
-    deliveryNotes: ['For delivery: mention the migration'],
-    limitations: [],
-    ...extra,
-  });
-const passingReview: Step[] = [
-  ['agent', 'specReviewer', reviewer('pass')],
-  [
-    'agent',
-    'codeReviewer',
-    reviewer('pass', [finding('C1', 'build', 'minor')]),
-  ],
-];
-const planReview =
-  (verdict: string, findings: Json[] = []) =>
-  () => ({
-    verdict,
-    summary: `Plan review ${verdict}`,
-    findings: findings.map((f) => ({
-      ...(f as Record<string, Json>),
-      recommendation: 'Fix',
-    })),
-    limitations: verdict === 'blocked' ? ['Could not read the spec'] : [],
-  });
-
-// ── Driver ──
-function waitingInput(engine: Engine, runId: string) {
-  const run = engine.run(runId);
-  const step = run.executions.at(-1);
-  return run.status === 'waiting' &&
-    step?.kind === 'input' &&
-    step.status === 'waiting'
-    ? step
-    : undefined;
-}
-async function drive(
-  engine: Engine,
-  runId: string,
-  repo: string,
-  steps: Step[],
-) {
-  for (const [index, [kind, nodeId, result]] of steps.entries()) {
-    const label = `step ${index} (${nodeId})`;
-    await vi.waitFor(
-      () => {
-        const run = engine.run(runId);
-        if (run.status === 'failed') throw new Error(`${label}: ${run.error}`);
-        const ready =
-          kind === 'agent'
-            ? engine.available(runId).some((w) => w.nodeId === nodeId)
-            : waitingInput(engine, runId)?.nodeId === nodeId;
-        if (!ready)
-          throw new Error(
-            `${label}: waiting at ${run.executions.at(-1)?.nodeId} (${run.status})`,
-          );
-      },
-      { timeout: 10000, interval: 10 },
-    );
-    if (kind === 'human') {
-      const step = waitingInput(engine, runId)!;
-      engine.externalInputs.answer(
-        {
-          action: 'answer',
-          target: { kind: 'human', runId, executionId: step.id },
-          value: result,
-          expectedRevision: 0,
-          submissionId: `answer-${index}`,
-        },
-        'mcp',
-      );
-      continue;
-    }
-    const work = engine.available(runId).find((w) => w.nodeId === nodeId)!;
-    const fresh = work.context.mode === 'fresh';
-    const claim = engine.claim(work.id, {
-      workerId: fresh ? `fresh-${index}` : 'author',
-      freshContext: fresh,
-      tools: [],
-      skills: [],
-      session: {
-        executorId: 'fixture',
-        sessionId: fresh ? `fresh-${index}` : 'author',
-      },
-    });
-    engine.submit(
-      claim.id,
-      claim.token!,
-      result({ repo, input: work.input as WorkInput }),
-    );
+  for (let i = 0; i < 2000; i++) {
+    const r = e.simulations.request({
+      action: 'get',
+      id: requestId,
+      limit: 100,
+    }) as unknown as Report;
+    if (r.state !== 'running') return r;
+    await tick();
   }
-}
-async function simulate(input: Record<string, Json>, steps: Step[]) {
-  const engine = new Engine(new Store(':memory:'), process.cwd());
-  engines.push(engine);
-  importStarter(engine, { starterId: 'sdlc-v2', requestId: 'fixture' });
-  const workflow = engine.store.workflows()[0];
-  definition = engine.store.getVersion(workflow.id, 1)!.definition;
-  const repo = repository();
-  const run = engine.start(workflow.id, {
-    request: 'Synthetic change',
-    repoPath: repo,
-    taskDir: 'notes',
-    ...input,
-  }).run;
-  await drive(engine, run.id, repo, steps);
-  await vi.waitFor(
-    () => expect(['completed', 'failed']).toContain(engine.run(run.id).status),
-    { timeout: 10000, interval: 10 },
+  throw new Error(
+    `${caseId} did not settle: ${JSON.stringify(e.simulations.request({ action: 'get', id: requestId }))}`.slice(
+      0,
+      3000,
+    ),
   );
-  const executions = engine.store.runs().flatMap((r) => r.executions);
-  const done = new Set(executions.map((e) => e.nodeId));
-  for (const edge of definition.edges)
-    if (
-      executions.some(
-        (e) =>
-          e.nodeId === edge.source &&
-          e.status === 'completed' &&
-          (e.port ?? 'default') === (edge.port ?? 'default'),
-      ) ||
-      (edge.port?.startsWith('branch:') && done.has(edge.target)) ||
-      (edge.targetHandle === 'join' && done.has(edge.source))
-    )
-      covered.add(edge.id);
-  const result = engine.run(run.id);
-  expect(result.error).toBeUndefined();
-  return {
-    engine,
-    run: result,
-    output: result.output as Record<string, Json>,
-    repo,
-  };
 }
 
-const smallStart: Step[] = [['agent', 'plan', plan()]];
-it('finishes a small change locally with verification and delivery reported apart', async () => {
-  const { output } = await simulate({}, [
-    ...smallStart,
-    ['agent', 'build', build()],
-    ...passingReview,
-  ]);
-  expect(output).toMatchObject({
-    outcome: 'finished',
-    verification: {
-      status: 'passed',
-      reviewRounds: 1,
-      checksPassed: true,
-      checks: [{ command: 'git diff --quiet', status: 'passed', attempts: 1 }],
-      criteria: [{ id: 'AC1', status: 'verified' }],
-      openFindings: [{ id: 'C1', severity: 'minor' }],
-    },
-    delivery: {
-      status: 'local',
-      prUrl: null,
-      ci: 'not_applicable',
-      notes: [
-        'For delivery: mention the migration',
-        'For delivery: mention the migration',
+// The saved suites drive SDLC v2 and both helpers through the built-in
+// fixture simulator, as a user would after editing a copy. Every edge of each
+// workflow must be traversed by at least one case.
+it('simulates every route of SDLC v2, Plan review and Change review', async () => {
+  const e = new Engine(new Store(':memory:'), process.cwd());
+  engines.push(e);
+  importStarter(e, { starterId: 'sdlc-v2', requestId: 'simulate' });
+  const copies = e.store.list<{ id: string; starterId: string }>(
+    'starterCopies',
+  );
+  for (const [key, content] of Object.entries(suites)) {
+    const starterId = key === bundle.rootId ? 'sdlc-v2' : `sdlc-v2/${key}`;
+    const workflowId = copies.find((c) => c.starterId === starterId)!.id;
+    const suite = e.testbench.createSuite({
+      workflowId,
+      content: content as Parameters<
+        Engine['testbench']['createSuite']
+      >[0]['content'],
+    });
+    let untested: string[] | undefined;
+    for (const { id } of content.cases) {
+      const report = await simulate(e, suite, id);
+      expect(
+        report.state,
+        `${key} ${id}: ${report.error ?? report.unsupported.items.join('; ')}`,
+      ).toBe('passed');
+      const missed = report.coverage!.untested.map((u) => u.edgeId);
+      untested = (untested ?? missed).filter((edge) => missed.includes(edge));
+    }
+    expect(untested, `${key} edges no case traverses`).toEqual([]);
+  }
+});
+
+// One check of the real Script logic against a temporary Git repository. The
+// Scripts run in-process; Git is the only subprocess.
+const scripts = (id: string) =>
+  Object.fromEntries(
+    bundle.workflows
+      .find((w) => w.id === id)!
+      .draft.nodes.flatMap((n) =>
+        'command' in n && typeof n.command === 'string'
+          ? [[n.id, n.command]]
+          : [],
+      ),
+  ) as Record<string, string>;
+type Output = {
+  taskDir: string;
+  route: string;
+  verdict: string;
+  feedback: string;
+  checks: { outputTail: string }[];
+};
+const AsyncFunction = (async () => {}).constructor as unknown as new (
+  ...args: string[]
+) => (
+  input: unknown,
+  load: (name: string) => Promise<unknown>,
+) => Promise<Output>;
+// The test runner cannot resolve import() inside a constructed function.
+const run = (command: string, input: unknown) =>
+  new AsyncFunction('input', 'load', command.replaceAll('import(', 'load('))(
+    input,
+    (name) => import(name),
+  );
+
+it('runs the setup, check, verdict, routing and delivery Scripts on a real repository', async () => {
+  const S = scripts(bundle.rootId),
+    C = scripts(`${bundle.rootId}-change-review`);
+  const repo = realpathSync(mkdtempSync(join(tmpdir(), 'interlock-sdlc-v2-')));
+  dirs.push(repo);
+  const git = (...args: string[]) =>
+    execFileSync('git', args, { cwd: repo, encoding: 'utf8' }).trim();
+  git('init', '-q', '-b', 'main');
+  git('config', 'user.email', 't@example.com');
+  git('config', 'user.name', 't');
+  git('config', 'commit.gpgsign', 'false');
+  writeFileSync(join(repo, 'a.txt'), 'a');
+  git('add', '.');
+  git('commit', '-qm', 'base');
+
+  const root = await run(S.setup, {
+    run: { repoPath: repo, request: 'Fix reimport!', issue: 'o/r/issues/403' },
+  });
+  expect(root).toMatchObject({ size: 'small', createPr: false });
+  expect(root.taskDir).toMatch(/^\.tasks\/403-fix-reimport-/);
+  expect(existsSync(join(repo, root.taskDir))).toBe(true);
+  await expect(
+    run(S.setup, { run: { repoPath: repo, request: 'x', taskDir: '../out' } }),
+  ).rejects.toThrow(/inside/);
+
+  // Approval covers only the plan text the person saw.
+  const planPath = join(root.taskDir, 'plan.md');
+  writeFileSync(join(repo, planPath), '# plan\nAC1');
+  const plan = { artifactPath: planPath, summary: 's', decisions: [] };
+  const capture = await run(S.planAsk, {
+    root,
+    plan,
+    ask: { question: 'q', context: 'c' },
+  });
+  writeFileSync(join(repo, planPath), '# changed');
+  expect(
+    (await run(S.planDecision, { capture, answer: { choice: 'approved' } }))
+      .route,
+  ).toBe('revise');
+
+  git('checkout', '-qb', 'task');
+  writeFileSync(join(repo, 'b.txt'), 'b');
+  git('add', '.');
+  git('commit', '-qm', 'change');
+  const head = git('rev-parse', 'HEAD');
+  // A failing command is retried once; a pass on retry is reported as flaky.
+  const flag = join(repo, '.git', 'flaky');
+  const pre = await run(C.checks, {
+    run: {
+      repoPath: repo,
+      baseRef: 'main',
+      checkCommands: [
+        `test -e ${flag} || { touch ${flag}; exit 1; }`,
+        'exit 3',
       ],
     },
   });
-  const nodes = new Map(definition!.nodes.map((n) => [n.id, n]));
-  for (const id of ['specReviewer', 'codeReviewer', 'planReview'])
-    expect(nodes.get(id)).toMatchObject({ context: { mode: 'fresh' } });
-});
-
-it('reviews a standard plan, routes plan findings to the spec and the plan, and opens a PR', async () => {
-  const { output } = await simulate({ size: 'standard', createPr: true }, [
-    ['agent', 'spec', spec],
-    ['agent', 'plan', plan()],
-    ['agent', 'planReview', planReview('revise', [finding('P1', 'spec')])],
-    ['agent', 'spec', spec],
-    ['agent', 'plan', plan()],
-    ['agent', 'planReview', planReview('revise', [finding('P2', 'plan')])],
-    ['agent', 'plan', plan()],
-    ['agent', 'planReview', planReview('ready')],
-    ['agent', 'build', build()],
-    ...passingReview,
-    [
-      'agent',
-      'openPr',
-      ({ input }) => {
-        expect(input.review?.deliveryNotes).toHaveLength(2);
-        return { prUrl: 'https://example.com/pr/1', summary: 'Opened' };
-      },
-    ],
+  expect(pre).toMatchObject({ headCommit: head, checksPassed: false });
+  expect(pre.checks).toMatchObject([
+    { status: 'passed', attempts: 2 },
+    { status: 'failed', exitCode: 3, attempts: 2 },
   ]);
-  expect(output.delivery).toMatchObject({
-    status: 'pr_opened',
-    prUrl: 'https://example.com/pr/1',
-    ci: 'not_awaited',
+  expect(pre.checks[0].outputTail).toMatch(/second attempt/);
+
+  // A failed check holds the change unless an environment finding names it.
+  const review = (findings: Json[]) => ({
+    verdict: 'pass',
+    summary: 's',
+    reviewedCommit: head,
+    reviewScope: 'full',
+    criteria: [{ id: 'AC1', status: 'verified', evidence: 'e' }],
+    findings,
+    resolutions: [],
+    limitations: [],
   });
-});
-
-it('bounds plan result repair, asks about decisions and build questions, then fixes review findings', async () => {
-  await simulate({}, [
-    ['agent', 'plan', badPlan],
-    ['agent', 'plan', badPlan],
-    ['agent', 'plan', badPlan],
-    ['human', 'planHuman', { choice: 'revise', comment: 'Write the file' }],
-    [
-      'agent',
-      'plan',
-      plan({
-        decisions: [
-          { question: 'Rename?', whyItMatters: 'Public', recommendation: 'No' },
-        ],
-      }),
-    ],
-    ['human', 'planHuman', { choice: 'approved' }],
-    [
-      'agent',
-      'build',
-      ({ input, repo }) => {
-        expect(input.previous).toHaveProperty('humanResponse');
-        return question({ repo, input });
-      },
-    ],
-    ['human', 'questionHuman', 'Keep it'],
-    [
-      'agent',
-      'build',
-      (ctx) => {
-        expect(ctx.input.previous).toBe('Keep it');
-        return build()(ctx);
-      },
-    ],
-    ['agent', 'specReviewer', reviewer('pass')],
-    ['agent', 'codeReviewer', reviewer('revise', [finding('C1', 'build')])],
-    [
-      'agent',
-      'build',
-      (ctx) => {
-        expect(feedback(ctx.input)).toContain('C1');
-        return build([{ id: 'C1', status: 'fixed', details: 'Fixed' }])(ctx);
-      },
-    ],
-    ...passingReview,
-  ]);
-});
-
-it('stops when a person declines a blocked plan review', async () => {
-  const { output } = await simulate({ size: 'standard' }, [
-    ['agent', 'spec', spec],
-    ['agent', 'plan', plan()],
-    ['agent', 'planReview', planReview('blocked')],
-    ['human', 'planHuman', { choice: 'stop' }],
-  ]);
-  expect(output).toMatchObject({
-    outcome: 'stopped',
-    verification: { status: 'not_reviewed', reviewRounds: 0 },
-    delivery: { status: 'not_attempted' },
+  expect((await run(C.normalize, { pre, review: review([]) })).verdict).toBe(
+    'revise',
+  );
+  const finding = (owner: string, location: string) => ({
+    id: 'E1',
+    owner,
+    severity: 'major',
+    location,
+    details: 'Fails the same way at the base commit',
   });
-});
-
-it('routes change findings to the spec, asks at the round limit and extends it', async () => {
-  const { output } = await simulate({ size: 'standard' }, [
-    ['agent', 'spec', spec],
-    ['agent', 'plan', plan()],
-    ['agent', 'planReview', planReview('ready')],
-    ['agent', 'build', build()],
-    ['agent', 'specReviewer', reviewer('revise', [finding('S1', 'spec')])],
-    ['agent', 'codeReviewer', reviewer('pass')],
-    ['agent', 'spec', spec],
-    // A change already reviewed skips a second plan review.
-    ['agent', 'plan', plan()],
-    ['agent', 'build', build()],
-    ['agent', 'specReviewer', reviewer('pass')],
-    ['agent', 'codeReviewer', reviewer('revise', [finding('C1', 'build')])],
-    ['agent', 'build', build([{ id: 'C1', status: 'fixed', details: 'Done' }])],
-    ['agent', 'specReviewer', reviewer('revise', [finding('S2', 'spec')])],
-    ['agent', 'codeReviewer', reviewer('pass')],
-    ['human', 'limitHuman', { choice: 'continue' }],
-    ['agent', 'spec', spec],
-    ['agent', 'plan', plan()],
-    ['agent', 'build', build()],
-    ...passingReview,
-  ]);
-  expect(output.verification).toMatchObject({
-    status: 'passed',
-    reviewRounds: 4,
+  const excused = await run(C.normalize, {
+    pre: { ...pre, checks: [pre.checks[1]] },
+    review: review([finding('environment', 'exit 3')]),
   });
-});
-
-it('returns failing checks to the build once, bounds reviewer repair and stops at a blocked review', async () => {
-  const { output } = await simulate({ checkCommands: ['test -f fixed.txt'] }, [
-    ...smallStart,
-    ['agent', 'build', build()],
-    [
-      'agent',
-      'build',
-      (ctx) => {
-        expect(feedback(ctx.input)).toContain('test -f fixed.txt');
-        return build([], 'fixed.txt')(ctx);
-      },
-    ],
-    ['agent', 'specReviewer', reviewer('pass', [], { reviewedCommit: 'abc' })],
-    ['agent', 'codeReviewer', reviewer('pass')],
-    [
-      'agent',
-      'specReviewer',
-      ({ input }) => {
-        expect(input.formatFeedback).toContain('specReview reviewed');
-        return reviewer('pass', [], { reviewedCommit: 'abc' })({
-          repo: '',
-          input,
-        });
-      },
-    ],
-    ['agent', 'codeReviewer', reviewer('pass')],
-    ['human', 'limitHuman', { choice: 'continue' }],
-    ['agent', 'specReviewer', reviewer('blocked')],
-    ['agent', 'codeReviewer', reviewer('pass')],
-    ['human', 'limitHuman', { choice: 'stop' }],
-  ]);
-  expect(output).toMatchObject({
-    outcome: 'stopped',
-    verification: {
-      status: 'incomplete',
-      checksPassed: true,
-      checks: [{ command: 'test -f fixed.txt', status: 'passed' }],
-    },
+  expect(excused).toMatchObject({
+    verdict: 'pass',
+    findings: [{ severity: 'minor' }],
   });
-});
 
-it('bounds unusable build results, then routes findings to the plan at the round limit', async () => {
-  await simulate({}, [
-    ...smallStart,
-    ['agent', 'build', unusableBuild],
-    ['agent', 'build', unusableBuild],
-    ['agent', 'build', unusableBuild],
-    ['human', 'limitHuman', { choice: 'continue' }],
-    ['agent', 'build', build()],
-    ['agent', 'specReviewer', reviewer('pass')],
-    ['agent', 'codeReviewer', reviewer('revise', [finding('C1', 'build')])],
-    ['agent', 'build', build([{ id: 'C1', status: 'fixed', details: 'Done' }])],
-    // Small changes have no spec, so a spec finding belongs to the plan.
-    ['agent', 'specReviewer', reviewer('revise', [finding('S1', 'spec')])],
-    ['agent', 'codeReviewer', reviewer('pass')],
-    ['agent', 'plan', plan()],
-    ['agent', 'build', build()],
-    ['agent', 'specReviewer', reviewer('pass')],
-    ['agent', 'codeReviewer', reviewer('revise', [finding('C2', 'plan')])],
-    ['human', 'limitHuman', { choice: 'continue' }],
-    ['agent', 'plan', plan()],
-    ['agent', 'build', build()],
-    ...passingReview,
-  ]);
-});
+  // Plan-owned findings return to planning; the round limit asks a person.
+  const plans = await run(C.normalize, {
+    pre: { ...pre, checksPassed: true, checks: [] },
+    review: review([finding('plan', 'plan.md')]),
+  });
+  expect((await run(S.reviewRoute, { review: plans, count: 1 })).route).toBe(
+    'replan',
+  );
+  expect((await run(S.reviewRoute, { review: plans, count: 3 })).route).toBe(
+    'ask',
+  );
 
-it('covers every route of the template across the cases above', () => {
-  const missing = definition!.edges
-    .filter((edge) => !covered.has(edge.id))
-    .map((edge) => edge.id);
-  expect(missing).toEqual([]);
+  // Three question rounds, then the shared limit checkpoint; continuing
+  // starts a new count and does not extend the review round limit.
+  const asking = {
+    summary: 's',
+    questions: [{ question: 'q', whyItMatters: 'w', recommendation: 'r' }],
+  };
+  let gate: Output | null = null;
+  for (const expected of ['ask', 'ask', 'ask', 'limit']) {
+    gate = await run(S.questionGate, { build: asking, prior: gate });
+    expect(gate.route).toBe(expected);
+  }
+  const grant = await run(S.limitGrant, {
+    asked: await run(S.limitAsk, { ask: gate }),
+    answer: { choice: 'continue' },
+  });
+  expect(grant.route).toBe('build');
+  expect(grant.feedback).toMatch(/without further questions/);
+  expect(
+    (await run(S.questionGate, { build: asking, prior: gate })).route,
+  ).toBe('ask');
+  expect(
+    (await run(S.reviewRoute, { review: plans, count: 3, grant })).route,
+  ).toBe('ask');
+
+  // Delivery refuses a checkout that moved after review.
+  expect((await run(S.deliverCheck, { root, review: excused })).route).toBe(
+    'local',
+  );
+  writeFileSync(join(repo, 'c.txt'), 'c');
+  git('add', '.');
+  git('commit', '-qm', 'more');
+  await expect(run(S.deliverCheck, { root, review: excused })).rejects.toThrow(
+    /Review the new commit/,
+  );
 });

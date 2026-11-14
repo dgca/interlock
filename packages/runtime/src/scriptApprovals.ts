@@ -34,6 +34,35 @@ const approvalContents = (definition: WorkflowDefinition) => [
   ),
 ];
 
+/** The content a waiting step asks a person to approve, in its run's version. */
+export function waitingApprovalContent(
+  definition: WorkflowDefinition | undefined,
+  execution: { nodeId: string; scriptApproval?: { hash: string } },
+) {
+  const scripts = definition ? approvalContents(definition) : [];
+  // A workspace hook or policy holds the run's entry step under its hash.
+  return (
+    scripts.find((s) => s.nodeId === execution.nodeId) ??
+    scripts.find(
+      (s) =>
+        (s.nodeId.startsWith('workspace.') ||
+          s.nodeId === 'permissionPolicy') &&
+        scriptContentHash(s) === execution.scriptApproval?.hash,
+    )
+  );
+}
+
+/** What an approval is for, in every view that names it. */
+export function approvalSubject(
+  content: { nodeId: string; language?: string } | undefined,
+) {
+  return content?.language === 'permission-policy'
+    ? 'permission policy'
+    : content?.nodeId.startsWith('workspace.')
+      ? 'workspace hook'
+      : 'imported Script';
+}
+
 /**
  * One-time approval of imported Script content. Approval is keyed by workflow
  * and content hash: content a person or agent writes has no pending record and
@@ -271,16 +300,7 @@ export class ScriptApprovals {
   step(run: Run, execution: NodeExecution) {
     // The same definition the engine gates: the run's current version.
     const version = this.store.getVersion(run.workflowId, run.version);
-    const scripts = version ? approvalContents(version.definition) : [];
-    // A workspace hook holds the run's entry step under the hook's hash.
-    const script =
-      scripts.find((s) => s.nodeId === execution.nodeId) ??
-      scripts.find(
-        (s) =>
-          (s.nodeId.startsWith('workspace.') ||
-            s.nodeId === 'permissionPolicy') &&
-          scriptContentHash(s) === execution.scriptApproval?.hash,
-      );
+    const script = waitingApprovalContent(version?.definition, execution);
     if (!script) return undefined;
     const hash = scriptContentHash(script);
     return {
