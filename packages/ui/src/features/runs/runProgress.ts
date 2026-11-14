@@ -47,6 +47,18 @@ const labels: Record<ProgressState, string> = {
 };
 
 /** Presentation of persisted executions; never guesses an agent's internal progress. */
+/** Progress labels that repeat a status the inspector already shows. */
+export const statusLabels = new Set([
+  'queued',
+  'not started',
+  'running',
+  'waiting',
+  'finished',
+  'completed',
+  'failed',
+  'cancelled',
+]);
+
 export function runProgress(
   run: Run,
   definition: WorkflowDefinition | null,

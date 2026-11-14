@@ -14,7 +14,7 @@
     "packages/ui/src/features/automations/AutomationEditor.tsx": 1073,
     "packages/ui/src/features/executors/AgentPresets.tsx": 837,
     "packages/ui/src/features/executors/ManagedExecutionPanel.tsx": 857,
-    "packages/ui/src/features/runs/RunInspector.tsx": 1421,
+    "packages/ui/src/features/runs/RunInspector.tsx": 1416,
     "packages/ui/src/features/variables/Variables.tsx": 1256,
     "packages/ui/src/features/workflows/NodeInspector.tsx": 1134,
     "packages/ui/src/features/workflows/WorkflowEditor.tsx": 1638,

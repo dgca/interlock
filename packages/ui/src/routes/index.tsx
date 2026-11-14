@@ -41,6 +41,10 @@ import {
 } from '../features/report/ReportSkeleton';
 import { DiagnosticsPageSkeleton } from '../features/diagnostics/DiagnosticsSkeleton';
 import { workflowSection } from '../features/workflows/workflowListConfig';
+import {
+  ProposalsSection,
+  useOpenProposalCount,
+} from '../features/proposals/proposalRoutes';
 import { TestsViewSkeleton } from '../features/testing/TestsViewSkeleton';
 import { testRoutes } from '../features/testing/testRoutes';
 
@@ -390,9 +394,11 @@ function WorkflowRoute() {
         !redirectToSchedules &&
         section !== 'runs' &&
         section !== 'tests' &&
-        section !== 'report',
+        section !== 'report' &&
+        section !== 'proposals',
     }),
   );
+  const proposalCount = useOpenProposalCount(workflowId!, !redirectToSchedules);
   const ownerId = workflow?.ownerWorkflowId ?? undefined;
   const owner = useQuery(
     trpc.workflows.get.queryOptions(
@@ -457,6 +463,7 @@ function WorkflowRoute() {
           );
         }}
         section={section}
+        proposalCount={proposalCount}
         onSectionChange={(section) => {
           setSearch((previous) => {
             const next = new URLSearchParams(previous);
@@ -470,6 +477,8 @@ function WorkflowRoute() {
             <Suspense fallback={<TestsViewSkeleton />}>
               <TestsView workflow={workflow} />
             </Suspense>
+          ) : section === 'proposals' ? (
+            <ProposalsSection workflow={workflow} act={context.act} />
           ) : section === 'report' ? (
             <Suspense fallback={<ReportLoadingContent />}>
               <WorkflowReportView workflowId={workflow.id} />

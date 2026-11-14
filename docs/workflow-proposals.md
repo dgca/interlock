@@ -6,7 +6,7 @@ A proposal never changes a workflow by itself. Approving one applies its edits a
 
 ## Let agents propose
 
-Agent proposals are off for every workflow until a person turns them on. With them off, `propose_workflow_change` refuses with a message and nothing else changes. People can always create a proposal from the CLI or the HTTP API.
+Agent proposals are off for every workflow until a person turns them on. With them off, `propose_workflow_change` refuses with a message and nothing else changes. People can always create a proposal with **New proposal** in the Proposals tab, the CLI or the HTTP API.
 
 The setting is per workflow:
 
@@ -52,6 +52,12 @@ To keep a looping agent from flooding the queue:
 
 ## Review a proposal
 
+Open the workflow's **Proposals** tab. The tab shows the number of open proposals; the list filters by Open, Approved and Rejected. **Proposal settings** turns agent proposals on and sets their scope.
+
+A proposal shows its rationale, links to its source runs, its changes against the current draft in the same layout as publication review, and its simulation result. **Edit before approving** opens the operations for editing; the changes update as you edit, and **Approve edited** applies your version. **Reject** asks for a reason. In the run inspector, a step that proposed a change lists the proposal with its status.
+
+From the CLI:
+
 ```sh
 interlock proposals list --workflow WORKFLOW_ID --status open
 interlock proposals get PROPOSAL_ID
@@ -69,7 +75,7 @@ If an approved proposal adds or changes a Script, Interlock treats the Script as
 
 A proposal records the draft revision it was made against, and approval only applies it to that revision. If the draft changed since:
 
-- When the operations still apply cleanly, the proposal is `reapplicable`. Run `interlock proposals reapply PROPOSAL_ID` to move it onto the current draft, check the new result, then approve it.
+- When the operations still apply cleanly, the proposal is `reapplicable`. Choose **Re-apply to current draft**, or run `interlock proposals reapply PROPOSAL_ID`, to move it onto the current draft, check the new result, then approve it.
 - Otherwise the proposal is `conflicting` and lists why. Reject it and ask for a new proposal.
 
 Interlock never applies a proposal against a different draft without that explicit step.

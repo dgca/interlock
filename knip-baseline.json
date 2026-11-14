@@ -681,11 +681,6 @@
       "symbol": "ChangeKind"
     },
     {
-      "file": "packages/ui/src/features/workflows/workflowDiff.ts",
-      "type": "types",
-      "symbol": "WorkflowDiff"
-    },
-    {
       "file": "packages/ui/src/lib/query.tsx",
       "type": "exports",
       "symbol": "queryClient"

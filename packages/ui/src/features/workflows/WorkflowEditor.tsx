@@ -11,7 +11,6 @@ import {
   PageTabList,
   SegmentedControl,
 } from '../../design-system';
-
 import { WorkflowPauseButton, PauseBanner } from '../pauses/PauseControls';
 import { isConfirmedWriteRejection } from '../../lib/isConfirmedWriteRejection';
 import type { Action } from '../../lib/useActionFeedback';
@@ -26,7 +25,6 @@ import {
   type WorkspaceRead,
 } from '../../components/WorkspaceReads';
 import { useMemo, useState, useRef, useEffect, type ReactNode } from 'react';
-
 import { useMergedRef, useResizeObserver } from '@mantine/hooks';
 import {
   ReactFlow,
@@ -66,7 +64,6 @@ import {
   type WorkflowEdge,
   type WorkflowDefinition,
 } from '@interlock/core';
-
 import { parseRawDefinition } from './rawDefinition';
 import { SettingsDialog, type Settings } from './SettingsDialog';
 import { DeleteWorkflowDialog } from './DeleteWorkflowDialog';
@@ -169,6 +166,7 @@ export function WorkflowEditor({
   section = 'editor',
   onSectionChange,
   sectionView,
+  proposalCount,
   onOpenWorkflow,
 }: {
   workflow: Workflow & { layoutRevision?: number };
@@ -188,6 +186,7 @@ export function WorkflowEditor({
   onOpenWorkflow?: (id: string) => void;
   /** Content of the selected Runs, Tests or Report section. */
   sectionView?: ReactNode;
+  proposalCount?: number;
 }) {
   const [deleting, setDeleting] = useState(false);
   const [confirmReload, setConfirmReload] = useState(false);
@@ -1078,6 +1077,7 @@ export function WorkflowEditor({
             { value: 'runs', label: 'Runs' },
             { value: 'tests', label: 'Tests' },
             { value: 'report', label: 'Report' },
+            { value: 'proposals', label: 'Proposals', count: proposalCount },
             ...(!workflow.ownerWorkflowId
               ? [{ value: 'children', label: 'Child workflows' }]
               : []),
@@ -1447,7 +1447,7 @@ export function WorkflowEditor({
             </WorkspaceReads>
           </Tabs.Panel>
         )}
-        {(['runs', 'tests', 'report'] as const).map((value) => (
+        {(['runs', 'tests', 'report', 'proposals'] as const).map((value) => (
           <Tabs.Panel
             key={value}
             value={value}
