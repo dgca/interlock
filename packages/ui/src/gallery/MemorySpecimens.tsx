@@ -20,6 +20,7 @@ const note = (extra: Partial<MemoryNote>): MemoryNote => ({
   ...extra,
 });
 const pending = note({
+  id: '5b4c3d2e-0000-4000-8000-000000000000',
   status: 'pending',
   author: 'agent',
   nodeId: 'implement',
@@ -89,7 +90,7 @@ export function Memory() {
               workflowId: 'workflow',
               revision: 7,
               budget: 8000,
-              notes: [live, { ...pending, status: undefined }].map(
+              notes: [live, pending].map(
                 ({ id, nodeId, revision, content, updatedAt }) => ({
                   id,
                   ...(nodeId ? { nodeId } : {}),
