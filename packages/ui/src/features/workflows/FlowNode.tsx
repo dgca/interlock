@@ -157,7 +157,6 @@ function ToolPort({ type }: { type: 'source' | 'target' }) {
         type={type}
         position={type === 'source' ? Position.Bottom : Position.Top}
         id={id}
-        aria-label={label}
         className={[styles.toolHandle, active ? styles.toolHandleActive : '']
           .filter(Boolean)
           .join(' ')}
