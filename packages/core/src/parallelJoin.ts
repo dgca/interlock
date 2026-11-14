@@ -36,7 +36,7 @@ type JoinSettings = {
  * the original all-branches join and output. Publication rejects "continue"
  * without a smaller joinAfter.
  */
-export const isPartialJoin = (node: JoinSettings) =>
+const isPartialJoin = (node: JoinSettings) =>
   (node.joinAfter ?? node.branches.length) < node.branches.length;
 
 /** Output shape of a partial join, for hints and contract checks. */
@@ -62,7 +62,7 @@ export function joinOutputSchema(node: JoinSettings) {
 }
 
 const topFields = (schema: Record<string, unknown>) => [
-  ...Object.keys((schema.properties ?? {}) as object),
+  ...Object.keys(schema.properties ?? {}),
   ...(Array.isArray(schema.required) ? (schema.required as string[]) : []),
 ];
 
