@@ -1,5 +1,7 @@
 # Use the SDLC workflow
 
+This page covers the original SDLC starter. [SDLC workflow v2](sdlc-workflow-v2.md) is offered beside it, with its own Plan review and Change review workflows, Interlock-run checks, Human input checkpoints and a permission policy for fewer approvals. Your copies of either are never changed by the other.
+
 Add **SDLC workflow** through **Workflows → Import → Starters → Add to library**. This explicitly creates a published version 1 without starting a run. It takes a software change request through intent, specification, implementation planning, construction, and independent review. It records decisions and verification evidence in the target repository.
 
 ## Connect a coding agent

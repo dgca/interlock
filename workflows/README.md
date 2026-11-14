@@ -1,15 +1,16 @@
 # Import a workflow
 
-These files are explicit imports. New libraries start empty; bundled SDLC and evaluator choices are available in **Workflows → Import → Starters**. The same dialog supports GitHub folders, local files and pasted JSON, with a preview before import. See [starter workflows](../docs/starter-workflows.md).
+These files are explicit imports. New libraries start empty; bundled SDLC, SDLC v2 and evaluator choices are available in **Workflows → Import → Starters**. The same dialog supports GitHub folders, local files and pasted JSON, with a preview before import. See [starter workflows](../docs/starter-workflows.md).
 
-| File                                         | Workflow                     | Purpose                                                                                                                                   |
-| -------------------------------------------- | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| [sdlc.json](sdlc.json)                       | SDLC workflow                | The same procedure offered by the bundled starter picker. See [Use the SDLC workflow](../docs/sdlc-workflow.md).                          |
-| [all-nodes.json](all-nodes.json)             | All nodes (demo)             | Inspect every current node editor using a fictional mission briefing. Importing also adds its owned **Format crew badge** helper.         |
-| [local-git-trial.json](local-git-trial.json) | Local Git trial example      | Reviewed local Script for independent comparison workspaces. See [managed Git trials](../docs/local-git-trials.md).                       |
-| [evaluate.json](evaluate.json)               | Evaluate workflow comparison | Grade retained artifacts using a fixed rubric and record resumable receipts. See [workflow evaluation](../docs/workflow-evaluation.md).   |
-| [improve.json](improve.json)                 | Improve one workflow prompt  | One bounded experiment and adoption proposal, with a pinned owned evaluator. See [workflow improvement](../docs/workflow-improvement.md). |
-| [parallel-checks.json](parallel-checks.json) | Parallel checks (demo)       | Count checks and look for a test check in parallel. See [Parallel groups](../docs/parallel.md).                                           |
+| File                                         | Workflow                     | Purpose                                                                                                                                                                 |
+| -------------------------------------------- | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [sdlc.json](sdlc.json)                       | SDLC workflow                | The same procedure offered by the bundled starter picker. See [Use the SDLC workflow](../docs/sdlc-workflow.md).                                                        |
+| [sdlc-v2.json](sdlc-v2.json)                 | SDLC workflow v2             | Bundle of SDLC workflow v2 with its owned Plan review and Change review, as offered by the starter picker. See [Use the SDLC workflow v2](../docs/sdlc-workflow-v2.md). |
+| [all-nodes.json](all-nodes.json)             | All nodes (demo)             | Inspect every current node editor using a fictional mission briefing. Importing also adds its owned **Format crew badge** helper.                                       |
+| [local-git-trial.json](local-git-trial.json) | Local Git trial example      | Reviewed local Script for independent comparison workspaces. See [managed Git trials](../docs/local-git-trials.md).                                                     |
+| [evaluate.json](evaluate.json)               | Evaluate workflow comparison | Grade retained artifacts using a fixed rubric and record resumable receipts. See [workflow evaluation](../docs/workflow-evaluation.md).                                 |
+| [improve.json](improve.json)                 | Improve one workflow prompt  | One bounded experiment and adoption proposal, with a pinned owned evaluator. See [workflow improvement](../docs/workflow-improvement.md).                               |
+| [parallel-checks.json](parallel-checks.json) | Parallel checks (demo)       | Count checks and look for a test check in parallel. See [Parallel groups](../docs/parallel.md).                                                                         |
 
 ## Import from GitHub
 
