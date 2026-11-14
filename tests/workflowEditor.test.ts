@@ -212,7 +212,7 @@ const render = async (visible = true, deletingOutside = false) => {
           section,
           workflowsRead,
           onDeleted: deleted,
-          runsView: h('p', {}, 'Workflow runs'),
+          sectionView: h('p', {}, 'Workflow runs'),
           workflows: [workflowCatalogEntry(workflow)],
           onBack: vi.fn(),
           onOpenWorkflow: opened,

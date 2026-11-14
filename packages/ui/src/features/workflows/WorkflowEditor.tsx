@@ -18,6 +18,7 @@ import type { Action } from '../../lib/useActionFeedback';
 import { useEditorDraft } from '../../lib/useEditorDraft';
 import { flushSync } from 'react-dom';
 import { WorkflowChildren } from './WorkflowChildren';
+import { workflowSection, type WorkflowSection } from './workflowListConfig';
 import { WorkflowCardsSkeleton } from '../../components/WorkflowCards/WorkflowCards';
 import {
   WorkspaceReads,
@@ -168,7 +169,7 @@ export function WorkflowEditor({
   onDeleted = onBack,
   section = 'editor',
   onSectionChange,
-  runsView,
+  sectionView,
   onOpenWorkflow,
   onReport,
 }: {
@@ -184,11 +185,12 @@ export function WorkflowEditor({
   act: Action;
   onDirty: (dirty: boolean) => void;
   onDeleted?: () => void;
-  section?: 'editor' | 'runs' | 'children';
-  onSectionChange?: (section: 'editor' | 'runs' | 'children') => void;
+  section?: WorkflowSection;
+  onSectionChange?: (section: WorkflowSection) => void;
   onOpenWorkflow?: (id: string) => void;
   onReport?: () => void;
-  runsView?: ReactNode;
+  /** Content of the selected Runs or Tests section. */
+  sectionView?: ReactNode;
 }) {
   const [deleting, setDeleting] = useState(false);
   const [confirmReload, setConfirmReload] = useState(false);
@@ -1078,21 +1080,14 @@ export function WorkflowEditor({
         keepMounted
         keepMountedMode="display-none"
         value={section}
-        onChange={(value) =>
-          onSectionChange?.(
-            value === 'runs'
-              ? 'runs'
-              : value === 'children'
-                ? 'children'
-                : 'editor',
-          )
-        }
+        onChange={(value) => onSectionChange?.(workflowSection(value))}
       >
         <PageTabList
           label="Workflow sections"
           items={[
             { value: 'editor', label: 'Editor' },
             { value: 'runs', label: 'Runs' },
+            { value: 'tests', label: 'Tests' },
             ...(!workflow.ownerWorkflowId
               ? [{ value: 'children', label: 'Child workflows' }]
               : []),
@@ -1462,12 +1457,15 @@ export function WorkflowEditor({
             </WorkspaceReads>
           </Tabs.Panel>
         )}
-        <Tabs.Panel
-          value="runs"
-          className={`${styles.runsView} ${styles.runListView}`}
-        >
-          {section === 'runs' && runsView}
-        </Tabs.Panel>
+        {(['runs', 'tests'] as const).map((value) => (
+          <Tabs.Panel
+            key={value}
+            value={value}
+            className={`${styles.runsView} ${styles.runListView}`}
+          >
+            {section === value && sectionView}
+          </Tabs.Panel>
+        ))}
       </Tabs>
       {confirmReload && remoteChanged && (
         <Modal

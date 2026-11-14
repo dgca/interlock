@@ -127,7 +127,7 @@ Optional `environment` has a nonblank `identity` up to 200 characters and option
 
 ## Inspect results and record quality
 
-Use `read_workflow_comparisons` with `request.action: "list"` for compact progress, or `request: {"action":"report","id":"COMPARISON_ID"}` for paged results. Each sample identifies its case, side, repetition, run URL and counterpart. Open these runs in the existing Runs UI to inspect graphs and full values. Labels include the short comparison ID, suite, case, side and repetition. Comparison labels appear in run rows and inspection, with counterpart navigation. Suite editing and comparison controls remain MCP/shared-API operations.
+Use `read_workflow_comparisons` with `request.action: "list"` for compact progress, or `request: {"action":"report","id":"COMPARISON_ID"}` for paged results. Each sample identifies its case, side, repetition, run URL and counterpart. Open these runs in the existing Runs UI to inspect graphs and full values. Labels include the short comparison ID, suite, case, side and repetition. Comparison labels appear in run rows and inspection, with counterpart navigation. Suites can also be edited in the workflow's **Tests** tab; comparison controls remain MCP/shared-API operations.
 
 Execution failures, structural checks and quality judgments are separate. A completed run can fail checks. A passed check does not establish semantic accuracy. Root observations are recorded after the execution tree finishes; later explicit retries do not silently rescore that evidence. Reports show current run status separately from the observed status. Missing underlying history is explicit.
 
