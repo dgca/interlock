@@ -154,8 +154,8 @@ export function touchRunRevision(db: DatabaseSync, id: string) {
 }
 
 /**
- * Run IDs whose run, execution or work rows changed after `after`, oldest change
- * first, and the revision to pass next. Without `after`, only the current revision.
+ * Runs whose run, execution or work rows changed after `after`, oldest change
+ * first, each with its revision. Without `after`, only the current revision.
  */
 export function runsChangedSince(
   db: DatabaseSync,
@@ -166,16 +166,20 @@ export function runsChangedSince(
     const row = db
       .prepare('SELECT revision FROM continuation_sequence WHERE id = 1')
       .get();
-    return { revision: Number(row?.revision ?? 0), runIds: [], more: false };
+    return { revision: Number(row?.revision ?? 0), changes: [], more: false };
   }
-  const rows = db
+  const changes = db
     .prepare(
       'SELECT run_id, revision FROM run_revisions WHERE revision > ? ORDER BY revision LIMIT ?',
     )
-    .all(after, limit);
+    .all(after, limit)
+    .map((row) => ({
+      runId: row.run_id as string,
+      revision: Number(row.revision),
+    }));
   return {
-    revision: Number(rows.at(-1)?.revision ?? after),
-    runIds: rows.map((row) => row.run_id as string),
-    more: rows.length === limit,
+    revision: changes.at(-1)?.revision ?? after,
+    changes,
+    more: changes.length === limit,
   };
 }

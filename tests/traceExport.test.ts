@@ -232,3 +232,30 @@ it('drops spans with a logged count when the collector is down, without delaying
     /dropped 2 spans \((collector unreachable|timeout|shutdown deadline)\)/,
   );
 });
+
+it('sends a finished run span once, ending at completion, when the run is saved again later', async () => {
+  const traces = exporter();
+  const run = engine.start(publish('Solo').id, {}).run;
+  completeAgent(run.id);
+  await traces.flush(1000);
+  const completed = engine
+    .inspect(run.id)
+    .events.findLast((e) => e.type === 'run.completed')!.at;
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  engine.budgets.set({
+    runId: run.id,
+    expectedRevision: 0,
+    budget: {
+      scope: 'run',
+      unknownUsage: 'allow',
+      limits: { inputTokens: { max: 1000 } },
+    },
+  });
+  await traces.stop();
+
+  const runSpans = spans().filter((s) => s.name === 'invoke_workflow Solo');
+  expect(runSpans).toHaveLength(1);
+  expect(
+    (runSpans[0] as Span & { endTimeUnixNano: string }).endTimeUnixNano,
+  ).toBe(`${BigInt(Date.parse(completed)) * 1_000_000n}`);
+});
