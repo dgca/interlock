@@ -19,7 +19,11 @@ import {
   executorOperationSchema,
   executorModelsQuerySchema,
 } from '@interlock/core';
-import { startersQuery, importStarter } from './starters.js';
+import {
+  startersQuery,
+  importStarter,
+  starterImportSchema,
+} from './starters.js';
 import { callTool } from './toolCallProcedures.js';
 import { parseImportDocument } from '@interlock/core/importDocument';
 import { z } from 'zod';
@@ -96,8 +100,7 @@ import {
   previewBoardImport,
   previewLegacyBoardImport,
 } from '@interlock/runtime/boardImport';
-import { GithubImporter, githubSourceSchema } from './githubImport.js';
-const githubImporter = new GithubImporter();
+import { githubImporter, githubSourceSchema } from './githubImport.js';
 import { pricesRouter } from './prices.js';
 import { launcherRouter } from './launcherRouter.js';
 import { evaluationProcedures } from './evaluationProcedures.js';
@@ -105,6 +108,7 @@ import { runReadProcedures } from './runReadProcedures.js';
 import { reportRouter, systemReport } from './reportProcedures.js';
 import { id, inputMutation, p, t } from './trpc.js';
 import { boardTypesRouter, boardsRouter } from './boardProcedures.js';
+import { proposalsRouter } from './proposalProcedures.js';
 import { memoryRouter } from './memoryProcedures.js';
 import {
   agentDraftEdit,
@@ -130,6 +134,7 @@ const updateWorkflowInput = id.extend({
 const claim = z.object({ workId: z.string(), token: z.string() });
 export const appRouter = t.router({
   scripts: scriptRouter,
+  proposals: proposalsRouter,
   prices: pricesRouter,
   launcher: launcherRouter,
   triggers: t.router({
@@ -353,20 +358,7 @@ export const appRouter = t.router({
   workflows: t.router({
     starters: startersQuery,
     importStarter: p
-      .input(
-        z
-          .object({
-            starterId: z.string().min(1).max(64),
-            requestId: z
-              .string()
-              .min(1)
-              .max(120)
-              .refine((v) => /\S/.test(v), 'Use a nonblank request key'),
-            copy: z.boolean().default(false),
-            boardSetup: boardImportSetupSchema.optional(),
-          })
-          .strict(),
-      )
+      .input(starterImportSchema)
       .mutation(({ ctx, input }) => importStarter(ctx.engine, input)),
     previewImport: p
       .input(z.object({ document: authoringJsonSchema }))

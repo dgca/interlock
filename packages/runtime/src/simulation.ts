@@ -1,13 +1,11 @@
+import { randomUUID } from 'node:crypto';
 import { setImmediate as yieldTurn } from 'node:timers/promises';
 import { Store } from '@interlock/storage';
 import {
   InterlockError,
   ResultRejection,
   simulationRequestSchema,
-  assertionProblems,
   evaluateAssertions,
-  promptIds,
-  isPollWait,
   type CapturedCase,
   type WorkflowDefinition,
   type Workflow,
@@ -21,6 +19,7 @@ import {
 } from '@interlock/core';
 import { Engine } from './index.js';
 import { definitionHash, fingerprint } from './versionIdentity.js';
+import { prepareSimulation } from './simulationPrepare.js';
 import {
   seedSimulationMemory,
   simulationMemory,
@@ -109,16 +108,17 @@ const page = <T>(items: T[], offset: number, limit: number) => ({
   truncated: offset > 0 || offset + limit < items.length,
 });
 
+type Active = {
+  record: Record;
+  engine?: Engine;
+  childWorkflows?: Workflow[];
+  childVersions?: NonNullable<ReturnType<Store['getVersion']>>[];
+  /** Proposal simulations stay in memory and outside the four-active limit. */
+  persist?: boolean;
+};
+
 export class Simulations {
-  private active = new Map<
-    string,
-    {
-      record: Record;
-      engine?: Engine;
-      childWorkflows?: Workflow[];
-      childVersions?: NonNullable<ReturnType<Store['getVersion']>>[];
-    }
-  >();
+  private active = new Map<string, Active>();
   private stopped = false;
   constructor(
     private store: Store,
@@ -194,7 +194,9 @@ export class Simulations {
         );
       return this.report(previous);
     }
-    if (this.active.size >= 4)
+    if (
+      [...this.active.values()].filter((a) => a.persist !== false).length >= 4
+    )
       throw new InterlockError('At most four simulations may be active');
     const suite = this.store.get<TestSuite>('testSuites', q.suiteId);
     if (!suite || suite.revision !== q.suiteRevision)
@@ -206,86 +208,8 @@ export class Simulations {
     if (!workflow || !version)
       throw new InterlockError('Published workflow version not found');
     const definition = version.definition;
-    const unsupported = definition.nodes.flatMap((node) => {
-      if (node.kind === 'exit' && node.continueAsNew)
-        return [
-          `Node ${node.id}: continue as new is unsupported in simulation`,
-        ];
-      if (
-        ![
-          'entry',
-          'exit',
-          'agent',
-          'script',
-          'fetch',
-          'condition',
-          'switch',
-          'workflow',
-          'wait',
-          'input',
-          'batch',
-          'parallel',
-        ].includes(node.kind)
-      )
-        return [`Node ${node.id}: ${node.kind} is unsupported`];
-      return [];
-    });
-    unsupported.push(...assertionProblems(testCase.assertions, definition));
-    const childWorkflows: Workflow[] = [];
-    const childVersions: NonNullable<ReturnType<Store['getVersion']>>[] = [];
-    const queue = [...definition.nodes];
-    const visitedWorkflows = new Set<string>();
-    while (queue.length) {
-      const node = queue.shift()!;
-      if (node.kind === 'workflow') {
-        const cw = this.store.get<Workflow>('workflows', node.workflowId);
-        if (cw && !visitedWorkflows.has(cw.id)) {
-          visitedWorkflows.add(cw.id);
-          childWorkflows.push(cw);
-          const cv = this.store.getVersion(node.workflowId, node.version ?? 1);
-          if (cv) {
-            childVersions.push(cv);
-            queue.push(...cv.definition.nodes);
-          }
-        }
-      }
-    }
-    const allPrompts = [...promptIds(definition)];
-    for (const cv of childVersions) {
-      allPrompts.push(...promptIds(cv.definition));
-    }
-    const prompts = [...new Set(allPrompts)]
-      .map((id) => {
-        const p = this.store.get<SavedPrompt>('prompts', id);
-        if (!p) unsupported.push(`Saved prompt ${id} is missing`);
-        return p;
-      })
-      .filter((p): p is SavedPrompt => !!p);
-    if (
-      prompts.length > 64 ||
-      Buffer.byteLength(JSON.stringify(prompts)) > 1048576
-    )
-      unsupported.push('Saved prompt capture exceeds 64 prompts or 1 MiB');
-    const allNodes = [...definition.nodes];
-    for (const cv of childVersions) {
-      allNodes.push(...cv.definition.nodes);
-    }
-    for (const [index, fixture] of (testCase.fixtures ?? []).entries()) {
-      if (
-        !allNodes.some(
-          (n) =>
-            n.id === fixture.nodeId &&
-            (n.kind === fixture.kind ||
-              (n.kind === 'wait' &&
-                isPollWait(n) &&
-                fixture.kind === n.timing.check.kind) ||
-              (n.kind === 'wait' && fixture.kind === 'wait')),
-        )
-      )
-        unsupported.push(
-          `Fixture ${index}: node or kind does not match the pinned definition`,
-        );
-    }
+    const { unsupported, childWorkflows, childVersions, prompts } =
+      prepareSimulation(this.store, definition, testCase);
     const record: Record = {
       id: q.requestId,
       requestHash,
@@ -331,17 +255,65 @@ export class Simulations {
     }
     return this.report(record);
   }
+  /**
+   * Simulate one case against an unpublished definition without storing
+   * anything; proposal reviews compare the draft with and without an edit.
+   */
+  async simulateDefinition(
+    workflow: Workflow,
+    definition: WorkflowDefinition,
+    suite: TestSuite,
+    testCase: CapturedCase,
+  ) {
+    const { unsupported, childWorkflows, childVersions, prompts } =
+      prepareSimulation(this.store, definition, testCase);
+    const memory = simulationMemory(this.store, [
+      workflow.id,
+      ...childWorkflows.map((cw) => cw.id),
+    ]);
+    const record: Record = {
+      id: randomUUID(),
+      requestHash: '',
+      mode: 'simulation',
+      workflowId: workflow.id,
+      suiteId: suite.id,
+      suiteRevision: suite.revision,
+      caseId: testCase.id,
+      version: 1,
+      definitionHash: definitionHash(definition),
+      caseHash: fingerprint(testCase),
+      capture: {
+        definition,
+        case: testCase,
+        prompts,
+        ...(memory ? { memory } : {}),
+      },
+      state: unsupported.length ? 'unsupported' : 'running',
+      substitutions: [],
+      executions: [],
+      checks: evaluateAssertions(testCase.assertions),
+      unsupported: unsupported.map((s) => s.slice(0, 512)),
+      createdAt: now(),
+      updatedAt: now(),
+    };
+    if (unsupported.length || this.stopped) return record;
+    const active = { record, childWorkflows, childVersions, persist: false };
+    this.active.set(record.id, active);
+    await this.execute(
+      active,
+      { ...workflow, latestVersion: 1 },
+      { workflowId: workflow.id, version: 1, definition, createdAt: now() },
+    );
+    return record;
+  }
   private async execute(
-    active: {
-      record: Record;
-      engine?: Engine;
-      childWorkflows?: Workflow[];
-      childVersions?: NonNullable<ReturnType<Store['getVersion']>>[];
-    },
+    active: Active,
     workflow: Workflow,
     version: NonNullable<ReturnType<Store['getVersion']>>,
   ) {
     const r = active.record;
+    const save = (record: Record) =>
+      active.persist !== false && this.save(record);
     let scratch: Store | undefined;
     let runId: string | undefined;
     const used = new Set<number>();
@@ -399,7 +371,7 @@ export class Simulations {
         outcome,
         ...(diagnostics ? { diagnostics } : {}),
       });
-      this.save(r);
+      save(r);
     };
     try {
       await yieldTurn();
@@ -700,17 +672,17 @@ export class Simulations {
       active.engine?.stop();
       scratch?.close();
       this.active.delete(r.id);
-      if (!this.stopped) this.save(r);
+      if (!this.stopped) save(r);
     }
   }
   stop() {
     this.stopped = true;
-    for (const { record, engine } of this.active.values()) {
+    for (const { record, engine, persist } of this.active.values()) {
       if (record.state === 'running') {
         record.state = 'interrupted';
         record.error =
           'Service stopped. Start a new simulation with a new requestId.';
-        this.save(record);
+        if (persist !== false) this.save(record);
       }
       engine?.stop();
     }
