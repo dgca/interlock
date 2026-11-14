@@ -183,6 +183,13 @@ export class ExecutorConfiguration {
         throw new InterlockError(
           'Executable, working directory, and allowed root overrides must be absolute paths',
         );
+    if (
+      q.transport === 'pull' &&
+      (q.harness !== 'custom' || q.mode !== 'launcher')
+    )
+      throw new InterlockError(
+        'The pull transport requires a custom profile in launcher mode',
+      );
     const result = this.engine.store.transaction(() => {
       const current = this.profiles().find((p) => p.id === q.id);
       if ((current?.revision ?? 0) !== q.expectedRevision)

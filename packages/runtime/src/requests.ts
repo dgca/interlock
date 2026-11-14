@@ -18,6 +18,7 @@ import {
 import type { Store } from '@interlock/storage';
 import type { ExternalInputs } from './externalInputs.js';
 import { ScriptApprovals } from './scriptApprovals.js';
+import { offlineLauncherWork } from './executors/pullLaunchers.js';
 
 type Ancestor = ReturnType<Store['attentionAncestors']>[number];
 type State =
@@ -53,8 +54,10 @@ export class Requests {
     const resources = this.store.uncertainResourceAttempts();
     const scripts = this.store.uncertainBackgroundSteps();
     const approvals = this.store.waitingScriptApprovals();
+    const launchers = offlineLauncherWork(this.store);
     const runs = this.ancestors(
       [
+        ...launchers,
         ...managed,
         ...human,
         ...stalls,
@@ -116,6 +119,12 @@ export class Requests {
             request.since ?? work.startedAt,
           );
     }
+    for (const { runId, executionId, workId, since } of launchers)
+      add(
+        { kind: 'launcher', runId, executionId, workId },
+        'Launcher client offline',
+        since,
+      );
     const scriptRecovery = new Set(scripts.map((script) => script.executionId));
     for (const { runId, executionId, since } of scripts)
       add(
@@ -356,6 +365,20 @@ export class Requests {
                   .join('\n')
               : script.command,
         },
+        actions: [],
+      };
+    }
+    if (target.kind === 'launcher') {
+      const work = this.store.get<WorkRequest>('work', target.workId);
+      if (work?.runId !== run.id || work.executionId !== target.executionId)
+        throw new InterlockError('Launcher assignment not found');
+      return {
+        ...base,
+        target,
+        kind: target.kind,
+        state: (active ? 'open' : 'resolved') as State,
+        question: 'Launcher client offline',
+        context: `No launcher client for executor profile "${work.executor}" has polled recently (launcher_client_offline). The assignment stays unclaimed until the client polls again.`,
         actions: [],
       };
     }
