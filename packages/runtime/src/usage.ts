@@ -259,11 +259,10 @@ export class Usage {
   }
 
   removeRuns(runIds: Set<string>) {
-    for (const attempt of this.store.list<UsageAttempt>(collection))
-      if (runIds.has(attempt.runId)) this.store.remove(collection, attempt.id);
-    for (const report of this.store.list<RunUsageReport>(runUsageCollection))
-      if (runIds.has(report.runId))
-        this.store.remove(runUsageCollection, report.id);
+    for (const attempt of this.store.forRuns<UsageAttempt>(collection, runIds))
+      this.store.remove(collection, attempt.id);
+    for (const report of this.runReportsForRuns(runIds))
+      this.store.remove(runUsageCollection, report.id);
   }
 
   /** Claimed attempts without a report count their streamed figures. */
@@ -322,38 +321,19 @@ export class Usage {
     return elapsedExcludingPausesMs(
       Date.parse(attempt.claimedAt),
       Date.parse(attempt.endedAt ?? new Date().toISOString()),
-      this.store.pauseHolds(
-        this.store.get<Run>('runs', attempt.runId)!.workflowId,
-        true,
-      ),
+      this.store.pauseHolds(this.store.runWorkflowId(attempt.runId), true),
     );
   }
   read(input: UsageQuery) {
     const query = usageQuerySchema.parse(input);
-    const runs = this.store.runs();
-    if (!runs.some((run) => run.id === query.runId))
-      throw new InterlockError('Run not found');
-    const scope = new Set([query.runId]);
-    const requested = runs.find((run) => run.id === query.runId)!;
+    const requested = this.store.currentRun(query.runId);
+    if (!requested) throw new InterlockError('Run not found');
+    let runs = [requested];
     if (query.includeChain && requested.chain)
-      for (const run of runs)
-        if (run.chain?.rootRunId === requested.chain.rootRunId)
-          scope.add(run.id);
-    if (query.includeDescendants) {
-      let changed = true;
-      while (changed) {
-        changed = false;
-        for (const run of runs)
-          if (
-            run.parentRunId &&
-            scope.has(run.parentRunId) &&
-            !scope.has(run.id)
-          ) {
-            scope.add(run.id);
-            changed = true;
-          }
-      }
-    }
+      runs.push(...this.store.chainRuns(new Set([requested.chain.rootRunId])));
+    if (query.includeDescendants)
+      runs = this.store.runScopes.trees(new Set(runs.map((run) => run.id)));
+    const scope = new Set(runs.map((run) => run.id));
     const { attempts, runReports } = this.prices.price(
       this.attemptsForRuns(scope),
       this.runReportsForRuns(scope),
@@ -544,12 +524,10 @@ export class Usage {
       includeChain: query.includeChain,
       includeReports: query.includeReports,
       includedRuns: scope.size,
-      includedDetachedRuns: runs.filter(
-        (run) =>
-          scope.has(run.id) &&
-          run.id !== query.runId &&
-          run.parentMode === 'detached',
-      ).length,
+      includedDetachedRuns: [
+        ...new Map(runs.map((r) => [r.id, r])).values(),
+      ].filter((run) => run.id !== query.runId && run.parentMode === 'detached')
+        .length,
       groupBy: query.groupBy,
       totals: summarizeUsage(attempts, runReports),
       groups: entries.slice(query.offset, query.offset + query.limit),

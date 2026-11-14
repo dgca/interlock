@@ -17,9 +17,14 @@ import {
 } from '../packages/runtime/src/transfer';
 import { migrate, migrations } from '../packages/storage/src/migrations';
 import published from './fixtures/published-0.2.13.json';
-// Schema 20 adds approval records for stored Scripts; other documents stay as written.
-const existingDocuments =
-  "SELECT * FROM documents WHERE collection != 'scriptApprovals' ORDER BY rowid";
+// Schema 20 adds approval records for stored Scripts. Schema 21 moves executions
+// into their own rows; reassemble run documents so their content compares as written.
+const existingDocuments = `SELECT collection, id, CASE
+    WHEN collection = 'runs' AND json_type(value, '$.executions') = 'array'
+    THEN json_set(value, '$.executions', (SELECT json_group_array(json(e.value) ORDER BY e.position)
+      FROM run_executions e WHERE e.run_id = d.id))
+    ELSE value END AS value
+  FROM documents d WHERE collection != 'scriptApprovals' ORDER BY rowid`;
 
 const directories: string[] = [];
 const engines: Engine[] = [];
@@ -62,7 +67,7 @@ it('upgrades the published 0.2.13 database unchanged and executes both published
     const e = engine(file);
     expect(e.store.migration).toMatchObject({
       from: 7,
-      to: 20,
+      to: 21,
       backup: expect.any(String),
     });
     expect(db.prepare(existingDocuments).all()).toEqual(before);
@@ -169,7 +174,7 @@ it.each([12, 13, 14])(
       const upgrade = migrate(db, file);
       expect(upgrade).toMatchObject({
         from: version,
-        to: 20,
+        to: 21,
         backup: expect.any(String),
       });
       expect(
@@ -182,7 +187,7 @@ it.each([12, 13, 14])(
           )
           .all(),
       ).toEqual([]);
-      expect(migrate(db, file)).toEqual({ from: 20, to: 20 });
+      expect(migrate(db, file)).toEqual({ from: 21, to: 21 });
     } finally {
       db.close();
     }

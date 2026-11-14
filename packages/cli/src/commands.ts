@@ -6,6 +6,7 @@ import { usage } from './usage.js';
 import { pricingLines, runPricesCommand } from './prices.js';
 import { parse } from './json.js';
 import { runLauncherCommand } from './launcher.js';
+import { parseTags, runQuery, runsCommand } from './runsCommand.js';
 import {
   externalInputRequestSchema,
   boardImportSetupSchema,
@@ -17,24 +18,12 @@ import {
   runVersionPreviewSchema,
   runVersionApplySchema,
   runVersionPolicySchema,
-  runTagsSchema,
   scriptApprovalModeSchema,
   type DoctorReport,
   type DiagnosticCategory,
   type WorkflowReport,
   type ReportFilter,
 } from '@interlock/core';
-function parseTags(values: string[] | undefined) {
-  if (!values) return undefined;
-  const entries = values.map((value) => {
-    const equals = value.indexOf('=');
-    if (equals < 1) throw new Error('Use --tag KEY=VALUE with a nonempty key');
-    return [value.slice(0, equals), value.slice(equals + 1)] as const;
-  });
-  if (new Set(entries.map(([key]) => key)).size !== entries.length)
-    throw new Error('Supply each --tag key once');
-  return runTagsSchema.parse(Object.fromEntries(entries));
-}
 function parseSummaryArgs(args: string[], withBudget = false) {
   const optionArgs: string[] = [];
   const positionals: string[] = [];
@@ -363,55 +352,8 @@ export async function runCommand(argv: string[]) {
         ? withNextCall(await client.runs.startSummary.mutate(input))
         : client.runs.start.mutate(input);
     }
-    case 'runs': {
-      if (!args.length) return client.runs.list.query();
-      const { values } = parseArgs({
-        args,
-        options: {
-          tag: { type: 'string', multiple: true },
-          workflow: { type: 'string' },
-          status: { type: 'string' },
-          'root-only': { type: 'boolean' },
-          chain: { type: 'string' },
-          limit: { type: 'string' },
-          'request-id': { type: 'string' },
-          'external-task': { type: 'string' },
-          'input-path': { type: 'string' },
-          equals: { type: 'string' },
-        },
-      });
-      if (
-        (values['input-path'] === undefined) !==
-        (values.equals === undefined)
-      )
-        throw new Error('--input-path and --equals must be supplied together');
-      const { runQuerySchema } = await import('@interlock/core');
-      return client.runs.find.query(
-        runQuerySchema.parse({
-          tags: parseTags(Array.isArray(values.tag) ? values.tag : undefined),
-          workflowId: values.workflow,
-          requestId:
-            typeof values['request-id'] === 'string'
-              ? values['request-id']
-              : undefined,
-          externalTask:
-            typeof values['external-task'] === 'string'
-              ? await parse(values['external-task'])
-              : undefined,
-          chainRootRunId: values.chain,
-          status: values.status,
-          rootOnly: values['root-only'],
-          limit: values.limit === undefined ? undefined : Number(values.limit),
-          inputMatch:
-            values['input-path'] === undefined
-              ? undefined
-              : {
-                  path: values['input-path'],
-                  equals: await parse(values.equals),
-                },
-        }),
-      );
-    }
+    case 'runs':
+      return runsCommand(client, args);
     case 'run-version': {
       if (args.length !== 1)
         throw new Error(
@@ -442,7 +384,7 @@ export async function runCommand(argv: string[]) {
       }
     }
     case 'run':
-      return client.runs.get.query({ id: args[0] });
+      return client.runs.get.query(runQuery(args));
     case 'context-group':
       if (args.length < 2 || args.length > 3)
         throw new Error(

@@ -4,6 +4,7 @@ import {
   type ReportFilter,
   type Run,
 } from '@interlock/core';
+import { readRuns } from './runExecutions.js';
 
 export function runsForReport(db: DatabaseSync, filter: ReportFilter): Run[] {
   const conditions = ["collection = 'runs'"];
@@ -39,8 +40,5 @@ export function runsForReport(db: DatabaseSync, filter: ReportFilter): Run[] {
     LIMIT ?
   `;
 
-  return db
-    .prepare(sql)
-    .all(...params)
-    .map((row) => JSON.parse(row.value as string) as Run);
+  return readRuns<Run>(db, db.prepare(sql).all(...params));
 }

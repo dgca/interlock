@@ -667,13 +667,13 @@ export function createMcpServer(
   );
   tool(
     'get_run',
-    'Inspect a run and descendants with definitions, execution versions, events, prompt captures, variable refs and token-free work. Prefer briefing for continuation and get_run_result for selected payloads. Removed versions report definitionAvailable:false and require restoration before retry. Follow chain.nextRunId for rollover. Detached runs are independent. Use manage_run_version for moves, manage_work_hold for older holds, and manage_script for Script progress.',
-    { id: z.string() },
+    'Inspect a run and descendants with definitions, execution versions, events, prompt captures, variable refs and token-free work. Prefer briefing for continuation and get_run_result for selected payloads; above 64 KiB the response is compacted unless full:true. Removed versions report definitionAvailable:false and require restoration before retry. Follow chain.nextRunId for rollover. Detached runs are independent. Use manage_run_version for moves, manage_work_hold for older holds, and manage_script for Script progress.',
+    { id: z.string(), full: z.boolean().optional() },
     (input) => client.runs.get(input),
   );
   tool(
     'list_runs',
-    'Find newest run summaries with projections, tags, correlation and ancestry. Filters combine; tags require every exact case-sensitive pair. inputMatch uses dot paths, blank for whole input, structural equality. Limit default 50/max 1000. rootOnly excludes all children, including detached. Lookup reserves nothing; use start_run for retry/active-task policy. Chains inherit externalTask, not requestId.',
+    'Find newest run summaries with projections, tags, correlation and ancestry. Filters combine; tags require every exact case-sensitive pair. inputMatch uses dot paths, blank for whole input, structural equality. Limit default 50/max 1000; next page: afterRunId = last id. rootOnly excludes all children, including detached. Lookup reserves nothing; use start_run for retry/active-task policy. Chains inherit externalTask, not requestId.',
     runQuerySchema.shape,
     (input) => client.runs.find(input),
   );
