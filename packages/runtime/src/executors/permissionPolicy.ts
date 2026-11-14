@@ -11,7 +11,11 @@ import {
   type WorkRequest,
 } from '@interlock/core';
 import type { Engine } from '../index.js';
-import { commandAllowed, pathInside } from '../permissionCommands.js';
+import {
+  commandAllowed,
+  pathInside,
+  writablePath,
+} from '../permissionCommands.js';
 import type { HarnessRequest } from './contracts.js';
 
 type Harness = ExecutorProfile['harness'];
@@ -129,36 +133,59 @@ function notApplied(policy: PermissionPolicy, harness: Harness) {
     .map((rule) => `${describeRule(rule)}: ${harness} asks instead`);
 }
 
-/** Whether the policy allows an action inside the real workspace root. */
+/**
+ * The rules that allow an action inside the real workspace root, or undefined
+ * when it must ask. Edits and command paths never reach Git's own files.
+ */
 export function policyAllows(
   policy: PermissionPolicy,
   action: PermissionAction,
   root: string,
   harness: Harness,
   cwd = root,
-) {
-  const has = (kind: string) => policy.allow.some((r) => r.kind === kind);
-  const inside = (paths: string[]) =>
-    paths.every((p) => pathInside(p, cwd, root));
-  if (action.kind === 'read') return has('read') && inside(action.paths);
-  if (action.kind === 'edit') return has('edit') && inside(action.paths);
+): string[] | undefined {
+  const rule = (kind: 'read' | 'edit') =>
+    policy.allow.some((r) => r.kind === kind)
+      ? [describeRule({ kind })]
+      : undefined;
+  if (action.kind === 'read')
+    return action.paths.every((p) => pathInside(p, cwd, root))
+      ? rule('read')
+      : undefined;
+  if (action.kind === 'edit')
+    return action.paths.every((p) => writablePath(p, cwd, root))
+      ? rule('edit')
+      : undefined;
   if (action.kind === 'tool')
-    return (
-      harness !== 'codex' &&
+    return harness !== 'codex' &&
       policy.allow.some((r) => r.kind === 'tool' && r.name === action.name)
-    );
+      ? [describeRule({ kind: 'tool', name: action.name })]
+      : undefined;
   return commandAllowed(
     action.command,
     resolve(cwd, action.cwd),
     root,
     policy.allow.flatMap((r) => (r.kind === 'command' ? [r.pattern] : [])),
-  );
+  )?.map((pattern) => describeRule({ kind: 'command', pattern }));
 }
+
+/** Most recent auto-allowed actions kept on a record; the count stays exact. */
+const auditLimit = 50;
+const auditText = (action: PermissionAction) =>
+  (action.kind === 'command'
+    ? action.command
+    : action.kind === 'tool'
+      ? action.name
+      : action.paths.join(', ')
+  )
+    .replace(/\s+/g, ' ')
+    .slice(0, 300);
 
 /**
  * The request callback for one managed session run. Without a policy it
- * forwards every request. With an approved policy, a permission request whose
- * action the policy allows is answered here and counted on the record.
+ * forwards every request. With an approved policy and a managed worktree, a
+ * permission request whose action the policy allows is answered here, counted
+ * and recorded with the rule that matched.
  */
 export function policyRequests(
   engine: Pick<Engine, 'store' | 'scriptApprovals' | 'workspaces'>,
@@ -183,45 +210,59 @@ export function policyRequests(
   const policy = definition?.permissionPolicy;
   if (!run || !definition || !policy?.allow.length) return { request };
   const harness = record.profile.harness;
+  const previous = record.permissionPolicy;
   const skip = (state: 'awaiting_approval' | 'unavailable', why: string) => {
     record.permissionPolicy = {
+      ...previous,
       state,
-      autoAllowed: record.permissionPolicy?.autoAllowed ?? 0,
+      autoAllowed: previous?.autoAllowed ?? 0,
       notApplied: [why],
     };
     return { request };
   };
-  if (engine.scriptApprovals.pendingPolicy(run.workflowId, policy))
+  if (engine.scriptApprovals.pendingPolicy(run.workflowId, definition))
     return skip(
       'awaiting_approval',
       'The policy waits for approval; every action asks',
     );
   let root: string, cwd: string;
   try {
-    root = realpathSync(engine.workspaces.path(run, definition) ?? record.cwd);
+    // The policy's scope is the run's managed worktree, never another directory.
+    const workspace = engine.workspaces.path(run, definition);
+    if (!workspace) throw new Error('No managed worktree');
+    root = realpathSync(workspace);
     cwd = realpathSync(record.cwd);
   } catch {
     return skip(
       'unavailable',
-      'The run workspace is unavailable; every action asks',
+      'The policy applies only in a managed worktree; every action asks',
     );
   }
   const skipped = notApplied(policy, harness);
-  record.permissionPolicy = {
+  const state: NonNullable<ManagedExecution['permissionPolicy']> = {
+    ...(previous?.allowed ? { allowed: previous.allowed } : {}),
     state: 'applied',
-    autoAllowed: record.permissionPolicy?.autoAllowed ?? 0,
+    autoAllowed: previous?.autoAllowed ?? 0,
     ...(skipped.length ? { notApplied: skipped } : {}),
   };
+  record.permissionPolicy = state;
   return {
     permissionPolicy: true,
     request: (input) => {
-      if (
-        input.kind !== 'permission' ||
-        !input.action ||
-        !policyAllows(policy, input.action, root, harness, cwd)
-      )
-        return request(input);
-      record.permissionPolicy!.autoAllowed++;
+      const rules =
+        input.kind === 'permission' && input.action
+          ? policyAllows(policy, input.action, root, harness, cwd)
+          : undefined;
+      if (!rules) return request(input);
+      state.autoAllowed++;
+      state.allowed = [
+        ...(state.allowed ?? []),
+        {
+          action: `${input.action!.kind}: ${auditText(input.action!)}`,
+          rule: rules.join('; ').slice(0, 300),
+          at: new Date().toISOString(),
+        },
+      ].slice(-auditLimit);
       return Promise.resolve({ allow: true });
     },
   };

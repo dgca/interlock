@@ -12,8 +12,7 @@ import {
   type StallRecord,
   type Workflow,
   type WorkRequest,
-  describeRule,
-  permissionPolicySchema,
+  describePolicyContent,
 } from '@interlock/core';
 import type { Store } from '@interlock/storage';
 import type { ExternalInputs } from './externalInputs.js';
@@ -359,10 +358,7 @@ export class Requests {
           // A policy reads as one allowed action per line, as in import review.
           command:
             script.language === 'permission-policy'
-              ? permissionPolicySchema
-                  .parse(JSON.parse(script.command))
-                  .allow.map(describeRule)
-                  .join('\n')
+              ? describePolicyContent(script.command)
               : script.command,
         },
         actions: [],

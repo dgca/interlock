@@ -100,14 +100,60 @@ export type PermissionAction =
   | { kind: 'command'; command: string; cwd: string }
   | { kind: 'tool'; name: string };
 
-/** Approval content for a policy. Its hash keys the approval record. */
-export function policyApprovalContent(policy: PermissionPolicy | undefined) {
+/** The settings that decide where a policy applies, approved with it. */
+type PolicyScope = {
+  permissionPolicy?: PermissionPolicy;
+  workspace?: {
+    repository: string;
+    baseRef: string;
+    branch: string;
+    hooks?: object;
+  };
+};
+/**
+ * Approval content for a policy and its scope: the worktree's repository,
+ * start ref, branch template and hooks. Changing either needs a new approval.
+ */
+export function policyApprovalContent(definition: PolicyScope) {
+  const { permissionPolicy: policy, workspace } = definition;
   return policy?.allow.length
     ? {
         language: 'permission-policy' as const,
-        command: JSON.stringify(policy, null, 2),
+        command: JSON.stringify(
+          {
+            ...policy,
+            ...(workspace
+              ? {
+                  workspace: {
+                    repository: workspace.repository,
+                    baseRef: workspace.baseRef,
+                    branch: workspace.branch,
+                    ...(workspace.hooks ? { hooks: workspace.hooks } : {}),
+                  },
+                }
+              : {}),
+          },
+          null,
+          2,
+        ),
       }
     : undefined;
+}
+
+/** Readable lines for approval content: one per rule, then the worktree. */
+export function describePolicyContent(command: string) {
+  const content = JSON.parse(command) as PolicyScope['permissionPolicy'] & {
+    workspace?: NonNullable<PolicyScope['workspace']>;
+  };
+  const workspace = content.workspace;
+  return [
+    ...permissionPolicySchema
+      .parse({ allow: content.allow })
+      .allow.map(describeRule),
+    workspace
+      ? `Only in a worktree of ${workspace.repository} from ${workspace.baseRef} on branch ${workspace.branch}${workspace.hooks ? ', with its hooks' : ''}`
+      : 'No managed worktree: every action asks',
+  ].join('\n');
 }
 
 /** One line per rule, as people read it in previews and approval requests. */

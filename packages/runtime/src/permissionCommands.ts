@@ -1,5 +1,5 @@
-import { realpathSync } from 'node:fs';
-import { basename, dirname, isAbsolute, join, sep } from 'node:path';
+import { existsSync, lstatSync, readFileSync, realpathSync } from 'node:fs';
+import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import { unsafeCommandHeads } from '@interlock/core';
 
 /**
@@ -184,29 +184,81 @@ function physicalPath(path: string, cwd: string) {
   }
   return current;
 }
+const within = (path: string, dir: string) =>
+  path === dir || path.startsWith(dir + sep);
 
 /** Whether a path, resolved from cwd, stays inside the real workspace root. */
 export function pathInside(path: string, cwd: string, root: string) {
   if (path === '/dev/null') return true;
   if (!path || path.startsWith('~')) return false;
-  const real = physicalPath(path, cwd);
-  return real === root || real.startsWith(root + sep);
+  return within(physicalPath(path, cwd), root);
 }
 
-function argumentInside(word: Word, cwd: string, root: string) {
+// Characters some file systems ignore in names, such as a zero-width joiner inside `.git`.
+const ignorable = /[\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff]/g;
+const isGitName = (part: string) =>
+  part.replace(ignorable, '').toLowerCase() === '.git';
+
+/** The repository directories a worktree's `.git` file or folder points at. */
+function gitDirectories(root: string) {
+  const dot = join(root, '.git');
+  const dirs: string[] = [];
+  try {
+    if (lstatSync(dot).isDirectory()) dirs.push(realpathSync(dot));
+    else {
+      const match = /^gitdir:\s*(.+?)\s*$/m.exec(readFileSync(dot, 'utf8'));
+      if (match) dirs.push(realpathSync(resolve(root, match[1])));
+    }
+    const common = join(dirs[0], 'commondir');
+    if (dirs[0] && existsSync(common))
+      dirs.push(
+        realpathSync(resolve(dirs[0], readFileSync(common, 'utf8').trim())),
+      );
+  } catch {
+    // No repository metadata: only the name check applies.
+  }
+  return dirs;
+}
+
+/**
+ * Whether a path may be written: inside the workspace, never a `.git` entry in
+ * any letter case, and never inside the repository's own Git directories.
+ * Writing those lets later Git commands run configured programs.
+ */
+export function writablePath(path: string, cwd: string, root: string) {
+  if (path === '/dev/null') return true;
+  if (!pathInside(path, cwd, root)) return false;
+  const real = physicalPath(path, cwd);
+  if (
+    path.split('/').some(isGitName) ||
+    real.slice(root.length).split(sep).some(isGitName)
+  )
+    return false;
+  return !gitDirectories(root).some((dir) => within(real, dir));
+}
+
+/** Option values and operands are all treated as paths that may be written. */
+function argumentAllowed(word: Word, cwd: string, root: string) {
   if (word.glob) return false;
   if (!word.text) return true;
-  if (!word.text.startsWith('-')) return pathInside(word.text, cwd, root);
-  const value = word.text.indexOf('=');
-  if (value > 0) {
-    const path = word.text.slice(value + 1);
-    return !path || pathInside(path, cwd, root);
-  }
-  // A short option with an attached path, such as -C/elsewhere.
-  return !word.text.includes('/');
+  if (!word.text.startsWith('-')) return writablePath(word.text, cwd, root);
+  const equals = word.text.indexOf('=');
+  const values = [
+    equals > 0 ? word.text.slice(equals + 1) : '',
+    // A short option with its value attached, such as -C.. or -tout.
+    word.text.startsWith('--') ? '' : word.text.slice(2).replace(/^=/, ''),
+  ];
+  return values.every((value) => !value || writablePath(value, cwd, root));
 }
 
-function segmentAllowed(
+/** A denied option, matched by prefix when it is a single-letter option. */
+const deniedWord = (text: string, denied: string) =>
+  text === denied ||
+  text.startsWith(`${denied}=`) ||
+  (/^-[A-Za-z]$/.test(denied) && text.startsWith(denied));
+
+/** The pattern a simple command matches, or undefined. */
+function segmentPattern(
   segment: Segment,
   patterns: string[][],
   cwd: string,
@@ -220,17 +272,13 @@ function segmentAllowed(
     words[0].glob ||
     words[0].text.includes('=')
   )
-    return false;
+    return undefined;
   const denied = unsafeArguments[program] ?? [];
-  if (
-    words.some((w) =>
-      denied.some((d) => w.text === d || w.text.startsWith(`${d}=`)),
-    )
-  )
-    return false;
-  if (!segment.targets.every((path) => pathInside(path, cwd, root)))
-    return false;
-  return patterns.some((pattern) => {
+  if (words.some((w) => denied.some((d) => deniedWord(w.text, d))))
+    return undefined;
+  if (!segment.targets.every((path) => writablePath(path, cwd, root)))
+    return undefined;
+  return patterns.find((pattern) => {
     const wildcard = pattern.at(-1) === '*';
     const fixed = wildcard ? pattern.slice(0, -1) : pattern;
     return (
@@ -238,14 +286,15 @@ function segmentAllowed(
         ? words.length >= fixed.length
         : words.length === fixed.length) &&
       fixed.every((token, i) => !words[i].glob && words[i].text === token) &&
-      words.slice(fixed.length).every((w) => argumentInside(w, cwd, root))
+      words.slice(fixed.length).every((w) => argumentAllowed(w, cwd, root))
     );
   });
 }
 
 /**
- * Whether every simple command in a script matches a pattern and every path
- * it names stays inside the workspace. `root` must be a real path.
+ * The patterns that allow a script, when every simple command in it matches
+ * one and every path it names stays inside the workspace and outside Git's
+ * own files; otherwise undefined. `root` must be a real path.
  */
 export function commandAllowed(
   command: string,
@@ -253,11 +302,13 @@ export function commandAllowed(
   root: string,
   patterns: string[],
 ) {
-  if (!patterns.length || !pathInside(cwd, sep, root)) return false;
+  if (!patterns.length || !pathInside(cwd, sep, root)) return undefined;
   const segments = parseScript(unwrapShell(command));
   const split = patterns.map((p) => p.trim().split(/\s+/));
-  return Boolean(
-    segments?.length &&
-    segments.every((segment) => segmentAllowed(segment, split, cwd, root)),
+  const matched = segments?.map((segment) =>
+    segmentPattern(segment, split, cwd, root),
   );
+  return matched?.length && matched.every(Boolean)
+    ? [...new Set(matched.map((pattern) => pattern!.join(' ')))]
+    : undefined;
 }

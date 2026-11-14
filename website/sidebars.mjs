@@ -26,6 +26,11 @@ const docs = [
     items: [
       { type: 'doc', id: 'build-workflow', label: 'Build workflows' },
       { type: 'doc', id: 'reuse-work', label: 'Reuse work' },
+      {
+        type: 'doc',
+        id: 'permission-policy',
+        label: 'Permission policy',
+      },
       { type: 'doc', id: 'automation-guide', label: 'Automations' },
       { type: 'doc', id: 'inspect-runs', label: 'Inspect and manage runs' },
       { type: 'doc', id: 'reports', label: 'Reports' },

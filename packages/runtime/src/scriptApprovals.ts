@@ -3,7 +3,6 @@ import {
   definitionScripts,
   InterlockError,
   policyApprovalContent,
-  type PermissionPolicy,
   type NodeExecution,
   type Run,
   type ScriptApprovalMode,
@@ -28,7 +27,7 @@ const collection = 'scriptApprovals';
 /** Content a person approves: Scripts, and a permission policy, which grants an agent actions. */
 const approvalContents = (definition: WorkflowDefinition) => [
   ...definitionScripts(definition),
-  ...[policyApprovalContent(definition.permissionPolicy)].flatMap((policy) =>
+  ...[policyApprovalContent(definition)].flatMap((policy) =>
     policy
       ? [{ ...policy, nodeId: 'permissionPolicy', label: 'Permission policy' }]
       : [],
@@ -94,8 +93,8 @@ export class ScriptApprovals {
   }
 
   /** The hash when a policy from an import or an agent waits for a person. */
-  pendingPolicy(workflowId: string, policy: PermissionPolicy | undefined) {
-    const content = policyApprovalContent(policy);
+  pendingPolicy(workflowId: string, definition: WorkflowDefinition) {
+    const content = policyApprovalContent(definition);
     return content && this.required(workflowId, content);
   }
 
@@ -135,10 +134,7 @@ export class ScriptApprovals {
     definition: WorkflowDefinition,
     pendingHook: () => string | undefined,
   ): boolean | undefined {
-    const hash = this.pendingPolicy(
-      run.workflowId,
-      definition.permissionPolicy,
-    );
+    const hash = this.pendingPolicy(run.workflowId, definition);
     const held = run.executions.at(-1);
     if (held?.kind === 'entry' && held.scriptApproval) {
       if (hash) {
@@ -154,7 +150,7 @@ export class ScriptApprovals {
         }
         return false;
       }
-      const policy = policyApprovalContent(definition.permissionPolicy);
+      const policy = policyApprovalContent(definition);
       if (!policy || held.scriptApproval.hash !== scriptContentHash(policy))
         return undefined;
       const hook = pendingHook();

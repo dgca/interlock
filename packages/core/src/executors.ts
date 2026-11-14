@@ -395,6 +395,8 @@ export interface ManagedExecution {
     autoAllowed: number;
     /** Rules this harness cannot apply, or why none apply. Those actions ask. */
     notApplied?: string[];
+    /** The latest auto-allowed actions, at most 50, with the rules that matched. */
+    allowed?: { action: string; rule: string; at: string }[];
   };
   modelSource?: z.infer<typeof executorSettingSourceSchema>;
   effortSource?: z.infer<typeof executorSettingSourceSchema>;

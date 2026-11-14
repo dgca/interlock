@@ -20,9 +20,12 @@ const commandsOf = (policy?: PermissionPolicy) =>
 /** Actions managed Agent sessions take without asking, inside the run workspace. */
 export function PermissionPolicySettings({
   value,
+  worktree,
   onChange,
 }: {
   value?: PermissionPolicy;
+  /** The policy's scope; without a managed worktree it never applies. */
+  worktree: boolean;
   onChange: (policy: PermissionPolicy | undefined) => void;
 }) {
   const rules = value?.allow ?? [];
@@ -62,9 +65,15 @@ export function PermissionPolicySettings({
         </Text>
         <Text size="xs" c="dimmed">
           Managed Agent sessions with standard permissions take these actions
-          without asking, inside the run workspace only. Anything else still
-          asks in Review.
+          without asking, inside the run's Git worktree only. Anything else
+          still asks in Review.
         </Text>
+        {!worktree && value && (
+          <Text size="xs" c="yellow">
+            Turn on Give each run its own Git worktree for this policy to apply.
+            Without it every action asks.
+          </Text>
+        )}
       </Stack>
       <Checkbox
         label="Read files in the workspace"

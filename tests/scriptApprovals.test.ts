@@ -278,11 +278,12 @@ it('applies an imported or agent-written permission policy only after a person a
       cwd: process.cwd(),
     } as ManagedExecution;
     const work = { runId: run.id, executionId: held.id } as WorkRequest;
-    return {
-      record,
-      active: policyRequests(engine, work, record, () => Promise.resolve({}))
-        .permissionPolicy,
-    };
+    const forwarded: unknown[] = [];
+    const session = policyRequests(engine, work, record, (request) => {
+      forwarded.push(request);
+      return Promise.resolve({ allow: false });
+    });
+    return { record, active: session.permissionPolicy, session, forwarded };
   };
   expect(session()).toMatchObject({
     active: undefined,
@@ -302,10 +303,19 @@ it('applies an imported or agent-written permission policy only after a person a
     }),
   );
   expect(existsSync(marker)).toBe(false);
-  expect(session()).toMatchObject({
-    active: true,
-    record: { permissionPolicy: { state: 'applied' } },
+  // Approved, but without a managed worktree there is no scope: everything asks.
+  const approved = session();
+  expect(approved).toMatchObject({
+    active: undefined,
+    record: { permissionPolicy: { state: 'unavailable' } },
   });
+  await approved.session.request({
+    kind: 'permission',
+    title: 'Bash',
+    detail: '',
+    action: { kind: 'command', command: 'git status', cwd: process.cwd() },
+  });
+  expect(approved.forwarded).toHaveLength(1);
 
   // An agent cannot grant its own sessions permissions in the default mode.
   const created = await agent.workflows.create({
@@ -317,4 +327,41 @@ it('applies an imported or agent-written permission policy only after a person a
   await vi.waitFor(() =>
     expect(latest(engine, agentRun.id).scriptApproval).toBeDefined(),
   );
+});
+
+it('asks again after an agent changes the worktree an approved policy covers', async () => {
+  const { engine, person, agent } = setup();
+  const definition = {
+    ...blankDefinition(),
+    permissionPolicy: { allow: [{ kind: 'edit' as const }] },
+    workspace: {
+      repository: '/srv/app',
+      baseRef: 'HEAD',
+      branch: 'interlock/{runId}',
+      retention: 'remove' as const,
+    },
+  };
+  const created = await person.workflows.create({ name: 'Scoped', definition });
+  await agent.workflows.update({
+    id: created.id,
+    draft: {
+      ...definition,
+      workspace: { ...definition.workspace, repository: '/Users/me' },
+    },
+    draftRevision: engine.workflow(created.id).draftRevision,
+  });
+  engine.publish(created.id);
+  const run = engine.start(created.id, {}).run;
+  await vi.waitFor(() =>
+    expect(latest(engine, run.id)).toMatchObject({
+      kind: 'entry',
+      scriptApproval: { hash: expect.any(String) as string },
+    }),
+  );
+  const [request] = engine.requests.current();
+  expect(await person.requests.get(request.target)).toMatchObject({
+    script: {
+      command: expect.stringContaining('worktree of /Users/me') as string,
+    },
+  });
 });

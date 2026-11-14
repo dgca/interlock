@@ -618,6 +618,7 @@ export function SettingsDialog({
                     />
                     <PermissionPolicySettings
                       value={settings.definition.permissionPolicy}
+                      worktree={Boolean(settings.definition.workspace)}
                       onChange={(permissionPolicy) =>
                         patchDefinition({ permissionPolicy })
                       }
