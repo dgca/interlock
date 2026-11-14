@@ -174,3 +174,36 @@ it('pages runs.find and runs.list by the last run ID without gaps or repeats', a
     store.close();
   }
 });
+
+it('writes a run and its executions as one unit, and keeps executions a write omits', () => {
+  const store = new Store(':memory:');
+  try {
+    const run = {
+      id: 'atomic',
+      workflowId: 'main',
+      status: 'running',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      executions: [{ id: 'step', status: 'running' }],
+    };
+    store.put('runs', run);
+    // The second execution cannot serialize after the document and first row were written.
+    expect(() =>
+      store.put('runs', {
+        ...run,
+        status: 'failed',
+        executions: [
+          { id: 'step', status: 'failed' },
+          { id: 'bad', size: 1n },
+        ],
+      }),
+    ).toThrow();
+    expect(store.get('runs', run.id)).toEqual(run);
+    store.put('runs', { ...run, executions: undefined, status: 'waiting' });
+    expect(store.get('runs', run.id)).toMatchObject({
+      status: 'waiting',
+      executions: run.executions,
+    });
+  } finally {
+    store.close();
+  }
+});
