@@ -37,4 +37,6 @@ interlock
 
 Restart with the same database and working-directory options if you customized them. Interlock creates a database backup before applying a required schema upgrade. Refresh the browser and reconnect your agent after restarting.
 
+Schema upgrades are one-way. Back up the database file before you upgrade, while the server is stopped, so you can return to the earlier version. Interlock also writes a copy to `interlock.db.backups/` beside the database before each upgrade. An earlier version refuses to open an upgraded database; restore the backup made before the upgrade instead. From database schema 21, each run's steps are stored in their own table, which earlier versions cannot read.
+
 Continue with [Workflows and runs](quickstart.md), or [connect an agent](agents.md) if you already have a procedure to run.
