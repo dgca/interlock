@@ -8,6 +8,7 @@ import {
   UserCheck,
 } from 'lucide-react';
 import {
+  Alert,
   Group,
   SimpleGrid,
   Table,
@@ -20,6 +21,7 @@ import type { api } from '../../lib/api';
 import {
   basisMetric,
   bucketLabel,
+  bucketRange,
   describeChange,
   formatMs,
   successRate,
@@ -84,6 +86,8 @@ function MetricCard({
 }
 
 const percent = (value: number) => `${value.toFixed(1)}%`;
+/** Spend changes are shown only when both periods' usage coverage is within this many points. */
+const comparableCoveragePoints = 10;
 
 /** Headline numbers for the period, each compared with the previous period. */
 export function DashboardSummary({
@@ -95,8 +99,7 @@ export function DashboardSummary({
   basis: TimeBasis;
   comparedWith?: string;
 }) {
-  const { report, previous, trend } = dashboard;
-  const outcomes = report.terminalOutcomes;
+  const { report, previous, trend, counts, limited } = dashboard;
   const usage = report.usage;
   const compare = previous && comparedWith;
   const change = (
@@ -105,8 +108,19 @@ export function DashboardSummary({
     format: (value: number) => string,
     unit?: 'points',
   ) => (compare ? describeChange(current, before, format, unit) : undefined);
+  // A limited window's report covers only its newest runs: keep exact counts, hide sampled changes.
+  const sampledChange: typeof change = (...args) =>
+    limited ? undefined : change(...args);
   const median = basisMetric(report.summary.durationMs, basis)?.median;
-  const rate = successRate(outcomes);
+  const rate = successRate({
+    completedRuns: counts.current.completed,
+    failedRuns: counts.current.failed,
+  });
+  const previousCoverage = previous?.usage.coverage.measuredPercentage;
+  const coverageComparable =
+    previousCoverage !== undefined &&
+    Math.abs(usage.coverage.measuredPercentage - previousCoverage) <=
+      comparableCoveragePoints;
   const singleCost = usage.costs.length === 1 ? usage.costs[0] : undefined;
   const previousCost =
     singleCost &&
@@ -119,7 +133,7 @@ export function DashboardSummary({
     format: (value: number | null) => string,
     label: string,
   ) =>
-    trend.length > 1 && trend.some((bucket) => value(bucket)) ? (
+    !limited && trend.length > 1 && trend.some((bucket) => value(bucket)) ? (
       <TrendBars
         label={label}
         values={trend.map((bucket) => ({
@@ -134,14 +148,10 @@ export function DashboardSummary({
       <MetricCard
         label="Runs"
         icon={<Layers size={16} aria-hidden />}
-        value={report.summary.totalRuns}
-        change={change(
-          report.summary.totalRuns,
-          previous?.summary.totalRuns,
-          String,
-        )}
+        value={counts.current.runs}
+        change={change(counts.current.runs, counts.previous?.runs, String)}
         comparedWith={comparedWith}
-        detail={`${outcomes.completedRuns} completed · ${outcomes.failedRuns} failed · ${outcomes.cancelledRuns} cancelled`}
+        detail={`${counts.current.completed} completed · ${counts.current.failed} failed · ${counts.current.cancelled} cancelled`}
         trend={bars(
           (bucket) => bucket.runs,
           (value) => `${value ?? 0} runs`,
@@ -154,7 +164,12 @@ export function DashboardSummary({
         value={rate === null ? '—' : percent(rate)}
         change={change(
           rate,
-          previous ? successRate(previous.terminalOutcomes) : null,
+          counts.previous
+            ? successRate({
+                completedRuns: counts.previous.completed,
+                failedRuns: counts.previous.failed,
+              })
+            : null,
           percent,
           'points',
         )}
@@ -165,7 +180,7 @@ export function DashboardSummary({
         label="Median run duration"
         icon={<Clock size={16} aria-hidden />}
         value={formatMs(median)}
-        change={change(
+        change={sampledChange(
           median,
           basisMetric(previous?.summary.durationMs, basis)?.median,
           formatMs,
@@ -188,8 +203,8 @@ export function DashboardSummary({
             : usage.costs.map((cost) => cost.formatted).join(' · ')
         }
         change={
-          singleCost && usage.coverage.measuredPercentage
-            ? change(
+          singleCost && usage.coverage.measuredPercentage && coverageComparable
+            ? sampledChange(
                 singleCost.amountMicros,
                 previousCost ? previousCost.amountMicros : null,
                 (micros) =>
@@ -198,7 +213,11 @@ export function DashboardSummary({
             : undefined
         }
         comparedWith={comparedWith}
-        detail={`${usage.coverage.measuredPercentage}% of attempts measured`}
+        detail={
+          compare && !coverageComparable
+            ? `${usage.coverage.measuredPercentage}% of attempts measured · ${previousCoverage}% in the ${comparedWith}`
+            : `${usage.coverage.measuredPercentage}% of attempts measured`
+        }
       />
       <MetricCard
         label="Admission wait"
@@ -217,10 +236,39 @@ export function DashboardSummary({
       <MetricCard
         label="Unattended rate"
         icon={<CheckCircle2 size={16} aria-hidden />}
-        value={`${outcomes.unattendedCompletionRate}%`}
-        detail={`escalated: ${outcomes.humanEscalationRate}%`}
+        value={`${report.terminalOutcomes.unattendedCompletionRate}%`}
+        detail={`escalated: ${report.terminalOutcomes.humanEscalationRate}%`}
       />
     </SimpleGrid>
+  );
+}
+
+/** Explains that a window has more runs than the report reads. */
+export function DashboardLimitNotice({
+  dashboard,
+  limit,
+}: {
+  dashboard: Dashboard;
+  limit: number;
+}) {
+  if (!dashboard.limited) return null;
+  const { counts } = dashboard;
+  const read = (runs: number) => Math.min(runs, limit).toLocaleString();
+  return (
+    <Alert
+      color="yellow"
+      title="This period has more runs than the report reads"
+    >
+      {counts.current.runs.toLocaleString()} runs this period (
+      {read(counts.current.runs)} read)
+      {counts.previous
+        ? `, ${counts.previous.runs.toLocaleString()} in the previous period (${read(counts.previous.runs)} read)`
+        : ''}
+      . Run counts and success rate are exact; durations, spend and outcomes
+      cover the newest {limit.toLocaleString()} runs of each period, so their
+      changes and trends are hidden. Choose a shorter period for complete
+      figures.
+    </Alert>
   );
 }
 
@@ -233,7 +281,7 @@ export function DashboardTrendTable({
   basis: TimeBasis;
 }) {
   const { trend } = dashboard;
-  if (trend.length < 2) return null;
+  if (trend.length < 2 || dashboard.limited) return null;
   const spanMs = Date.parse(trend.at(-1)!.end) - Date.parse(trend[0].start);
   return (
     <section className={workspacePage.card} aria-labelledby="trend-title">
@@ -254,7 +302,11 @@ export function DashboardTrendTable({
           <Table.Tbody>
             {trend.map((bucket) => (
               <Table.Tr key={bucket.start}>
-                <Table.Th scope="row" fw={500}>
+                <Table.Th
+                  scope="row"
+                  fw={500}
+                  title={bucketRange(bucket.start, bucket.end)}
+                >
                   {bucketLabel(bucket.start, bucket.end, spanMs)}
                 </Table.Th>
                 <Table.Td className={styles.numeric}>{bucket.runs}</Table.Td>

@@ -27,7 +27,11 @@ import { ReportApprovals } from './ReportApprovals';
 import styles from './WorkflowReportView.module.css';
 import { RunTagFilter, AppliedRunTagFilters } from '../runs/RunTagFilter';
 import { PricingNote } from '../runs/PricingNote';
-import { DashboardSummary, DashboardTrendTable } from './DashboardSummary';
+import {
+  DashboardLimitNotice,
+  DashboardSummary,
+  DashboardTrendTable,
+} from './DashboardSummary';
 import { DashboardDurations, DashboardSpend } from './DashboardBreakdowns';
 import { DashboardRuns } from './DashboardRuns';
 import {
@@ -68,6 +72,9 @@ export function WorkflowReportView({ workflowId }: { workflowId?: string }) {
   };
   const reportQuery = useQuery({
     ...trpc.report.dashboard.queryOptions(input),
+    // Two bounded reports: refresh on a minute poll and Refresh, not on every engine event.
+    meta: { engineRefresh: false },
+    refetchInterval: 60_000,
     // Relative windows identify a view; calculate the actual boundary on each
     // fetch so remounts reuse cached data without freezing the report window.
     queryKey: [
@@ -203,11 +210,7 @@ export function WorkflowReportView({ workflowId }: { workflowId?: string }) {
                   }
                 />
               )}
-              {dashboard.limited && (
-                <Text size="sm" c="dimmed">
-                  Each period includes its newest {input.limit} runs.
-                </Text>
-              )}
+              <DashboardLimitNotice dashboard={dashboard} limit={input.limit} />
               <DashboardRuns
                 workflowId={selectedWorkflowId ?? undefined}
                 tags={tags}

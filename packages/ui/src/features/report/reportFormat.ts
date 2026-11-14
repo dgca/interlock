@@ -107,6 +107,13 @@ export function bucketLabel(startIso: string, endIso: string, spanMs: number) {
   }
   const day = (date: Date) =>
     date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  // A day-long interval is named by the date holding most of it; longer ones by their range.
+  if (end.getTime() - start.getTime() <= 86_400_000)
+    return day(new Date((start.getTime() + end.getTime()) / 2));
   const last = new Date(end.getTime() - 1);
-  return day(start) === day(last) ? day(start) : `${day(start)}–${day(last)}`;
+  return `${day(start)}–${day(last)}`;
 }
+
+/** Exact interval bounds, for tooltips beside the short label. */
+export const bucketRange = (startIso: string, endIso: string) =>
+  `${new Date(startIso).toLocaleString()} – ${new Date(endIso).toLocaleString()}`;

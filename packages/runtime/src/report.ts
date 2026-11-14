@@ -61,12 +61,16 @@ function elapsedDistribution(intervals: Elapsed[]) {
   };
 }
 
-/** `observe` receives each reported run with the duration its summary counts. */
+/** Receives each run with its counted duration, and each node's measured attempts. */
+export type ReportObserver = {
+  run?: (run: Run, duration: Elapsed) => void;
+  node?: (nodeId: string, attempts: number, measured: number) => void;
+};
 export function generateWorkflowReport(
   store: Store,
   engine: Engine,
   input: ReportFilter,
-  observe?: (run: Run, duration: Elapsed) => void,
+  observe: ReportObserver = {},
 ): WorkflowReport {
   const reportNowMs = Date.now();
   const filter = reportFilterSchema.parse(input);
@@ -194,14 +198,11 @@ export function generateWorkflowReport(
   const runHumanWaitMap = new Map<string, number>();
 
   const workIdsByRun = new Map<string, Set<string>>();
-  for (const w of workList) {
-    let set = workIdsByRun.get(w.runId);
-    if (!set) {
-      set = new Set();
-      workIdsByRun.set(w.runId, set);
-    }
-    set.add(w.id);
-  }
+  for (const w of workList)
+    workIdsByRun.set(
+      w.runId,
+      (workIdsByRun.get(w.runId) ?? new Set()).add(w.id),
+    );
 
   // The last terminal event per run, indexed once rather than scanned per run.
   const terminalAt = new Map<string, string>();
@@ -228,7 +229,7 @@ export function generateWorkflowReport(
     }
     const duration = elapsed(run, createdAtMs, endMs);
     runDurations.push(duration);
-    observe?.(run, duration);
+    observe.run?.(run, duration);
 
     // Admission queue wait
     if (run.admission?.queuedAt) {
@@ -310,12 +311,9 @@ export function generateWorkflowReport(
           Date.parse(exec.startedAt),
           Date.parse(exec.completedAt),
         );
-        let list = nodeDurationsMap.get(exec.nodeId);
-        if (!list) {
-          list = [];
-          nodeDurationsMap.set(exec.nodeId, list);
-        }
-        list.push(duration);
+        if (!nodeDurationsMap.has(exec.nodeId))
+          nodeDurationsMap.set(exec.nodeId, []);
+        nodeDurationsMap.get(exec.nodeId)!.push(duration);
 
         if (stage) {
           const total = perRunStageDuration.get(stage) ?? zeroElapsed();
@@ -326,19 +324,12 @@ export function generateWorkflowReport(
     }
 
     for (const [stage, duration] of perRunStageDuration) {
-      let list = stageDurationsMap.get(stage);
-      if (!list) {
-        list = [];
-        stageDurationsMap.set(stage, list);
-      }
-      list.push(duration);
-
-      let runSet = stageRunCountMap.get(stage);
-      if (!runSet) {
-        runSet = new Set();
-        stageRunCountMap.set(stage, runSet);
-      }
-      runSet.add(run.id);
+      if (!stageDurationsMap.has(stage)) stageDurationsMap.set(stage, []);
+      stageDurationsMap.get(stage)!.push(duration);
+      stageRunCountMap.set(
+        stage,
+        (stageRunCountMap.get(stage) ?? new Set()).add(run.id),
+      );
     }
   }
 
@@ -775,6 +766,8 @@ export function generateWorkflowReport(
           : 0,
     }),
   );
+  for (const [nodeId, data] of nodeUsageMap)
+    observe.node?.(nodeId, data.attempts, data.measured);
 
   const byModel: UsageByModel[] = Array.from(modelUsageMap.values()).sort(
     (a, b) => b.count - a.count,

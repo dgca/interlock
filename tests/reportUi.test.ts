@@ -14,6 +14,7 @@ import { routes } from '../packages/ui/src/routes';
 
 const query = vi.hoisted(() => vi.fn());
 const summaries = vi.hoisted(() => vi.fn());
+let dashboardOverrides: Record<string, unknown> = {};
 vi.mock('../packages/ui/src/lib/engineEvents', () => ({
   subscribeToEngineEvents: () => () => {},
 }));
@@ -43,13 +44,28 @@ vi.mock('../packages/ui/src/lib/api', async () => {
       // The dashboard wraps the same report; tests drive that report.
       report: {
         dashboard: {
-          query: async (input: unknown) => ({
-            report: (await query(input)) as WorkflowReport,
-            previous: null,
-            trend: [],
-            spendByStage: [],
-            limited: false,
-          }),
+          query: async (input: unknown) => {
+            const report = (await query(input)) as WorkflowReport;
+            const { totalRuns, completedRuns, failedRuns, cancelledRuns } =
+              report.terminalOutcomes;
+            return {
+              report,
+              previous: null,
+              trend: [],
+              spendByStage: [],
+              counts: {
+                current: {
+                  runs: totalRuns,
+                  completed: completedRuns,
+                  failed: failedRuns,
+                  cancelled: cancelledRuns,
+                },
+                previous: null,
+              },
+              limited: false,
+              ...dashboardOverrides,
+            };
+          },
         },
       },
     }),
@@ -135,6 +151,7 @@ function report(totalRuns = 4): WorkflowReport {
 }
 
 let activeRuns: object[] = [];
+let attentionRuns: object[] = [];
 const activeRun = (
   title: string,
   hoursWaiting: number,
@@ -192,16 +209,24 @@ beforeEach(() => {
       }
     },
   );
-  summaries.mockReset().mockImplementation(({ tab }) =>
-    Promise.resolve({
-      items: tab === 'active' ? activeRuns : [],
-      counts: { active: activeRuns.length, attention: 0, history: 0 },
-      total: tab === 'active' ? activeRuns.length : 0,
+  summaries.mockReset().mockImplementation(({ tab }) => {
+    const items =
+      tab === 'active' ? activeRuns : tab === 'attention' ? attentionRuns : [];
+    return Promise.resolve({
+      items,
+      counts: {
+        active: activeRuns.length,
+        attention: attentionRuns.length,
+        history: 0,
+      },
+      total: items.length,
       offset: 0,
       nextOffset: null,
-    }),
-  );
+    });
+  });
+  attentionRuns = [];
   activeRuns = [];
+  dashboardOverrides = {};
   query
     .mockReset()
     .mockImplementation(async ({ tags }) => report(tags ? 1 : 4));
@@ -574,13 +599,24 @@ it('returns to the cached report without a skeleton and retains it when backgrou
   expect(spend()).toContain('4.0000 USD');
 });
 
-it('lists runs waiting on people, held or queued, longest wait first, and leaves working runs out', async () => {
+it('lists attention requests, held and queued runs, longest wait first, and leaves other waits out', async () => {
+  const approval = activeRun('Needs approval', 3, {
+    actor: 'person',
+    waiting: wait('human_request', 3),
+    attention: {
+      runId: 'Needs approval',
+      reasons: ['approval'],
+      target: { runId: 'Needs approval', executionId: 'e1' },
+    },
+  });
+  attentionRuns = [approval];
   activeRuns = [
     activeRun('Agent working', 9, { status: 'running' }),
-    activeRun('Needs approval', 3, {
+    activeRun('At input node', 5, {
       actor: 'person',
-      waiting: wait('human_request', 3),
+      waiting: wait('input_node', 5),
     }),
+    approval,
     activeRun('On hold', 26, { waiting: wait('hold', 26) }),
     activeRun('In queue', 1, {
       status: 'queued',
@@ -589,12 +625,76 @@ it('lists runs waiting on people, held or queued, longest wait first, and leaves
   ];
   await mount();
   const panel = container.querySelector('[aria-labelledby="attention-title"]')!;
-  expect(panel.textContent).toContain(
-    '1 waiting on a person · 1 held · 0 stalled · 1 queued',
-  );
+  expect(panel.textContent).toContain('1 need attention · 1 held · 1 queued');
   expect(
     [...panel.querySelectorAll('li a')].map((link) => link.textContent),
   ).toEqual(['On hold', 'Needs approval', 'In queue']);
+  expect(panel.textContent).toContain('Approval requested');
   expect(panel.textContent).toContain('1 d');
   expect(panel.textContent).toContain('3 h');
+});
+
+const card = (label: string) =>
+  [...container.querySelectorAll('section')].find(
+    (section) => section.querySelector('p')?.textContent === label,
+  )!.textContent;
+it('states changes from the previous period, and hides sampled changes when a period is limited', async () => {
+  const previous = report(2);
+  previous.usage.coverage.measuredPercentage = 100;
+  const counts = (runs: number) => ({
+    runs,
+    completed: runs,
+    failed: 0,
+    cancelled: 0,
+  });
+  const trend = [1, 3].map((runs, index) => ({
+    start: `2026-11-0${index + 1}T00:00:00.000Z`,
+    end: `2026-11-0${index + 2}T00:00:00.000Z`,
+    runs,
+    completed: runs,
+    failed: 0,
+    cancelled: 0,
+    durationMs: calculateDistribution([60_000]),
+  }));
+  dashboardOverrides = {
+    previous,
+    trend,
+    counts: { current: counts(4), previous: counts(2) },
+  };
+  await mount();
+  expect(card('Runs')).toContain('↑ 100% vs previous 7 days');
+  expect(card('Attributed spend')).toContain('↑ 100% vs previous 7 days');
+  expect(container.textContent).toContain('Runs over time');
+
+  dashboardOverrides = {
+    previous,
+    trend,
+    counts: { current: counts(4000), previous: counts(2) },
+    limited: true,
+  };
+  await click('Refresh');
+  expect(card('Runs')).toContain('4000');
+  expect(card('Runs')).toContain('vs previous 7 days');
+  expect(card('Attributed spend')).not.toContain('vs previous');
+  expect(container.textContent).toContain(
+    'This period has more runs than the report reads',
+  );
+  expect(container.textContent).toContain('1,000 read');
+  expect(container.textContent).not.toContain('Runs over time');
+  expect(container.querySelector('svg[role="img"]')).toBeNull();
+
+  dashboardOverrides = {
+    previous: {
+      ...previous,
+      usage: {
+        ...previous.usage,
+        coverage: { ...previous.usage.coverage, measuredPercentage: 10 },
+      },
+    },
+    counts: { current: counts(4), previous: { ...counts(0) } },
+  };
+  await click('Refresh');
+  expect(card('Runs')).toContain('↑ from 0');
+  expect(card('Attributed spend')).not.toContain('vs previous');
+  expect(card('Attributed spend')).toContain('10% in the previous 7 days');
 });

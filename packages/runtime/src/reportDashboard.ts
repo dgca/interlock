@@ -36,6 +36,13 @@ type DashboardStageSpend = {
   measuredAttempts: number;
 };
 
+type RunCounts = {
+  runs: number;
+  completed: number;
+  failed: number;
+  cancelled: number;
+};
+
 export type ReportDashboard = {
   report: WorkflowReport;
   /** The window of equal length that ends where this one starts. Null for all time. */
@@ -43,7 +50,9 @@ export type ReportDashboard = {
   /** Runs in the window by creation time; empty for all time. */
   trend: DashboardTrendBucket[];
   spendByStage: DashboardStageSpend[];
-  /** True when the run limit cut either window, so its counts cover the newest runs only. */
+  /** Exact run counts per window from indexed metadata, independent of the run limit. */
+  counts: { current: RunCounts; previous: RunCounts | null };
+  /** True when the run limit cut either window, so its report covers the newest runs only. */
   limited: boolean;
 };
 
@@ -91,7 +100,10 @@ function trend(
 }
 
 /** Groups reported node spend by the stage the report assigns each node. */
-function spendByStage(report: WorkflowReport): DashboardStageSpend[] {
+function spendByStage(
+  report: WorkflowReport,
+  measured: Map<string, number>,
+): DashboardStageSpend[] {
   const stages = new Map(report.nodes.map((node) => [node.nodeId, node.stage]));
   const groups = new Map<string | null, DashboardStageSpend>();
   for (const node of report.usage.byNode) {
@@ -103,9 +115,7 @@ function spendByStage(report: WorkflowReport): DashboardStageSpend[] {
       measuredAttempts: 0,
     };
     group.attempts += node.attempts;
-    group.measuredAttempts += Math.round(
-      (node.measuredPercentage / 100) * node.attempts,
-    );
+    group.measuredAttempts += measured.get(node.nodeId) ?? 0;
     if (node.currency === 'mixed' || group.currency === 'mixed') {
       group.costMicros = null;
       group.currency = 'mixed';
@@ -147,20 +157,20 @@ export function generateReportDashboard(
 ): ReportDashboard {
   const filter = reportFilterSchema.parse(input);
   const observed: { run: Run; duration: Elapsed }[] = [];
-  const report = generateWorkflowReport(
-    engine.store,
-    engine,
-    filter,
-    (run, duration) => observed.push({ run, duration }),
-  );
-  const limited = report.summary.totalRuns >= filter.limit;
+  const measured = new Map<string, number>();
+  const report = generateWorkflowReport(engine.store, engine, filter, {
+    run: (run, duration) => observed.push({ run, duration }),
+    node: (nodeId, _attempts, count) => measured.set(nodeId, count),
+  });
+  const current = engine.store.countReportRuns(filter);
   if (filter.since === undefined)
     return {
       report,
       previous: null,
       trend: [],
-      spendByStage: spendByStage(report),
-      limited,
+      spendByStage: spendByStage(report, measured),
+      counts: { current, previous: null },
+      limited: current.runs > report.summary.totalRuns,
     };
   const sinceMs = reportDateBoundMs(filter.since, true);
   const untilMs =
@@ -168,16 +178,21 @@ export function generateReportDashboard(
       ? Date.parse(report.generatedAt)
       : reportDateBoundMs(filter.until, false);
   const spanMs = Math.max(1, untilMs - sinceMs);
-  const previous = generateWorkflowReport(engine.store, engine, {
+  const previousFilter = {
     ...filter,
     since: new Date(sinceMs - spanMs).toISOString(),
     until: new Date(sinceMs - 1).toISOString(),
-  });
+  };
+  const previous = generateWorkflowReport(engine.store, engine, previousFilter);
+  const before = engine.store.countReportRuns(previousFilter);
   return {
     report,
     previous: comparison(previous),
     trend: trend(observed, sinceMs, sinceMs + spanMs),
-    spendByStage: spendByStage(report),
-    limited: limited || previous.summary.totalRuns >= filter.limit,
+    spendByStage: spendByStage(report, measured),
+    counts: { current, previous: before },
+    limited:
+      current.runs > report.summary.totalRuns ||
+      before.runs > previous.summary.totalRuns,
   };
 }

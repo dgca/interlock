@@ -407,7 +407,7 @@ it('keeps supported year limits inclusive after offset and fraction normalizatio
   ).not.toContain('first');
 });
 
-it('builds the dashboard from the same report, with the previous window, trend and stage spend', async () => {
+it('builds the dashboard from the same report, with exact counts, the previous window, trend and stage spend', async () => {
   const { store, engine } = setup();
   const def = blankDefinition();
   const agent = def.nodes.find((node) => node.kind === 'agent')!;
@@ -512,9 +512,16 @@ it('builds the dashboard from the same report, with the previous window, trend a
     },
   ]);
   expect(dashboard.limited).toBe(false);
-  expect((await caller.report.dashboard({ ...filter, limit: 2 })).limited).toBe(
-    true,
-  );
+  expect(dashboard.counts).toEqual({
+    current: { runs: 3, completed: 2, failed: 1, cancelled: 0 },
+    previous: { runs: 1, completed: 1, failed: 0, cancelled: 0 },
+  });
+  // A limit below the window's runs samples the report but keeps exact counts.
+  const limited = await caller.report.dashboard({ ...filter, limit: 2 });
+  expect(limited.limited).toBe(true);
+  expect(limited.report.summary.totalRuns).toBe(2);
+  expect(limited.counts.current.runs).toBe(3);
+  expect(limited.counts.previous?.runs).toBe(1);
   const allTime = await caller.report.dashboard({ workflowId: wf.id });
   expect(allTime.previous).toBeNull();
   expect(allTime.trend).toEqual([]);
