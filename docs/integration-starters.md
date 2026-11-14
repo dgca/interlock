@@ -1,22 +1,16 @@
-# Connect GitHub issues and notifications
+# Connect GitHub issues
 
-Both starters are experimental: they have not yet been run against live GitHub or a live webhook.
+This starter is experimental: it has not yet been run against live GitHub.
 
-Two bundled starters connect Interlock to outside systems with existing features: schedules, event automations, Fetch, Scripts, Secret variables and [idempotent run starts](idempotent-run-starts.md). Neither needs an agent.
+The bundled **GitHub issue intake** starter connects Interlock to GitHub with existing features: schedules, Fetch, Scripts, Secret variables and [idempotent run starts](idempotent-run-starts.md). It needs no agent. It reads open issues with your label. For each one it starts a run, then replaces your label with a picked-up label. It writes nothing else.
 
-| Starter                 | What it does outside Interlock                                                                                                             |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| **GitHub issue intake** | Reads open issues with your label. For each one it starts a run, then replaces your label with a picked-up label. It writes nothing else.  |
-| **Run notifications**   | Sends one JSON `POST` with `{"text": "..."}` to your webhook URL for each event you choose, by default a run failing or needing attention. |
-
-Add them from **Workflows → Import → Starters**, or with `interlock import-starter github-issue-intake` and `interlock import-starter run-notifications`. The files are [workflows/github-issue-intake.json](../workflows/github-issue-intake.json) and [workflows/run-notifications.json](../workflows/run-notifications.json). Adding a starter publishes a copy and starts nothing. Neither starter ships an automation; you create it, and it stays off until you turn it on.
+Add it from **Workflows → Import → Starters**, or with `interlock import-starter github-issue-intake`. The file is [workflows/github-issue-intake.json](../workflows/github-issue-intake.json). Adding the starter publishes a copy and starts nothing. It ships no automation; you create it, and it stays off until you turn it on.
 
 ## Credentials
 
-Each starter needs one Secret. Adding the starter creates the Secret without a value: `github_token` for intake, `notify_webhook_url` for notifications. If the name is taken, the new Secret gets a suffix, such as `github_token_2`. Every copy of a starter uses the same Secret. Runs refuse to start until you set it: open **Variables**, select the Secret, choose **Set value** and save. A file import of the same JSON asks you to bind or provision the Secret instead.
+The starter needs one Secret, `github_token`. Adding the starter creates it without a value. If the name is taken, the new Secret gets a suffix, such as `github_token_2`. Every copy of the starter uses the same Secret. Runs refuse to start until you set it: open **Variables**, select the Secret, choose **Set value** and save. A file import of the same JSON asks you to bind or provision the Secret instead.
 
-- The GitHub token reaches GitHub only in the `Authorization` header of the two GitHub Fetch steps, through a header bound to the Secret. It is never workflow input, never in a URL, and Interlock redacts it from run history. Requests with a Secret header do not follow redirects, so use the repository's current owner and name.
-- A Slack-compatible incoming webhook URL is itself the credential. The notification Script receives it as the `NOTIFY_WEBHOOK_URL` environment variable from the Secret. It is not in the workflow definition, the message, the output or error text, and exports carry only the requirement.
+The GitHub token reaches GitHub only in the `Authorization` header of the two GitHub Fetch steps, through a header bound to the Secret. It is never workflow input, never in a URL, and Interlock redacts it from run history. Requests with a Secret header do not follow redirects, so use the repository's current owner and name.
 
 Use a fine-grained GitHub token limited to the repository, with **Issues: Read and write**. Read is enough for listing; write is for the label change.
 
@@ -92,21 +86,3 @@ The intake is the template for any source that lists items as JSON: another trac
 3. **Mark**: the source's way of showing that an item was taken, such as a label, status or reaction. If the source has none, delete the step and connect **Start target run** to the end of the Batch; the request key alone still prevents duplicate starts, but every poll asks for the same items again.
 
 Keep the Batch, **Start target run** and the report step unchanged.
-
-## Run notifications
-
-1. Create an incoming webhook in Slack, or any service that accepts a JSON `POST` with a `text` field.
-2. Add the starter and paste the webhook URL into the `notify_webhook_url` Secret.
-3. Open **Automations → New automation → Interlock event**. Choose the source workflow, select **Failed** and **Needs attention**, and choose **Run notifications** as the workflow to start.
-4. Turn on **Enable when created**, or use the **Enabled** switch later.
-
-The CLI equivalent:
-
-```sh
-interlock triggers manage '{"action":"create","workflowId":"NOTIFICATIONS_WORKFLOW_ID","config":{"kind":"event","name":"Notify","events":["failed","needs_attention"],"scope":{"type":"workflow","workflowId":"SOURCE_WORKFLOW_ID","includeChildren":true},"pauseAfterConsecutiveFailures":5}}'
-interlock triggers manage '{"action":"enable","id":"TRIGGER_ID","expectedRevision":1}'
-```
-
-Add `completed` only for workflows where each success is worth a message. With **Any workflow** and `completed`, every intake poll would post, 288 times a day at the default interval.
-
-A message names the run, its task title when it has one, what happened, the failing step and error, and a link to the run on this Interlock (`$INTERLOCK_URL/runs/RUN_ID`). Text from the event is escaped for Slack markup. A webhook answer outside 200–299 fails the handler run with the status code. A handler run never notifies about itself: an automation does not fire again inside its own [causal chain](events.md#event-input-and-causal-chains). To change the wording or the link, edit the **Post to webhook** Script in your copy.
