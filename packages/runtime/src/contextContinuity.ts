@@ -53,13 +53,8 @@ export class ContextContinuityGroups {
       ...binding,
     });
     // Persist projection changes so continuation cursors observe a handoff.
-    for (const work of this.store.work()) {
-      if (
-        work.runId !== binding.runId ||
-        work.context.continuityGroup !== binding.group ||
-        work.status !== 'available'
-      )
-        continue;
+    for (const work of this.store.work('available', binding.runId)) {
+      if (work.context.continuityGroup !== binding.group) continue;
       work.continuity = binding;
       this.store.put('work', work);
     }

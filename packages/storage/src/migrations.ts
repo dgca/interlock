@@ -1,6 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { migrateCurrentState } from './currentState.js';
 import { approveExistingScripts } from './scriptApprovals.js';
+import { migrateRunExecutions } from './runExecutions.js';
 import {
   closeSync,
   mkdirSync,
@@ -364,6 +365,8 @@ export const migrations: readonly Migration[] = [
       approveExistingScripts(db);
     },
   },
+  // One-way: run documents no longer embed executions after this version.
+  { version: 21, up: migrateRunExecutions },
 ];
 
 type Migration = { version: number; up: (db: DatabaseSync) => void };

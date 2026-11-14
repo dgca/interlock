@@ -170,12 +170,13 @@ export function boardRuns(
           'title', json_extract(r.value, '$.title'),
           'externalTask', json_extract(r.value, '$.externalTask'),
           'error', substr(json_extract(t.value, '$.error'), 1, 240),
-          'activity', substr(json_extract(t.value, '$.executions[#-1].label'), 1, 160)
+          'activity', substr(json_extract(m.execution, '$.label'), 1, 160)
         )
       ) ORDER BY page.pageColumn, page.ordinal)
       FROM board_page page
       CROSS JOIN documents r ON r.collection = 'runs' AND r.id = page.id
-      CROSS JOIN documents t ON t.collection = 'runs' AND t.id = page.runId) AS cards
+      CROSS JOIN documents t ON t.collection = 'runs' AND t.id = page.runId
+      CROSS JOIN run_metadata m ON m.id = page.runId) AS cards
   `,
     )
     .get(

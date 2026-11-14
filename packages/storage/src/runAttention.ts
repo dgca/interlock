@@ -101,10 +101,10 @@ export function uncertainBackgroundSteps(db: DatabaseSync) {
   return db
     .prepare(
       `
-    SELECT id AS runId, json_extract(value, '$.executions[#-1].id') AS executionId,
-      json_extract(value, '$.executions[#-1].startedAt') AS since
-    FROM documents INDEXED BY uncertain_background_steps WHERE collection = 'runs'
-      AND json_extract(value, '$.executions[#-1].background.state') = 'uncertain'
+    SELECT id AS runId, json_extract(execution, '$.id') AS executionId,
+      json_extract(execution, '$.startedAt') AS since
+    FROM run_metadata INDEXED BY run_metadata_uncertain_background
+    WHERE json_extract(execution, '$.background.state') = 'uncertain'
   `,
     )
     .all() as { runId: string; executionId: string; since: string }[];
@@ -114,14 +114,13 @@ export function waitingHumanInputs(db: DatabaseSync) {
     .prepare(
       `
     SELECT id AS runId,
-      json_extract(value, '$.executions[#-1].id') AS executionId,
-      substr(json_extract(value, '$.executions[#-1].label'), 1, 160) AS label,
-      json_extract(value, '$.executions[#-1].startedAt') AS since
-    FROM documents INDEXED BY human_input_waiting WHERE collection = 'runs'
-      AND json_extract(value, '$.status') = 'waiting'
-      AND json_extract(value, '$.executions[#-1].status') = 'waiting'
-      AND json_type(value, '$.executions[#-1].humanInput') = 'object'
-    ORDER BY rowid
+      json_extract(execution, '$.id') AS executionId,
+      substr(json_extract(execution, '$.label'), 1, 160) AS label,
+      json_extract(execution, '$.startedAt') AS since
+    FROM run_metadata INDEXED BY run_metadata_human_input
+    WHERE status = 'waiting' AND json_extract(execution, '$.status') = 'waiting'
+      AND json_extract(execution, '$.humanInput') = 1
+    ORDER BY position
   `,
     )
     .all() as {

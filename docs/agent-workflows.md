@@ -279,7 +279,18 @@ Call `claim_work` for the full assignment. For one persisted value, call `get_ru
 }
 ```
 
-Omit `executionId` for run data. `field` is `input` or `output`, defaulting to `output`. Blank `path` selects the whole field; dot-separated paths select object keys or array indices. JSON null is a value. Missing runs, foreign execution IDs, unavailable outputs, missing paths, and unsafe property paths return errors. `maxBytes` limits the selected value's UTF-8 JSON encoding, defaults to 65536, and accepts 1 through 262144. Oversized values return an error with their size; select a narrower path. It limits the value, not the complete response envelope. `get_run` remains full inspection, including execution errors and resolved Fetch requests.
+Omit `executionId` for run data. `field` is `input` or `output`, defaulting to `output`. Blank `path` selects the whole field; dot-separated paths select object keys or array indices. JSON null is a value. Missing runs, foreign execution IDs, unavailable outputs, missing paths, and unsafe property paths return errors. `maxBytes` limits the selected value's UTF-8 JSON encoding, defaults to 65536, and accepts 1 through 262144. Oversized values return an error with their size; select a narrower path. It limits the value, not the complete response envelope.
+
+### Inspect a run
+
+`get_run` (shared API `runs.get`, CLI `interlock run RUN_ID`) returns full inspection, including execution errors and resolved Fetch requests, when its JSON is at most 64 KiB (65536 bytes). Above that, the response is compacted and gets `compacted: {limitBytes, fullBytes, read}`:
+
+- The workflow `definition` and other fields over 1 KiB on the run, its descendants, their executions and assignments are dropped. IDs (including `childRunIds`), status, stage, waiting, port, labels and timestamps always stay.
+- An `error` over 1 KiB is truncated and states its full size.
+- `children` lists only `{id, status}`; `descendants` carries the details.
+- If the response is still over 64 KiB, only the most recent items of `events`, `descendants`, `children`, `work`, `descendantWork` and each run's `executions` are kept.
+
+Each object that lost something gets `omitted`, mapping the field to `{bytes, via}` or `{count, via}`. `via: "get_run_result"` means read it with `get_run_result`, passing the run that owns the execution and `field` `input`, `output` or `result`. `via: "full"` means pass `full: true` (CLI `--full`) for the complete response. A compacted response is never larger than the full one, but a run with very large ID lists can still exceed 64 KiB. The UI requests the full response.
 
 ## Wait for a scoped change
 
@@ -336,7 +347,7 @@ Pass `leaseSeconds: 300` explicitly when a renewal should grant five minutes reg
 
 ## Find runs
 
-MCP `list_runs` and the shared API `runs.find` return summaries in descending creation order. The default limit is 50, with a maximum of 1000. Equal timestamps use descending insertion order.
+MCP `list_runs` and the shared API `runs.find` return summaries in descending creation order. The default limit is 50, with a maximum of 1000. Equal timestamps use descending insertion order. To read the next page, repeat the query with `afterRunId` set to the last summary's `id`; an empty page means there are no more. `afterRunId` must name a retained run.
 
 Available filters include `requestId`, `externalTask:{system,id}`, `workflowId`, `status`, `rootOnly`, `chainRootRunId`, `tags`, and `inputMatch: {path, equals}`. Optional `startRequestId`, `externalTask`, and `tags` appear in summaries and inspection. Status accepts `queued`, `running`, `waiting`, `completed`, `failed`, or `cancelled`. `rootOnly` defaults to false, which includes nested Workflow, Batch item, and Parallel branch runs. A summary includes IDs, workflow name, version, status, timestamps, cursor, input, `parentRunId`, optional `parentMode: "detached"`, `rootRunId`, `rootWorkflowId`, and the owning group reference for a Batch item (`batchNodeId`) or Parallel branch (`parallelBranch`). Root IDs follow the same rules as work summaries. Use `get_run` for execution details.
 
@@ -346,9 +357,10 @@ Paths use dot-separated object keys or array indices. A blank path selects the c
 interlock runs --workflow WORKFLOW_ID --status waiting --root-only --limit 20
 interlock runs --tag repo=dgca/interlock --tag batch=factory-7
 interlock runs --input-path thread_ts --equals '"1787334538.500319"' --limit 10
+interlock runs --workflow WORKFLOW_ID --limit 50 --after-run LAST_RUN_ID
 ```
 
-Without flags, `interlock runs` retains its full history dump. The shared `runs.list` endpoint also retains its original response.
+Without flags, `interlock runs` prints full run records, newest first, through the shared `runs.list` endpoint. `runs.list` accepts optional `limit` (1 to 1000, default 1000) and `afterRunId` (the last run ID read), so stores with up to 1000 runs return whole as before.
 
 Use `start_run.requestId` for atomic redelivery safety. External-task lookup does not reserve a task: distinct keys can create concurrent attempts. Use an atomic `onActiveExternalTask` start policy when one active task owner is required. See [start identity and retention](idempotent-run-starts.md).
 

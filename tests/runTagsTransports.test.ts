@@ -9,7 +9,7 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { Engine } from '@interlock/runtime';
 import { Store } from '@interlock/storage';
 import { createClient } from '@interlock/client';
-import { blankDefinition } from '@interlock/core';
+import { blankDefinition, type Run } from '@interlock/core';
 import { createApp } from '../packages/server/src/app';
 import { runCommand } from '../packages/cli/src/commands';
 
@@ -337,6 +337,20 @@ it.each(['http', 'stdio'])(
         'batch=' + tags.batch,
       ])) as { id: string }[];
       expect(cliRuns.map((run) => run.id)).toEqual([id]);
+      // Paging keeps each command's shape; a full page hints at the next cursor on stderr.
+      const all = (await runCommand(['runs'])) as Run[];
+      expect(all.length).toBeGreaterThan(1);
+      expect(await runCommand(['runs', '--after-run', all[0].id])).toEqual(
+        all.slice(1),
+      );
+      const stderr = vi
+        .spyOn(process.stderr, 'write')
+        .mockImplementation(() => true);
+      const first = (await runCommand(['runs', '--limit', '1'])) as Run[];
+      expect(stderr).toHaveBeenCalledWith(
+        `Stopped at 1 runs; continue with --after-run ${first[0].id}\n`,
+      );
+      stderr.mockRestore();
       const cliReport = (await runCommand([
         'report',
         '--workflow',

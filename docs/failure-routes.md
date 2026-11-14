@@ -86,7 +86,7 @@ A failed child follows Failed with category `child`. A child that completes but 
 }
 ```
 
-`input` is the resolved original call input after bindings. `error.child.executionId` is the child's last execution ID, or null if unavailable. Use `get_run` or targeted result reads to inspect that child. History, prompts and work tokens are not copied into the failure value. For category `output`, `output` contains the rejected successful child result, which is also retained on the caller execution. For category `child`, it is null.
+`input` is the resolved original call input after bindings. `error.child.executionId` is the child's last execution ID, or null if unavailable. Use `get_run` or targeted result reads to inspect that child; above 64 KiB `get_run` truncates long errors and drops large fields, so pass `full: true` for the complete child. History, prompts and work tokens are not copied into the failure value. For category `output`, `output` contains the rejected successful child result, which is also retained on the caller execution. For category `child`, it is null.
 
 Caller input or binding errors, invalid target workflow input, invalid pins/configuration, caller step limits and persistence errors stay terminal. Target input is validated before allocating a route-enabled child. After valid dispatch, a failed child is a routable outcome regardless of its internal cause, including its own contract/step-limit failure or a Script/Fetch interruption recorded at restart. Handling that outcome never replays the child's external effects.
 

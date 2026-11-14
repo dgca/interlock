@@ -516,7 +516,7 @@ export class Engine {
     for (const id of this.trials.recover()) this.cancelTree(id);
     // Deterministic ownership survives a lost process outcome. Background supervisors
     // keep their reservation while authenticated recovery establishes their result.
-    for (const run of store.runs()) {
+    for (const run of store.runScopes.withActiveResources()) {
       let changed = false;
       for (const execution of run.executions) {
         if (!execution.resourceActive) continue;
@@ -534,7 +534,7 @@ export class Engine {
       if (changed) this.save(run);
     }
     // A process interruption gives no evidence that local work or remote side effects completed.
-    for (const run of store.runs()) {
+    for (const run of store.activeRuns()) {
       const execution = run.executions.at(-1);
       if (
         run.status === 'waiting' &&
@@ -3187,10 +3187,8 @@ export class Engine {
   private cancelTree(id: string, afterCommit?: (() => void)[]) {
     const run = this.run(id);
     if (terminal(run.status)) return;
-    for (const child of this.store
-      .runs()
-      .filter((r) => r.parentRunId === id && r.parentMode !== 'detached'))
-      this.cancelTree(child.id, afterCommit);
+    for (const child of this.store.runScopes.attachedChildIds(id))
+      this.cancelTree(child, afterCommit);
     this.cancelOne(run, afterCommit);
   }
   private cancelOne(run: Run, afterCommit?: (() => void)[], reason?: string) {
@@ -3229,11 +3227,8 @@ export class Engine {
     if (execution && !terminal(execution.status))
       execution.status = 'cancelled';
     for (const work of this.store
-      .work()
-      .filter(
-        (w) =>
-          w.runId === id && ['available', 'claimed', 'held'].includes(w.status),
-      )) {
+      .work(undefined, id)
+      .filter((w) => ['available', 'claimed', 'held'].includes(w.status))) {
       this.resources.end(work, 'cancelled');
       this.usage.ended(work, 'cancelled');
       this.holds.close(work, now(), reason ?? 'run cancellation', 'cancelled');
