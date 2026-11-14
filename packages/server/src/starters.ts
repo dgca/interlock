@@ -77,7 +77,7 @@ const catalog = [
     bundle: prWatcherBundle,
     boardSuggestion: undefined,
     summary:
-      'Fix failing checks and trusted review comments on a pull request.',
+      'Experimental. Fix failing checks and trusted review comments on a pull request.',
     requirements:
       'gh signed in, coding agent and fresh reviewer. Pushes reviewed fixes to the pull request branch: never forced, never the default branch.',
   },

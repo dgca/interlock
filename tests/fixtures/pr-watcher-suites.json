@@ -34,21 +34,6 @@
             "nodeId": "watch",
             "kind": "script",
             "output": {
-              "settled": false,
-              "status": "pending",
-              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "checkedAt": "2026-11-13T10:30:00.000Z",
-              "failed": [],
-              "blocked": [],
-              "pendingChecks": 0,
-              "comments": [],
-              "ignoredComments": 0
-            }
-          },
-          {
-            "nodeId": "watch",
-            "kind": "script",
-            "output": {
               "settled": true,
               "status": "failing",
               "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
@@ -76,7 +61,7 @@
           },
           {
             "nodeId": "fix",
-            "kind": "agent",
+            "kind": "workflow",
             "output": {
               "status": "done",
               "summary": "fixed",
@@ -115,6 +100,7 @@
             "nodeId": "push",
             "kind": "script",
             "output": {
+              "route": "watch",
               "pushed": true,
               "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "since": "2026-11-13T10:30:00.000Z",
@@ -165,7 +151,7 @@
             "operator": "equals",
             "expected": "merged"
           },
-          { "kind": "route", "nodeId": "push", "visit": 1, "port": "default" },
+          { "kind": "route", "nodeId": "push", "visit": 1, "port": "watch" },
           { "kind": "route", "nodeId": "watch", "visit": 2, "port": "default" }
         ]
       },
@@ -222,7 +208,7 @@
           },
           {
             "nodeId": "fix",
-            "kind": "agent",
+            "kind": "workflow",
             "output": {
               "status": "done",
               "summary": "fixed",
@@ -261,6 +247,7 @@
             "nodeId": "push",
             "kind": "script",
             "output": {
+              "route": "watch",
               "pushed": true,
               "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "since": "2026-11-13T10:30:00.000Z",
@@ -351,55 +338,8 @@
         ]
       },
       {
-        "id": "no-pull-request",
-        "name": "An SDLC run that opened no pull request ends the watcher quietly",
-        "input": {
-          "eventId": "e1",
-          "type": "completed",
-          "occurredAt": "2026-11-13T10:00:00.000Z",
-          "runId": "run-1",
-          "workflowId": "sdlc",
-          "version": 1,
-          "stage": "Delivery",
-          "waiting": null,
-          "repoPath": "/tmp"
-        },
-        "fixtures": [
-          {
-            "nodeId": "setup",
-            "kind": "script",
-            "output": {
-              "route": "none",
-              "outcome": "no_pull_request",
-              "url": null,
-              "since": null,
-              "summary": "none"
-            }
-          },
-          {
-            "nodeId": "finish",
-            "kind": "script",
-            "output": {
-              "outcome": "no_pull_request",
-              "prUrl": "https://github.com/o/r/pull/7",
-              "repairs": 0,
-              "lastPushedCommit": null,
-              "summary": "no_pull_request"
-            }
-          }
-        ],
-        "assertions": [
-          {
-            "kind": "output",
-            "path": "outcome",
-            "operator": "equals",
-            "expected": "no_pull_request"
-          }
-        ]
-      },
-      {
-        "id": "error-then-window",
-        "name": "A setup error and the end of the watch window each ask a person",
+        "id": "error-then-stop",
+        "name": "A setup error asks a person",
         "input": {
           "prUrl": "https://github.com/o/r/pull/7",
           "repoPath": "/tmp",
@@ -421,18 +361,158 @@
           {
             "nodeId": "attention",
             "kind": "input",
-            "output": { "choice": "continue" }
+            "output": { "choice": "stop" }
           },
           {
             "nodeId": "grant",
             "kind": "script",
             "output": {
-              "route": "setup",
+              "route": "stop",
               "outcome": "stopped",
               "repairUntil": 2,
-              "summary": "setup"
+              "summary": "stop"
             }
           },
+          {
+            "nodeId": "finish",
+            "kind": "script",
+            "output": {
+              "outcome": "stopped",
+              "prUrl": "https://github.com/o/r/pull/7",
+              "repairs": 0,
+              "lastPushedCommit": null,
+              "summary": "stopped"
+            }
+          }
+        ],
+        "assertions": [
+          {
+            "kind": "output",
+            "path": "outcome",
+            "operator": "equals",
+            "expected": "stopped"
+          },
+          { "kind": "route", "nodeId": "setup", "visit": 1, "port": "failed" }
+        ]
+      },
+      {
+        "id": "fixer-failure",
+        "name": "A fixer whose executor fails asks a person instead of failing the run",
+        "input": {
+          "prUrl": "https://github.com/o/r/pull/7",
+          "repoPath": "/tmp",
+          "maxRepairs": 1
+        },
+        "fixtures": [
+          {
+            "nodeId": "setup",
+            "kind": "script",
+            "output": {
+              "route": "watch",
+              "repoPath": "/tmp",
+              "url": "https://github.com/o/r/pull/7",
+              "maxRepairs": 2,
+              "checkCommands": null,
+              "since": "2026-11-13T10:00:00.000Z",
+              "summary": "Watching"
+            }
+          },
+          {
+            "nodeId": "watch",
+            "kind": "script",
+            "output": {
+              "settled": true,
+              "status": "failing",
+              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "checkedAt": "2026-11-13T10:30:00.000Z",
+              "failed": [],
+              "blocked": [],
+              "pendingChecks": 0,
+              "comments": [],
+              "ignoredComments": 0
+            }
+          },
+          {
+            "nodeId": "triage",
+            "kind": "script",
+            "output": { "route": "fix", "kind": null, "summary": "fix" }
+          },
+          {
+            "nodeId": "prepare",
+            "kind": "script",
+            "output": {
+              "prHead": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "criteria": "CHECK1: the check passes",
+              "since": "2026-11-13T10:30:00.000Z"
+            }
+          },
+          {
+            "nodeId": "fix",
+            "kind": "workflow",
+            "error": "Agent failed twice"
+          },
+          {
+            "nodeId": "attentionAsk",
+            "kind": "script",
+            "output": {
+              "kind": "error",
+              "question": "Keep watching?",
+              "context": "c",
+              "evidence": "e",
+              "revision": "error"
+            }
+          },
+          {
+            "nodeId": "attention",
+            "kind": "input",
+            "output": { "choice": "stop" }
+          },
+          {
+            "nodeId": "grant",
+            "kind": "script",
+            "output": {
+              "route": "stop",
+              "outcome": "stopped",
+              "repairUntil": 2,
+              "summary": "stop"
+            }
+          },
+          {
+            "nodeId": "finish",
+            "kind": "script",
+            "output": {
+              "outcome": "stopped",
+              "prUrl": "https://github.com/o/r/pull/7",
+              "repairs": 1,
+              "lastPushedCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "summary": "stopped"
+            }
+          }
+        ],
+        "assertions": [
+          {
+            "kind": "output",
+            "path": "outcome",
+            "operator": "equals",
+            "expected": "stopped"
+          },
+          { "kind": "route", "nodeId": "fix", "visit": 1, "port": "failed" }
+        ]
+      }
+    ]
+  },
+  "interlock-pr-watcher (one-interval window)": {
+    "name": "Pull request watcher window",
+    "cases": [
+      {
+        "id": "window-green",
+        "name": "A window that ends with every check green and no trusted comment ends the run quietly",
+        "input": {
+          "prUrl": "https://github.com/o/r/pull/7",
+          "repoPath": "/tmp",
+          "maxRepairs": 1
+        },
+        "fixtures": [
           {
             "nodeId": "setup",
             "kind": "script",
@@ -462,7 +542,7 @@
             }
           },
           {
-            "nodeId": "watch",
+            "nodeId": "windowCheck",
             "kind": "script",
             "output": {
               "settled": false,
@@ -477,11 +557,61 @@
             }
           },
           {
+            "nodeId": "finish",
+            "kind": "script",
+            "output": {
+              "outcome": "checks_passed",
+              "prUrl": "https://github.com/o/r/pull/7",
+              "repairs": 0,
+              "lastPushedCommit": null,
+              "summary": "checks_passed"
+            }
+          }
+        ],
+        "assertions": [
+          {
+            "kind": "output",
+            "path": "outcome",
+            "operator": "equals",
+            "expected": "checks_passed"
+          },
+          { "kind": "route", "nodeId": "watch", "visit": 1, "port": "timeout" },
+          {
+            "kind": "route",
+            "nodeId": "windowCheck",
+            "visit": 1,
+            "port": "passing"
+          }
+        ]
+      },
+      {
+        "id": "window-pending",
+        "name": "A window that ends with checks still pending asks a person",
+        "input": {
+          "prUrl": "https://github.com/o/r/pull/7",
+          "repoPath": "/tmp",
+          "maxRepairs": 1
+        },
+        "fixtures": [
+          {
+            "nodeId": "setup",
+            "kind": "script",
+            "output": {
+              "route": "watch",
+              "repoPath": "/tmp",
+              "url": "https://github.com/o/r/pull/7",
+              "maxRepairs": 2,
+              "checkCommands": null,
+              "since": "2026-11-13T10:00:00.000Z",
+              "summary": "Watching"
+            }
+          },
+          {
             "nodeId": "watch",
             "kind": "script",
             "output": {
               "settled": false,
-              "status": "passing",
+              "status": "pending",
               "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
               "checkedAt": "2026-11-13T10:30:00.000Z",
               "failed": [],
@@ -492,676 +622,16 @@
             }
           },
           {
-            "nodeId": "watch",
+            "nodeId": "windowCheck",
             "kind": "script",
             "output": {
               "settled": false,
-              "status": "passing",
+              "status": "pending",
               "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
               "checkedAt": "2026-11-13T10:30:00.000Z",
               "failed": [],
               "blocked": [],
-              "pendingChecks": 0,
-              "comments": [],
-              "ignoredComments": 0
-            }
-          },
-          {
-            "nodeId": "watch",
-            "kind": "script",
-            "output": {
-              "settled": false,
-              "status": "passing",
-              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "checkedAt": "2026-11-13T10:30:00.000Z",
-              "failed": [],
-              "blocked": [],
-              "pendingChecks": 0,
-              "comments": [],
-              "ignoredComments": 0
-            }
-          },
-          {
-            "nodeId": "watch",
-            "kind": "script",
-            "output": {
-              "settled": false,
-              "status": "passing",
-              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "checkedAt": "2026-11-13T10:30:00.000Z",
-              "failed": [],
-              "blocked": [],
-              "pendingChecks": 0,
-              "comments": [],
-              "ignoredComments": 0
-            }
-          },
-          {
-            "nodeId": "watch",
-            "kind": "script",
-            "output": {
-              "settled": false,
-              "status": "passing",
-              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "checkedAt": "2026-11-13T10:30:00.000Z",
-              "failed": [],
-              "blocked": [],
-              "pendingChecks": 0,
-              "comments": [],
-              "ignoredComments": 0
-            }
-          },
-          {
-            "nodeId": "watch",
-            "kind": "script",
-            "output": {
-              "settled": false,
-              "status": "passing",
-              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "checkedAt": "2026-11-13T10:30:00.000Z",
-              "failed": [],
-              "blocked": [],
-              "pendingChecks": 0,
-              "comments": [],
-              "ignoredComments": 0
-            }
-          },
-          {
-            "nodeId": "watch",
-            "kind": "script",
-            "output": {
-              "settled": false,
-              "status": "passing",
-              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "checkedAt": "2026-11-13T10:30:00.000Z",
-              "failed": [],
-              "blocked": [],
-              "pendingChecks": 0,
-              "comments": [],
-              "ignoredComments": 0
-            }
-          },
-          {
-            "nodeId": "watch",
-            "kind": "script",
-            "output": {
-              "settled": false,
-              "status": "passing",
-              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "checkedAt": "2026-11-13T10:30:00.000Z",
-              "failed": [],
-              "blocked": [],
-              "pendingChecks": 0,
-              "comments": [],
-              "ignoredComments": 0
-            }
-          },
-          {
-            "nodeId": "watch",
-            "kind": "script",
-            "output": {
-              "settled": false,
-              "status": "passing",
-              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "checkedAt": "2026-11-13T10:30:00.000Z",
-              "failed": [],
-              "blocked": [],
-              "pendingChecks": 0,
-              "comments": [],
-              "ignoredComments": 0
-            }
-          },
-          {
-            "nodeId": "watch",
-            "kind": "script",
-            "output": {
-              "settled": false,
-              "status": "passing",
-              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "checkedAt": "2026-11-13T10:30:00.000Z",
-              "failed": [],
-              "blocked": [],
-              "pendingChecks": 0,
-              "comments": [],
-              "ignoredComments": 0
-            }
-          },
-          {
-            "nodeId": "watch",
-            "kind": "script",
-            "output": {
-              "settled": false,
-              "status": "passing",
-              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "checkedAt": "2026-11-13T10:30:00.000Z",
-              "failed": [],
-              "blocked": [],
-              "pendingChecks": 0,
-              "comments": [],
-              "ignoredComments": 0
-            }
-          },
-          {
-            "nodeId": "watch",
-            "kind": "script",
-            "output": {
-              "settled": false,
-              "status": "passing",
-              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "checkedAt": "2026-11-13T10:30:00.000Z",
-              "failed": [],
-              "blocked": [],
-              "pendingChecks": 0,
-              "comments": [],
-              "ignoredComments": 0
-            }
-          },
-          {
-            "nodeId": "watch",
-            "kind": "script",
-            "output": {
-              "settled": false,
-              "status": "passing",
-              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "checkedAt": "2026-11-13T10:30:00.000Z",
-              "failed": [],
-              "blocked": [],
-              "pendingChecks": 0,
-              "comments": [],
-              "ignoredComments": 0
-            }
-          },
-          {
-            "nodeId": "watch",
-            "kind": "script",
-            "output": {
-              "settled": false,
-              "status": "passing",
-              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "checkedAt": "2026-11-13T10:30:00.000Z",
-              "failed": [],
-              "blocked": [],
-              "pendingChecks": 0,
-              "comments": [],
-              "ignoredComments": 0
-            }
-          },
-          {
-            "nodeId": "watch",
-            "kind": "script",
-            "output": {
-              "settled": false,
-              "status": "passing",
-              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "checkedAt": "2026-11-13T10:30:00.000Z",
-              "failed": [],
-              "blocked": [],
-              "pendingChecks": 0,
-              "comments": [],
-              "ignoredComments": 0
-            }
-          },
-          {
-            "nodeId": "watch",
-            "kind": "script",
-            "output": {
-              "settled": false,
-              "status": "passing",
-              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "checkedAt": "2026-11-13T10:30:00.000Z",
-              "failed": [],
-              "blocked": [],
-              "pendingChecks": 0,
-              "comments": [],
-              "ignoredComments": 0
-            }
-          },
-          {
-            "nodeId": "watch",
-            "kind": "script",
-            "output": {
-              "settled": false,
-              "status": "passing",
-              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "checkedAt": "2026-11-13T10:30:00.000Z",
-              "failed": [],
-              "blocked": [],
-              "pendingChecks": 0,
-              "comments": [],
-              "ignoredComments": 0
-            }
-          },
-          {
-            "nodeId": "watch",
-            "kind": "script",
-            "output": {
-              "settled": false,
-              "status": "passing",
-              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "checkedAt": "2026-11-13T10:30:00.000Z",
-              "failed": [],
-              "blocked": [],
-              "pendingChecks": 0,
-              "comments": [],
-              "ignoredComments": 0
-            }
-          },
-          {
-            "nodeId": "watch",
-            "kind": "script",
-            "output": {
-              "settled": false,
-              "status": "passing",
-              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "checkedAt": "2026-11-13T10:30:00.000Z",
-              "failed": [],
-              "blocked": [],
-              "pendingChecks": 0,
-              "comments": [],
-              "ignoredComments": 0
-            }
-          },
-          {
-            "nodeId": "watch",
-            "kind": "script",
-            "output": {
-              "settled": false,
-              "status": "passing",
-              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "checkedAt": "2026-11-13T10:30:00.000Z",
-              "failed": [],
-              "blocked": [],
-              "pendingChecks": 0,
-              "comments": [],
-              "ignoredComments": 0
-            }
-          },
-          {
-            "nodeId": "watch",
-            "kind": "script",
-            "output": {
-              "settled": false,
-              "status": "passing",
-              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "checkedAt": "2026-11-13T10:30:00.000Z",
-              "failed": [],
-              "blocked": [],
-              "pendingChecks": 0,
-              "comments": [],
-              "ignoredComments": 0
-            }
-          },
-          {
-            "nodeId": "watch",
-            "kind": "script",
-            "output": {
-              "settled": false,
-              "status": "passing",
-              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "checkedAt": "2026-11-13T10:30:00.000Z",
-              "failed": [],
-              "blocked": [],
-              "pendingChecks": 0,
-              "comments": [],
-              "ignoredComments": 0
-            }
-          },
-          {
-            "nodeId": "watch",
-            "kind": "script",
-            "output": {
-              "settled": false,
-              "status": "passing",
-              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "checkedAt": "2026-11-13T10:30:00.000Z",
-              "failed": [],
-              "blocked": [],
-              "pendingChecks": 0,
-              "comments": [],
-              "ignoredComments": 0
-            }
-          },
-          {
-            "nodeId": "watch",
-            "kind": "script",
-            "output": {
-              "settled": false,
-              "status": "passing",
-              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "checkedAt": "2026-11-13T10:30:00.000Z",
-              "failed": [],
-              "blocked": [],
-              "pendingChecks": 0,
-              "comments": [],
-              "ignoredComments": 0
-            }
-          },
-          {
-            "nodeId": "watch",
-            "kind": "script",
-            "output": {
-              "settled": false,
-              "status": "passing",
-              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "checkedAt": "2026-11-13T10:30:00.000Z",
-              "failed": [],
-              "blocked": [],
-              "pendingChecks": 0,
-              "comments": [],
-              "ignoredComments": 0
-            }
-          },
-          {
-            "nodeId": "watch",
-            "kind": "script",
-            "output": {
-              "settled": false,
-              "status": "passing",
-              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "checkedAt": "2026-11-13T10:30:00.000Z",
-              "failed": [],
-              "blocked": [],
-              "pendingChecks": 0,
-              "comments": [],
-              "ignoredComments": 0
-            }
-          },
-          {
-            "nodeId": "watch",
-            "kind": "script",
-            "output": {
-              "settled": false,
-              "status": "passing",
-              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "checkedAt": "2026-11-13T10:30:00.000Z",
-              "failed": [],
-              "blocked": [],
-              "pendingChecks": 0,
-              "comments": [],
-              "ignoredComments": 0
-            }
-          },
-          {
-            "nodeId": "watch",
-            "kind": "script",
-            "output": {
-              "settled": false,
-              "status": "passing",
-              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "checkedAt": "2026-11-13T10:30:00.000Z",
-              "failed": [],
-              "blocked": [],
-              "pendingChecks": 0,
-              "comments": [],
-              "ignoredComments": 0
-            }
-          },
-          {
-            "nodeId": "watch",
-            "kind": "script",
-            "output": {
-              "settled": false,
-              "status": "passing",
-              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "checkedAt": "2026-11-13T10:30:00.000Z",
-              "failed": [],
-              "blocked": [],
-              "pendingChecks": 0,
-              "comments": [],
-              "ignoredComments": 0
-            }
-          },
-          {
-            "nodeId": "watch",
-            "kind": "script",
-            "output": {
-              "settled": false,
-              "status": "passing",
-              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "checkedAt": "2026-11-13T10:30:00.000Z",
-              "failed": [],
-              "blocked": [],
-              "pendingChecks": 0,
-              "comments": [],
-              "ignoredComments": 0
-            }
-          },
-          {
-            "nodeId": "watch",
-            "kind": "script",
-            "output": {
-              "settled": false,
-              "status": "passing",
-              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "checkedAt": "2026-11-13T10:30:00.000Z",
-              "failed": [],
-              "blocked": [],
-              "pendingChecks": 0,
-              "comments": [],
-              "ignoredComments": 0
-            }
-          },
-          {
-            "nodeId": "watch",
-            "kind": "script",
-            "output": {
-              "settled": false,
-              "status": "passing",
-              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "checkedAt": "2026-11-13T10:30:00.000Z",
-              "failed": [],
-              "blocked": [],
-              "pendingChecks": 0,
-              "comments": [],
-              "ignoredComments": 0
-            }
-          },
-          {
-            "nodeId": "watch",
-            "kind": "script",
-            "output": {
-              "settled": false,
-              "status": "passing",
-              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "checkedAt": "2026-11-13T10:30:00.000Z",
-              "failed": [],
-              "blocked": [],
-              "pendingChecks": 0,
-              "comments": [],
-              "ignoredComments": 0
-            }
-          },
-          {
-            "nodeId": "watch",
-            "kind": "script",
-            "output": {
-              "settled": false,
-              "status": "passing",
-              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "checkedAt": "2026-11-13T10:30:00.000Z",
-              "failed": [],
-              "blocked": [],
-              "pendingChecks": 0,
-              "comments": [],
-              "ignoredComments": 0
-            }
-          },
-          {
-            "nodeId": "watch",
-            "kind": "script",
-            "output": {
-              "settled": false,
-              "status": "passing",
-              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "checkedAt": "2026-11-13T10:30:00.000Z",
-              "failed": [],
-              "blocked": [],
-              "pendingChecks": 0,
-              "comments": [],
-              "ignoredComments": 0
-            }
-          },
-          {
-            "nodeId": "watch",
-            "kind": "script",
-            "output": {
-              "settled": false,
-              "status": "passing",
-              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "checkedAt": "2026-11-13T10:30:00.000Z",
-              "failed": [],
-              "blocked": [],
-              "pendingChecks": 0,
-              "comments": [],
-              "ignoredComments": 0
-            }
-          },
-          {
-            "nodeId": "watch",
-            "kind": "script",
-            "output": {
-              "settled": false,
-              "status": "passing",
-              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "checkedAt": "2026-11-13T10:30:00.000Z",
-              "failed": [],
-              "blocked": [],
-              "pendingChecks": 0,
-              "comments": [],
-              "ignoredComments": 0
-            }
-          },
-          {
-            "nodeId": "watch",
-            "kind": "script",
-            "output": {
-              "settled": false,
-              "status": "passing",
-              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "checkedAt": "2026-11-13T10:30:00.000Z",
-              "failed": [],
-              "blocked": [],
-              "pendingChecks": 0,
-              "comments": [],
-              "ignoredComments": 0
-            }
-          },
-          {
-            "nodeId": "watch",
-            "kind": "script",
-            "output": {
-              "settled": false,
-              "status": "passing",
-              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "checkedAt": "2026-11-13T10:30:00.000Z",
-              "failed": [],
-              "blocked": [],
-              "pendingChecks": 0,
-              "comments": [],
-              "ignoredComments": 0
-            }
-          },
-          {
-            "nodeId": "watch",
-            "kind": "script",
-            "output": {
-              "settled": false,
-              "status": "passing",
-              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "checkedAt": "2026-11-13T10:30:00.000Z",
-              "failed": [],
-              "blocked": [],
-              "pendingChecks": 0,
-              "comments": [],
-              "ignoredComments": 0
-            }
-          },
-          {
-            "nodeId": "watch",
-            "kind": "script",
-            "output": {
-              "settled": false,
-              "status": "passing",
-              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "checkedAt": "2026-11-13T10:30:00.000Z",
-              "failed": [],
-              "blocked": [],
-              "pendingChecks": 0,
-              "comments": [],
-              "ignoredComments": 0
-            }
-          },
-          {
-            "nodeId": "watch",
-            "kind": "script",
-            "output": {
-              "settled": false,
-              "status": "passing",
-              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "checkedAt": "2026-11-13T10:30:00.000Z",
-              "failed": [],
-              "blocked": [],
-              "pendingChecks": 0,
-              "comments": [],
-              "ignoredComments": 0
-            }
-          },
-          {
-            "nodeId": "watch",
-            "kind": "script",
-            "output": {
-              "settled": false,
-              "status": "passing",
-              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "checkedAt": "2026-11-13T10:30:00.000Z",
-              "failed": [],
-              "blocked": [],
-              "pendingChecks": 0,
-              "comments": [],
-              "ignoredComments": 0
-            }
-          },
-          {
-            "nodeId": "watch",
-            "kind": "script",
-            "output": {
-              "settled": false,
-              "status": "passing",
-              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "checkedAt": "2026-11-13T10:30:00.000Z",
-              "failed": [],
-              "blocked": [],
-              "pendingChecks": 0,
-              "comments": [],
-              "ignoredComments": 0
-            }
-          },
-          {
-            "nodeId": "watch",
-            "kind": "script",
-            "output": {
-              "settled": false,
-              "status": "passing",
-              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "checkedAt": "2026-11-13T10:30:00.000Z",
-              "failed": [],
-              "blocked": [],
-              "pendingChecks": 0,
-              "comments": [],
-              "ignoredComments": 0
-            }
-          },
-          {
-            "nodeId": "watch",
-            "kind": "script",
-            "output": {
-              "settled": false,
-              "status": "passing",
-              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "checkedAt": "2026-11-13T10:30:00.000Z",
-              "failed": [],
-              "blocked": [],
-              "pendingChecks": 0,
+              "pendingChecks": 1,
               "comments": [],
               "ignoredComments": 0
             }
@@ -1211,676 +681,12 @@
             "operator": "equals",
             "expected": "stopped"
           },
-          { "kind": "route", "nodeId": "watch", "visit": 1, "port": "timeout" },
-          { "kind": "route", "nodeId": "grant", "visit": 1, "port": "setup" }
-        ]
-      },
-      {
-        "id": "comments-no-change",
-        "name": "A trusted comment needs no change after a failed checkout; the watcher keeps watching until the pull request closes",
-        "input": {
-          "prUrl": "https://github.com/o/r/pull/7",
-          "repoPath": "/tmp",
-          "maxRepairs": 1
-        },
-        "fixtures": [
-          {
-            "nodeId": "setup",
-            "kind": "script",
-            "output": {
-              "route": "watch",
-              "repoPath": "/tmp",
-              "url": "https://github.com/o/r/pull/7",
-              "maxRepairs": 2,
-              "checkCommands": null,
-              "since": "2026-11-13T10:00:00.000Z",
-              "summary": "Watching"
-            }
-          },
-          {
-            "nodeId": "watch",
-            "kind": "script",
-            "output": {
-              "settled": true,
-              "status": "comments",
-              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "checkedAt": "2026-11-13T10:30:00.000Z",
-              "failed": [],
-              "blocked": [],
-              "pendingChecks": 0,
-              "comments": [],
-              "ignoredComments": 0
-            }
-          },
-          {
-            "nodeId": "triage",
-            "kind": "script",
-            "output": { "route": "fix", "kind": null, "summary": "fix" }
-          },
-          {
-            "nodeId": "prepare",
-            "kind": "script",
-            "error": "The checkout has uncommitted changes"
-          },
-          {
-            "nodeId": "attentionAsk",
-            "kind": "script",
-            "output": {
-              "kind": "error",
-              "question": "Keep watching?",
-              "context": "c",
-              "evidence": "e",
-              "revision": "error"
-            }
-          },
-          {
-            "nodeId": "attention",
-            "kind": "input",
-            "output": { "choice": "continue" }
-          },
-          {
-            "nodeId": "grant",
-            "kind": "script",
-            "output": {
-              "route": "setup",
-              "outcome": "stopped",
-              "repairUntil": 2,
-              "summary": "setup"
-            }
-          },
-          {
-            "nodeId": "setup",
-            "kind": "script",
-            "output": {
-              "route": "watch",
-              "repoPath": "/tmp",
-              "url": "https://github.com/o/r/pull/7",
-              "maxRepairs": 2,
-              "checkCommands": null,
-              "since": "2026-11-13T10:00:00.000Z",
-              "summary": "Watching"
-            }
-          },
-          {
-            "nodeId": "watch",
-            "kind": "script",
-            "output": {
-              "settled": true,
-              "status": "comments",
-              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "checkedAt": "2026-11-13T10:30:00.000Z",
-              "failed": [],
-              "blocked": [],
-              "pendingChecks": 0,
-              "comments": [],
-              "ignoredComments": 0
-            }
-          },
-          {
-            "nodeId": "triage",
-            "kind": "script",
-            "output": { "route": "fix", "kind": null, "summary": "fix" }
-          },
-          {
-            "nodeId": "prepare",
-            "kind": "script",
-            "output": {
-              "prHead": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "criteria": "CHECK1: the check passes",
-              "since": "2026-11-13T10:30:00.000Z"
-            }
-          },
-          {
-            "nodeId": "fix",
-            "kind": "agent",
-            "output": {
-              "status": "no_change",
-              "summary": "fixed",
-              "headCommit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "resolutions": [
-                { "id": "CHECK1", "status": "fixed", "details": "d" }
-              ]
-            }
-          },
-          {
-            "nodeId": "push",
-            "kind": "script",
-            "output": {
-              "pushed": false,
-              "commit": null,
-              "since": "2026-11-13T10:30:00.000Z",
-              "summary": "none"
-            }
-          },
-          {
-            "nodeId": "watch",
-            "kind": "script",
-            "output": {
-              "settled": true,
-              "status": "closed",
-              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "checkedAt": "2026-11-13T10:30:00.000Z",
-              "failed": [],
-              "blocked": [],
-              "pendingChecks": 0,
-              "comments": [],
-              "ignoredComments": 0
-            }
-          },
-          {
-            "nodeId": "triage",
-            "kind": "script",
-            "output": {
-              "route": "done",
-              "kind": null,
-              "summary": "done",
-              "outcome": "closed"
-            }
-          },
-          {
-            "nodeId": "finish",
-            "kind": "script",
-            "output": {
-              "outcome": "closed",
-              "prUrl": "https://github.com/o/r/pull/7",
-              "repairs": 1,
-              "lastPushedCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-              "summary": "closed"
-            }
-          }
-        ],
-        "assertions": [
-          {
-            "kind": "output",
-            "path": "outcome",
-            "operator": "equals",
-            "expected": "closed"
-          },
-          { "kind": "route", "nodeId": "fix", "visit": 1, "port": "no_change" },
-          { "kind": "route", "nodeId": "prepare", "visit": 1, "port": "failed" }
-        ]
-      },
-      {
-        "id": "review-and-push-failures",
-        "name": "A fixer that cannot fix a revised change, a failed review, a blocked review and a rejected push each ask a person",
-        "input": {
-          "prUrl": "https://github.com/o/r/pull/7",
-          "repoPath": "/tmp",
-          "maxRepairs": 1
-        },
-        "fixtures": [
-          {
-            "nodeId": "setup",
-            "kind": "script",
-            "output": {
-              "route": "watch",
-              "repoPath": "/tmp",
-              "url": "https://github.com/o/r/pull/7",
-              "maxRepairs": 2,
-              "checkCommands": null,
-              "since": "2026-11-13T10:00:00.000Z",
-              "summary": "Watching"
-            }
-          },
-          {
-            "nodeId": "watch",
-            "kind": "script",
-            "output": {
-              "settled": true,
-              "status": "failing",
-              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "checkedAt": "2026-11-13T10:30:00.000Z",
-              "failed": [],
-              "blocked": [],
-              "pendingChecks": 0,
-              "comments": [],
-              "ignoredComments": 0
-            }
-          },
-          {
-            "nodeId": "triage",
-            "kind": "script",
-            "output": { "route": "fix", "kind": null, "summary": "fix" }
-          },
-          {
-            "nodeId": "prepare",
-            "kind": "script",
-            "output": {
-              "prHead": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "criteria": "CHECK1: the check passes",
-              "since": "2026-11-13T10:30:00.000Z"
-            }
-          },
-          {
-            "nodeId": "fix",
-            "kind": "agent",
-            "output": {
-              "status": "done",
-              "summary": "fixed",
-              "headCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-              "resolutions": [
-                { "id": "CHECK1", "status": "fixed", "details": "d" }
-              ]
-            }
-          },
-          {
-            "nodeId": "changeReview",
-            "kind": "workflow",
-            "output": {
-              "verdict": "revise",
-              "summary": "review",
-              "reviewedCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-              "reviewScope": "full",
-              "criteria": [
-                { "id": "CHECK1", "status": "gap", "evidence": "e" }
-              ],
-              "findings": [
-                {
-                  "id": "F1",
-                  "owner": "implementation",
-                  "severity": "major",
-                  "location": "a.ts",
-                  "details": "d"
-                }
-              ],
-              "resolutions": [],
-              "limitations": [],
-              "baseCommit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "headCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-              "checksPassed": null,
-              "checks": []
-            }
-          },
-          {
-            "nodeId": "reviewRoute",
-            "kind": "script",
-            "output": {
-              "route": "fix",
-              "review": { "verdict": "revise" },
-              "summary": "s"
-            }
-          },
-          {
-            "nodeId": "fix",
-            "kind": "agent",
-            "output": {
-              "status": "blocked",
-              "summary": "fixed",
-              "headCommit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "resolutions": [
-                { "id": "CHECK1", "status": "fixed", "details": "d" }
-              ]
-            }
-          },
-          {
-            "nodeId": "attentionAsk",
-            "kind": "script",
-            "output": {
-              "kind": "fix_blocked",
-              "question": "Keep watching?",
-              "context": "c",
-              "evidence": "e",
-              "revision": "fix_blocked"
-            }
-          },
-          {
-            "nodeId": "attention",
-            "kind": "input",
-            "output": { "choice": "continue" }
-          },
-          {
-            "nodeId": "grant",
-            "kind": "script",
-            "output": {
-              "route": "setup",
-              "outcome": "stopped",
-              "repairUntil": 2,
-              "summary": "setup"
-            }
-          },
-          {
-            "nodeId": "setup",
-            "kind": "script",
-            "output": {
-              "route": "watch",
-              "repoPath": "/tmp",
-              "url": "https://github.com/o/r/pull/7",
-              "maxRepairs": 2,
-              "checkCommands": null,
-              "since": "2026-11-13T10:00:00.000Z",
-              "summary": "Watching"
-            }
-          },
-          {
-            "nodeId": "watch",
-            "kind": "script",
-            "output": {
-              "settled": true,
-              "status": "failing",
-              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "checkedAt": "2026-11-13T10:30:00.000Z",
-              "failed": [],
-              "blocked": [],
-              "pendingChecks": 0,
-              "comments": [],
-              "ignoredComments": 0
-            }
-          },
-          {
-            "nodeId": "triage",
-            "kind": "script",
-            "output": { "route": "fix", "kind": null, "summary": "fix" }
-          },
-          {
-            "nodeId": "prepare",
-            "kind": "script",
-            "output": {
-              "prHead": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "criteria": "CHECK1: the check passes",
-              "since": "2026-11-13T10:30:00.000Z"
-            }
-          },
-          {
-            "nodeId": "fix",
-            "kind": "agent",
-            "output": {
-              "status": "done",
-              "summary": "fixed",
-              "headCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-              "resolutions": [
-                { "id": "CHECK1", "status": "fixed", "details": "d" }
-              ]
-            }
-          },
-          {
-            "nodeId": "changeReview",
-            "kind": "workflow",
-            "error": "No change to review"
-          },
-          {
-            "nodeId": "attentionAsk",
-            "kind": "script",
-            "output": {
-              "kind": "error",
-              "question": "Keep watching?",
-              "context": "c",
-              "evidence": "e",
-              "revision": "error"
-            }
-          },
-          {
-            "nodeId": "attention",
-            "kind": "input",
-            "output": { "choice": "continue" }
-          },
-          {
-            "nodeId": "grant",
-            "kind": "script",
-            "output": {
-              "route": "setup",
-              "outcome": "stopped",
-              "repairUntil": 2,
-              "summary": "setup"
-            }
-          },
-          {
-            "nodeId": "setup",
-            "kind": "script",
-            "output": {
-              "route": "watch",
-              "repoPath": "/tmp",
-              "url": "https://github.com/o/r/pull/7",
-              "maxRepairs": 2,
-              "checkCommands": null,
-              "since": "2026-11-13T10:00:00.000Z",
-              "summary": "Watching"
-            }
-          },
-          {
-            "nodeId": "watch",
-            "kind": "script",
-            "output": {
-              "settled": true,
-              "status": "failing",
-              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "checkedAt": "2026-11-13T10:30:00.000Z",
-              "failed": [],
-              "blocked": [],
-              "pendingChecks": 0,
-              "comments": [],
-              "ignoredComments": 0
-            }
-          },
-          {
-            "nodeId": "triage",
-            "kind": "script",
-            "output": { "route": "fix", "kind": null, "summary": "fix" }
-          },
-          {
-            "nodeId": "prepare",
-            "kind": "script",
-            "output": {
-              "prHead": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "criteria": "CHECK1: the check passes",
-              "since": "2026-11-13T10:30:00.000Z"
-            }
-          },
-          {
-            "nodeId": "fix",
-            "kind": "agent",
-            "output": {
-              "status": "done",
-              "summary": "fixed",
-              "headCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-              "resolutions": [
-                { "id": "CHECK1", "status": "fixed", "details": "d" }
-              ]
-            }
-          },
-          {
-            "nodeId": "changeReview",
-            "kind": "workflow",
-            "output": {
-              "verdict": "blocked",
-              "summary": "review",
-              "reviewedCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-              "reviewScope": "full",
-              "criteria": [
-                { "id": "CHECK1", "status": "gap", "evidence": "e" }
-              ],
-              "findings": [
-                {
-                  "id": "F1",
-                  "owner": "implementation",
-                  "severity": "major",
-                  "location": "a.ts",
-                  "details": "d"
-                }
-              ],
-              "resolutions": [],
-              "limitations": [],
-              "baseCommit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "headCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-              "checksPassed": null,
-              "checks": []
-            }
-          },
-          {
-            "nodeId": "reviewRoute",
-            "kind": "script",
-            "output": { "route": "attention", "review": null, "summary": "s" }
-          },
-          {
-            "nodeId": "attentionAsk",
-            "kind": "script",
-            "output": {
-              "kind": "review_blocked",
-              "question": "Keep watching?",
-              "context": "c",
-              "evidence": "e",
-              "revision": "review_blocked"
-            }
-          },
-          {
-            "nodeId": "attention",
-            "kind": "input",
-            "output": { "choice": "continue" }
-          },
-          {
-            "nodeId": "grant",
-            "kind": "script",
-            "output": {
-              "route": "setup",
-              "outcome": "stopped",
-              "repairUntil": 2,
-              "summary": "setup"
-            }
-          },
-          {
-            "nodeId": "setup",
-            "kind": "script",
-            "output": {
-              "route": "watch",
-              "repoPath": "/tmp",
-              "url": "https://github.com/o/r/pull/7",
-              "maxRepairs": 2,
-              "checkCommands": null,
-              "since": "2026-11-13T10:00:00.000Z",
-              "summary": "Watching"
-            }
-          },
-          {
-            "nodeId": "watch",
-            "kind": "script",
-            "output": {
-              "settled": true,
-              "status": "failing",
-              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "checkedAt": "2026-11-13T10:30:00.000Z",
-              "failed": [],
-              "blocked": [],
-              "pendingChecks": 0,
-              "comments": [],
-              "ignoredComments": 0
-            }
-          },
-          {
-            "nodeId": "triage",
-            "kind": "script",
-            "output": { "route": "fix", "kind": null, "summary": "fix" }
-          },
-          {
-            "nodeId": "prepare",
-            "kind": "script",
-            "output": {
-              "prHead": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "criteria": "CHECK1: the check passes",
-              "since": "2026-11-13T10:30:00.000Z"
-            }
-          },
-          {
-            "nodeId": "fix",
-            "kind": "agent",
-            "output": {
-              "status": "done",
-              "summary": "fixed",
-              "headCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-              "resolutions": [
-                { "id": "CHECK1", "status": "fixed", "details": "d" }
-              ]
-            }
-          },
-          {
-            "nodeId": "changeReview",
-            "kind": "workflow",
-            "output": {
-              "verdict": "pass",
-              "summary": "review",
-              "reviewedCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-              "reviewScope": "full",
-              "criteria": [
-                { "id": "CHECK1", "status": "verified", "evidence": "e" }
-              ],
-              "findings": [],
-              "resolutions": [],
-              "limitations": [],
-              "baseCommit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              "headCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-              "checksPassed": null,
-              "checks": []
-            }
-          },
-          {
-            "nodeId": "reviewRoute",
-            "kind": "script",
-            "output": { "route": "push", "review": null, "summary": "s" }
-          },
-          { "nodeId": "push", "kind": "script", "error": "non-fast-forward" },
-          {
-            "nodeId": "attentionAsk",
-            "kind": "script",
-            "output": {
-              "kind": "error",
-              "question": "Keep watching?",
-              "context": "c",
-              "evidence": "e",
-              "revision": "error"
-            }
-          },
-          {
-            "nodeId": "attention",
-            "kind": "input",
-            "output": { "choice": "stop" }
-          },
-          {
-            "nodeId": "grant",
-            "kind": "script",
-            "output": {
-              "route": "stop",
-              "outcome": "stopped",
-              "repairUntil": 2,
-              "summary": "stop"
-            }
-          },
-          {
-            "nodeId": "finish",
-            "kind": "script",
-            "output": {
-              "outcome": "stopped",
-              "prUrl": "https://github.com/o/r/pull/7",
-              "repairs": 1,
-              "lastPushedCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-              "summary": "stopped"
-            }
-          }
-        ],
-        "assertions": [
-          {
-            "kind": "output",
-            "path": "outcome",
-            "operator": "equals",
-            "expected": "stopped"
-          },
           {
             "kind": "route",
-            "nodeId": "reviewRoute",
+            "nodeId": "windowCheck",
             "visit": 1,
-            "port": "fix"
-          },
-          { "kind": "route", "nodeId": "fix", "visit": 2, "port": "blocked" },
-          {
-            "kind": "route",
-            "nodeId": "changeReview",
-            "visit": 2,
-            "port": "failed"
-          },
-          {
-            "kind": "route",
-            "nodeId": "reviewRoute",
-            "visit": 2,
             "port": "attention"
-          },
-          { "kind": "route", "nodeId": "push", "visit": 1, "port": "failed" }
+          }
         ]
       }
     ]
