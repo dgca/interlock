@@ -6,6 +6,9 @@ import { usage } from './usage.js';
 import { pricingLines, runPricesCommand } from './prices.js';
 import { parse } from './json.js';
 import { runLauncherCommand } from './launcher.js';
+import { parseSummaryArgs } from './args.js';
+import { runBoardCommand } from './boards.js';
+import { runStartCommand } from './start.js';
 import { parseTags, runQuery, runsCommand } from './runsCommand.js';
 import {
   externalInputRequestSchema,
@@ -17,69 +20,12 @@ import {
   setRunVersionPolicySchema,
   runVersionPreviewSchema,
   runVersionApplySchema,
-  runVersionPolicySchema,
   scriptApprovalModeSchema,
   type DoctorReport,
   type DiagnosticCategory,
   type WorkflowReport,
   type ReportFilter,
 } from '@interlock/core';
-function parseSummaryArgs(args: string[], withBudget = false) {
-  const optionArgs: string[] = [];
-  const positionals: string[] = [];
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
-    if (arg === '--') {
-      positionals.push(...args.slice(i + 1));
-      break;
-    }
-    if (
-      withBudget &&
-      [
-        '--tag',
-        '--budget',
-        '--request-id',
-        '--external-task',
-        '--title',
-        '--priority',
-        '--after',
-        '--on-active-external-task',
-        '--version-policy',
-      ].includes(arg)
-    ) {
-      if (i + 1 < args.length) optionArgs.push(`${arg}=${args[++i]}`);
-      else optionArgs.push(arg);
-      continue;
-    }
-    // Negative JSON numbers are positional values, not short options.
-    if (
-      arg.startsWith('-') &&
-      !/^-(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$/.test(arg.trim())
-    )
-      optionArgs.push(arg);
-    else positionals.push(arg);
-  }
-  const { values } = parseArgs({
-    args: optionArgs,
-    options: {
-      summary: { type: 'boolean' },
-      ...(withBudget
-        ? {
-            tag: { type: 'string' as const, multiple: true as const },
-            budget: { type: 'string' as const },
-            'request-id': { type: 'string' as const },
-            'external-task': { type: 'string' as const },
-            title: { type: 'string' as const },
-            priority: { type: 'string' as const },
-            after: { type: 'string' as const },
-            'on-active-external-task': { type: 'string' as const },
-            'version-policy': { type: 'string' as const },
-          }
-        : {}),
-    },
-  });
-  return { values, positionals };
-}
 export async function runCommand(argv: string[]) {
   const client = engineClient();
   const [command, ...args] = argv;
@@ -305,53 +251,10 @@ export async function runCommand(argv: string[]) {
         id: args[0],
         cascade: args.includes('--cascade'),
       });
-    case 'start': {
-      const { values, positionals } = parseSummaryArgs(args, true);
-      if (positionals.length < 2 || positionals.length > 3)
-        throw new Error(
-          'Usage: start <workflow-id> <json|@file> [version] [--title TEXT] [--summary] [--budget json|@file] [--request-id key] [--external-task json|@file] [--tag KEY=VALUE ...] [--priority N] [--after json|@file] [--on-active-external-task allow|reuse|reject|cancel_previous] [--version-policy pinned|latest-compatible]',
-        );
-      const input = {
-        title: typeof values.title === 'string' ? values.title : undefined,
-        tags: parseTags(Array.isArray(values.tag) ? values.tag : undefined),
-        versionPolicy:
-          values['version-policy'] === undefined
-            ? undefined
-            : runVersionPolicySchema.parse(values['version-policy']),
-        priority:
-          typeof values.priority === 'string'
-            ? Number(values.priority)
-            : undefined,
-        after:
-          typeof values.after === 'string'
-            ? await parse(values.after)
-            : undefined,
-        onActiveExternalTask:
-          typeof values['on-active-external-task'] === 'string'
-            ? (values['on-active-external-task'] as
-                'allow' | 'reuse' | 'reject' | 'cancel_previous')
-            : undefined,
-        requestId:
-          typeof values['request-id'] === 'string'
-            ? values['request-id']
-            : undefined,
-        externalTask:
-          typeof values['external-task'] === 'string'
-            ? await parse(values['external-task'])
-            : undefined,
-        budget:
-          typeof values.budget === 'string'
-            ? await parse(values.budget)
-            : undefined,
-        workflowId: positionals[0],
-        input: await parse(positionals[1]),
-        version:
-          positionals[2] === undefined ? undefined : Number(positionals[2]),
-      };
-      return values.summary
-        ? withNextCall(await client.runs.startSummary.mutate(input))
-        : client.runs.start.mutate(input);
-    }
+    case 'start':
+      return runStartCommand(args);
+    case 'board':
+      return runBoardCommand(args);
     case 'runs':
       return runsCommand(client, args);
     case 'run-version': {

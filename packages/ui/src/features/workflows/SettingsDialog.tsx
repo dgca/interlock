@@ -113,7 +113,7 @@ export function SettingsDialog({
     void api.boards.list
       .query()
       .then((items) => {
-        if (active) setBoards(items);
+        if (active) setBoards(items.filter((board) => !board.typeId));
       })
       .catch(() => {});
     return () => {

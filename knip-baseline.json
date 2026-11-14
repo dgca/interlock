@@ -421,11 +421,6 @@
       "symbol": "RunChainLink"
     },
     {
-      "file": "packages/core/src/runProjection.ts",
-      "type": "exports",
-      "symbol": "runWaitingSchema"
-    },
-    {
       "file": "packages/core/src/runStarts.ts",
       "type": "exports",
       "symbol": "startDependencySchema"

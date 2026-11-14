@@ -8,7 +8,7 @@ function runListSearch(
   mode?: RunMode,
 ) {
   const query = new URLSearchParams();
-  if (mode === 'overview') query.set('mode', mode);
+  if (mode === 'overview' || mode === 'stages') query.set('mode', mode);
   if (tab !== 'active') query.set('tab', tab);
   if (offset > 0) query.set('offset', String(offset));
   if (tags && Object.keys(tags).length) query.set('tags', JSON.stringify(tags));
@@ -54,7 +54,10 @@ export function runReturnLocation(value: string | null | undefined) {
     if (pathname === '/runs') return { path, label: 'Back to runs' };
     if (pathname === '/runs/request') return { path, label: 'Back to request' };
     if (/^\/runs\/[^/]+$/.test(pathname)) return { path, label: 'Back to run' };
-    if (pathname !== '/boards/new' && /^\/boards\/[^/]+$/.test(pathname))
+    if (
+      !['/boards/new', '/boards/types'].includes(pathname) &&
+      /^\/boards\/[^/]+$/.test(pathname)
+    )
       return {
         path,
         label: searchParams.has('request')
@@ -78,6 +81,9 @@ export const paths = {
   boardNew: '/boards/new',
   board: (id: string) => `/boards/${encodeURIComponent(id)}`,
   boardSettings: (id: string) => `/boards/${encodeURIComponent(id)}/settings`,
+  boardTypes: '/boards/types',
+  boardTypeNew: '/boards/types/new',
+  boardType: (id: string) => `/boards/types/${encodeURIComponent(id)}`,
   request: (target: RequestTarget, returnTo?: string) => {
     const query = new URLSearchParams({ request: JSON.stringify(target) });
     if (returnTo) query.set('returnTo', returnTo);

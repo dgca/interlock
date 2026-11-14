@@ -7,12 +7,8 @@ import {
   useParams,
   useSearchParams,
 } from 'react-router';
-import { ArrowUpRight, Columns3, Plus, Search, Settings2 } from 'lucide-react';
-import {
-  boardStatusSchema,
-  runDisplayTitle,
-  type BoardStatus,
-} from '@interlock/core';
+import { Columns3, Plus, Search, Settings2 } from 'lucide-react';
+import { boardStatusSchema, type BoardStatus } from '@interlock/core';
 import {
   Anchor,
   Badge,
@@ -27,22 +23,16 @@ import {
   TextInput,
   workspacePage,
 } from '../../design-system';
-import { ExternalTaskLink } from '../../components/ExternalTaskLink';
-import { StatusBadge } from '../../components/StatusBadge/StatusBadge';
-import stretched from '../../components/StretchedLink.module.css';
 import {
   WorkspaceReadWarning,
   workspaceRead,
 } from '../../components/WorkspaceReads';
 import { paths, runOffset } from '../../routes/paths';
-import { requestActionLabel } from '../runs/runAttention';
 import type { api } from '../../lib/api';
 import { trpc, useQuery } from '../../lib/query';
-import {
-  runDisplayStatus,
-  runProjectionLabels,
-} from '../runs/runProjectionText';
 import { parseRequestTarget, RequestView } from './RequestView';
+import { BoardCard } from './BoardCard';
+import { BoardLanes } from './BoardLanes';
 import { BoardRowsSkeleton, BoardColumnsSkeleton } from './BoardSkeleton';
 import classes from './Boards.module.css';
 
@@ -70,6 +60,10 @@ export function BoardLibrary() {
   const boards = useQuery(trpc.boards.list.queryOptions());
   const boardsRead = workspaceRead('boards', boards, searchInput);
   const catalog = useQuery(trpc.workflows.catalog.queryOptions());
+  const types = useQuery(trpc.boardTypes.list.queryOptions());
+  const typeNames = new Map(
+    (types.data ?? []).map((type) => [type.id, type.name]),
+  );
   const byId = new Map(
     (catalog.data ?? []).map((workflow) => [workflow.id, workflow.name]),
   );
@@ -92,9 +86,14 @@ export function BoardLibrary() {
           />
         }
         actions={
-          <Button component={Link} to={paths.boardNew} variant="primary">
-            <Plus size={16} /> New board
-          </Button>
+          <>
+            <Button component={Link} to={paths.boardTypes}>
+              Board types
+            </Button>
+            <Button component={Link} to={paths.boardNew} variant="primary">
+              <Plus size={16} /> New board
+            </Button>
+          </>
         }
       />
       <div className={workspacePage.content}>
@@ -142,11 +141,15 @@ export function BoardLibrary() {
                       </Anchor>
                     </h2>
                     <Text size="sm" c="dimmed">
+                      {board.typeId &&
+                        `${typeNames.get(board.typeId) ?? 'Board type'} · `}
                       {!count
-                        ? 'No workflows assigned'
+                        ? board.typeId
+                          ? 'All workflows'
+                          : 'No workflows assigned'
                         : names.length === count
                           ? workflowNames.format(names)
-                          : `${count} assigned ${count === 1 ? 'workflow' : 'workflows'}`}
+                          : `${count} ${board.typeId ? 'selected' : 'assigned'} ${count === 1 ? 'workflow' : 'workflows'}`}
                     </Text>
                   </div>
                   {board.attentionCount > 0 && (
@@ -173,7 +176,44 @@ export function BoardLibrary() {
 
 export function WorkflowBoardRoute() {
   const id = useParams().boardId!;
+  const boards = useQuery(trpc.boards.list.queryOptions());
+  const board = boards.data?.find((item) => item.id === id);
+  if (board?.typeId) return <TypedBoard key={id} id={id} name={board.name} />;
+  if (boards.isPending)
+    return (
+      <div className={`${workspacePage.page} ${classes.boardPage}`}>
+        <PageHeader title="Board" />
+        <BoardColumnsSkeleton />
+      </div>
+    );
   return <WorkflowBoard key={id} id={id} />;
+}
+
+function TypedBoard({ id, name }: { id: string; name: string }) {
+  const navigate = useNavigate();
+  return (
+    <div className={`${workspacePage.page} ${classes.boardPage}`}>
+      <PageHeader
+        title={name}
+        onBack={() => void navigate(paths.boards)}
+        backLabel="Back to boards"
+        actions={
+          <Button component={Link} to={paths.boardSettings(id)}>
+            <Settings2 size={16} /> Board settings
+          </Button>
+        }
+      />
+      <BoardLanes
+        scope={{ id }}
+        returnTo={paths.board(id)}
+        empty={
+          <Text size="sm" c="dimmed">
+            No runs match this board's scope.
+          </Text>
+        }
+      />
+    </div>
+  );
 }
 
 function WorkflowBoard({ id }: { id: string }) {
@@ -440,15 +480,20 @@ function StageColumn({
         page.data?.columns.find((item) => item.id === column.id)?.cards ?? [],
     ),
   ];
-  const card = (item: Card) => (
-    <BoardCard
-      key={item.id}
-      card={item}
-      search={search}
-      boardId={filters.id}
-      rememberOpener={rememberOpener}
-    />
-  );
+  const boardUrl = paths.board(filters.id) + (search.size ? `?${search}` : '');
+  const card = (item: Card) => {
+    const requestSearch = new URLSearchParams(search);
+    requestSearch.set('request', JSON.stringify(item.request));
+    return (
+      <BoardCard
+        key={item.id}
+        card={item}
+        runLink={paths.run(item.runId, { returnTo: boardUrl })}
+        requestLink={{ search: `?${requestSearch}` }}
+        onOpenRequest={rememberOpener}
+      />
+    );
+  };
   return (
     <section className={classes.column} aria-label={column.name}>
       <Group gap="xs" className={classes.columnHeading}>
@@ -493,88 +538,5 @@ function StageColumn({
         )}
       </Stack>
     </section>
-  );
-}
-
-function BoardCard({
-  card,
-  search,
-  boardId,
-  rememberOpener,
-}: {
-  card: Card;
-  search: URLSearchParams;
-  boardId: string;
-  rememberOpener: (element: HTMLAnchorElement) => void;
-}) {
-  const title = runDisplayTitle(card);
-  const terminal =
-    card.status === 'failed' ||
-    card.status === 'completed' ||
-    card.status === 'cancelled';
-  const projection = runProjectionLabels(card);
-  const reason =
-    card.requestSummary ||
-    (card.status === 'failed' ? card.error?.split('\n')[0] : undefined) ||
-    card.waiting?.detail.message ||
-    projection.waiting ||
-    projection.activity ||
-    (!terminal ? card.activity : undefined);
-  const boardUrl = paths.board(boardId) + (search.size ? `?${search}` : '');
-  const runLink = paths.run(card.runId, { returnTo: boardUrl });
-  const requestSearch = card.request ? new URLSearchParams(search) : undefined;
-  requestSearch?.set('request', JSON.stringify(card.request));
-  return (
-    <li className={`${classes.card} ${stretched.container}`}>
-      <h3>
-        <Link className={stretched.link} to={runLink}>
-          {title}
-        </Link>
-      </h3>
-      {(card.title || card.externalTask?.title) && (
-        <Text c="dimmed" size="sm">
-          {card.workflowName}
-        </Text>
-      )}
-      <Group gap="xs" mt={5}>
-        <StatusBadge status={runDisplayStatus(card)} />
-        {!!card.attentionCount && (
-          <Badge color="yellow" variant="light">
-            Needs attention · {card.attentionCount}
-          </Badge>
-        )}
-      </Group>
-      {reason && <p className={classes.reason}>{reason}</p>}
-      <Group mt={6} gap="sm" justify="space-between">
-        {card.request && requestSearch && (
-          <Anchor
-            component={Link}
-            to={{ search: `?${requestSearch}` }}
-            className={stretched.action}
-            preventScrollReset
-            onClick={(event) => {
-              if (
-                event.button === 0 &&
-                !event.metaKey &&
-                !event.ctrlKey &&
-                !event.shiftKey &&
-                !event.altKey
-              )
-                rememberOpener(event.currentTarget);
-            }}
-            size="sm"
-            underline="hover"
-          >
-            {requestActionLabel(card.request.kind)}
-            <ArrowUpRight size={14} aria-hidden="true" />
-          </Anchor>
-        )}
-        <ExternalTaskLink
-          task={card.externalTask}
-          withArrow
-          className={stretched.action}
-        />
-      </Group>
-    </li>
   );
 }

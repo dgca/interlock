@@ -39,6 +39,7 @@ export function createMcpClient(url?: string) {
       settings: client.boards.settings.query,
       save: client.boards.save.mutate,
       assign: client.boards.assign.mutate,
+      view: client.boards.view.query,
     },
     requests: {
       list: client.requests.list.query,

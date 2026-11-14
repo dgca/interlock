@@ -1,10 +1,11 @@
 import type { ListTableLayout } from '../../components/ListTable/ListTable';
 import type { RunTab } from './runAttention';
 
-export type RunMode = 'list' | 'overview';
+/** `stages` is a workflow's own board and applies only inside a workflow. */
+export type RunMode = 'list' | 'overview' | 'stages';
 
 export function runMode(value: string | null): RunMode {
-  return value === 'overview' ? 'overview' : 'list';
+  return value === 'overview' || value === 'stages' ? value : 'list';
 }
 
 export const runViews: { value: RunTab; label: string }[] = [

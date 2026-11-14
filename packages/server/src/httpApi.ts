@@ -129,6 +129,23 @@ export function createHttpApi(
     }
   });
 
+  api.get('/boards/view', async (c) => {
+    try {
+      const { id, workflowId, lane, offset, limit } = c.req.query();
+      return c.json(
+        await caller(c).boards.view({
+          id,
+          workflowId,
+          lane,
+          offset: offset === undefined ? undefined : Number(offset),
+          limit: limit === undefined ? undefined : Number(limit),
+        }),
+      );
+    } catch (error) {
+      return rejection(c, error);
+    }
+  });
+
   api.post('/runs', async (c) => {
     let body: unknown;
     try {
