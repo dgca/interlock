@@ -31,6 +31,7 @@ export const usage = [
   'usage <run-id> [options-json|@file: {"includeDescendants":true,"includeChain":true,"groupBy":"attempt","includeReports":true,"limit":20,"offset":0}]',
   'report-usage <json|@file: {"workId":"...","attempt":1,"token":"...","snapshot":{"sequence":1,"final":true,"models":[{"provider":"...","model":"...","inputTokens":100,"outputTokens":20}]}}] (executor is default and requires token; source:observer omits token and requires an ended attempt; runId with source:observer reports run-level usage outside attempts; observer takes precedence in totals and budgets; cumulative per source/stream, missing values remain unknown)',
   'prices [json|@file: {"expectedId":"...","table":{...}|null}] (read the model price table new runs capture for derived cost; replace it, or null restores the shipped table)',
+  'prices start-warning [json|@file: {"threshold":{"currency":"USD","amountMicros":N}|null}] (read or set the median recent run cost above which the UI asks before starting; start responses then include costProjection)',
   'simulation <json|@file> (action: run/get/list/capture/cancel; fixture-only, no external effects)',
   'test-suite <json|@file> (action: create/update/get/list; saved cases with optional simulation fixtures)',
   'assignment-size <json|@file> (workId, or workflowId/nodeId with sample; optional warningBytes)',

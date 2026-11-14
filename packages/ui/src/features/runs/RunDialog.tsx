@@ -11,6 +11,7 @@ import {
   Button,
   Group,
   ActionError,
+  Alert,
 } from '../../design-system';
 
 import { useEffect, useState, useRef } from 'react';
@@ -20,6 +21,7 @@ import type {
   Workflow,
   WorkflowVersion,
   RunVersionPolicy,
+  StartCostProjection,
 } from '@interlock/core';
 
 import styles from './RunForms.module.css';
@@ -44,6 +46,8 @@ function sample(schema: Record<string, any>): Json {
   if (schema.type === 'null') return null;
   return schema.type === 'string' ? '' : {};
 }
+const money = (micros: number, currency: string) =>
+  `${currency} ${(micros / 1e6).toFixed(2)}`;
 export function RunDialog({
   workflow,
   onClose,
@@ -66,6 +70,14 @@ export function RunDialog({
     [input, setInput] = useState('{}'),
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false);
+  // undefined while loading; null when no warning threshold or thin history.
+  const [cost, setCost] = useState<StartCostProjection | null>();
+  useEffect(() => {
+    api.prices.startCost
+      .query({ workflowId: workflow.id })
+      .then(setCost)
+      .catch(() => setCost(null));
+  }, [workflow.id]);
   useEffect(() => {
     api.workflows.versions
       .query({ id: workflow.id })
@@ -106,6 +118,14 @@ export function RunDialog({
   return (
     <Modal title={`Run ${workflow.name}`} onClose={onClose}>
       <ModalBody>
+        {cost?.exceedsThreshold && (
+          <Alert color="yellow" title="Large run" mb="md">
+            Recent runs of this workflow cost a median of{' '}
+            {money(cost.medianMicros, cost.currency)} ({cost.sampleSize} runs),
+            above the {money(cost.thresholdMicros, cost.currency)} warning
+            threshold.
+          </Alert>
+        )}
         {versions.length > 0 ? (
           <>
             <TextInput
@@ -226,7 +246,7 @@ export function RunDialog({
         <Button onClick={onClose}>Cancel</Button>
         <Button
           variant="primary"
-          disabled={busy || !schema}
+          disabled={busy || !schema || cost === undefined}
           onClick={async () => {
             let metadata: ReturnType<typeof tagsFromRows>;
             try {
@@ -264,7 +284,11 @@ export function RunDialog({
           }}
         >
           <Play />
-          {busy ? 'Starting…' : 'Start run'}
+          {busy
+            ? 'Starting…'
+            : cost?.exceedsThreshold
+              ? 'Start anyway'
+              : 'Start run'}
         </Button>
       </ModalFooter>
     </Modal>
