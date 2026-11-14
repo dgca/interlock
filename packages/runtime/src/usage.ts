@@ -21,6 +21,7 @@ import {
 } from '@interlock/core';
 import type { Store } from '@interlock/storage';
 import { claimTokenHash } from './leases.js';
+import { Pricing } from './pricing.js';
 
 const collection = 'usageAttempts';
 const runUsageCollection = 'runUsage';
@@ -58,10 +59,13 @@ function assertCumulative(before: UsageSnapshot, after: UsageSnapshot) {
 }
 
 export class Usage {
+  readonly prices: Pricing;
   constructor(
     private store: Store,
     private notify: (runId: string) => void,
-  ) {}
+  ) {
+    this.prices = new Pricing(store);
+  }
 
   private receipt(work: WorkRequest, claimedAt: string | null): UsageAttempt {
     return {
@@ -166,6 +170,7 @@ export class Usage {
           reportedAt: now(),
         };
         this.store.put(runUsageCollection, record);
+        this.prices.capture(runId, snapshot);
         this.notify(runId);
         return {
           runId,
@@ -239,6 +244,7 @@ export class Usage {
           ? { ...receipt, observerReport: { snapshot, reportedAt: now() } }
           : { ...receipt, snapshot, reportedAt: now() },
       );
+      this.prices.capture(work.runId, snapshot);
       this.notify(work.runId);
       return {
         workId: workId!,
@@ -333,8 +339,10 @@ export class Usage {
           }
       }
     }
-    const attempts = this.attemptsForRuns(scope);
-    const runReports = this.runReportsForRuns(scope);
+    const { attempts, runReports } = this.prices.price(
+      this.attemptsForRuns(scope),
+      this.runReportsForRuns(scope),
+    );
 
     let entries: UsageGroup[] = [];
     if (query.groupBy === 'run') {

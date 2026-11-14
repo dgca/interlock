@@ -4,6 +4,7 @@ import {
   sessionIdentitySchema,
   type SessionIdentity,
 } from './contextContinuity.js';
+import { summarizePricing } from './pricing.js';
 
 export const RUN_USAGE_GRACE_MS = 60 * 60 * 1000;
 
@@ -14,6 +15,7 @@ export const tokenFields = [
   'inputTokens',
   'outputTokens',
   'cachedInputTokens',
+  'cacheWriteInputTokens',
   'reasoningOutputTokens',
 ] as const;
 export const modelUsageSchema = z
@@ -23,6 +25,9 @@ export const modelUsageSchema = z
     inputTokens: count.optional(),
     outputTokens: count.optional(),
     cachedInputTokens: count.optional(),
+    cacheWriteInputTokens: count
+      .optional()
+      .describe('Prompt-cache writes; like cachedInputTokens, part of input.'),
     reasoningOutputTokens: count.optional(),
     cost: z
       .object({
@@ -49,6 +54,16 @@ export const modelUsageSchema = z
           path: [subset],
           message: `${subset} cannot exceed ${total}`,
         });
+    if (
+      value.inputTokens !== undefined &&
+      (value.cachedInputTokens ?? 0) + (value.cacheWriteInputTokens ?? 0) >
+        value.inputTokens
+    )
+      context.addIssue({
+        code: 'custom',
+        path: ['cacheWriteInputTokens'],
+        message: 'Cached and cache-write tokens cannot exceed inputTokens',
+      });
   });
 export const usageSnapshotSchema = z
   .object({
@@ -350,6 +365,7 @@ export function summarizeUsage(
     ),
   }));
   const reportedCosts = models.filter((model) => model?.cost).length;
+  const pricing = summarizePricing(models);
   return {
     attempts: attempts.length,
     reportedAttempts: reports.filter(Boolean).length,
@@ -367,5 +383,6 @@ export function summarizeUsage(
           costs.every((cost) => !cost.amountMicros.overflow)
         ? 'complete'
         : 'partial') as UsageCoverage,
+    ...(pricing ? { pricing } : {}),
   };
 }

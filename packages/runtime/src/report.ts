@@ -4,13 +4,12 @@ import {
   elapsedExcludingPausesMs,
   formatCurrencyAmount,
   selectedUsageReport,
+  summarizeUsage,
   type ReportFilter,
   type WorkflowReport,
   type Run,
   type NodeExecution,
   type WorkRequest,
-  type UsageAttempt,
-  type RunUsageReport,
   type StallRecord,
   type ContextEvent,
   type WorkHoldInterval,
@@ -133,8 +132,8 @@ export function generateWorkflowReport(
 
   const runIds = new Set(runs.map((r) => r.id));
   const workList = store.forRuns<WorkRequest>('work', runIds);
-  const attemptsList = store.forRuns<UsageAttempt>('usageAttempts', runIds);
-  const runUsageList = store.forRuns<RunUsageReport>('runUsage', runIds);
+  const { attempts: attemptsList, runReports: runUsageList } =
+    engine.usage.prices.forRuns(runIds);
   const stallsList = store.forRuns<StallRecord>('stalls', runIds);
   const contextEventsList = store.forRuns<ContextEvent>(
     'contextEvents',
@@ -928,6 +927,7 @@ export function generateWorkflowReport(
       byModel,
       byProvider,
       byAlias: [...aliasUsageMap.values()].sort((a, b) => b.count - a.count),
+      pricing: summarizeUsage(attemptsList, runUsageList).pricing,
     },
     terminalOutcomes: {
       totalRuns: totalRunsCount,

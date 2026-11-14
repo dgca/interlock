@@ -37,6 +37,8 @@ import {
 import { continueAsNewSchema } from './runChains.js';
 import { z } from 'zod';
 export * from './usage.js';
+export * from './pricing.js';
+export { DEFAULT_PRICE_TABLE } from './priceTable.js';
 import { modelUsageSchema, type ModelUsage } from './usage.js';
 export interface ExecutionProvenance {
   profileId: string | null;
@@ -1463,8 +1465,6 @@ export {
   briefingQuerySchema,
   waitQuerySchema,
   resultQuerySchema,
-} from './continuation.js';
-export {
   continuationLimitSchema,
   mutationDetailSchema,
   mutationSummarySchema,
