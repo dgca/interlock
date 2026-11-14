@@ -279,7 +279,11 @@ Call `claim_work` for the full assignment. For one persisted value, call `get_ru
 }
 ```
 
-Omit `executionId` for run data. `field` is `input` or `output`, defaulting to `output`. Blank `path` selects the whole field; dot-separated paths select object keys or array indices. JSON null is a value. Missing runs, foreign execution IDs, unavailable outputs, missing paths, and unsafe property paths return errors. `maxBytes` limits the selected value's UTF-8 JSON encoding, defaults to 65536, and accepts 1 through 262144. Oversized values return an error with their size; select a narrower path. It limits the value, not the complete response envelope. `get_run` remains full inspection, including execution errors and resolved Fetch requests.
+Omit `executionId` for run data. `field` is `input` or `output`, defaulting to `output`. Blank `path` selects the whole field; dot-separated paths select object keys or array indices. JSON null is a value. Missing runs, foreign execution IDs, unavailable outputs, missing paths, and unsafe property paths return errors. `maxBytes` limits the selected value's UTF-8 JSON encoding, defaults to 65536, and accepts 1 through 262144. Oversized values return an error with their size; select a narrower path. It limits the value, not the complete response envelope.
+
+### Inspect a run with get_run
+
+`get_run` (shared API `runs.get`, CLI `interlock run RUN_ID`) returns full inspection, including execution errors and resolved Fetch requests, when its JSON is at most 64 KiB (65536 bytes). Above that, the response keeps the same structure but omits the workflow `definition` and every field over 1 KiB on the run, its descendants, their executions and assignments. Each object that lost a field gets `omittedBytes`, mapping the field name to its JSON size, and the response gets `compacted: {limitBytes, fullBytes, read}`. Read one step's payload with `get_run_result`, passing the run that owns the execution, or pass `full: true` (CLI `--full`) for the complete response. A run with many descendants or events can still exceed 64 KiB after compaction. The UI requests the full response.
 
 ## Wait for a scoped change
 

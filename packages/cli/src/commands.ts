@@ -384,7 +384,7 @@ export async function runCommand(argv: string[]) {
       }
     }
     case 'run':
-      return client.runs.get.query({ id: args[0] });
+      return client.runs.get.query({ id: args[0], full: args[1] === '--full' });
     case 'context-group':
       if (args.length < 2 || args.length > 3)
         throw new Error(

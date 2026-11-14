@@ -797,7 +797,6 @@ export const appRouter = t.router({
         };
       }),
     attention: p.query(({ ctx }) => ctx.engine.runAttention()),
-    get: p.input(id).query(({ ctx, input }) => ctx.engine.inspect(input.id)),
     start: p.input(runStartSchema).mutation(({ ctx, input }) =>
       ctx.engine.start(
         input.workflowId,

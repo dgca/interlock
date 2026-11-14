@@ -69,9 +69,11 @@ When a start warning threshold is set with `interlock prices start-warning`, the
 | Command                                            | Purpose                               |
 | -------------------------------------------------- | ------------------------------------- |
 | `interlock runs --workflow WORKFLOW_ID --limit 20` | List recent workflow runs             |
-| `interlock run RUN_ID`                             | Inspect execution state and results   |
+| `interlock run RUN_ID [--full]`                    | Inspect execution state and results   |
 | `interlock work RUN_ID --summary`                  | Inspect available Agent assignments   |
 | `interlock usage RUN_ID`                           | Inspect reported token usage and cost |
+
+Above 64 KiB, `interlock run` omits fields over 1 KiB and lists their sizes; add `--full` for the complete response. See [Inspect a run with get_run](agent-workflows.md#inspect-a-run-with-get_run).
 
 Use IDs returned by commands. Starting a connected-agent run makes assignments available without launching an agent. See [Run agents](agents.md).
 

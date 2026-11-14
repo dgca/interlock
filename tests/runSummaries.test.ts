@@ -108,7 +108,75 @@ it('pages projected run rows after applying the Runs scope and tab', async () =>
     ).toMatchObject([{ id: 'older-attention' }]);
     const fullRun = (await runs.list()).find((run) => run.id === 'parent');
     expect(fullRun?.executions[0].output).toBe(large);
-    expect((await runs.get({ id: 'parent' })).run).toEqual(fullRun);
+    expect((await runs.get({ id: 'parent', full: true })).run).toEqual(fullRun);
+  } finally {
+    engine.stop();
+    store.close();
+  }
+});
+
+it('compacts get_run above 64 KiB and keeps full step data reachable', async () => {
+  const store = new Store(':memory:');
+  const engine = new Engine(store, process.cwd());
+  try {
+    const payload = (step: number) => ({ step, text: 'x'.repeat(20_000) });
+    const bytes = (step: number) => JSON.stringify(payload(step)).length;
+    const put = (id: string, steps: number) =>
+      store.put('runs', {
+        id,
+        workflowId: 'main',
+        workflowName: 'Main',
+        version: 1,
+        status: 'completed',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+        cursor: 'done',
+        value: null,
+        input: payload(-1),
+        output: { ok: true },
+        executions: Array.from({ length: steps }, (_, step) => ({
+          id: `e${step}`,
+          nodeId: `n${step}`,
+          kind: 'script',
+          label: `Step ${step}`,
+          status: 'completed',
+          startedAt: '2026-01-01T00:00:00.000Z',
+          childRunIds: [],
+          nextItem: 0,
+          input: payload(step),
+          output: payload(step),
+        })),
+      });
+    put('small', 1);
+    put('long', 25);
+    const { runs } = appRouter.createCaller({ engine });
+
+    // Responses under the limit keep their exact shape.
+    expect(await runs.get({ id: 'small' })).toEqual(engine.inspect('small'));
+
+    const compact = await runs.get({ id: 'long' });
+    const size = Buffer.byteLength(JSON.stringify(compact));
+    expect(size).toBeLessThan(65536);
+    expect(compact.compacted).toMatchObject({ limitBytes: 65536 });
+    expect(compact.compacted!.fullBytes).toBeGreaterThan(1_000_000);
+    expect(compact.run.executions).toHaveLength(25);
+    expect(compact.run.executions[3]).toMatchObject({
+      id: 'e3',
+      label: 'Step 3',
+      omittedBytes: { input: bytes(3), output: bytes(3) },
+    });
+    expect(compact.run.executions[3]).not.toHaveProperty('output');
+    expect(compact.run).toMatchObject({
+      output: { ok: true },
+      omittedBytes: { input: bytes(-1) },
+    });
+
+    expect((await runs.get({ id: 'long', full: true })).run).toEqual(
+      engine.inspect('long').run,
+    );
+    expect(
+      await runs.result({ id: 'long', executionId: 'e3', path: 'step' }),
+    ).toMatchObject({ value: 3 });
   } finally {
     engine.stop();
     store.close();
