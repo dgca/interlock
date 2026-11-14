@@ -152,3 +152,34 @@ export function touchRunRevision(db: DatabaseSync, id: string) {
   ).run(id);
   return true;
 }
+
+/**
+ * Runs whose run, execution or work rows changed after `after`, oldest change
+ * first, each with its revision. Without `after`, only the current revision.
+ */
+export function runsChangedSince(
+  db: DatabaseSync,
+  after?: number,
+  limit = 500,
+) {
+  if (after === undefined) {
+    const row = db
+      .prepare('SELECT revision FROM continuation_sequence WHERE id = 1')
+      .get();
+    return { revision: Number(row?.revision ?? 0), changes: [], more: false };
+  }
+  const changes = db
+    .prepare(
+      'SELECT run_id, revision FROM run_revisions WHERE revision > ? ORDER BY revision LIMIT ?',
+    )
+    .all(after, limit)
+    .map((row) => ({
+      runId: row.run_id as string,
+      revision: Number(row.revision),
+    }));
+  return {
+    revision: changes.at(-1)?.revision ?? after,
+    changes,
+    more: changes.length === limit,
+  };
+}

@@ -163,3 +163,10 @@ export function storageSpace(db: DatabaseSync) {
       size * Number(db.prepare('PRAGMA freelist_count').get()!.freelist_count),
   };
 }
+
+export function quickCheck(db: DatabaseSync): string[] {
+  const rows = db.prepare('PRAGMA quick_check').all() as {
+    quick_check?: string;
+  }[];
+  return rows.map((r) => r.quick_check ?? JSON.stringify(r));
+}

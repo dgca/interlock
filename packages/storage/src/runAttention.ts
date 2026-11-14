@@ -1,5 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
-import type { Run } from '@interlock/core';
+import type { Run, StallRecord } from '@interlock/core';
 export type AttentionWork = {
   runId: string;
   executionId: string;
@@ -151,4 +151,17 @@ export function attentionAncestors(db: DatabaseSync, ids: Set<string>) {
     'id' | 'parentRunId' | 'parentMode' | 'workflowId' | 'status'
   >[] &
     { chainRootRunId?: string }[];
+}
+
+/** Unresolved stall records, optionally for one run. */
+export function currentStalls(db: DatabaseSync, runId?: string) {
+  const scoped =
+    runId === undefined ? '' : " AND json_extract(value, '$.runId') = ?";
+  return db
+    .prepare(
+      "SELECT value FROM documents INDEXED BY stalls_unresolved WHERE collection = 'stalls' AND json_extract(value, '$.resolvedAt') IS NULL" +
+        scoped,
+    )
+    .all(...(runId === undefined ? [] : [runId]))
+    .map((row) => JSON.parse(row.value as string) as StallRecord);
 }

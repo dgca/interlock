@@ -13,6 +13,8 @@ import {
   startWorkflowSync,
   type WorkflowSync,
 } from '@interlock/runtime/workflowSync';
+import { traceExportConfig } from '@interlock/runtime/traceExportConfig';
+import type { TraceExport } from '@interlock/runtime/traceExport';
 
 export function parseAllowedRoots(value?: string): string[] | undefined {
   if (!value || !value.trim()) return undefined;
@@ -84,6 +86,7 @@ export async function startServer(options: {
     );
   let engine: Engine | undefined;
   let sync: WorkflowSync | undefined;
+  let traces: TraceExport | undefined;
   try {
     const allowedRoots =
       options.allowedRoots ??
@@ -105,9 +108,16 @@ export async function startServer(options: {
     engine.executors.start(nativeAdapters);
     const syncDir = options.syncDir ?? process.env.INTERLOCK_SYNC_DIR?.trim();
     if (syncDir) sync = startWorkflowSync(engine, resolve(syncDir));
+    // The exporter module loads only when INTERLOCK_OTEL_TRACES is on.
+    const traceConfig = traceExportConfig();
+    if (traceConfig)
+      traces = (
+        await import('@interlock/runtime/traceExport')
+      ).startTraceExport(store, traceConfig);
     engine.pump();
   } catch (error) {
     sync?.stop();
+    await traces?.stop(0);
     engine?.stop();
     store.close();
     unlock();
@@ -133,6 +143,7 @@ export async function startServer(options: {
       clearInterval(timer);
       server.close();
       sync?.stop();
+      void traces?.stop(0);
       engine.stop();
       store.close();
       unlock();
@@ -149,6 +160,7 @@ export async function startServer(options: {
       clearInterval(timer);
       sync?.stop();
       await engine.executors.stop();
+      await traces?.stop(2000);
       engine.stop();
       server.close(() => {
         store.close();
