@@ -14,6 +14,7 @@ import type { UsageMetric } from '@interlock/core';
 import { errorMessage } from '../../lib/api';
 import { trpc, useQuery } from '../../lib/query';
 
+import { PricingNote } from './PricingNote';
 import styles from './RunUsage.module.css';
 
 export function usageMetricText(metric: UsageMetric, scale = 1) {
@@ -90,6 +91,7 @@ export function RunUsage({ id }: { id: string }) {
                   : 'Unknown'}
               </Text>
             </Group>
+            <PricingNote pricing={totals.pricing} />
             <Text size="xs" c="dimmed">
               {totals.reportedAttempts} of {totals.attempts} claim attempts
               reported · {totals.finalAttempts} final
