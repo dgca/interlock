@@ -10,7 +10,7 @@ New libraries start empty. Existing workflows remain intact after upgrades, incl
 
 This creates and publishes a copy without starting a run. Imported workflows belong to you. Editing, publishing, archive, ownership and deletion use the ordinary operations. The improvement recipe and specialized examples remain optional file imports.
 
-Both SDLC starters suggest the Planning, Implementation, Review, and Delivery columns. [SDLC workflow v2](sdlc-workflow-v2.md) has its own identity: adding it never changes copies of the original, and the original stays available. Create the suggested board, map the stages to an existing board, or skip board setup. When you skip setup, you can run the workflow without a board.
+Both SDLC starters suggest the Planning, Implementation, Review, and Delivery columns. [SDLC workflow v2](sdlc-workflow-v2.md) has its own identity: adding it never changes copies of the original, and the original stays available. Each copy of SDLC v2 also gets its own published **Plan review** and **Change review**, owned by that copy, each with a permanent identity of its own. Create the suggested board, map the stages to an existing board, or skip board setup. When you skip setup, you can run the workflow without a board.
 
 Known copies offer **Open workflow**. To deliberately create another one, select **Add another copy** before adding. Existing copies are never overwritten or republished. A recognized unpublished manual copy stays a draft; review and publish it on its workflow page if needed.
 

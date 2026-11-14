@@ -13,6 +13,7 @@ import { ComparisonContext } from './ComparisonContext';
 import { RunTags } from './RunTags';
 import {
   attentionText,
+  attentionWait,
   waitReasonText,
   runReviewLink,
   type RunTab,
@@ -42,10 +43,7 @@ function RunCard({
   const attention = run.attention;
   const review = runReviewLink(run, runHref, returnTo);
   const reason = run.actor
-    ? runProjectionText(
-        run,
-        run.waiting?.kind === 'human_request' && attention ? '' : undefined,
-      )
+    ? runProjectionText(run, attentionWait(run) && attention ? '' : undefined)
     : run.waitReason && !attention
       ? waitReasonText[run.waitReason]
       : undefined;

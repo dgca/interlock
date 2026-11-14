@@ -204,6 +204,16 @@ export class AttemptBudget {
   }
 }
 
+/** A budget stop is stored as failed but spends no failure; inspection shows it as held. */
+export function inspected<T extends ManagedExecution>(record: T) {
+  const held = record.budgetStop && record.state === 'failed';
+  return { ...record, state: held ? ('held' as const) : record.state };
+}
+
+/** Millionths as currency, to four decimals so small budgets stay legible. */
+const amount = (micros: number) =>
+  (micros / 1e6).toFixed(4).replace(/0{1,2}$/, '');
+
 /** Stops managed attempts that cross a run budget, as a recoverable block. */
 export class BudgetStops {
   constructor(
@@ -249,9 +259,11 @@ export class BudgetStops {
             check.value === null
               ? 'over'
               : 'currency' in check && check.currency
-                ? `${check.currency} ${(check.value / 1e6).toFixed(2)} of ${(check.max / 1e6).toFixed(2)}`
+                ? `${check.currency} ${amount(check.value)} of ${amount(check.max)}`
                 : `${check.value} of ${check.max}`;
-          return `${check.metric} ${value} (budget on run ${gate.runId})`;
+          const run = this.engine.store.currentRun(gate.runId);
+          const title = run?.title ?? run?.externalTask?.title;
+          return `${check.metric} ${value} (budget on run ${title ? `"${title}" (${gate.runId})` : gate.runId})`;
         }),
     );
     return reached.length ? reached.join('; ').slice(0, 500) : undefined;

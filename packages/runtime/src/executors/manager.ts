@@ -33,7 +33,7 @@ import {
 } from './launcher.js';
 import { OperatorChannel } from './operator.js';
 import { RecoveryPolicies } from './recovery.js';
-import { BudgetStops, usageDelta } from './budgetStops.js';
+import { BudgetStops, inspected, usageDelta } from './budgetStops.js';
 import {
   active,
   attemptsCollection,
@@ -169,7 +169,7 @@ export class ExecutorManager {
     return this.config.saveSettings(input);
   }
   saveProfile(input: ExecutorProfileUpdate) {
-    return this.config.saveProfile(input);
+    return this.launcher.pull.saved(this.config.saveProfile(input));
   }
   listProfiles(refresh = false) {
     return this.launcher.pull.annotate(this.config.listProfiles(refresh));
@@ -620,7 +620,7 @@ export class ExecutorManager {
       items: latest
         ? [
             {
-              ...latest,
+              ...inspected(latest),
               requests: [
                 ...latest.requests.filter((r) => r.state === 'pending'),
                 ...latest.requests
@@ -636,7 +636,7 @@ export class ExecutorManager {
       history: records.slice(1, 11).map((r) => ({
         id: r.id,
         attempt: r.attempt,
-        state: r.state,
+        state: inspected(r).state,
         startedAt: r.startedAt,
         endedAt: r.endedAt,
         error: r.error,

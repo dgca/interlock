@@ -268,6 +268,13 @@ it('serializes admission across competing claims, exposes blockers, and preserve
     next: 'adjust_budget',
     budgetBlocked: { total: 1 },
   });
+  // A claim refused at admission needs a person: it shows in Needs attention.
+  expect(e.requests.current()).toMatchObject([
+    { cardId: run.id, label: 'Run budget reached', target: { kind: 'budget' } },
+  ]);
+  expect(e.runAttention()).toMatchObject([
+    { runId: run.id, reasons: ['budget'] },
+  ]);
   e.renew(claim.id, claim.token!, 30);
   report(e, claim, 5);
   e.submit(claim.id, claim.token!, 10);
@@ -276,6 +283,7 @@ it('serializes admission across competing claims, exposes blockers, and preserve
   e.budgets.set({ runId: run.id, expectedRevision: 1, budget: policy(3) });
   expect(e.run(claim.runId)).toEqual(before);
   expect(e.available(run.id)).toHaveLength(2);
+  expect(e.requests.current()).toEqual([]);
   for (const w of e.available(run.id)) {
     const c = e.claim(w.id, worker);
     e.submit(c.id, c.token!, 20);

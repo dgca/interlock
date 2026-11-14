@@ -29,6 +29,26 @@ const sdlcBoard: BoardSuggestion = {
   columns: sdlcColumns,
   stages: sdlcColumns.map((column) => ({ ...column, columnId: column.id })),
 };
+/** A portable bundle: a root workflow and the helpers it owns and calls. */
+interface StarterBundle {
+  rootId: string;
+  workflows: {
+    id: string;
+    name: string;
+    description: string;
+    draft: unknown;
+    versions: { definition: unknown }[];
+  }[];
+}
+const bundleRoot = (bundle: StarterBundle) => {
+  const root = bundle.workflows.find((w) => w.id === bundle.rootId)!;
+  return {
+    name: root.name,
+    description: root.description,
+    definition: root.draft,
+  };
+};
+const sdlcV2Bundle = sdlcV2 as StarterBundle;
 const catalog = [
   {
     id: 'sdlc',
@@ -41,12 +61,13 @@ const catalog = [
   {
     // A separate identity: copies of the first SDLC starter keep theirs.
     id: 'sdlc-v2',
-    template: sdlcV2,
+    template: bundleRoot(sdlcV2Bundle),
+    bundle: sdlcV2Bundle,
     boardSuggestion: sdlcBoard,
     summary:
-      'Plan, build, and review a change with parallel reviewers and human checkpoints.',
+      'Plan, build, and review a change; adds the Plan review and Change review it calls.',
     requirements:
-      'Needs a coding agent and fresh reviewers. Set repoPath or a Git worktree per run.',
+      'Needs a coding agent and a fresh reviewer. Set repoPath or a Git worktree per run.',
   },
   {
     id: 'evaluate-comparison',
@@ -57,6 +78,8 @@ const catalog = [
       'Needs a completed workflow comparison. Review mode requires a fresh reviewer.',
   },
 ] as const;
+type Starter = (typeof catalog)[number];
+const bundleOf = (s: Starter) => ('bundle' in s ? s.bundle : undefined);
 interface Copy {
   id: string;
   starterId: string;
@@ -84,6 +107,7 @@ function existing(
   starterId: string,
   definition: WorkflowDefinition,
   hasPortableStages = false,
+  bundleId?: string,
 ) {
   const workflows = engine.store.workflows();
   const known = new Set(
@@ -92,7 +116,7 @@ function existing(
       .filter((c) => c.starterId === starterId)
       .map((c) => c.id),
   );
-  const tracked = workflows.find((w) => known.has(w.id));
+  const tracked = workflows.find((w) => known.has(w.id) || w.id === bundleId);
   if (tracked) return tracked;
   const hashes = new Set([contentHash(definition)]);
   if (hasPortableStages)
@@ -178,10 +202,59 @@ function setupForCopy(
   };
 }
 
+/**
+ * Give a new root copy its own published copies of the bundle's helpers, owned
+ * by it, and point the root's Workflow steps at them. Each helper keeps a
+ * permanent identity of its own: `<starter id>/<bundle helper id>`.
+ */
+function addHelpers(
+  engine: Engine,
+  starterId: string,
+  bundle: StarterBundle,
+  rootId: string,
+) {
+  const ids = new Map<string, { id: string; version: number }>();
+  for (const helper of bundle.workflows) {
+    if (helper.id === bundle.rootId) continue;
+    const copy = engine.create(
+      helper.name,
+      helper.description,
+      definitionSchema.parse(helper.versions.at(-1)!.definition),
+      rootId,
+    );
+    engine.publish(copy.id);
+    const version = engine.workflow(copy.id).latestVersion;
+    ids.set(helper.id, { id: copy.id, version });
+    engine.store.put<Copy>('starterCopies', {
+      id: copy.id,
+      starterId: `${starterId}/${helper.id}`,
+    });
+  }
+  const root = engine.workflow(rootId);
+  engine.update(rootId, {
+    draftRevision: root.draftRevision,
+    draft: {
+      ...root.draft,
+      nodes: root.draft.nodes.map((node) => {
+        const target = node.kind === 'workflow' && ids.get(node.workflowId);
+        return target
+          ? { ...node, workflowId: target.id, version: target.version }
+          : node;
+      }),
+    },
+  });
+}
+
 export function listStarters(engine: Engine) {
   return catalog.map((s) => {
     const definition = definitionSchema.parse(s.template.definition),
-      copy = existing(engine, s.id, definition, !!s.boardSuggestion);
+      copy = existing(
+        engine,
+        s.id,
+        definition,
+        !!s.boardSuggestion,
+        bundleOf(s)?.rootId,
+      );
     const boardSetup =
       s.boardSuggestion &&
       starterBoardPreview(engine, {
@@ -250,7 +323,13 @@ export function importStarter(
     const definition = definitionSchema.parse(starter.template.definition);
     const found = q.copy
       ? undefined
-      : existing(engine, starter.id, definition, !!starter.boardSuggestion);
+      : existing(
+          engine,
+          starter.id,
+          definition,
+          !!starter.boardSuggestion,
+          bundleOf(starter)?.rootId,
+        );
     if (q.boardSetup && !starter.boardSuggestion)
       throw new InterlockError('This starter has no suggested board.');
     if (q.boardSetup && found)
@@ -285,6 +364,8 @@ export function importStarter(
           );
         }
       }
+      const bundle = bundleOf(starter);
+      if (bundle) addHelpers(engine, starter.id, bundle, workflow.id);
       engine.publish(workflow.id);
     }
     engine.store.put<Copy>('starterCopies', {

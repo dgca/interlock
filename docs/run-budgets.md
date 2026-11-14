@@ -42,10 +42,12 @@ All successful claims count, including failed work, lease expiries, claims relea
 
 [Managed executors](managed-executors.md) stream usage while an attempt runs. When those figures, with the rest of the budget scope, reach a token or cost maximum, Interlock stops the session and releases the claim:
 
-- The attempt keeps the usage streamed so far. It ends as `held`, does not spend the Agent's failure allowance, and appears in the assignment's hold history with actor `managed-budget`.
-- The run waits with `waiting.kind:"budget"`, and its message states which limit was reached. The assignment stays budget-blocked until every governing budget permits a claim.
+- The attempt keeps the usage streamed so far. It ends as `held` (the executor inspect view shows **Stopped at budget**), does not spend the Agent's failure allowance, and appears in the assignment's hold history with actor `managed-budget`.
+- The run waits with `waiting.kind:"budget"`, and its message states which limit was reached and the run that holds the budget, with its title when it has one. Costs show up to four decimal places. The assignment stays budget-blocked until every governing budget permits a claim.
 - Raising the limit, or disabling the budget, makes the assignment available again. The managed executor claims it and resumes the stopped native session, so completed steps and the session's work are kept.
 - If the harness returns its result before it stops, the result is kept and the run continues. The next Agent claim is then blocked by the budget.
+
+Every budget-blocked assignment, whether stopped mid-attempt or refused at its claim, appears in **Runs → Needs attention** and in `workflow_requests` as **Run budget reached** (or **Run budget needs final usage** when only incomplete usage blocks it). The request names the governing run. It clears when the budget allows the claim or the run is cancelled.
 
 A budget stop releases only managed attempts whose own run is in the budget scope. Claim-count limits never stop running work. Other in-flight attempts in the scope stop at their next usage update.
 
@@ -61,10 +63,10 @@ While an attempt runs, its streamed figures count in budget checks but are not s
 
 ## Handle incomplete reports
 
-`unknownUsage` is required, even for a claim-only policy:
+`unknownUsage` is optional and defaults to `allow`:
 
 - `allow` admits claims below the reported thresholds and exposes incomplete telemetry as a warning. A claim-count limit can bound reservations when telemetry is unavailable.
-- `block` stops further claims while any scoped attempt or run-level observer stream lacks final figures for a configured reported metric. A final report with an omitted metric still leaves that metric unknown. A scope with no attempts or run streams has zero consumption, so its first claim can proceed if its maxima permit it.
+- `block` stops further claims while any scoped attempt or run-level observer stream lacks final figures for a configured reported metric. A final report with an omitted metric still leaves that metric unknown. A scope with no attempts or run streams has zero consumption, so its first claim can proceed if its maxima permit it. To leave a `usage_incomplete` block, report final figures for the incomplete attempt (as an observer once it has ended), or change the budget to `unknownUsage:"allow"`.
 
 Partial sums reaching a maximum block under either policy. Aggregate overflow blocks instead of rounding down. Cost in a different currency remains unavailable for the configured currency. Within one source, a final cumulative report can clear an incomplete-usage block automatically, but cannot lower consumption below a reached maximum. Executors or observers must report actual measurements using [usage reporting](usage-reporting.md).
 

@@ -26,6 +26,7 @@ import { RunBoardSkeleton, RunRowsSkeleton } from './RunListSkeleton';
 import classes from './RunList.module.css';
 import {
   attentionText,
+  attentionWait,
   waitReasonText,
   runReviewLink,
   type RunTab,
@@ -288,7 +289,7 @@ export function RunList({
                     <small className={classes.reason}>
                       {runProjectionText(
                         r,
-                        r.waiting?.kind === 'human_request' && r.attention
+                        attentionWait(r) && r.attention
                           ? attentionText(r.attention)
                           : undefined,
                       )}
@@ -298,12 +299,11 @@ export function RunList({
                       {waitReasonText[r.waitReason]}
                     </small>
                   ) : null}
-                  {r.attention &&
-                    (!r.actor || r.waiting?.kind !== 'human_request') && (
-                      <small className={classes.attention}>
-                        {attentionText(r.attention)}
-                      </small>
-                    )}
+                  {r.attention && (!r.actor || !attentionWait(r)) && (
+                    <small className={classes.attention}>
+                      {attentionText(r.attention)}
+                    </small>
+                  )}
                   {review && (
                     <Anchor
                       component={Link}

@@ -131,6 +131,47 @@ it('adds SDLC v2 as its own copy and leaves an existing v1 copy untouched', () =
     e.scriptApprovals.pendingPolicy(v2.workflow.id, definition),
   ).toBeFalsy();
 });
+it('gives each SDLC v2 copy its own published Plan review and Change review', () => {
+  const e = setup();
+  const helpers = (rootId: string) => {
+    const root = e.store.getVersion(rootId, 1)!.definition;
+    return root.nodes.flatMap((n) =>
+      n.kind === 'workflow' ? [[n.workflowId, n.version]] : [],
+    );
+  };
+  const first = importStarter(e, { starterId: 'sdlc-v2', requestId: 'a' });
+  const second = importStarter(e, {
+    starterId: 'sdlc-v2',
+    requestId: 'b',
+    copy: true,
+  });
+  for (const { workflow } of [first, second]) {
+    const calls = helpers(workflow.id);
+    expect(calls).toHaveLength(2);
+    for (const [id, version] of calls) {
+      expect(version).toBe(1);
+      expect(e.workflow(id as string)).toMatchObject({
+        ownerWorkflowId: workflow.id,
+        latestVersion: 1,
+      });
+    }
+  }
+  expect(helpers(first.workflow.id)).not.toEqual(helpers(second.workflow.id));
+  expect(e.store.workflows()).toHaveLength(6);
+  expect(
+    e.store
+      .list<{ starterId: string }>('starterCopies')
+      .map((c) => c.starterId)
+      .sort(),
+  ).toEqual([
+    'sdlc-v2',
+    'sdlc-v2',
+    'sdlc-v2/interlock-sdlc-v2-change-review',
+    'sdlc-v2/interlock-sdlc-v2-change-review',
+    'sdlc-v2/interlock-sdlc-v2-plan-review',
+    'sdlc-v2/interlock-sdlc-v2-plan-review',
+  ]);
+});
 it('recognizes renamed legacy drafts and retained originals without changing them', () => {
   const e = setup(),
     w = e.create('My SDLC', '', definitionSchema.parse(sdlc.definition));
