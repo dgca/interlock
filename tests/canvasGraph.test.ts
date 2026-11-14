@@ -18,6 +18,10 @@ import {
   canvasGraph,
   withoutNodes,
 } from '../packages/ui/src/features/workflows/canvasGraph';
+import {
+  connectEdges,
+  edgesFromCanvas,
+} from '../packages/ui/src/features/workflows/editorConnections';
 import { nestedBatches, batchDefinition } from './fixtures/batch';
 import { parallelDefinition } from './fixtures/parallel';
 
@@ -658,4 +662,48 @@ it('separates successful and timeout handles for polling Waits', async () => {
   if (node.kind === 'wait' && node.timing.kind === 'poll')
     delete node.timing.timeoutMs;
   expect(outputPortTop(node, 'default')).toBe('50%');
+});
+
+it('draws tool edges on tool handles and keeps them through route edits', () => {
+  const definition = definitionSchema.parse({
+    nodes: [
+      { id: 'entry', kind: 'entry', label: 'In' },
+      { id: 'agent', kind: 'agent', label: 'Agent', prompt: 'Work.' },
+      { ...placedNode('checks', 400, 300), label: 'Run checks' },
+      { id: 'exit', kind: 'exit', label: 'Out' },
+    ],
+    edges: [
+      { id: 'in', source: 'entry', target: 'agent' },
+      { id: 'out', source: 'agent', target: 'exit' },
+      {
+        id: 'tool',
+        source: 'agent',
+        target: 'checks',
+        kind: 'tool',
+        maxCallsPerAttempt: 3,
+      },
+    ],
+  });
+  validateDefinition(definition);
+  const graph = canvasGraph(definition);
+  const tool = graph.edges.find((e) => e.id === 'tool')!;
+  expect(tool).toMatchObject({ sourceHandle: 'tools', targetHandle: 'tool' });
+  expect(tool.className).toContain('toolEdge');
+  expect(graph.nodes.find((n) => n.id === 'checks')!.data.toolTarget).toBe(
+    true,
+  );
+  // Removing the route from the canvas keeps the tool edge and its limits.
+  const remaining = edgesFromCanvas(
+    definition,
+    graph.edges.filter((e) => e.id !== 'out'),
+  );
+  expect(remaining).toContainEqual(definition.edges[2]);
+  // Reconnecting the Agent's default route does not replace the tool edge.
+  const reconnected = connectEdges(remaining, {
+    source: 'agent',
+    sourceHandle: 'default',
+    target: 'exit',
+    targetHandle: 'default',
+  });
+  expect(reconnected.filter((e) => e.kind === 'tool')).toHaveLength(1);
 });

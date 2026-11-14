@@ -886,9 +886,6 @@
     }
   },
   "packages/ui/src/features/workflows/WorkflowEditor.tsx": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 2
-    },
     "@typescript-eslint/prefer-promise-reject-errors": {
       "count": 1
     },

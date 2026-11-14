@@ -73,14 +73,30 @@ export function Testing() {
             name="Confident answer"
             caseId="confident"
             suiteRevision={2}
-            simulation={simulation('passed', [
+            simulation={simulation(
+              'passed',
+              [
+                {
+                  ...answerCheck,
+                  status: 'pass',
+                  reason: 'Output satisfies check',
+                },
+                {
+                  ...routeCheck,
+                  status: 'pass',
+                  reason: 'Expected route taken',
+                },
+              ],
               {
-                ...answerCheck,
-                status: 'pass',
-                reason: 'Output satisfies check',
+                coverage: {
+                  totalEdges: 5,
+                  coveredEdges: 5,
+                  percentage: 100,
+                  untested: [],
+                  tools: { total: 2, called: 1, uncalled: ['lint'] },
+                },
               },
-              { ...routeCheck, status: 'pass', reason: 'Expected route taken' },
-            ])}
+            )}
           />
           <CaseResult
             name="Escalates a low-confidence answer"

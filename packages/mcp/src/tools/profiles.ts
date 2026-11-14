@@ -20,6 +20,7 @@ const execute = [
   'preflight_result',
   'submit_result',
   'fail_work',
+  'call_work_tool',
   'manage_work_hold',
   'report_usage',
   'inspect_assignment_size',

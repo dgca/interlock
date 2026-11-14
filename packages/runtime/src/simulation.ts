@@ -104,17 +104,16 @@ const page = <T>(items: T[], offset: number, limit: number) => ({
   truncated: offset > 0 || offset + limit < items.length,
 });
 
+type Active = {
+  record: Record;
+  engine?: Engine;
+  childWorkflows?: Workflow[];
+  childVersions?: NonNullable<ReturnType<Store['getVersion']>>[];
+  persist?: boolean;
+};
+
 export class Simulations {
-  private active = new Map<
-    string,
-    {
-      record: Record;
-      engine?: Engine;
-      childWorkflows?: Workflow[];
-      childVersions?: NonNullable<ReturnType<Store['getVersion']>>[];
-      persist?: boolean;
-    }
-  >();
+  private active = new Map<string, Active>();
   private stopped = false;
   constructor(
     private store: Store,
@@ -371,13 +370,7 @@ export class Simulations {
     return { unsupported, childWorkflows, childVersions, prompts };
   }
   private async execute(
-    active: {
-      record: Record;
-      engine?: Engine;
-      childWorkflows?: Workflow[];
-      childVersions?: NonNullable<ReturnType<Store['getVersion']>>[];
-      persist?: boolean;
-    },
+    active: Active,
     workflow: Workflow,
     version: NonNullable<ReturnType<Store['getVersion']>>,
   ) {
@@ -534,9 +527,11 @@ export class Simulations {
         },
       });
       active.engine = engine;
+      // Tool calls also take the next unused fixture for their node.
       grouped = (id) => {
         for (let run = id && engine.run(id); run;) {
-          if (run.batchNodeId || run.parallelBranch) return true;
+          if (run.batchNodeId || run.parallelBranch || run.toolCall)
+            return true;
           run = run.parentRunId && engine.run(run.parentRunId);
         }
         return false;
@@ -606,6 +601,23 @@ export class Simulations {
         }
         if (claim) {
           const f = take(claim.nodeId, 'agent', claim.runId);
+          // The simulated agent makes its tool calls before it answers.
+          for (const call of f.toolCalls ?? []) {
+            const index = last;
+            try {
+              await engine.callTool({
+                workId: claim.id,
+                token: claim.token!,
+                name: call.name,
+                arguments: call.arguments ?? {},
+              });
+            } catch (error) {
+              throw new InterlockError(
+                (fatal = `Fixture ${index}: tool call ${call.name}: ${errorText(error)}`),
+              );
+            }
+            last = index;
+          }
           if (f.error) {
             receipt(claim.nodeId, 'agent', claim.executionId, 'failure');
             engine.reportFailure(claim.id, claim.token!, f.error);

@@ -59,6 +59,7 @@ import { Testing } from './TestingSpecimens';
 import { BoardCard, type BoardCardData } from '../features/boards/BoardCard';
 import { LanesEditor } from '../features/boards/BoardTypeFields';
 import boardClasses from '../features/boards/Boards.module.css';
+import { AgentTools } from './ToolSpecimens';
 import {
   ListTable,
   ListTableRow,
@@ -747,6 +748,7 @@ export default function Gallery() {
         <Dialogs />
         <Testing />
         <Boards />
+        <AgentTools />
       </div>
     </main>
   );

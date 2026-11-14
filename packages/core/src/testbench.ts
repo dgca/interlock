@@ -417,7 +417,10 @@ export function assertionProblems(
     if (
       a.kind === 'route' &&
       !definition.edges.some(
-        (e) => e.source === a.nodeId && (e.port ?? 'default') === a.port,
+        (e) =>
+          e.kind !== 'tool' &&
+          e.source === a.nodeId &&
+          (e.port ?? 'default') === a.port,
       )
     )
       return [

@@ -11,10 +11,10 @@ import {
   NumberInput,
   Button,
 } from '../../design-system';
-
 import { StallPolicyEditor } from '../executors/StallSettings';
 import { NodeExecutorSelect } from '../executors/NodeExecutorSelect';
 import { ResourceBindingsEditor } from './ResourceBindingsEditor';
+import { AgentToolsEditor } from './AgentToolsEditor';
 import { useRef, useState } from 'react';
 import {
   NodeSettingsSections,
@@ -332,6 +332,7 @@ export function NodeInspector({
                 value={node.prompt}
                 onChange={(e) => patch({ prompt: e.target.value })}
               />
+              <AgentToolsEditor node={node} definition={definition} />
             </NodeSection>
             <NodeSection name="execution">
               <NodeExecutorSelect

@@ -98,6 +98,7 @@ export function nodeInputHint(
     const edges = definition.edges.filter(
       (edge) =>
         edge.target === target.id &&
+        edge.kind !== 'tool' &&
         edge.targetHandle !== 'end' &&
         edge.targetHandle !== 'join',
     );

@@ -106,6 +106,8 @@ export class ManagedWorkspaces {
       definition.workspace &&
       !run.batchNodeId &&
       !run.parallelBranch &&
+      // A tool call runs in its calling Agent's checkout.
+      !run.toolCall &&
       (!run.chain || run.chain.rootRunId === run.id) &&
       // Simulations have no side effects; local Git trials isolate themselves.
       !this.options.substituteOperation &&

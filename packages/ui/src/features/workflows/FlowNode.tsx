@@ -39,6 +39,7 @@ import { formatDuration } from './DurationInput';
 import { conditionColors } from './conditionColors';
 import { outputPortTop, type ParallelLane } from '@interlock/core/layout';
 import { parallelEndHandle } from './parallelReturns';
+import { TOOL_SOURCE_HANDLE, TOOL_TARGET_HANDLE } from './editorConnections';
 export type CanvasNode = Node<{
   node: WorkflowNode;
   status?: string;
@@ -66,6 +67,8 @@ export type CanvasNode = Node<{
   activePorts?: string[];
   connectionPorts?: string[];
   parallelLanes?: (ParallelLane & { startTop: number; endTop: number })[];
+  /** The step runs only through tool calls, so its route ports are hidden. */
+  toolTarget?: boolean;
 }>;
 const icons = {
   entry: ArrowUpFromLine,
@@ -136,6 +139,35 @@ function Port({
           .filter(Boolean)
           .join(' ')}
         style={{ top, color: active ? undefined : color }}
+      >
+        {label}
+      </span>
+    </>
+  );
+}
+
+/** Tool edges leave an Agent at the bottom and enter a Script or Fetch at the top. */
+function ToolPort({ type }: { type: 'source' | 'target' }) {
+  const id = type === 'source' ? TOOL_SOURCE_HANDLE : TOOL_TARGET_HANDLE;
+  const active = useContext(ActivePorts).has(`${type}:${id}`);
+  const label = type === 'source' ? 'Tools' : 'Tool';
+  return (
+    <>
+      <Handle
+        type={type}
+        position={type === 'source' ? Position.Bottom : Position.Top}
+        id={id}
+        className={[styles.toolHandle, active ? styles.toolHandleActive : '']
+          .filter(Boolean)
+          .join(' ')}
+      />
+      <span
+        className={[
+          type === 'source' ? styles.toolPortBelow : styles.toolPortAbove,
+          active ? styles.portActive : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
       >
         {label}
       </span>
@@ -527,8 +559,15 @@ function FlowNodeBody({ data, selected }: NodeProps<CanvasNode>) {
         </div>
       </div>
       {bindings}
-      {n.kind !== 'entry' && <Port type="target" id="default" label="In" />}
+      {n.kind === 'agent' && <ToolPort type="source" />}
+      {(n.kind === 'script' || n.kind === 'fetch') && (
+        <ToolPort type="target" />
+      )}
+      {n.kind !== 'entry' && !data.toolTarget && (
+        <Port type="target" id="default" label="In" />
+      )}
       {n.kind !== 'exit' &&
+        !data.toolTarget &&
         (n.kind === 'condition' ? (
           <>
             <Port
