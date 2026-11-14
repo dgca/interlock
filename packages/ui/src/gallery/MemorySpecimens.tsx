@@ -90,15 +90,7 @@ export function Memory() {
               workflowId: 'workflow',
               revision: 7,
               budget: 8000,
-              notes: [live, pending].map(
-                ({ id, nodeId, revision, content, updatedAt }) => ({
-                  id,
-                  ...(nodeId ? { nodeId } : {}),
-                  revision,
-                  content,
-                  updatedAt,
-                }),
-              ),
+              noteCount: 2,
             },
           }}
         />

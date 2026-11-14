@@ -22,6 +22,7 @@ import {
 import { runMode, runTable, runViews, type RunMode } from './runListConfig';
 import { BoardLanes } from '../boards/BoardLanes';
 import { AutomationAlerts } from '../automations/AutomationAlerts';
+import { MemoryReviewList, useMemoryReviews } from '../memory/MemoryReviews';
 import {
   WorkflowSyncAlertList,
   useWorkflowSyncAlerts,
@@ -163,6 +164,7 @@ export function RunList({
   );
   const page = runs.data;
   const sync = useWorkflowSyncAlerts(workflowId);
+  const memory = useMemoryReviews(workflowId);
   const read = workspaceRead('runs', runs, tagFilterTrigger);
   const counts = page?.counts;
   const filtered = Object.keys(selectedTags ?? {}).length > 0;
@@ -231,7 +233,9 @@ export function RunList({
     count: counts
       ? counts[view.value] +
         (view.value === 'attention'
-          ? (page?.scheduleAttentionCount ?? 0) + sync.items.length
+          ? (page?.scheduleAttentionCount ?? 0) +
+            sync.items.length +
+            memory.total
           : 0)
       : undefined,
   }));
@@ -245,6 +249,9 @@ export function RunList({
       )}
       {selectedMode === 'list' && tab === 'attention' && (
         <WorkflowSyncAlertList {...sync} />
+      )}
+      {selectedMode === 'list' && tab === 'attention' && (
+        <MemoryReviewList items={memory.items} />
       )}
       <WorkspaceReadWarning reads={[read]} inline showDetails />
       {!page ? (
@@ -355,7 +362,8 @@ export function RunList({
       ) : offset > 0 ? (
         <Text role="status">No runs on this page.</Text>
       ) : tab === 'attention' &&
-        page.scheduleAttentionCount + sync.items.length > 0 ? null : (
+        page.scheduleAttentionCount + sync.items.length + memory.total >
+          0 ? null : (
         <EmptyState
           title={
             filtered

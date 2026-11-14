@@ -344,6 +344,7 @@ export function RemoveNoteDialog({
       await api.memory.manage.mutate({
         action: reject ? 'reject' : 'delete',
         noteId: note.id,
+        revision: note.revision,
       });
       onRemoved(reject ? 'Note rejected' : 'Note deleted');
     } catch (e) {
