@@ -67,7 +67,6 @@ import {
   resolveBindingFields,
   matchRouting,
   type PathBinding,
-  toolCallRequestSchema,
   type ToolCallInput,
   workTools,
   workHoldRequestSchema,
@@ -242,6 +241,7 @@ export class Engine {
       save: (run) => this.save(run),
       event: (run, type, text) => this.event(run, type, text),
       fail: (run, execution, error) => this.fail(run, execution, error),
+      withClaim: (id, token, action) => this.withClaim(id, token, action),
       cancel: (run, reason) => this.cancelOne(run, undefined, reason),
       paused: (run) => this.pauses.applicable(run.workflowId).length > 0,
     });
@@ -2892,13 +2892,8 @@ export class Engine {
     }
   }
   /** Run one Agent tool call under the caller's active claim and wait for its result. */
-  async callTool(input: ToolCallInput, signal?: AbortSignal) {
-    const q = toolCallRequestSchema.parse(input);
-    const runId = this.withClaim(q.workId, q.token, (work) =>
-      this.toolCalls.begin(work, q),
-    );
-    this.pump();
-    return this.toolCalls.wait(runId, q.workId, q.waitMs, signal);
+  callTool(input: ToolCallInput, signal?: AbortSignal) {
+    return this.toolCalls.call(input, signal);
   }
   renew(id: string, token: string, leaseSeconds?: number) {
     return this.withClaim(id, token, (work) => {
@@ -3035,6 +3030,7 @@ export class Engine {
         const node = this.definition(run).nodes.find(
           (n) => n.id === work.nodeId,
         )!;
+        this.toolCalls.settle(work, 'calling Agent submitted its result');
         this.finish(run, execution, node, output);
         this.usage.ended(work, 'completed');
         this.resources.end(work, 'completed');

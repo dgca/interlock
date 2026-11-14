@@ -10,6 +10,15 @@ export const simulationFixtureSchema = z
     error: z.string().min(1).max(512).optional(),
     expectRejection: z.boolean().optional(),
     timedOut: z.boolean().optional(),
+    toolCalls: z
+      .array(
+        z.object({
+          name: z.string(),
+          arguments: z.record(z.any()).optional(),
+        }),
+      )
+      .max(100)
+      .optional(),
   })
   .strict()
   .superRefine((fixture, ctx) => {
@@ -24,13 +33,18 @@ export const simulationFixtureSchema = z
           code: 'custom',
           message: 'timedOut fixtures must not provide output or error',
         });
-      if (fixture.expectRejection)
+      if (fixture.expectRejection || fixture.toolCalls)
         ctx.addIssue({
           code: 'custom',
-          message: 'Expected rejection cannot be used with timedOut',
+          message: 'timedOut fixtures cannot expect rejection or call tools',
         });
       return;
     }
+    if (fixture.toolCalls && fixture.kind !== 'agent')
+      ctx.addIssue({
+        code: 'custom',
+        message: 'toolCalls are only supported for Agent fixtures',
+      });
     if (fixture.kind === 'input' && fixture.error !== undefined)
       ctx.addIssue({
         code: 'custom',
@@ -82,6 +96,15 @@ export const routeCoverageSchema = z
         })
         .strict(),
     ),
+    /** Tool edges called at least once; present when the workflow has tools. */
+    tools: z
+      .object({
+        total: z.number().int().min(0),
+        called: z.number().int().min(0),
+        uncalled: z.array(z.string()),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 export type RouteCoverage = z.infer<typeof routeCoverageSchema>;

@@ -5,9 +5,11 @@ import {
   nodeSchema,
   validateDefinition,
   type WorkflowDefinition,
+  type WorkRequest,
 } from '@interlock/core';
 import { Engine } from '@interlock/runtime';
 import { Store } from '@interlock/storage';
+import { toolCallToken } from '../packages/runtime/src/toolCalls';
 import {
   exportWorkflows,
   importWorkflows,
@@ -69,6 +71,15 @@ it('rejects tool edges that could not run inside the calling turn', () => {
   expect(() => validateDefinition(definition({ timeoutMs: 400_000 }))).toThrow(
     /exceeds the Agent assignment claim lease of 300s/,
   );
+  const large = {
+    type: 'object',
+    properties: Object.fromEntries(
+      Array.from({ length: 400 }, (_, i) => [`field${i}`, { type: 'string' }]),
+    ),
+  };
+  expect(() => validateDefinition(definition({ inputSchema: large }))).toThrow(
+    /input contract of a tool must be at most 8192 bytes/,
+  );
   const routed = definition();
   routed.edges.push({
     id: 'r',
@@ -89,6 +100,10 @@ it('rejects tool edges that could not run inside the calling turn', () => {
 
 it('runs a tool call as a linked child run without charging route steps', async () => {
   const { e, runId, workId, token } = claimed();
+  // The tool listing counts toward the measured assignment size.
+  expect(
+    e.assignmentSizes.read({ workId }).components.tools.bytes,
+  ).toBeGreaterThan(100);
   const result = await e.callTool({
     workId,
     token,
@@ -113,6 +128,24 @@ it('runs a tool call as a linked child run without charging route steps', async 
   // The agent continues its turn and its result routes as before.
   e.submit(workId, token, {});
   expect(e.run(runId).status).toBe('completed');
+  // Lists and reports count the workflow run once; the call is the tool step's stat.
+  const workflowId = parent.workflowId;
+  expect(
+    e.store
+      .runSummaries({ workflowId, tab: 'history', offset: 0, limit: 10 }, [])
+      .items.map((r) => r.id),
+  ).toEqual([runId]);
+  expect(
+    e.store
+      .findRuns({ workflowId, rootOnly: false, limit: 10 })
+      .map((r) => r.id),
+  ).toEqual([runId]);
+  const report = e.report({ workflowId });
+  expect(report.summary.totalRuns).toBe(1);
+  expect(report.nodes.map((n) => n.nodeId)).toContain('checks');
+  expect(e.store.countReportRuns({ workflowId }).runs).toBe(1);
+  const [tree] = e.history.preview({ workflowId }).items;
+  expect(tree).toMatchObject({ rootRunId: runId, runCount: 1 });
 });
 
 it('authorises calls by the current claim and enforces per-edge limits', async () => {
@@ -168,7 +201,7 @@ it('holds calls under a pause and cancels them when the claim ends first', async
   e.pump();
   expect(e.run(held.runId)).toMatchObject({
     status: 'cancelled',
-    cancellationReason: 'calling claim ended before the tool started',
+    cancellationReason: 'calling claim attempt ended',
     executions: [],
   });
 });
@@ -199,4 +232,131 @@ it('keeps tool edges through export and holds an imported tool Script for approv
     waitMs: 5000,
   });
   expect(done).toMatchObject({ status: 'completed', output: { passed: true } });
+});
+
+it('simulates tool calls with per-node fixtures and reports called tools', async () => {
+  const e = new Engine(new Store(':memory:'), process.cwd());
+  engines.push(e);
+  const w = e.create('Simulated tools', '', definition());
+  e.publish(w.id);
+  const suite = e.testbench.createSuite({
+    workflowId: w.id,
+    content: {
+      name: 'Tools',
+      cases: [
+        {
+          id: 'case',
+          name: 'Case',
+          input: {},
+          fixtures: [
+            {
+              nodeId: 'agent',
+              kind: 'agent',
+              output: {},
+              toolCalls: [
+                { name: 'run_checks', arguments: { target: 'a' } },
+                { name: 'run_checks', arguments: { target: 'all' } },
+              ],
+            },
+            { nodeId: 'checks', kind: 'script', output: { passed: false } },
+            { nodeId: 'checks', kind: 'script', error: 'checks crashed' },
+          ],
+          assertions: [],
+        },
+      ],
+    },
+  });
+  const requestId = crypto.randomUUID();
+  e.simulations.request({
+    action: 'run',
+    suiteId: suite.id,
+    suiteRevision: suite.revision,
+    caseId: 'case',
+    version: 1,
+    requestId,
+  });
+  await expect
+    .poll(
+      () =>
+        (
+          e.simulations.request({ action: 'get', id: requestId }) as {
+            state: string;
+          }
+        ).state,
+    )
+    .toBe('passed');
+  const result = e.simulations.request({ action: 'get', id: requestId }) as {
+    coverage: { tools: unknown; totalEdges: number };
+    executions: { items: { nodeId: string; status: string }[] };
+  };
+  expect(result.coverage).toMatchObject({
+    totalEdges: 2,
+    tools: { total: 1, called: 1, uncalled: [] },
+  });
+  expect(result.executions.items.map((x) => `${x.nodeId}:${x.status}`)).toEqual(
+    [
+      'entry:completed',
+      'agent:completed',
+      'checks:completed',
+      'checks:failed',
+      'exit:completed',
+    ],
+  );
+});
+
+it('accepts the tool-only credential for tool calls and nothing else', async () => {
+  const { e, workId, token } = claimed();
+  const tool = toolCallToken(token);
+  const call = { workId, token: tool, name: 'run_checks' };
+  await expect(
+    e.callTool({ ...call, arguments: { target: 'all' } }),
+  ).resolves.toMatchObject({ status: 'completed' });
+  expect(() => e.submit(workId, tool, {})).toThrow();
+  expect(() => e.renew(workId, tool)).toThrow(/Claim token does not match/);
+  expect(() => e.reportFailure(workId, tool, 'no')).toThrow(
+    /Claim token does not match/,
+  );
+  const work = e.store.get<WorkRequest>('work', workId)!;
+  expect(() =>
+    e.manageWorkHold({
+      action: 'hold',
+      workId,
+      expectedAttempt: work.attempt,
+      expectedRevision: work.holdRevision ?? 0,
+      category: 'external',
+      reason: 'blocked',
+      checkpointRef: 'none',
+      token: tool,
+    } as never),
+  ).toThrow();
+  expect(e.store.get<WorkRequest>('work', workId)!.status).toBe('claimed');
+  // A later claim attempt invalidates the earlier credential.
+  e.reportFailure(workId, token, 'retry');
+  const next = e.claim(workId, worker).token!;
+  await expect(
+    e.callTool({ ...call, arguments: { target: 'all' } }),
+  ).rejects.toThrow();
+  expect(toolCallToken(next)).not.toBe(tool);
+});
+
+it('cancels a running tool call when the Agent submits', async () => {
+  const { e, runId, workId, token } = claimed(
+    definition({
+      command: 'await new Promise((r) => setTimeout(r, 2000)); return {};',
+    }),
+  );
+  const held = await e.callTool({
+    workId,
+    token,
+    name: 'run_checks',
+    arguments: { target: 'all' },
+    waitMs: 100,
+  });
+  expect(held.status).toBe('running');
+  e.submit(workId, token, {});
+  expect(e.run(held.runId)).toMatchObject({
+    status: 'cancelled',
+    cancellationReason: 'calling Agent submitted its result',
+  });
+  expect(e.run(runId).status).toBe('completed');
 });

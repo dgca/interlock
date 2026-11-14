@@ -17,6 +17,7 @@ import {
 import { codexAction } from './permissionPolicy.js';
 import { transcriptText } from './transcriptEvents.js';
 import { codexResult } from './codexResult.js';
+import { toolCallEnvironment } from '../toolCalls.js';
 
 export const codexAdapter: HarnessAdapter = {
   id: 'codex',
@@ -85,6 +86,9 @@ export const codexAdapter: HarnessAdapter = {
       input.command,
       ['app-server', '--listen', 'stdio://'],
       input.cwd,
+      'json-rpc',
+      // Assignment tool calls use a tool-only credential, never the claim.
+      { ...process.env, ...toolCallEnvironment(input.work) },
     );
     let turnId: string | undefined,
       threadId: string | undefined,

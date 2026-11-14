@@ -44,6 +44,8 @@ export function findRuns(
     parameters.push(query.status);
   }
   if (query.rootOnly) filters.push('parent_id IS NULL');
+  // Tool calls are listed under their Agent execution, not as runs.
+  filters.push("json_extract(value, '$.toolCall') IS NULL");
   if (query.afterRunId !== undefined) {
     const cursor = runCursor(db, query.afterRunId);
     filters.push('(created_at, position) < (?, ?)');
