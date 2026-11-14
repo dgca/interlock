@@ -1,4 +1,4 @@
-import { afterEach, expect, it } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 import {
   DEFAULT_PRICE_TABLE,
   blankDefinition,
@@ -14,6 +14,7 @@ import { Engine } from '@interlock/runtime';
 
 const open: { engine: Engine; store: Store }[] = [];
 afterEach(() => {
+  vi.useRealTimers();
   for (const { engine, store } of open.splice(0)) {
     engine.stop();
     store.close();
@@ -246,4 +247,80 @@ it('prices an invoked child workflow with its caller table even after a table ed
     costs: [{ amountMicros: { value: 2_020_020 } }],
     pricing: { tables: [{ version: DEFAULT_PRICE_TABLE.version }] },
   });
+});
+
+it('projects start cost from recent completed runs and never blocks a start', () => {
+  vi.useFakeTimers();
+  const store = new Store(':memory:'),
+    engine = new Engine(store, process.cwd());
+  open.push({ store, engine });
+  const workflow = engine.create('Costly', '', blankDefinition());
+  engine.publish(workflow.id);
+  const finished = (amountMicros?: number) => {
+    const run = engine.start(workflow.id, {}).run;
+    const work = engine.claim(engine.available(run.id)[0].id, worker, 10);
+    if (amountMicros !== undefined)
+      engine.usage.report({
+        workId: work.id,
+        attempt: work.attempt,
+        token: work.token!,
+        snapshot: {
+          sequence: 1,
+          final: true,
+          models: [
+            {
+              provider: 'p',
+              model: 'm',
+              cost: { amountMicros, currency: 'USD', source: 'fixture' },
+            },
+          ],
+        },
+      });
+    engine.submit(work.id, work.token!, {});
+  };
+  finished(2_000_000);
+  finished(2_000_000);
+  // A run with unknown usage is not a cost of zero.
+  finished();
+  expect(engine.startCosts.project(workflow.id)).toBeNull();
+  finished(500_000);
+  // No threshold: nothing is computed or returned.
+  expect(engine.start(workflow.id, {})).not.toHaveProperty('costProjection');
+  engine.startCosts.configure({
+    threshold: { currency: 'USD', amountMicros: 1_000_000 },
+  });
+  const started = engine.start(workflow.id, {});
+  expect(engine.available(started.run.id)).toHaveLength(1);
+  expect(started).toMatchObject({
+    costProjection: {
+      currency: 'USD',
+      medianMicros: 2_000_000,
+      sampleSize: 3,
+      exceedsThreshold: true,
+    },
+  });
+  // A schedule starts anyway and records why no one confirmed.
+  const trigger = engine.triggers.mutate({
+    action: 'create',
+    workflowId: workflow.id,
+    config: {
+      name: 'Nightly',
+      timing: { type: 'interval', intervalMs: 30000 },
+    },
+  }).trigger!;
+  engine.triggers.mutate({
+    action: 'enable',
+    id: trigger.id,
+    expectedRevision: trigger.revision,
+  });
+  vi.setSystemTime(Date.now() + 30000);
+  engine.pump();
+  const scheduled = store.runs().find((run) => run.schedule)!;
+  expect(engine.available(scheduled.id)).toHaveLength(1);
+  expect(
+    store
+      .list<{ runId: string; type: string; message: string }>('events')
+      .find((e) => e.runId === scheduled.id && e.type === 'run.cost_warning')
+      ?.message,
+  ).toMatch(/median of USD 2\.00 \(3 runs\), above the USD 1\.00/);
 });

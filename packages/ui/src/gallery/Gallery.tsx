@@ -67,6 +67,7 @@ import {
   WorkflowGrid,
 } from '../components/WorkflowCards/WorkflowCards';
 import { DiscardChangesDialog } from '../components/DiscardChangesDialog';
+import { StartCostWarning } from '../features/runs/StartCostWarning';
 import classes from './Gallery.module.css';
 
 const options = ['Codex', 'Claude Code', 'Connected agent'];
@@ -583,6 +584,9 @@ function Dialogs() {
           <Button onClick={() => show('modal')}>Open modal</Button>
           <Button onClick={() => show('busy')}>Open busy modal</Button>
           <Button onClick={() => show('discard')}>Open discard dialog</Button>
+          <Button onClick={() => show('start-warning')}>
+            Open start cost warning
+          </Button>
         </Group>
       </Specimen>
       {(open === 'modal' || open === 'busy') && (
@@ -605,6 +609,26 @@ function Dialogs() {
             <Button variant="primary" loading={open === 'busy'}>
               Save
             </Button>
+          </ModalFooter>
+        </Modal>
+      )}
+      {open === 'start-warning' && (
+        <Modal title="Run Release notes" onClose={() => show(null)}>
+          <ModalBody>
+            <StartCostWarning
+              cost={{
+                currency: 'USD',
+                medianMicros: 4_200_000,
+                sampleSize: 5,
+                thresholdMicros: 2_000_000,
+                exceedsThreshold: true,
+              }}
+            />
+            <TextInput label="Run title" />
+          </ModalBody>
+          <ModalFooter>
+            <Button onClick={() => show(null)}>Cancel</Button>
+            <Button variant="primary">Start anyway</Button>
           </ModalFooter>
         </Modal>
       )}
