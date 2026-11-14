@@ -74,7 +74,7 @@ Hooks run in the worktree with `INTERLOCK_RUN_ID` and `INTERLOCK_WORKSPACE_PATH`
 - **`afterCreate`** runs before the run's first step. If it fails, preparation fails. Cancelling the run stops it.
 - **`beforeRemove`** runs before a ready worktree is removed. If it fails, the worktree is still removed and the error is recorded.
 
-Hooks are Scripts for trust purposes. Import review lists them, and [Script approval](reuse-work.md#approve-imported-scripts) applies to them. If an imported hook is not approved yet, the run waits at its entry with an ordinary **Approve imported Script** request, and no worktree is created until a person approves it. Interlock never runs an unapproved hook. If a hook changes in a later version and is no longer approved, preparation fails, and removal keeps the worktree with that reason.
+Hooks are Scripts for trust purposes. Import review lists them, and [Script approval](reuse-work.md#approve-imported-scripts) applies to them. If an imported hook is not approved yet, the run waits at its entry with an **Approve workspace hook** request, and no worktree is created until a person approves it. Interlock never runs an unapproved hook. If a hook changes in a later version and is no longer approved, preparation fails, and removal keeps the worktree with that reason.
 
 Hooks use the Script [environment modes](architecture.md#scripts-and-interruptions). Without `environmentMode`, a hook receives the server's full environment, as before. With `"environmentMode": "minimal"`, it receives only `PATH`, `HOME`, locale settings, `INTERLOCK_` variables and the names in `environmentPassthrough`. Hooks added in the editor start in minimal mode.
 

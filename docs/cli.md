@@ -152,6 +152,8 @@ When a start warning is set with `interlock prices start-warning`, the output in
 | `interlock usage RUN_ID [OPTIONS_JSON]`            | Reported token usage and cost       |
 | `interlock budget RUN_ID`                          | The run's budget policy and status  |
 
+`work --summary` includes each assignment's `rootWorkflowId`, so executor scripts can route assignments by the workflow that started the tree.
+
 `runs` without filters prints full runs, newest first, 1000 per page. With any filter it prints summaries. When a page is full, it tells you the `--after-run` value for the next page.
 
 | `runs` filter                     | Selects                                                        |

@@ -5,13 +5,84 @@ description: Start from existing procedures and share workflows, prompts, and co
 
 # Reuse work
 
-Keep repeated procedures, instructions and settings in one place so every workflow can use them. This page covers starters and Workflow steps, imported Scripts, syncing workflows with a repository folder, board setup on import, saved prompts and variables.
+Keep repeated procedures, instructions and settings in one place so every workflow can use them. This page covers starters, Workflow steps and child workflows, importing workflows, imported Scripts, syncing with a repository folder, board setup on import, saved prompts and variables.
 
 ## Start from a workflow
 
 The starter picker offers ready-made procedures, such as the **SDLC workflow**, which plans, builds and reviews a software change. An added starter becomes your own copy. Adding one does not start a run or replace an existing workflow. See [Starter workflows](starter-workflows.md).
 
 To reuse a procedure inside another workflow, add a **Workflow** step that invokes it. For example, several procedures can share one review workflow instead of each keeping a copy of its steps. Choose whether the caller waits for its result or starts it independently.
+
+## Create a child workflow
+
+A child workflow is a helper that belongs to one parent. It stays out of the main library and appears in the parent's **Child workflows** tab.
+
+1. In the parent, open **Add node**, choose **Workflow**, select **Create child workflow** and enter a name.
+2. Choose **Save and create child**. Interlock saves the parent draft with the new node and opens the child editor.
+3. Edit and publish the child.
+4. Choose **Use v1 in [node name]** to pin that version in the parent draft and return to the parent.
+5. Connect the node and publish the parent.
+
+You can also create a child from the **Child workflows** tab with **New child**, without adding a node. Save or discard Raw edits before creating a child.
+
+- A draft can reference an unpublished child, but publication is blocked until the reference has a version.
+- Later child publications do not change existing pins. Choose a newer version in node settings or from the child editor.
+- Only the owner can reference a child. A child can invoke library workflows but cannot own or reference other children.
+- The child editor links back to its owner and has its own URL and **Runs** tab.
+
+The UI cannot yet move a workflow between parents, search children from the main library, or clone a parent with its children. Parent clone is disabled, and a parent with children cannot be deleted: delete unreferenced children first. Agents can adopt, reparent or release workflows over MCP while keeping their IDs and history; see [ownership changes](https://github.com/dgca/interlock/blob/main/docs/agent-workflows.md#change-workflow-ownership).
+
+## Publish a shared workflow and its dependents
+
+Ordinary publication, including **Review & publish**, keeps the version pins of every workflow that calls the published one. To advance the callers too, publish with cascade:
+
+```sh
+interlock publish CHILD_ID --cascade
+```
+
+MCP `publish_workflow` accepts `{"id": "CHILD_ID", "cascade": true}`, and the shared API accepts the same option.
+
+- The cascade follows references in each workflow's latest published definition, including archived workflows and Workflow steps inside Batches.
+- It republishes each dependent once, children before parents, and leaves unrelated pins alone. Draft-only workflows and references found only in older versions are not included.
+- Every dependent draft must match its latest published definition. Publish or discard definition edits first.
+- A dependency cycle or any validation failure rejects the whole operation, including the requested publication.
+- Dependent drafts get new revisions, so an editor holding an older draft must reload before saving.
+
+Existing versions keep their exact pins, and existing runs stay pinned unless their [run version policy](https://github.com/dgca/interlock/blob/main/docs/workflow-execution.md#move-a-run-to-a-newer-version) accepts the new version at a safe boundary. New runs use the new versions; starting an explicit older version still uses its original dependencies. Contracts are checked during execution, so test changed child behavior before cascading it.
+
+To preview and apply a whole bundle from a repository, use `interlock import bundle.json --dry-run`, then `interlock import bundle.json --publish --cascade`; see the [workflow commands](cli.md#workflows).
+
+## Import workflows
+
+Open **Workflows → Import**. The dialog opens on bundled **Starters** and also accepts a public GitHub folder, a local file, or pasted JSON. Every source shows a preview first, and importing never starts a run.
+
+1. Choose **GitHub folder**, paste an HTTPS `github.com/OWNER/REPO/tree/REF/FOLDER` link and choose **Find workflows**. Branch names with slashes and commit links work.
+2. Review each workflow's description, source file and dependencies.
+3. Select the workflows and choose **Import workflow**, or **Import N workflows** for several.
+
+For **Paste JSON**, paste a legacy workflow or portable bundle and choose **Preview workflow**. Invalid JSON and validation errors keep your text so you can correct it. **Local file** uses the same import rules unless the host disables it.
+
+### What import keeps and rejects
+
+- Selections import together. An invalid selection, or an existing workflow with different draft content, metadata, ownership, published version or saved prompt, rejects the whole selection and changes nothing.
+- Portable bundles keep their IDs and pins. Legacy files create a new workflow each time.
+- Identical definitions are unchanged, and draft position-only differences update only the saved layout.
+- Reimport keeps the workflow's board membership.
+- Every included schedule is disabled and its revision advances, even on an identical reimport. Schedules left out of the bundle are unchanged. See [workflow schedules](https://github.com/dgca/interlock/blob/main/docs/schedules.md).
+- Variable-bearing bundles need a local binding, or explicit unset provisioning, in the preview. Config and Secret values are never exported. See [workflow variables](https://github.com/dgca/interlock/blob/main/docs/variables.md).
+
+### GitHub folder limits
+
+| Limit        | Value                                                                           |
+| ------------ | ------------------------------------------------------------------------------- |
+| Repositories | Public only. Private access, recursion and automatic updates are not supported. |
+| Files        | Direct JSON files in the folder, at most 50                                     |
+| Size         | 2 MiB per response or file                                                      |
+| Timeout      | 60 seconds per request                                                          |
+
+Discovery pins the preview to a commit. Invalid files cannot be selected but do not hide valid ones. Rate-limit messages include retry timing when GitHub provides it.
+
+If an import response is lost, check the library before retrying, especially for legacy files: the import may have completed. A confirmed rejection says **Nothing imported**.
 
 ## Approve imported Scripts
 
@@ -38,6 +109,10 @@ Only a person can approve Scripts or change this setting; MCP callers are refuse
 ### Permission policies
 
 A workflow [permission policy](permission-policy.md) from an import, or one an agent writes over MCP, waits the same way under any setting except **Off**. A new run holds at its entry with an **Approve permission policy** request. `interlock approve-script` approves it too.
+
+### Workspace hooks
+
+Hooks of a [managed Git workspace](https://github.com/dgca/interlock/blob/main/docs/managed-workspaces.md#hooks) are Scripts for approval too. An imported hook that is not yet approved holds the run at its entry with an **Approve workspace hook** request, and no worktree is created until a person approves it.
 
 ## Sync workflows with a repository folder
 

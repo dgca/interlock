@@ -1,10 +1,10 @@
 # Interlock
 
+[Documentation](https://dgca.github.io/interlock/docs/) · [Website](https://dgca.github.io/interlock/)
+
 Interlock turns a procedure you repeat with AI agents into a workflow that runs the same way every time, on your own machine. A workflow combines agent assignments with scripts, HTTP requests, branches, waits and human decisions. Interlock checks each step's data against its contract, keeps every run in a local SQLite database, and shows progress in your browser.
 
 Use it when you want agent work to follow a known path, stop for your decisions, and leave a record you can inspect.
-
-![The Interlock workflow editor showing a published workflow with Fetch, Script, Branch and Agent steps](https://raw.githubusercontent.com/dgca/interlock/main/site/shots/workflow-editor.png)
 
 ## Quick start
 
@@ -60,7 +60,6 @@ Read the [full security notes](https://github.com/dgca/interlock/blob/main/docs/
 - [Upgrading](https://dgca.github.io/interlock/docs/upgrading/) and [Troubleshooting](https://dgca.github.io/interlock/docs/troubleshooting/).
 - [Feature index](https://github.com/dgca/interlock/blob/main/docs/features.md): what is implemented, by area.
 - [Current limits](https://github.com/dgca/interlock/blob/main/docs/v1.md): what is not.
-- [Workflow editor and operations reference](https://github.com/dgca/interlock/blob/main/docs/workflow-editor.md): detailed editor, node and CLI behavior.
 - [Architecture and execution semantics](https://github.com/dgca/interlock/blob/main/docs/architecture.md) and [domain language](https://github.com/dgca/interlock/blob/main/CONTEXT.md).
 
 ## Develop locally
@@ -83,7 +82,7 @@ pnpm lint
 pnpm test
 ```
 
-See [AGENTS.md](https://github.com/dgca/interlock/blob/main/AGENTS.md) for repository rules and the full set of checks, and [Develop locally](https://github.com/dgca/interlock/blob/main/docs/workflow-editor.md#develop-locally) for the development server, package and browser tests.
+See [AGENTS.md](https://github.com/dgca/interlock/blob/main/AGENTS.md) for repository rules and the full set of checks, and [Develop Interlock](https://github.com/dgca/interlock/blob/main/docs/development.md) for the development server, package and browser tests.
 
 ## License
 
