@@ -1,4 +1,5 @@
 import {
+  boardImportSetupSchema,
   definitionSchema,
   InterlockError,
   type WorkflowDefinition,
@@ -299,6 +300,18 @@ export function listStarters(
     };
   });
 }
+export const starterImportSchema = z
+  .object({
+    starterId: z.string().min(1).max(64),
+    requestId: z
+      .string()
+      .min(1)
+      .max(120)
+      .refine((v) => /\S/.test(v), 'Use a nonblank request key'),
+    copy: z.boolean().default(false),
+    boardSetup: boardImportSetupSchema.optional(),
+  })
+  .strict();
 export function importStarter(
   engine: Engine,
   q: {

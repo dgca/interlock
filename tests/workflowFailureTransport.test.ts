@@ -49,7 +49,7 @@ it.each(['http', 'stdio'])(
     try {
       await client.connect(transport);
       const tools = (await listToolsWithSharedSchemas(client)).tools;
-      expect(tools).toHaveLength(71);
+      expect(tools).toHaveLength(72);
       expect(
         JSON.stringify(
           tools.find((tool) => tool.name === 'create_workflow')?.inputSchema,

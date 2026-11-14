@@ -231,6 +231,10 @@ The [evaluation starter](workflow-evaluation.md) uses two routes from its Script
 
 The server reads the grade from that step and writes it through the same quality judgment path as MCP `update_workflow_comparison` `record_quality`, with request key `RUN_ID:SAMPLE_ID` and the same provenance checks. The response is the judgment. Repeating the request returns the original judgment, so retry it unchanged after a network error or `5xx`. A grade that fails a provenance check answers `400`; a missing comparison answers `404`.
 
+## Review proposed workflow changes
+
+`GET /api/workflows/{id}/proposals`, `GET /api/proposals/{id}`, `POST /api/proposals` and `POST /api/proposals/{id}/decision` list, read, create and decide [proposed workflow changes](workflow-proposals.md#http) as a person.
+
 ## Choose HTTP or MCP
 
 Use HTTP from code you own: a script, a cron job, a CI step or a small relay that receives another system's events. It needs only an HTTP client, starts work, and reads status and results.

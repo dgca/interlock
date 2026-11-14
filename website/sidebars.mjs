@@ -36,6 +36,11 @@ const docs = [
       { type: 'doc', id: 'reports', label: 'Reports' },
       { type: 'doc', id: 'opentelemetry', label: 'OpenTelemetry traces' },
       { type: 'doc', id: 'testing-workflows', label: 'Test and improve' },
+      {
+        type: 'doc',
+        id: 'workflow-proposals',
+        label: 'Proposed workflow changes',
+      },
     ],
   },
   { type: 'doc', id: 'troubleshooting', label: 'Troubleshooting' },

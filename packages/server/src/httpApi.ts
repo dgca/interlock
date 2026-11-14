@@ -332,6 +332,56 @@ export function createHttpApi(
     launcherCall(c, (launcher, input) => launcher.fail(input as never)),
   );
 
+  // Workflow change proposals. Decisions here are a person's, as in the UI and CLI.
+  const jsonBody = async (c: Context) => {
+    try {
+      const body: unknown = await c.req.json();
+      return body && typeof body === 'object' && !Array.isArray(body)
+        ? (body as Record<string, unknown>)
+        : undefined;
+    } catch {
+      return undefined;
+    }
+  };
+  const proposalCall = async (c: Context, call: () => Promise<unknown>) => {
+    try {
+      return c.json(await call());
+    } catch (error) {
+      return rejection(c, error);
+    }
+  };
+  api.get('/workflows/:id/proposals', (c) =>
+    proposalCall(c, () => {
+      const { status, offset, limit } = c.req.query();
+      return caller(c).proposals.list({
+        workflowId: c.req.param('id'),
+        status: status as 'open' | undefined,
+        offset: offset === undefined ? undefined : Number(offset),
+        limit: limit === undefined ? undefined : Number(limit),
+      });
+    }),
+  );
+  api.get('/proposals/:id', (c) =>
+    proposalCall(c, () => caller(c).proposals.get({ id: c.req.param('id') })),
+  );
+  for (const [path, call] of [
+    [
+      '/proposals',
+      (c: Context, body: object) => caller(c).proposals.create(body as never),
+    ],
+    [
+      '/proposals/:id/decision',
+      (c: Context, body: object) =>
+        caller(c).proposals.decide({ ...body, id: c.req.param('id') } as never),
+    ],
+  ] as const)
+    api.post(path, async (c) => {
+      const body = await jsonBody(c);
+      if (!body)
+        return failure(c, 400, 'invalid_request', 'Body must be a JSON object');
+      return proposalCall(c, () => call(c, body));
+    });
+
   // Keep unknown API paths out of the UI's fallback page.
   api.all('*', (c) => failure(c, 404, 'not_found', 'Unknown API route'));
   return api;

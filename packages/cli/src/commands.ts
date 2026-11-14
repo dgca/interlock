@@ -8,6 +8,7 @@ import { parse } from './json.js';
 import { runLauncherCommand } from './launcher.js';
 import { parseSummaryArgs } from './args.js';
 import { runBoardCommand } from './boards.js';
+import { runProposalsCommand } from './proposals.js';
 import { runMemoryCommand } from './memory.js';
 import { runStartCommand } from './start.js';
 import { parseTags, runQuery, runsCommand } from './runsCommand.js';
@@ -258,6 +259,8 @@ export async function runCommand(argv: string[]) {
       return runStartCommand(args);
     case 'board':
       return runBoardCommand(args);
+    case 'proposals':
+      return runProposalsCommand(args);
     case 'runs':
       return runsCommand(client, args);
     case 'run-version': {
