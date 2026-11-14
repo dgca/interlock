@@ -6,6 +6,12 @@ Use a tool edge when an agent needs a deterministic action several times inside 
 
 Child Workflow targets are not supported.
 
+## Connect a tool in the editor
+
+Drag from an Agent's **Tools** handle, at the bottom of its card, to the **Tool** handle at the top of a Script or Fetch card. Tool edges are dashed. A step connected as a tool hides its route ports, because it runs only through calls. To set call limits or remove a tool, open the Agent's settings: **Assignment** lists its tools under **Tools**, with **Calls per attempt** and **Calls per execution**. Leave a limit blank to use the default.
+
+In the run inspector, the Agent step lists its **Tool calls** with each call's attempt, start time and status. Select one to inspect the step's input, output and error. The tool step's card shows how many calls finished or failed.
+
 ## Define a tool edge
 
 A tool edge is an edge with `"kind": "tool"`. It is never followed as a route.
@@ -75,3 +81,7 @@ Tool calls are not route steps and do not count toward `maxSteps`; the per-edge 
 - **Paused**: a call that is already running finishes. A new call waits until every applicable pause hold is released; the response reports `blockedBy: "pause"`.
 - **Server restart**: a running Script or Fetch fails as `Service interrupted during … execution`, the same as a routed step. A call that had not started resumes when its claim is still active.
 - A call blocked by a resource its own Agent holds fails instead of waiting.
+
+## Simulate tool calls
+
+In a [simulation](workflow-simulation.md) fixture, an Agent fixture can list `toolCalls: [{"name": "run_checks", "arguments": {...}}]`. The simulated agent makes those calls in order before it returns its `output` or `error`. Each call takes the next unused `script` or `fetch` fixture for the tool's node, like a step inside a Batch item. A call that is rejected, for example over a limit or with invalid arguments, fails the simulation. Route coverage ignores tool edges; `coverage.tools` reports how many of the workflow's tools the case called and lists the uncalled edge IDs.

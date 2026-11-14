@@ -98,6 +98,8 @@ export class ToolCalls {
       throw new InterlockError(
         `Unknown tool ${q.name}. Available: ${tools.map((t) => t.name).join(', ') || 'none'}`,
       );
+    if (q.callId && q.callId.length > 200)
+      throw new InterlockError('callId must be at most 200 characters');
     const calls = this.calls(execution, tool);
     if (q.callId) {
       const existing = calls.find((r) => r.toolCall!.callId === q.callId);

@@ -249,9 +249,9 @@ export interface ToolCallLink {
 export const toolCallRequestSchema = z.object({
   workId: z.string(),
   token: z.string(),
-  name: z.string().min(1).max(64),
+  name: z.string(),
   arguments: z.record(z.unknown()).default({}),
-  callId: z.string().min(1).max(200).optional(),
+  callId: z.string().optional(),
   waitMs: z.number().int().min(0).max(600_000).default(50_000),
 });
 export type ToolCallRequest = z.infer<typeof toolCallRequestSchema>;

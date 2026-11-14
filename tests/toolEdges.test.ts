@@ -200,3 +200,73 @@ it('keeps tool edges through export and holds an imported tool Script for approv
   });
   expect(done).toMatchObject({ status: 'completed', output: { passed: true } });
 });
+
+it('simulates tool calls with per-node fixtures and reports called tools', async () => {
+  const e = new Engine(new Store(':memory:'), process.cwd());
+  engines.push(e);
+  const w = e.create('Simulated tools', '', definition());
+  e.publish(w.id);
+  const suite = e.testbench.createSuite({
+    workflowId: w.id,
+    content: {
+      name: 'Tools',
+      cases: [
+        {
+          id: 'case',
+          name: 'Case',
+          input: {},
+          fixtures: [
+            {
+              nodeId: 'agent',
+              kind: 'agent',
+              output: {},
+              toolCalls: [
+                { name: 'run_checks', arguments: { target: 'a' } },
+                { name: 'run_checks', arguments: { target: 'all' } },
+              ],
+            },
+            { nodeId: 'checks', kind: 'script', output: { passed: false } },
+            { nodeId: 'checks', kind: 'script', error: 'checks crashed' },
+          ],
+          assertions: [],
+        },
+      ],
+    },
+  });
+  const requestId = crypto.randomUUID();
+  e.simulations.request({
+    action: 'run',
+    suiteId: suite.id,
+    suiteRevision: suite.revision,
+    caseId: 'case',
+    version: 1,
+    requestId,
+  });
+  await expect
+    .poll(
+      () =>
+        (
+          e.simulations.request({ action: 'get', id: requestId }) as {
+            state: string;
+          }
+        ).state,
+    )
+    .toBe('passed');
+  const result = e.simulations.request({ action: 'get', id: requestId }) as {
+    coverage: { tools: unknown; totalEdges: number };
+    executions: { items: { nodeId: string; status: string }[] };
+  };
+  expect(result.coverage).toMatchObject({
+    totalEdges: 2,
+    tools: { total: 1, called: 1, uncalled: [] },
+  });
+  expect(result.executions.items.map((x) => `${x.nodeId}:${x.status}`)).toEqual(
+    [
+      'entry:completed',
+      'agent:completed',
+      'checks:completed',
+      'checks:failed',
+      'exit:completed',
+    ],
+  );
+});

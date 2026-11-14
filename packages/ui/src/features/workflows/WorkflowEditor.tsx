@@ -91,39 +91,17 @@ import { TidyControl } from './TidyControl';
 import { api, errorMessage } from '../../lib/api';
 import styles from './WorkflowEditor.module.css';
 import { withParallelReturns } from './parallelReturns';
+import {
+  connectEdges,
+  edgesFromCanvas,
+  validConnection,
+} from './editorConnections';
 // Keep the workflow toolbar and lower canvas controls outside fitted node bounds.
 const editorFitView = {
   padding: { top: '82px', right: '24px', bottom: '162px', left: '24px' },
 } as const;
 const nodeTypes = { workflow: FlowNode };
 const edgeTypes = { loop: LoopEdge, ortho: OrthoEdge };
-
-function validConnection(index: Map<string, WorkflowNode>, c: Connection) {
-  const source = index.get(c.source);
-  const target = index.get(c.target);
-  return Boolean(
-    source &&
-    source.kind !== 'exit' &&
-    target &&
-    target.kind !== 'entry' &&
-    !parallelConnectionError(
-      source,
-      target,
-      c.sourceHandle ?? 'default',
-      c.targetHandle as WorkflowEdge['targetHandle'],
-    ) &&
-    !(
-      source.kind === 'batch' &&
-      c.sourceHandle === 'item' &&
-      c.targetHandle === 'end'
-    ) &&
-    (c.targetHandle !== 'end' || target.kind === 'batch') &&
-    (source.kind === 'batch' && c.sourceHandle === 'item'
-      ? source.id
-      : source.batchId) ===
-      (c.targetHandle === 'end' ? target.id : target.batchId),
-  );
-}
 
 function wireBetween(
   start: OnConnectStartParams,
@@ -785,26 +763,7 @@ export function WorkflowEditor({
   };
   const connect = (c: Connection) =>
     setDraft((d) =>
-      withParallelReturns({
-        ...d,
-        edges: [
-          ...d.edges.filter(
-            (e) =>
-              !(
-                e.source === c.source &&
-                e.port === (c.sourceHandle ?? 'default')
-              ),
-          ),
-          {
-            id: crypto.randomUUID(),
-            source: c.source,
-            target: c.target,
-            port: (c.sourceHandle ?? 'default') as WorkflowEdge['port'],
-            targetHandle: (c.targetHandle ??
-              'default') as WorkflowEdge['targetHandle'],
-          },
-        ],
-      }),
+      withParallelReturns({ ...d, edges: connectEdges(d.edges, c) }),
     );
   return (
     <div
@@ -1300,22 +1259,10 @@ export function WorkflowEditor({
                     setDraft((d) =>
                       withParallelReturns({
                         ...d,
-                        edges: applyEdgeChanges(
-                          changes,
-                          canvasGraph(d).edges,
-                        ).map((e) => ({
-                          id: e.id,
-                          source: e.source,
-                          target: e.target,
-                          port: (e.sourceHandle ??
-                            'default') as WorkflowEdge['port'],
-                          targetHandle: e.targetHandle?.startsWith(
-                            'parallel-end:',
-                          )
-                            ? 'join'
-                            : ((e.targetHandle ??
-                                'default') as WorkflowEdge['targetHandle']),
-                        })),
+                        edges: edgesFromCanvas(
+                          d,
+                          applyEdgeChanges(changes, canvasGraph(d).edges),
+                        ),
                       }),
                     );
                   }}

@@ -9,7 +9,7 @@ export function registerAssignmentTools(
 ) {
   tool(
     'call_work_tool',
-    "Run a tool from a claimed assignment's tools under your active claim and return the step's output. arguments match its inputSchema. Waits up to waitMs, capped by your lease; if status is running or waiting, call again with callId. Rejects over-limit calls; does not renew.",
+    "Call a tool from a claimed assignment's tools with your claim; returns the step's output. Waits up to waitMs within your lease; if status is running or waiting, call again with callId.",
     toolCallRequestSchema.shape,
     (input, signal) => client.work.callTool(input, { signal }),
   );

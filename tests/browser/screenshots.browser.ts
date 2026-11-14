@@ -30,6 +30,7 @@ const gallerySections = [
   'editors',
   'dialogs',
   'testing',
+  'agent-tools',
 ];
 
 /** Main screens, each with a locator that proves the screen finished loading. */

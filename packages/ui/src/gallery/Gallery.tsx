@@ -56,6 +56,7 @@ import { ContractEditor } from '../components/ContractEditor/ContractEditor';
 import { WorkflowSyncAlertList } from '../features/workflows/WorkflowSyncAlerts';
 import { Section, Specimen } from './GalleryLayout';
 import { Testing } from './TestingSpecimens';
+import { AgentTools } from './ToolSpecimens';
 import {
   ListTable,
   ListTableRow,
@@ -661,6 +662,7 @@ export default function Gallery() {
         <Editors />
         <Dialogs />
         <Testing />
+        <AgentTools />
       </div>
     </main>
   );
