@@ -221,6 +221,49 @@ export function createHttpApi(
     }
   });
 
+  // The evaluation starter's Scripts: the server selects samples and records
+  // a grader step's accepted output, so scripts never copy grades.
+  const missingComparison = (c: Context) =>
+    engine.store.get('comparisons', c.req.param('id')!)
+      ? undefined
+      : failure(c, 404, 'not_found', 'Comparison not found');
+  api.get('/comparisons/:id/evaluation-plan', async (c) => {
+    try {
+      return (
+        missingComparison(c) ??
+        c.json(
+          await caller(c).testbench.evaluationPlan({
+            id: c.req.param('id'),
+            evaluationRunId: c.req.query('evaluationRunId')!,
+          }),
+        )
+      );
+    } catch (error) {
+      return rejection(c, error);
+    }
+  });
+  api.post('/comparisons/:id/judgments', async (c) => {
+    const missing = missingComparison(c);
+    if (missing) return missing;
+    let body: unknown;
+    try {
+      body = await c.req.json();
+    } catch {
+      return failure(c, 400, 'invalid_request', 'Body must be JSON');
+    }
+    if (!body || typeof body !== 'object' || Array.isArray(body))
+      return failure(c, 400, 'invalid_request', 'Body must be a JSON object');
+    try {
+      const judgment = await caller(c).testbench.recordEvaluation({
+        ...body,
+        id: c.req.param('id'),
+      } as never);
+      return c.json(judgment);
+    } catch (error) {
+      return rejection(c, error);
+    }
+  });
+
   // Pull launcher clients: the profile credential travels in its own header
   // because Authorization carries the API token when one is required.
   const launcherCall = async (

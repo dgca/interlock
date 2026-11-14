@@ -2,13 +2,15 @@
 
 Scripts and applications can start published workflows and follow their runs with plain JSON requests under `/api` on the running server, by default `http://127.0.0.1:4310/api`. The routes call the same server operations as the UI, the CLI and MCP, so input contracts, start receipts, admission and cancellation follow the same rules.
 
-| Route                        | Purpose                                                         |
-| ---------------------------- | --------------------------------------------------------------- |
-| `GET /api/workflows`         | List published workflows with their IDs and input contracts.    |
-| `POST /api/runs`             | Start a run of a published workflow.                            |
-| `GET /api/runs/{id}`         | Read a run's compact status.                                    |
-| `GET /api/runs/{id}/result`  | Read a completed run's output.                                  |
-| `POST /api/runs/{id}/cancel` | Cancel a queued or active run and its ordinary active children. |
+| Route                                       | Purpose                                                         |
+| ------------------------------------------- | --------------------------------------------------------------- |
+| `GET /api/workflows`                        | List published workflows with their IDs and input contracts.    |
+| `POST /api/runs`                            | Start a run of a published workflow.                            |
+| `GET /api/runs/{id}`                        | Read a run's compact status.                                    |
+| `GET /api/runs/{id}/result`                 | Read a completed run's output.                                  |
+| `POST /api/runs/{id}/cancel`                | Cancel a queued or active run and its ordinary active children. |
+| `GET /api/comparisons/{id}/evaluation-plan` | Select the samples an evaluation run grades.                    |
+| `POST /api/comparisons/{id}/judgments`      | Record a Batch item's accepted grade once.                      |
 
 The API is local, like the rest of Interlock. It accepts requests only for `127.0.0.1`, `localhost` or `[::1]`, rejects untrusted browser origins, and limits request bodies to 2 MiB. When `INTERLOCK_REQUIRE_TOKEN=1` is set, every `/api` request needs the [API token](connect-harness.md#api-token):
 
@@ -210,6 +212,24 @@ curl -s http://127.0.0.1:4310/api/runs/missing
 
 Other rejections from the engine, such as an unpublished or archived workflow or a deleted version, return `400` with the engine's message.
 
+## Evaluate a comparison
+
+The [evaluation starter](workflow-evaluation.md) uses two routes from its Scripts. Other callers rarely need them.
+
+`GET /api/comparisons/{id}/evaluation-plan?evaluationRunId=RUN_ID` returns the plan for an evaluation run whose input captured this comparison: the fixed settings, `samples` (each sample's exact grader input), `skipped` with reasons (at most 100) and `remaining`. Selection is deterministic, and the plan names no side, version or worker.
+
+`POST /api/comparisons/{id}/judgments` records the grade a Batch item run's completed `review` or `checks` step produced:
+
+```json
+{
+  "evaluationRunId": "RUN_ID",
+  "reviewerRunId": "ITEM_RUN_ID",
+  "sampleId": "SAMPLE_ID"
+}
+```
+
+The server reads the grade from that step and writes it through the same quality judgment path as MCP `update_workflow_comparison` `record_quality`, with request key `RUN_ID:SAMPLE_ID` and the same provenance checks. The response is the judgment. Repeating the request returns the original judgment, so retry it unchanged after a network error or `5xx`. A grade that fails a provenance check answers `400`; a missing comparison answers `404`.
+
 ## Choose HTTP or MCP
 
 Use HTTP from code you own: a script, a cron job, a CI step or a small relay that receives another system's events. It needs only an HTTP client, starts work, and reads status and results.
@@ -247,11 +267,11 @@ Retry on network errors and `5xx` with the same key. Do not retry `400`, `404` o
 
 ## Compatibility
 
-Interlock is pre-1.0. The supported HTTP API is the five routes above, the request fields listed for `POST /api/runs`, the response fields shown on this page, the status codes and the error `code` values. Within that contract:
+Interlock is pre-1.0. The supported HTTP API is the seven routes above, the request fields listed for `POST /api/runs`, the response fields shown on this page, the status codes and the error `code` values. Within that contract:
 
 - Patch releases can add routes, optional request fields, response fields, `waiting.kind` values and error codes. Ignore fields you do not know.
 - Removing or renaming a supported field or route, or changing a status code, is a breaking change. It follows the [release rules](releases.md): it is flagged before the release bump is chosen and described in the changelog.
 
 `/trpc` is the UI's internal transport and can change in any release. Do not build integrations on it.
 
-An OpenAPI description is not published. With five routes, this page and curl cover discovery; workflow input contracts already arrive as JSON Schema from `GET /api/workflows`. A generated OpenAPI file becomes worthwhile if the API grows enough that typed client generation saves real work.
+An OpenAPI description is not published. With seven routes, this page and curl cover discovery; workflow input contracts already arrive as JSON Schema from `GET /api/workflows`. A generated OpenAPI file becomes worthwhile if the API grows enough that typed client generation saves real work.

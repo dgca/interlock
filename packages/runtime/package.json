@@ -10,7 +10,8 @@
     "./executors/native": "./src/executors/native.ts",
     "./importSelection": "./src/importSelection.ts",
     "./transfer": "./src/transfer.ts",
-    "./versionIdentity": "./src/versionIdentity.ts"
+    "./versionIdentity": "./src/versionIdentity.ts",
+    "./evaluationPlan": "./src/evaluationPlan.ts"
   },
   "dependencies": {
     "@interlock/core": "workspace:*",

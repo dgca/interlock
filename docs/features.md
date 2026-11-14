@@ -63,7 +63,7 @@ What Interlock implements today, grouped by area. See [current limits](v1.md) fo
 ## MCP and CLI
 
 - HTTP MCP on the running server for authoring and execution, with a legacy stdio bridge and CLI access to the same service.
-- A small plain-JSON [HTTP API](http-api.md) under `/api` for scripts and integrations: list published workflows with input contracts, start runs with idempotency keys, read compact status and results, and cancel runs.
+- A small plain-JSON [HTTP API](http-api.md) under `/api` for scripts and integrations: list published workflows with input contracts, start runs with idempotency keys, read compact status and results, cancel runs, and plan and record comparison evaluations.
 - MCP workflow schemas, compact assignment discovery with root workflow identity, bounded run lookup with input matching, and CLI/MCP workflow archive, restore, and deletion.
 - Opt-in compact MCP authoring acknowledgments and edit diagnostics, with full defaults, shared API summary operations, and CLI start/submit `--summary` plus claim `--fresh`/`--lease`.
 - Compact MCP start/submission responses and work discovery by default, with lifecycle-scoped next work, wait cursors, suggested read-only calls, and explicit full options; see [compact mutation responses](agent-workflows.md#continue-with-compact-mutation-responses).
