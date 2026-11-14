@@ -20,6 +20,8 @@ import {
 } from './gitWorktrees.js';
 import type { ContextContinuityGroups } from './contextContinuity.js';
 import { sourceQuiescence } from './quiescence.js';
+import type { ScriptApprovals } from './scriptApprovals.js';
+import { executeScript } from './scripts.js';
 import type { TrialEnvironments } from './trialEnvironments.js';
 import {
   resolveAndValidateCwd,
@@ -34,9 +36,11 @@ const usable = (w?: ManagedWorkspace) =>
   (w?.state === 'ready' || w?.state === 'retained') && existsSync(w.path);
 const errorText = (error: unknown) =>
   (error instanceof Error ? error.message : String(error)).slice(0, 512);
+type Settings = NonNullable<WorkflowDefinition['workspace']>;
 type Host = {
   readonly store: Store;
   readonly contextGroups: ContextContinuityGroups;
+  readonly scriptApprovals: ScriptApprovals;
   getAllowedRoots(): string[];
   pump(): void;
 };
@@ -150,6 +154,11 @@ export class ManagedWorkspaces {
   gate(run: Run, definition: WorkflowDefinition): boolean | string | undefined {
     if (!this.owns(run, definition)) return undefined;
     const settings = definition.workspace!;
+    const held = run.executions.at(-1);
+    if (held?.scriptApproval && held.kind === 'entry') {
+      if (this.pendingHook(run, settings)) return false;
+      return this.host.scriptApprovals.releaseRun(run, held);
+    }
     const existing = this.get(run.id);
     if (usable(existing)) {
       // A retried run takes its kept checkout back.
@@ -171,6 +180,14 @@ export class ManagedWorkspaces {
     }
     if (!this.configured)
       return 'Workspace: managed workspaces need a data folder';
+    // Hooks are Scripts: imported ones wait for a person before anything runs.
+    const hash = this.pendingHook(run, settings);
+    if (hash) {
+      const entry = definition.nodes.find((n) => n.id === run.cursor);
+      if (run.executions.length || entry?.kind !== 'entry')
+        return 'Workspace: an imported workspace hook needs approval';
+      return this.host.scriptApprovals.holdRun(run, entry, hash);
+    }
     let branch: string;
     try {
       branch = workspaceBranch(settings.branch, run.id);
@@ -206,20 +223,65 @@ export class ManagedWorkspaces {
             w.branchClaimed = true;
           }),
         signal,
-      ).then(
-        ({ baseCommit }) =>
+      )
+        .then(async ({ baseCommit }) => {
           this.update(run.id, (w) => {
-            w.state = 'ready';
             w.baseCommit = baseCommit;
-          }),
-        (error: unknown) =>
-          this.update(run.id, (w) => {
-            w.state = 'failed';
-            w.error = errorText(error);
-          }),
-      ),
+          });
+          const created = { ...workspace, baseCommit };
+          await this.hook('afterCreate', created, settings, signal);
+        })
+        .then(
+          () =>
+            this.update(run.id, (w) => {
+              w.state = 'ready';
+            }),
+          (error: unknown) =>
+            this.update(run.id, (w) => {
+              w.state = 'failed';
+              w.error = errorText(error);
+            }),
+        ),
     );
     return false;
+  }
+  private pendingHook(run: Run, settings: Settings) {
+    for (const hook of Object.values(settings.hooks ?? {})) {
+      const hash = this.host.scriptApprovals.required(run.workflowId, hook);
+      if (hash) return hash;
+    }
+    return undefined;
+  }
+  /** Run a hook in the checkout like a Script; its output is ignored. */
+  private async hook(
+    name: 'afterCreate' | 'beforeRemove',
+    workspace: ManagedWorkspace,
+    settings: Settings,
+    signal: AbortSignal,
+  ) {
+    const hook = settings.hooks?.[name];
+    if (!hook) return;
+    if (this.host.scriptApprovals.required(workspace.workflowId, hook))
+      throw new InterlockError(`The ${name} hook needs approval`);
+    const context = {
+      INTERLOCK_RUN_ID: workspace.runId,
+      INTERLOCK_WORKSPACE_PATH: workspace.path,
+      INTERLOCK_WORKSPACE_BRANCH: workspace.branch,
+      INTERLOCK_WORKSPACE_REPOSITORY: workspace.repository,
+      INTERLOCK_WORKSPACE_BASE_COMMIT: workspace.baseCommit ?? '',
+    };
+    await executeScript(
+      hook.command,
+      context,
+      hook.timeoutMs,
+      workspace.path,
+      signal,
+      hook.language,
+      { ...process.env, ...context },
+    ).catch((error: Error) => {
+      if (error.message !== 'Script stdout must contain one JSON value')
+        throw new InterlockError(`The ${name} hook failed: ${error.message}`);
+    });
   }
   private job(id: string, work: (signal: AbortSignal) => Promise<unknown>) {
     const controller = new AbortController();
@@ -323,23 +385,59 @@ export class ManagedWorkspaces {
           !sourceQuiescence(this.store, owner.id, localJobs).quiescent)
       )
         continue;
+      const settings = owner && this.definition(owner).workspace;
+      if (settings && this.retained(owner, settings)) {
+        this.update(id, (w) => {
+          w.state = 'retained';
+        });
+        this.active.delete(id);
+        continue;
+      }
       this.update(id, (w) => {
         w.state = 'removing';
       });
-      this.job(id, () =>
-        removeWorktree(this.root, workspace).then(
+      this.job(id, async (signal) => {
+        let hookError: string | undefined;
+        if (
+          settings &&
+          workspace.state === 'ready' &&
+          existsSync(workspace.path)
+        )
+          await this.hook('beforeRemove', workspace, settings, signal).catch(
+            (error: unknown) => {
+              hookError = errorText(error);
+            },
+          );
+        // Never run unapproved content. No one is asked, so keep the checkout.
+        if (hookError && /needs approval/.test(hookError))
+          return this.update(id, (w) => {
+            w.state = 'retained';
+            w.error = `Kept: ${hookError}`;
+          });
+        return removeWorktree(this.root, workspace).then(
           (result) =>
             this.update(id, (w) => {
               w.state = result === 'dirty' ? 'retained' : 'removed';
               w.error =
                 result === 'dirty'
                   ? 'Kept: the worktree has uncommitted changes'
-                  : undefined;
+                  : hookError;
             }),
           (error: unknown) => this.removalFailed(id, errorText(error)),
-        ),
-      );
+        );
+      });
     }
+  }
+  private retained(owner: Run, settings: Settings) {
+    if (settings.retention === 'keep') return true;
+    if (settings.retention !== 'keep_on_failure') return false;
+    // A continue-as-new chain ends with its latest run.
+    const last =
+      this.store
+        .sourceRunTree(owner.id)
+        .find((r) => r.chain?.rootRunId === owner.id && !r.chain.nextRunId) ??
+      owner;
+    return last.status === 'failed';
   }
   /** Retry a failed removal a few times, then keep the checkout and say why. */
   private removalFailed(id: string, error: string) {

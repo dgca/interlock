@@ -20,6 +20,14 @@ export function workspaceBranch(template: string, runId: string) {
   return name;
 }
 
+const hookSchema = z
+  .object({
+    // Omitted language runs as Bash, like Script nodes.
+    language: z.enum(['javascript', 'bash']).optional(),
+    command: z.string().min(1),
+    timeoutMs: z.number().int().min(100).max(600000).default(60000),
+  })
+  .strict();
 export const workspaceSettingsSchema = z
   .object({
     repository: z
@@ -56,6 +64,20 @@ export const workspaceSettingsSchema = z
         }
       })
       .describe(`New branch name; must contain ${workspaceBranchToken}.`),
+    retention: z
+      .enum(['remove', 'keep_on_failure', 'keep'])
+      .default('remove')
+      .describe(
+        'When the run tree is quiescent: remove the checkout, keep it if the run failed, or always keep it. The branch is always kept.',
+      ),
+    hooks: z
+      .object({ afterCreate: hookSchema, beforeRemove: hookSchema })
+      .partial()
+      .strict()
+      .optional()
+      .describe(
+        'Scripts run in the checkout after it is created and before it is removed.',
+      ),
   })
   .strict()
   .describe(

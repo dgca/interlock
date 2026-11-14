@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import {
   definitionScripts,
   InterlockError,
@@ -7,6 +8,7 @@ import {
   type ScriptContent,
   type Workflow,
   type WorkflowDefinition,
+  type WorkflowNode,
 } from '@interlock/core';
 import {
   scriptApprovalId,
@@ -73,6 +75,34 @@ export class ScriptApprovals {
     if (step) execution.status = run.status = 'waiting';
     this.effects?.save(run);
     this.effects?.event(run, `${execution.label}: waiting for Script approval`);
+    return true;
+  }
+
+  /** Hold a run at its entry until imported workspace hooks are approved. */
+  holdRun(run: Run, entry: WorkflowNode, hash: string) {
+    const since = new Date().toISOString();
+    run.executions.push({
+      id: randomUUID(),
+      version: run.version,
+      nodeId: entry.id,
+      kind: entry.kind,
+      label: entry.label,
+      input: run.value,
+      status: 'waiting',
+      startedAt: since,
+      childRunIds: [],
+      nextItem: 0,
+      scriptApproval: { hash, since },
+    });
+    run.status = 'waiting';
+    this.effects?.save(run);
+    this.effects?.event(run, 'Waiting for workspace hook approval');
+    return true;
+  }
+  releaseRun(run: Run, entry: NodeExecution) {
+    delete entry.scriptApproval;
+    entry.status = run.status = 'running';
+    this.effects?.save(run);
     return true;
   }
 
@@ -161,10 +191,15 @@ export class ScriptApprovals {
   step(run: Run, execution: NodeExecution) {
     // The same definition the engine gates: the run's current version.
     const version = this.store.getVersion(run.workflowId, run.version);
-    const node = version?.definition.nodes.find(
-      (n) => n.id === execution.nodeId,
-    );
-    const script = node && definitionScripts({ nodes: [node] })[0];
+    const scripts = version ? definitionScripts(version.definition) : [];
+    // A workspace hook holds the run's entry step under the hook's hash.
+    const script =
+      scripts.find((s) => s.nodeId === execution.nodeId) ??
+      scripts.find(
+        (s) =>
+          s.nodeId.startsWith('workspace.') &&
+          scriptContentHash(s) === execution.scriptApproval?.hash,
+      );
     if (!script) return undefined;
     const hash = scriptContentHash(script);
     return {
