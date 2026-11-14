@@ -20,7 +20,7 @@ vi.mock('../packages/ui/src/lib/api', () => ({
       },
     },
     runs: { start: { mutate: start } },
-    prices: { startCost: { query: async () => null } },
+    prices: { startCost: { query: () => Promise.resolve(null) } },
   },
   errorMessage: (error: Error) => error.message,
 }));
