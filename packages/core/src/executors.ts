@@ -201,8 +201,15 @@ export const executorProfileSchema = z
         'Default managed permissions: standard, read-only, or full-access.',
       ),
     mode: z.enum(['direct', 'launcher']).optional(),
-    transport: z.enum(['subprocess', 'http']).optional(),
+    transport: z.enum(['subprocess', 'http', 'pull']).optional(),
     timeoutSeconds: z.number().int().positive().optional(),
+    clientTimeoutSeconds: z
+      .number()
+      .int()
+      .min(5)
+      .max(3600)
+      .optional()
+      .describe('Pull client offline after this many seconds (60).'),
     env: z.record(z.string()).optional(),
     environmentMode: environmentModeSchema.optional(),
     environmentPassthrough: environmentPassthroughSchema

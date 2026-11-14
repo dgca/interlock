@@ -29,37 +29,8 @@ import { useEditorDraft } from '../../lib/useEditorDraft';
 import { KeyValueEditor } from './KeyValueEditor';
 import { integrationReturnFocusId } from './harnessProfiles';
 import { permissionOptions } from './permissions';
+import { preservedFields, profileDraft } from './integrationDraft';
 import styles from './IntegrationEditor.module.css';
-
-function profileDraft(profile: ExecutorProfile | null) {
-  return {
-    name: profile?.name ?? '',
-    mode: profile?.mode ?? 'direct',
-    transport: profile?.transport ?? 'subprocess',
-    concurrency: profile?.concurrency ?? ('' as const),
-    timeoutSeconds: profile?.timeoutSeconds ?? ('' as const),
-    permissions: profile?.permissions ?? 'standard',
-    env: profile?.env ?? {},
-    headers: profile?.headers ?? {},
-    turnCommand: profile?.turnCommand ?? profile?.command ?? '',
-    turnUrl: profile?.turnUrl ?? '',
-    launchCommand: profile?.launchCommand ?? '',
-    launchUrl: profile?.launchUrl ?? '',
-    statusCommand: profile?.statusCommand ?? '',
-    statusUrl: profile?.statusUrl ?? '',
-    messageCommand: profile?.messageCommand ?? '',
-    messageUrl: profile?.messageUrl ?? '',
-    stopCommand: profile?.stopCommand ?? '',
-    stopUrl: profile?.stopUrl ?? '',
-    archiveCommand: profile?.archiveCommand ?? '',
-    archiveUrl: profile?.archiveUrl ?? '',
-    cwd: profile?.cwd ?? '',
-    allowedRoots: profile?.allowedRoots ?? [],
-    sessionNameTemplate: profile?.sessionNameTemplate ?? '',
-    resumeCommandTemplate: profile?.resumeCommandTemplate ?? '',
-    deepLinkTemplate: profile?.deepLinkTemplate ?? '',
-  };
-}
 
 type ProfileDraft = ReturnType<typeof profileDraft>;
 
@@ -146,6 +117,7 @@ function IntegrationEditor({
     transport,
     concurrency,
     timeoutSeconds,
+    clientTimeoutSeconds,
     permissions,
     env,
     headers,
@@ -294,6 +266,8 @@ function IntegrationEditor({
   };
   const reload = useDraftDismissal(dirty, busy, () => void checkSaved());
 
+  const direct = mode === 'direct';
+  const pull = !direct && transport === 'pull';
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (busy || conflict || uncertain || !dirty) return;
@@ -343,6 +317,7 @@ function IntegrationEditor({
     if (!beginSave()) return;
     try {
       const payload: ExecutorProfileUpdate = {
+        ...preservedFields(profile),
         id,
         name: name.trim(),
         harness: 'custom',
@@ -363,6 +338,9 @@ function IntegrationEditor({
         ...(concurrency === '' ? {} : { concurrency: Number(concurrency) }),
         ...(timeoutSeconds !== ''
           ? { timeoutSeconds: Number(timeoutSeconds) }
+          : {}),
+        ...(pull && clientTimeoutSeconds !== ''
+          ? { clientTimeoutSeconds: Number(clientTimeoutSeconds) }
           : {}),
         ...(Object.keys(env).length > 0 ? { env } : {}),
         ...(Object.keys(headers).length > 0 ? { headers } : {}),
@@ -423,7 +401,6 @@ function IntegrationEditor({
     }
   };
 
-  const direct = mode === 'direct';
   const http = transport === 'http';
   const invocation = direct ? 'Turn' : 'Launch';
   const endpoint = direct
@@ -562,33 +539,53 @@ function IntegrationEditor({
                   data={[
                     { label: 'Subprocess', value: 'subprocess' },
                     { label: 'HTTP', value: 'http' },
+                    ...(direct ? [] : [{ label: 'Pull', value: 'pull' }]),
                   ]}
                 />
               </div>
-              <TextInput
-                label={`${invocation} ${http ? 'URL' : 'command'}`}
-                required
-                className={styles.monoInput}
-                value={draft[endpoint]}
-                onChange={(e) => update(endpoint, e.currentTarget.value)}
-                inputWrapperOrder={[...descriptionOrder]}
-                description={
-                  direct
-                    ? http
-                      ? 'Interlock sends and receives JSON over HTTP POST.'
-                      : 'Reads assignment JSON from stdin and writes result JSON to stdout.'
-                    : http
-                      ? 'Interlock sends the claim ticket in an HTTP POST.'
-                      : 'Starts a worker with the claim ticket.'
-                }
-                placeholder={
-                  http
-                    ? `https://agent.example.com/${direct ? 'turn' : 'launch'}`
-                    : direct
-                      ? 'python -m my_agent.turn'
-                      : 'python -m my_agent.launch'
-                }
-              />
+              {pull ? (
+                <NumberInput
+                  label="Client offline after (seconds)"
+                  description="With no poll for this long, assignments wait in Needs attention. Default 60."
+                  inputWrapperOrder={[...descriptionOrder]}
+                  min={10}
+                  max={3600}
+                  allowDecimal={false}
+                  value={clientTimeoutSeconds}
+                  onChange={(value) =>
+                    update(
+                      'clientTimeoutSeconds',
+                      value === '' ? '' : Number(value),
+                    )
+                  }
+                  placeholder="60"
+                />
+              ) : (
+                <TextInput
+                  label={`${invocation} ${http ? 'URL' : 'command'}`}
+                  required
+                  className={styles.monoInput}
+                  value={draft[endpoint]}
+                  onChange={(e) => update(endpoint, e.currentTarget.value)}
+                  inputWrapperOrder={[...descriptionOrder]}
+                  description={
+                    direct
+                      ? http
+                        ? 'Interlock sends and receives JSON over HTTP POST.'
+                        : 'Reads assignment JSON from stdin and writes result JSON to stdout.'
+                      : http
+                        ? 'Interlock sends the claim ticket in an HTTP POST.'
+                        : 'Starts a worker with the claim ticket.'
+                  }
+                  placeholder={
+                    http
+                      ? `https://agent.example.com/${direct ? 'turn' : 'launch'}`
+                      : direct
+                        ? 'python -m my_agent.turn'
+                        : 'python -m my_agent.launch'
+                  }
+                />
+              )}
               {isNew && (
                 <NativeSelect
                   label="Default permissions"
@@ -624,7 +621,7 @@ function IntegrationEditor({
                     </div>
                   </details>
                 )}
-                {!direct && (
+                {!direct && !pull && (
                   <details className={styles.disclosure}>
                     <summary>
                       <ChevronRight size={14} /> Lifecycle hooks
