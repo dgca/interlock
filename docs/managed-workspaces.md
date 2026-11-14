@@ -53,12 +53,16 @@ Interlock runs Git with argument lists, never through a shell, and with reposito
 
 ## Cleanup
 
-Interlock removes the worktree after the run tree is finished and [quiescent](events.md): no active or revoked claims, managed executions, or local or background operations remain. After cancelling a run tree in which an agent still held a claim, confirm that the claim stopped with `manage_work_resources` `release` (`confirmStopped: true`). The worktree is then removed. Removal discards uncommitted changes in the worktree.
+Interlock removes the worktree after the run tree is finished and [quiescent](events.md): no active or revoked claims, managed executions, or local or background operations remain. After cancelling a run tree in which an agent still held a claim, confirm that the claim stopped with `manage_work_resources` `release` (`confirmStopped: true`). The worktree is then removed.
+
+Interlock never removes a worktree with uncommitted or untracked changes (ignored files do not count). It keeps that worktree instead, whatever `retention` says, and records the reason. Commits that exist only on the run's branch are safe, because the branch is never deleted. If removal keeps failing, Interlock stops after three attempts and keeps the worktree with the error.
+
+`get_run` and the run page show the worktree's `path`, `branch`, `state` and any `error`, so you can find a kept worktree and see why it was kept. Remove a kept worktree yourself with `git worktree remove` once you no longer need it.
 
 Interlock only deletes a directory that sits directly inside the workspaces folder, is not a symlink, and has a matching ownership marker (`<run id>.owner.json`). Other directories there are never touched. At startup, Interlock:
 
 - treats interrupted preparations as failed and retries interrupted removals
-- removes marked worktrees that no record keeps
+- removes marked worktrees that no record keeps, unless they have uncommitted changes
 - runs `git worktree prune` in the repositories it tracks
 
 If you retry a failed run, it reuses the worktree it kept, or creates a new one on the run's existing branch.
@@ -67,7 +71,11 @@ If you retry a failed run, it reuses the worktree it kept, or creates a new one 
 
 Hooks run in the worktree with `INTERLOCK_RUN_ID` and `INTERLOCK_WORKSPACE_PATH`, `_BRANCH`, `_REPOSITORY` and `_BASE_COMMIT` set. They also receive the same values as JSON on standard input. Their output is ignored.
 
-- **`afterCreate`** runs before the run's first step. If it fails, preparation fails.
+- **`afterCreate`** runs before the run's first step. If it fails, preparation fails. Cancelling the run stops it.
 - **`beforeRemove`** runs before a ready worktree is removed. If it fails, the worktree is still removed and the error is recorded.
 
-Hooks are Scripts for trust purposes. Import review lists them, and [Script approval](reuse-work.md#approve-imported-scripts) applies to them. If an imported hook is not approved yet, the run waits at its entry with an ordinary **Approve imported Script** request, and no worktree is created until a person approves it. Interlock never runs an unapproved hook. If a hook changes in a later version and is no longer approved, preparation fails, and removal keeps the worktree.
+Hooks are Scripts for trust purposes. Import review lists them, and [Script approval](reuse-work.md#approve-imported-scripts) applies to them. If an imported hook is not approved yet, the run waits at its entry with an ordinary **Approve imported Script** request, and no worktree is created until a person approves it. Interlock never runs an unapproved hook. If a hook changes in a later version and is no longer approved, preparation fails, and removal keeps the worktree with that reason. Hooks run with the server's full environment.
+
+## Importing a workflow with a worktree setting
+
+The `repository` path in an exported workflow comes from the exporting machine. Import review shows each workflow's repository, start ref and branch template next to its Scripts, so check that the path points at the repository you expect before you run it.

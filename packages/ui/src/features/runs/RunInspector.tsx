@@ -49,13 +49,12 @@ import {
 } from '../../lib/query';
 
 import { StatusBadge } from '../../components/StatusBadge/StatusBadge';
-
+import { RunWorkspace } from './RunWorkspace';
 import { RunGraph } from './RunGraph';
 import { runProgress } from './runProgress';
 import { detachedBoundary } from './runScope';
 import { AgentHandoff } from './AgentHandoff';
 import { WorkPanel } from './WorkPanel';
-
 import { manualClaims } from './manualClaims';
 import styles from './RunInspector.module.css';
 import { ComparisonContext } from './ComparisonContext';
@@ -714,6 +713,7 @@ export function RunInspector({
           <RunTags tags={run.tags} />
         </details>
       )}
+      <RunWorkspace workspace={data.workspace} />
       {versionDialog && (
         <RunVersionDialog
           key={id}

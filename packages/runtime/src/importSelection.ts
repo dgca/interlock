@@ -4,7 +4,7 @@ import {
   InterlockError,
   promptIds,
   blankDefinition,
-  importedScripts,
+  importReview,
   samePromptContent,
   withoutWorkflowPositions,
   type BoardImportSetup,
@@ -100,7 +100,7 @@ export function inspectImportDocument(
           name: p.name,
         })),
         variables: document.bundle.variables ?? [],
-        scripts: importedScripts(document.bundle.workflows),
+        ...importReview(document.bundle.workflows),
         ...(boardSetup.suggestions.length || boardSetup.unresolved.length
           ? { boardSetup }
           : {}),
@@ -126,7 +126,7 @@ export function inspectImportDocument(
       workflows: [],
       prompts: [],
       variables: [] as VariableRequirement[],
-      scripts: importedScripts([{ name: w.name, draft: definition }]),
+      ...importReview([{ name: w.name, draft: definition }]),
       ...(boardSetup.unresolved.length ? { boardSetup } : {}),
     };
   } finally {

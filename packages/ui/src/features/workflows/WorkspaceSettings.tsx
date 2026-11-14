@@ -68,6 +68,7 @@ export function WorkspaceSettings({
           />
           <NativeSelect
             label="When the run tree finishes"
+            description="A worktree with uncommitted or untracked changes is always kept. Commits stay on the branch, which is never deleted."
             value={value.retention}
             data={[
               { value: 'remove', label: 'Remove the worktree' },

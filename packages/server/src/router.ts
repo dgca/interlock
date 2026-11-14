@@ -36,7 +36,7 @@ import {
   externalInputMutationSchema,
   externalInputStatusSchema,
   blankDefinition,
-  importedScripts,
+  importReview,
   boardMembershipSchema,
   boardImportSetupSchema,
   boardQuerySchema,
@@ -400,7 +400,7 @@ export const appRouter = t.router({
             prompts: [] as { id: string; name: string }[],
             published: false,
             variables: [],
-            scripts: importedScripts([
+            ...importReview([
               {
                 name: doc.workflow.name,
                 draft: doc.workflow.definition ?? blankDefinition(),
@@ -431,7 +431,7 @@ export const appRouter = t.router({
             name: p.name,
           })),
           published: root.versions.length > 0,
-          scripts: importedScripts(doc.bundle.workflows),
+          ...importReview(doc.bundle.workflows),
           variables: ctx.engine.variables.previewRequirements(
             doc.bundle.variables ?? [],
           ),

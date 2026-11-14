@@ -39,6 +39,9 @@ type ScriptSource = {
     };
   }[];
   workspace?: {
+    repository?: string;
+    baseRef?: string;
+    branch?: string;
     hooks?: { afterCreate?: ScriptContent; beforeRemove?: ScriptContent };
   };
 };
@@ -88,7 +91,11 @@ export function definitionScripts(
     .concat(hooks);
 }
 
-/** Distinct Scripts per workflow in an import, for review before importing. */
+/**
+ * Distinct Scripts per workflow in an import, for review before importing,
+ * followed by each distinct Git worktree setting, whose repository path comes
+ * from the exporting machine.
+ */
 export function importedScripts(
   workflows: readonly {
     name: string;
@@ -115,3 +122,34 @@ export function importedScripts(
       }));
   });
 }
+function importedWorkspaces(workflows: Parameters<typeof importedScripts>[0]) {
+  return workflows.flatMap((workflow) => {
+    const settings = [
+      workflow.draft?.workspace,
+      ...(workflow.versions ?? []).map((v) => v.definition.workspace),
+    ].flatMap((w) =>
+      w?.repository
+        ? [
+            {
+              workflowName: workflow.name,
+              repository: w.repository,
+              baseRef: w.baseRef ?? 'HEAD',
+              branch: w.branch ?? 'interlock/{runId}',
+            },
+          ]
+        : [],
+    );
+    return settings.filter(
+      (w, i) =>
+        settings.findIndex((o) => JSON.stringify(o) === JSON.stringify(w)) ===
+        i,
+    );
+  });
+}
+/** What a person reviews before importing: Scripts and Git worktree settings. */
+export const importReview = (
+  workflows: Parameters<typeof importedScripts>[0],
+) => ({
+  scripts: importedScripts(workflows),
+  workspaces: importedWorkspaces(workflows),
+});
