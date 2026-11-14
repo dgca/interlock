@@ -4,6 +4,7 @@ import {
   waitingHumanInputs,
   uncertainResourceAttempts,
   uncertainBackgroundSteps,
+  currentStalls,
 } from './runAttention.js';
 import { waitingScriptApprovals } from './scriptApprovals.js';
 export * from './scriptApprovals.js';
@@ -19,15 +20,22 @@ import {
   type WorkflowCatalogQuery,
 } from '@interlock/core';
 import { migrate, type MigrationResult } from './migrations.js';
-import { batchSize, readRuns, writeRun } from './runExecutions.js';
+import {
+  batchSize,
+  executionSteps,
+  readRuns,
+  writeRun,
+} from './runExecutions.js';
 import { findRuns } from './runQueries.js';
 import { RunScopes } from './runScopes.js';
 import {
   continuationState,
+  runsChangedSince,
   touchRunRevision,
-  type ExecutionMetadata,
 } from './continuation.js';
 import {
+  activeRunState,
+  dueAgentExecutions,
   currentProjection,
   type CurrentRun,
   type CurrentWork,
@@ -50,6 +58,7 @@ import {
   historyReferences,
   deleteHistoryDocuments,
   storageSpace,
+  quickCheck,
 } from './history.js';
 import type {
   Run,
@@ -100,19 +109,19 @@ export class Store {
       if (touchRunRevision(this.db, id)) this.changed('runs');
     });
   }
-  currentStalls(runId?: string): import('@interlock/core').StallRecord[] {
-    const scoped =
-      runId === undefined ? '' : " AND json_extract(value, '$.runId') = ?";
-    return this.db
-      .prepare(
-        "SELECT value FROM documents INDEXED BY stalls_unresolved WHERE collection = 'stalls' AND json_extract(value, '$.resolvedAt') IS NULL" +
-          scoped,
-      )
-      .all(...(runId === undefined ? [] : [runId]))
-      .map((row) => JSON.parse(row.value as string));
+  currentStalls(runId?: string) {
+    return currentStalls(this.db, runId);
   }
   continuation(id: string) {
     return continuationState(this.db, id);
+  }
+  /** Runs changed after a continuation revision; omit it to read the current revision. */
+  runsChangedSince(revision?: number) {
+    return runsChangedSince(this.db, revision);
+  }
+  /** Execution metadata from `from` on, without inputs, outputs or results. */
+  executionSteps(runId: string, from = 0) {
+    return executionSteps(this.db, runId, from);
   }
   currentProjection(ids: readonly string[]) {
     return currentProjection(this.db, ids);
@@ -123,32 +132,11 @@ export class Store {
       .get(id);
     return row && JSON.parse(row.value as string);
   }
-  activeRunState(): {
-    run: CurrentRun;
-    execution: ExecutionMetadata | undefined;
-  }[] {
-    return this.db
-      .prepare(
-        "SELECT value, execution FROM run_metadata INDEXED BY run_metadata_status WHERE status IN ('queued', 'running', 'waiting') ORDER BY position",
-      )
-      .all()
-      .map((row) => ({
-        run: JSON.parse(row.value as string),
-        execution:
-          row.execution === null
-            ? undefined
-            : JSON.parse(row.execution as string),
-      }));
+  activeRunState() {
+    return activeRunState(this.db);
   }
-  dueAgentExecutions(at: string): Set<string> {
-    return new Set(
-      this.db
-        .prepare(
-          "SELECT execution_id FROM work_metadata WHERE status = 'available' AND available_until <= ?",
-        )
-        .all(at)
-        .map((row) => row.execution_id as string),
-    );
+  dueAgentExecutions(at: string) {
+    return dueAgentExecutions(this.db, at);
   }
   attentionWork() {
     return attentionWork(this.db);
@@ -180,11 +168,8 @@ export class Store {
   storageSpace() {
     return storageSpace(this.db);
   }
-  quickCheck(): string[] {
-    const rows = this.db.prepare('PRAGMA quick_check').all() as {
-      quick_check?: string;
-    }[];
-    return rows.map((r) => r.quick_check ?? String(r));
+  quickCheck() {
+    return quickCheck(this.db);
   }
   deleteHistoryDocuments(ids: Set<string>) {
     deleteHistoryDocuments(this.db, ids);

@@ -289,11 +289,17 @@ it.each(['http', 'stdio'])(
         expect(legacy.data.definition.nodes).toHaveLength(34);
         expect(legacy.data).toEqual(engine.inspect(runId));
       }
-      const full = await call('get_run', { id: runId });
+      const bounded = await call('get_run', { id: runId });
+      expect(Buffer.byteLength(bounded.text)).toBeLessThan(65536);
+      const full = await call('get_run', { id: runId, full: true });
+      expect(
+        (bounded.data as { compacted: { fullBytes: number } }).compacted
+          .fullBytes,
+      ).toBeGreaterThan(500_000);
       expect(Buffer.byteLength(full.text)).toBeGreaterThan(500_000);
       expect(full.data.run.executions.length).toBeGreaterThan(4);
       console.info(
-        `${mode}: summary start ${startBytes} B, submit ${Buffer.byteLength(response.text)} B, full after four submissions ${Buffer.byteLength(full.text)} B`,
+        `${mode}: summary start ${startBytes} B, submit ${Buffer.byteLength(response.text)} B, full after four submissions ${Buffer.byteLength(full.text)} B, bounded ${Buffer.byteLength(bounded.text)} B`,
       );
       const legacy = await call('start_run', {
         workflowId: workflow.id,

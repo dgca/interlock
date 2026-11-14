@@ -34,6 +34,7 @@ const docs = [
       { type: 'doc', id: 'automation-guide', label: 'Automations' },
       { type: 'doc', id: 'inspect-runs', label: 'Inspect and manage runs' },
       { type: 'doc', id: 'reports', label: 'Reports' },
+      { type: 'doc', id: 'opentelemetry', label: 'OpenTelemetry traces' },
       { type: 'doc', id: 'testing-workflows', label: 'Test and improve' },
     ],
   },

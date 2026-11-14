@@ -13,7 +13,9 @@
     "./versionIdentity": "./src/versionIdentity.ts",
     "./evaluationPlan": "./src/evaluationPlan.ts",
     "./workflowSync": "./src/workflowSync.ts",
-    "./reportDashboard": "./src/reportDashboard.ts"
+    "./reportDashboard": "./src/reportDashboard.ts",
+    "./traceExport": "./src/traceExport.ts",
+    "./traceExportConfig": "./src/traceExportConfig.ts"
   },
   "dependencies": {
     "@interlock/core": "workspace:*",

@@ -212,3 +212,19 @@ export function batchSize(
     .get(...keys, id, executionId);
   return Number(row?.size ?? 0);
 }
+
+/** Execution metadata from position `from` on, without inputs, outputs, results or paths. */
+export function executionSteps(db: DatabaseSync, runId: string, from: number) {
+  return db
+    .prepare(
+      `SELECT position, json_remove(value, '$.input', '$.originalInput', '$.output', '$.result',
+        '$.request', '$.check', '$.humanInput', '$.externalInput', '$.background',
+        '$.provenance', '$.resolvedCwd', '$.error') AS value
+      FROM run_executions WHERE run_id = ? AND position >= ? ORDER BY position`,
+    )
+    .all(runId, from)
+    .map((row) => ({
+      ...(JSON.parse(row.value as string) as NodeExecution),
+      position: Number(row.position),
+    }));
+}
