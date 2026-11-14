@@ -6,7 +6,7 @@
 
 ## Add it
 
-Open **Workflows → Import → Starters**, select **Pull request watcher** and choose **Add to library**. From the CLI: `interlock import-starter pr-watcher`. Nothing runs. Each import publishes the watcher with two workflows it owns: **Pull request fix**, which runs the fixer, and its own copy of SDLC v2's Change review.
+Open **Workflows → Import → Starters**, select **Pull request watcher** and choose **Add to library**. From the CLI: `interlock import-starter pr-watcher`. Nothing runs. Each import publishes the watcher with two workflows it owns: **Pull request fix**, which runs the fixer, and its own copy of SDLC's Change review.
 
 It needs:
 
@@ -42,9 +42,9 @@ Without the worktree setting, the checkout must be on the pull request's branch 
 
 ### When an SDLC run opens a pull request
 
-[SDLC workflow v2](sdlc-workflow-v2.md) with `createPr: true` opens a pull request on its run's branch. An [Interlock event](events.md) automation can start the watcher when that run completes:
+[SDLC workflow](sdlc-workflow-v2.md) with `createPr: true` opens a pull request on its run's branch. An [Interlock event](events.md) automation can start the watcher when that run completes:
 
-1. In your SDLC v2 copy, turn on **Give each run its own Git worktree**, keeping `{runId}` in the branch name. The watcher finds the pull request by that run ID.
+1. In your SDLC copy, turn on **Give each run its own Git worktree**, keeping `{runId}` in the branch name. The watcher finds the pull request by that run ID.
 2. In the watcher, turn on **Give each run its own Git worktree** with the same repository. The event carries no `repoPath`.
 3. Create the automation. With the CLI, save this as `watch-prs.json`, replacing the IDs, and run `interlock triggers manage @watch-prs.json`:
 
@@ -76,7 +76,7 @@ The watcher receives the event and looks for an open pull request whose branch c
 2. **Watch checks and comments.** A polling Wait checks the pull request every 5 minutes for up to 4 hours. It continues when every check on the latest commit has finished and one failed, or when a trusted comment arrived after the latest commit. Green checks keep it watching for comments.
 3. **Prepare.** A Script brings the checkout to the pull request's latest commit and collects the failed checks with the tail of each failed GitHub Actions log.
 4. **Fix.** An agent repairs the cause, addresses the trusted comments and commits. It does not push, merge, rebase or amend.
-5. **Change review.** SDLC v2's Change review runs your `checkCommands` and reviews the fix with fresh context. A revision goes back to the fixer.
+5. **Change review.** SDLC's Change review runs your `checkCommands` and reviews the fix with fresh context. A revision goes back to the fixer.
 6. **Push.** A Script reads the pull request again. If it was merged or closed, the run ends without pushing; if its head moved, a person decides. Otherwise it pushes the reviewed commit to the pull request's branch, and watching resumes.
 
 A merged or closed pull request ends the run.
@@ -134,7 +134,7 @@ The only outward action is a push to the pull request's own branch:
 
 ## Test your edits
 
-Interlock's saved cases, in `tests/fixtures/pr-watcher-suites.json` in the repository, run the main routes with [fixture simulation](workflow-simulation.md): a fix pushed with no person involved, the repair limit, a setup error, a failed fixer, and the end of the watch window. Save an entry with `save_test_suite` against your copy and run it after an edit; the window entry expects a copy whose watch window equals its polling interval. Change review has its own cases in the SDLC v2 suites.
+Interlock's saved cases, in `tests/fixtures/pr-watcher-suites.json` in the repository, run the main routes with [fixture simulation](workflow-simulation.md): a fix pushed with no person involved, the repair limit, a setup error, a failed fixer, and the end of the watch window. Save an entry with `save_test_suite` against your copy and run it after an edit; the window entry expects a copy whose watch window equals its polling interval. Change review has its own cases in the SDLC suites.
 
 ## Verify against a real pull request
 

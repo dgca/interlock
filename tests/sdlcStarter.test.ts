@@ -1,10 +1,20 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { Engine } from '@interlock/runtime';
 import { Store } from '@interlock/storage';
-import { validateDefinition, type Json } from '@interlock/core';
-import { importStarter } from '../packages/server/src/starters';
+import {
+  definitionSchema,
+  validateDefinition,
+  type Json,
+} from '@interlock/core';
+import sdlc from '../workflows/sdlc.json';
+// The original SDLC workflow is no longer a starter; it stays importable as a file.
 function addSdlc(engine: Engine) {
-  importStarter(engine, { starterId: 'sdlc', requestId: 'sdlc-fixture' });
+  const workflow = engine.create(
+    sdlc.name,
+    sdlc.description,
+    definitionSchema.parse(sdlc.definition),
+  );
+  engine.publish(workflow.id);
 }
 
 const engines: Engine[] = [];
@@ -66,7 +76,7 @@ async function draftAndReview(engine: Engine, runId: string, stage: string) {
   await vi.waitFor(() => expect(engine.available(runId)).toHaveLength(1));
 }
 
-it('explicitly adds a published self-contained SDLC without starting runs', () => {
+it('publishes the original SDLC file as a self-contained workflow without starting runs', () => {
   const engine = setup();
   addSdlc(engine);
   const workflows = engine.store.workflows();

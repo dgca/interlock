@@ -1,18 +1,18 @@
 # Choose starter workflows
 
-New libraries start empty. Existing workflows remain intact after upgrades, including earlier seeded SDLC copies. Bundled starters are explicit choices, available without a network connection or developer checkout.
+New libraries start empty. Existing workflows remain intact after upgrades, including earlier seeded SDLC copies and copies of the original SDLC starter. Bundled starters are explicit choices, available without a network connection or developer checkout.
 
 ## Add a starter
 
 1. Open **Workflows → Import** or **Browse starter workflows** in an empty library.
-2. Choose **Starters** and select a procedure: **SDLC workflow**, **SDLC workflow v2**, **Pull request watcher**, **Evaluate workflow comparison** or **GitHub issue intake**.
+2. Choose **Starters** and select a procedure: **SDLC workflow**, **Pull request watcher**, **Evaluate workflow comparison** or **GitHub issue intake**.
 3. Review its purpose and requirements. For SDLC, choose whether to set up the suggested board. Then choose **Add to library**.
 
 This creates and publishes a copy without starting a run. Imported workflows belong to you. Editing, publishing, archive, ownership and deletion use the ordinary operations. The improvement recipe and specialized examples remain optional file imports.
 
-Both SDLC starters suggest the Planning, Implementation, Review, and Delivery columns. [SDLC workflow v2](sdlc-workflow-v2.md) has its own identity: adding it never changes copies of the original, and the original stays available. Each copy of SDLC v2 also gets its own published **Plan review** and **Change review**, owned by that copy, each with a permanent identity of its own. Create the suggested board, map the stages to an existing board, or skip board setup. When you skip setup, you can run the workflow without a board.
+[SDLC workflow](sdlc-workflow-v2.md) suggests the Planning, Implementation, Review, and Delivery columns. Each copy also gets its own published **Plan review** and **Change review**, owned by that copy, each with a permanent identity of its own. Create the suggested board, map the stages to an existing board, or skip board setup. When you skip setup, you can run the workflow without a board.
 
-[Pull request watcher](pr-watcher.md) fixes failing checks and trusted review comments on a GitHub pull request, and gets its own copy of SDLC v2's **Change review**. Its one outward action is pushing reviewed fixes to the pull request's branch.
+[Pull request watcher](pr-watcher.md) fixes failing checks and trusted review comments on a GitHub pull request, and gets its own copy of SDLC's **Change review**. Its one outward action is pushing reviewed fixes to the pull request's branch.
 
 [GitHub issue intake](integration-starters.md) needs a Secret. Adding it creates that Secret without a value, or reuses it when an earlier copy created it; set its value in **Variables** before the first run. It does not add an automation: create its schedule yourself.
 
@@ -33,13 +33,12 @@ A single import opens its workflow. Multiple roots return to the library with th
 ```sh
 interlock starters
 interlock import-starter sdlc
-interlock import-starter sdlc-v2
 interlock import-starter pr-watcher
 interlock import-starter evaluate-comparison --copy --request-id review-copy-1
 interlock import-starter github-issue-intake
 ```
 
-`--copy` requests another copy. The CLI generates a new key when you omit `--request-id`. Supply your own key and reuse it when retrying an uncertain operation. Without `--copy`, known existing copies are reused. Standalone file commands such as `interlock import @workflow.json` retain their existing draft/bundle behavior.
+The SDLC starter was offered as `sdlc-v2` beside an earlier SDLC starter; `sdlc-v2` still selects it. `--copy` requests another copy. The CLI generates a new key when you omit `--request-id`. Supply your own key and reuse it when retrying an uncertain operation. Without `--copy`, known existing copies are reused. Standalone file commands such as `interlock import @workflow.json` retain their existing draft/bundle behavior.
 
 For MCP, discover choices on demand:
 
@@ -59,7 +58,7 @@ Use `copy:true` with a new key for a deliberate additional copy. When you includ
 
 ## Copies and retry records
 
-Explicit imports track the catalog identity against the local workflow ID, so subsequent edits and renames do not lose that association. Older manual copies can be recognized by current drafts or retained published definitions. Matching ignores canvas positions and declaration order. Interlock also recognizes the original SDLC definition from before portable stages. An arbitrary changed and renamed old copy without retained matching content cannot be identified reliably. Display names alone never establish identity.
+Explicit imports track the catalog identity against the local workflow ID, so subsequent edits and renames do not lose that association. Older manual copies can be recognized by current drafts or retained published definitions. Matching ignores canvas positions and declaration order. Copies added as `sdlc-v2` are copies of the SDLC starter. Copies of the original SDLC starter, which the picker no longer offers, are not: they stay in your library unchanged, and adding SDLC creates a new copy beside them. The original remains importable from [`workflows/sdlc.json`](sdlc-workflow.md#import-the-original-workflow). An arbitrary changed and renamed old copy without retained matching content cannot be identified reliably. Display names alone never establish identity.
 
 Definitions that do not match the current schema are skipped during content recognition. They remain unchanged in the library and do not block starter discovery or imports. Other compatible drafts and retained versions can still identify an existing copy.
 

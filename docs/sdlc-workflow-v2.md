@@ -1,10 +1,10 @@
-# Use the SDLC workflow v2
+# Use the SDLC workflow
 
-**SDLC workflow v2** takes a software change from a request to a reviewed commit, and optionally a pull request. It is three workflows: **SDLC workflow v2** plans, builds and delivers; **Plan review** reviews a plan with fresh context; **Change review** runs the check commands and then reviews the change with fresh context. The [original SDLC workflow](sdlc-workflow.md) stays available and your copies of it are unchanged.
+The **SDLC workflow** starter takes a software change from a request to a reviewed commit, and optionally a pull request. It is three workflows: **SDLC workflow** plans, builds and delivers; **Plan review** reviews a plan with fresh context; **Change review** runs the check commands and then reviews the change with fresh context. It replaced the [original SDLC workflow](sdlc-workflow.md) in the starter picker; your copies of the original are unchanged.
 
 ## Add it
 
-Open **Workflows → Import → Starters**, select **SDLC workflow v2**, choose whether to set up the suggested board, and choose **Add to library**. From the CLI: `interlock import-starter sdlc-v2`. Nothing runs.
+Open **Workflows → Import → Starters**, select **SDLC workflow**, choose whether to set up the suggested board, and choose **Add to library**. From the CLI: `interlock import-starter sdlc`. The earlier ID `sdlc-v2` still works. Nothing runs.
 
 Each import publishes a new SDLC copy and its own copies of Plan review and Change review, owned by it and pinned to their version 1. Edit a helper and publish it, then update the SDLC step's pinned version to use your change. **Add another copy** creates another set of three. Each workflow keeps a permanent starter identity, so the picker finds your copy later; shipped template changes never overwrite it.
 
@@ -80,9 +80,9 @@ Each workflow can be checked with [fixture simulation](workflow-simulation.md), 
 
 On a default import, every Agent action asks a person, but the check commands Interlock runs before each review do not: they run as a Script with your permissions, not as an Agent action. When the plan chooses them and `reviewPolicy` is `auto` on a small change, nobody sees them before they run. Pin them with the `checkCommands` input, or use `reviewPolicy: "always"` to approve each plan first; plan approval lists the commands.
 
-A managed Agent session with **Standard** permissions asks a person before it edits a file or runs a command. SDLC v2 ships a conservative [permission policy](permission-policy.md) on **SDLC workflow v2** and a narrower one on **Change review**. They allow routine reading, editing and Git bookkeeping without asking. **Plan review** runs its reviewer with **Read only** permissions, which a policy never widens. A policy applies only inside a run's own [Git worktree](managed-workspaces.md), so turn that on first:
+A managed Agent session with **Standard** permissions asks a person before it edits a file or runs a command. The starter ships a conservative [permission policy](permission-policy.md) on **SDLC workflow** and a narrower one on **Change review**. They allow routine reading, editing and Git bookkeeping without asking. **Plan review** runs its reviewer with **Read only** permissions, which a policy never widens. A policy applies only inside a run's own [Git worktree](managed-workspaces.md), so turn that on first:
 
-1. Open **SDLC workflow v2**, then **Workflow settings**.
+1. Open **SDLC workflow**, then **Workflow settings**.
 2. Turn on **Give each run its own Git worktree** and enter the absolute path of your repository. Keep the branch template's `{runId}`.
 3. Publish.
 
@@ -121,7 +121,7 @@ Without the worktree setting, a run must start from a checkout with no uncommitt
 A paired live run on the same brief shows whether v2 earns its place. Interlock has not made one yet. To run one:
 
 1. **Repositories.** Make two clones of the target repository at the same commit, one per arm, so the arms never share a checkout.
-2. **Workflows.** Add both starters. In the v1 copy, change nothing. In the v2 SDLC copy, turn on **Give each run its own Git worktree** with the v2 clone as the repository and the shared commit as the start ref, and publish. Leave the shipped policies as they are.
+2. **Workflows.** Add the SDLC starter, which is v2, and import the original from `workflows/sdlc.json` and publish it. In the v1 copy, change nothing. In the v2 SDLC copy, turn on **Give each run its own Git worktree** with the v2 clone as the repository and the shared commit as the start ref, and publish. Leave the shipped policies as they are.
 3. **Executor.** Use one managed profile for both arms, for example Codex with model `gpt-6.1-sol`, effort `medium` and **Standard** permissions, and select it as the executor of v1, v2 SDLC, Plan review and Change review.
 4. **Start** each arm with MCP `start_run` (or `interlock start`) and the same brief:
 
@@ -174,4 +174,4 @@ A run that reaches its budget waits and appears in **Runs → Needs attention** 
 
 ## Existing libraries
 
-Adding v2 never changes copies of the original SDLC starter, and the picker keeps offering both under their own identities. See [starter workflows](starter-workflows.md).
+Adding this starter never changes copies of the original SDLC workflow. The picker does not count an original copy as a copy of this starter, so it offers **Add to library**; a copy added earlier as SDLC workflow v2 shows **Open workflow**. See [starter workflows](starter-workflows.md).
