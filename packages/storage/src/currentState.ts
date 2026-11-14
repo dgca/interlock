@@ -154,3 +154,32 @@ export function currentProjection(
     .map((row) => JSON.parse(row.value as string));
   return empty;
 }
+
+export function activeRunState(db: DatabaseSync): {
+  run: CurrentRun;
+  execution: ExecutionMetadata | undefined;
+}[] {
+  return db
+    .prepare(
+      "SELECT value, execution FROM run_metadata INDEXED BY run_metadata_status WHERE status IN ('queued', 'running', 'waiting') ORDER BY position",
+    )
+    .all()
+    .map((row) => ({
+      run: JSON.parse(row.value as string) as CurrentRun,
+      execution:
+        row.execution === null
+          ? undefined
+          : (JSON.parse(row.execution as string) as ExecutionMetadata),
+    }));
+}
+
+export function dueAgentExecutions(db: DatabaseSync, at: string) {
+  return new Set(
+    db
+      .prepare(
+        "SELECT execution_id FROM work_metadata WHERE status = 'available' AND available_until <= ?",
+      )
+      .all(at)
+      .map((row) => row.execution_id as string),
+  );
+}

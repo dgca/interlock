@@ -11,7 +11,7 @@
     "packages/runtime/src/testbench.ts": 1018,
     "packages/runtime/src/transfer.ts": 806,
     "packages/server/src/router.ts": 931,
-    "packages/storage/src/index.ts": 892,
+    "packages/storage/src/index.ts": 877,
     "packages/ui/src/features/automations/AutomationEditor.tsx": 1073,
     "packages/ui/src/features/executors/AgentPresets.tsx": 837,
     "packages/ui/src/features/executors/ManagedExecutionPanel.tsx": 857,
