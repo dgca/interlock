@@ -69,9 +69,7 @@ export function App() {
   const variableMatch = useMatch('/variables/*');
   const harnessMatch = useMatch({ path: paths.harnesses, end: false });
   const diagnosticsMatch = useMatch('/settings/diagnostics');
-  const libraryReportMatch = useMatch('/report');
-  const workflowReportMatch = useMatch('/workflows/:workflowId/report');
-  const reportMatch = libraryReportMatch || workflowReportMatch;
+  const reportMatch = useMatch('/report');
   const page = boardMatch
     ? 'boards'
     : automationMatch

@@ -1,5 +1,6 @@
 /**
- * Measures how step latency, inspector load and startup scale with retained run history.
+ * Measures how step latency, inspector load, report dashboard load and startup
+ * scale with retained run history.
  * Not part of `pnpm test`. Uses temporary stores only:
  *
  *   pnpm exec tsx scripts/benchmark-run-storage.ts [retained counts, default 100 10000]
@@ -186,6 +187,31 @@ async function measure(retained: number) {
     }
     for (let index = 0; index < 5; index++)
       runList.push(await timeAsync(() => caller.runs.list()));
+    // Seeded runs are one minute apart. A three-day window ending at the last
+    // seeded run fills both the current and previous dashboard windows at 10,000.
+    const until = Date.UTC(2026, 0, 1) + retained * 60_000;
+    const window = {
+      since: new Date(until - 3 * 86_400_000).toISOString(),
+      until: new Date(until).toISOString(),
+      limit: 1000,
+    };
+    const report: number[] = [];
+    const dashboard: number[] = [];
+    const dashboardPage: number[] = [];
+    for (let index = 0; index < 10; index++) {
+      report.push(await timeAsync(() => caller.report.summary(window)));
+      dashboard.push(await timeAsync(() => caller.report.dashboard(window)));
+      // Everything the Report page requests: dashboard, attention and recent runs.
+      dashboardPage.push(
+        await timeAsync(() =>
+          Promise.all([
+            caller.report.dashboard(window),
+            caller.runs.summaries({ tab: 'active', limit: 100 }),
+            caller.runs.summaries({ tab: 'history', limit: 12 }),
+          ]),
+        ),
+      );
+    }
     engine.stop();
     engine.store.close();
     return {
@@ -198,6 +224,9 @@ async function measure(retained: number) {
       inspectorMs: stats(inspector),
       runsPageMs: stats(runsPage),
       runsListMs: stats(runList),
+      reportMs: stats(report),
+      dashboardMs: stats(dashboard),
+      dashboardPageMs: stats(dashboardPage),
     };
   } finally {
     rmSync(dir, { recursive: true, force: true });

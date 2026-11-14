@@ -13,6 +13,7 @@ import {
 import { routes } from '../packages/ui/src/routes';
 
 const query = vi.hoisted(() => vi.fn());
+const summaries = vi.hoisted(() => vi.fn());
 vi.mock('../packages/ui/src/lib/engineEvents', () => ({
   subscribeToEngineEvents: () => () => {},
 }));
@@ -36,14 +37,33 @@ vi.mock('../packages/ui/src/lib/api', async () => {
       requests: { list: { query: async () => ({ items: [], total: 0 }) } },
       triggers: { attention: { query: async () => ({ items: [], total: 0 }) } },
       pauses: { list: { query: async () => ({ items: [], total: 0 }) } },
-      report: { summary: { query } },
+      runs: {
+        summaries: { query: summaries },
+      },
+      // The dashboard wraps the same report; tests drive that report.
+      report: {
+        dashboard: {
+          query: async (input: unknown) => ({
+            report: (await query(input)) as WorkflowReport,
+            previous: null,
+            trend: [],
+            spendByStage: [],
+            limited: false,
+          }),
+        },
+      },
     }),
     errorMessage: (error: Error) => error.message,
   };
 });
 vi.mock('../packages/ui/src/features/workflows/WorkflowEditor', () => ({
-  WorkflowEditor: ({ onReport }: { onReport: () => void }) =>
-    h('button', { onClick: onReport }, 'Open workflow report'),
+  WorkflowEditor: ({
+    section,
+    reportView,
+  }: {
+    section: string;
+    reportView: unknown;
+  }) => (section === 'report' ? reportView : h('p', null, 'Workflow editor')),
 }));
 vi.mock('../packages/ui/src/features/runs/RunList', () => ({
   RunList: () => h('div', null, 'Runs route'),
@@ -114,6 +134,35 @@ function report(totalRuns = 4): WorkflowReport {
   };
 }
 
+let activeRuns: object[] = [];
+const activeRun = (
+  title: string,
+  hoursWaiting: number,
+  projection: Record<string, unknown>,
+) => {
+  const since = new Date(Date.now() - hoursWaiting * 3_600_000).toISOString();
+  return {
+    id: title,
+    workflowId: 'w1',
+    workflowName: 'Tagged work',
+    title,
+    version: 1,
+    status: 'waiting',
+    createdAt: since,
+    updatedAt: since,
+    executionCount: 1,
+    stage: null,
+    actor: 'agent',
+    waiting: null,
+    ...projection,
+  };
+};
+const wait = (kind: string, hoursWaiting: number) => ({
+  kind,
+  detail: { runId: 'r', nodeId: 'n' },
+  since: new Date(Date.now() - hoursWaiting * 3_600_000).toISOString(),
+});
+
 let root: Root;
 let container: HTMLDivElement;
 let router: ReturnType<typeof createMemoryRouter>;
@@ -143,6 +192,16 @@ beforeEach(() => {
       }
     },
   );
+  summaries.mockReset().mockImplementation(({ tab }) =>
+    Promise.resolve({
+      items: tab === 'active' ? activeRuns : [],
+      counts: { active: activeRuns.length, attention: 0, history: 0 },
+      total: tab === 'active' ? activeRuns.length : 0,
+      offset: 0,
+      nextOffset: null,
+    }),
+  );
+  activeRuns = [];
   query
     .mockReset()
     .mockImplementation(async ({ tags }) => report(tags ? 1 : 4));
@@ -190,9 +249,13 @@ async function input(label: string, value: string) {
 async function openTags() {
   await click('Filter by tags');
 }
+const runCountLabel = () =>
+  [...container.querySelectorAll('p')].find(
+    (element) => element.textContent === 'Runs',
+  );
 const runCount = () =>
   [...container.querySelectorAll('p')].find(
-    (element) => element.textContent === 'Total Runs',
+    (element) => element.textContent === 'Runs',
   )!.parentElement!.parentElement!.textContent;
 
 it('navigates the actual App from Runs to global and workflow Reports without changing hook order', async () => {
@@ -212,7 +275,7 @@ it('navigates the actual App from Runs to global and workflow Reports without ch
     await act(async () => {
       await router.navigate('/workflows/w1/report');
     });
-    expect(container.textContent).toContain('Performance & cost report');
+    expect(router.state.location.search).toBe('?view=report');
     expect(query).toHaveBeenLastCalledWith(
       expect.objectContaining({ workflowId: 'w1' }),
     );
@@ -316,7 +379,7 @@ function pendingReport() {
   return { promise, resolve, reject };
 }
 function expectNoMetrics() {
-  expect(container.textContent).not.toContain('Total Runs');
+  expect(runCountLabel()).toBeUndefined();
   expect(container.textContent).not.toContain('Attributed Spend');
   expect(container.textContent).not.toMatch(/[14]\.0000 USD/);
 }
@@ -462,20 +525,17 @@ it('does not invent a currency total when measured usage omitted cost', async ()
   expect(spend()).toContain('Unmeasured');
   expect(spend()).not.toContain('USD');
 });
-it('keeps scoped reports attached to their workflow and provides a return action', async () => {
-  await mount('/workflows/w1');
-  await click('Open workflow report');
-  expect(router.state.location.pathname).toBe('/workflows/w1/report');
+it('opens earlier workflow report links in the workflow Report tab, scoped to that workflow', async () => {
+  await mount('/workflows/w1/report');
+  expect(router.state.location.pathname).toBe('/workflows/w1');
+  expect(router.state.location.search).toBe('?view=report');
   expect(
     container.querySelector('input[aria-label="Filter by workflow"]'),
   ).toBeNull();
-  expect(container.textContent).toContain('Tagged work');
+  expect(runCount()).toContain('4');
   expect(query).toHaveBeenLastCalledWith(
     expect.objectContaining({ workflowId: 'w1' }),
   );
-  await click('Back to workflow');
-  expect(router.state.location.pathname).toBe('/workflows/w1');
-  expect(container.textContent).toContain('Open workflow report');
 });
 
 it('labels mixed provider costs without presenting an invalid currency total', async () => {
@@ -512,4 +572,29 @@ it('returns to the cached report without a skeleton and retains it when backgrou
   expect(container.textContent).toContain('Background report unavailable');
   expect(runCount()).toContain('4');
   expect(spend()).toContain('4.0000 USD');
+});
+
+it('lists runs waiting on people, held or queued, longest wait first, and leaves working runs out', async () => {
+  activeRuns = [
+    activeRun('Agent working', 9, { status: 'running' }),
+    activeRun('Needs approval', 3, {
+      actor: 'person',
+      waiting: wait('human_request', 3),
+    }),
+    activeRun('On hold', 26, { waiting: wait('hold', 26) }),
+    activeRun('In queue', 1, {
+      status: 'queued',
+      waiting: wait('admission_queue', 1),
+    }),
+  ];
+  await mount();
+  const panel = container.querySelector('[aria-labelledby="attention-title"]')!;
+  expect(panel.textContent).toContain(
+    '1 waiting on a person · 1 held · 0 stalled · 1 queued',
+  );
+  expect(
+    [...panel.querySelectorAll('li a')].map((link) => link.textContent),
+  ).toEqual(['On hold', 'Needs approval', 'In queue']);
+  expect(panel.textContent).toContain('1 d');
+  expect(panel.textContent).toContain('3 h');
 });

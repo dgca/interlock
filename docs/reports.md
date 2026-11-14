@@ -5,7 +5,21 @@ description: Compare run duration, reliability, and reported usage and cost.
 
 # Reports
 
-Open **Report** for a library-wide view, or choose **Workflow actions → Performance & cost report** in a workflow's editor. Filter by workflow, time range, or run tags to focus on the work you want to compare.
+Open **Report** for a library-wide view, or a workflow's **Report** tab for that workflow. Filter by workflow, time range, or run tags to focus on the work you want to compare. Earlier `/workflows/:id/report` links open the tab.
+
+## Check in on a workflow
+
+The top of the report compares the selected period with the previous period of the same length:
+
+- **Runs** started and their outcomes, and **Success rate**: completed runs as a share of completed and failed runs. Cancelled runs are excluded from the rate.
+- **Median run duration** with its p90, and **Attributed spend** with how many attempts reported usage.
+- Small bar charts show runs started and the median duration per interval; **Runs over time** lists the same values. **All time** has no previous period or intervals.
+
+**Pending attention** lists active runs waiting on a person, held, stalled, or queued, longest wait first, with how long each has waited. **Recent runs** shows the newest runs with their status. Both link to the run inspector and ignore the selected period.
+
+**Stage durations** and **Node durations** show medians and p90s with the median's change from the previous period. **Reported spend** breaks reported cost down by node, model, and stage, with the share of attempts that reported usage.
+
+Each period covers its newest 1,000 runs. When a period has more, the report says so and its counts cover only those runs.
 
 ## Read the measurements
 

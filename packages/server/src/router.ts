@@ -2,7 +2,6 @@ import {
   stallSettingsUpdateSchema,
   stallRequestSchema,
   doctorOptionsSchema,
-  reportFilterSchema,
   transcriptQuerySchema,
   messageReceiptQuerySchema,
 } from '@interlock/core';
@@ -109,6 +108,7 @@ import { pricesRouter } from './prices.js';
 import { launcherRouter } from './launcherRouter.js';
 import { evaluationProcedures } from './evaluationProcedures.js';
 import { runReadProcedures } from './runReadProcedures.js';
+import { reportRouter, systemReport } from './reportProcedures.js';
 import { id, inputMutation, p, t } from './trpc.js';
 import {
   agentDraftEdit,
@@ -913,19 +913,13 @@ export const appRouter = t.router({
         ctx.engine.reportFailure(input.workId, input.token, input.error),
       ),
   }),
-  report: t.router({
-    summary: p
-      .input(reportFilterSchema.optional())
-      .query(({ ctx, input }) => ctx.engine.report(input ?? {})),
-  }),
+  report: reportRouter,
   system: t.router({
     workflowSync: p.query(({ ctx }) => workflowSyncStatus(ctx.engine)),
     doctor: p
       .input(doctorOptionsSchema.optional())
       .query(({ ctx, input }) => ctx.engine.doctor(input ?? undefined)),
-    report: p
-      .input(reportFilterSchema.optional())
-      .query(({ ctx, input }) => ctx.engine.report(input ?? {})),
+    report: systemReport,
   }),
 });
 export type AppRouter = typeof appRouter;

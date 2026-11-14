@@ -42,7 +42,7 @@ interface RecoveryEventRecord {
   }[];
 }
 
-type Elapsed = ReturnType<typeof elapsedExcludingPausesMs>;
+export type Elapsed = ReturnType<typeof elapsedExcludingPausesMs>;
 const zeroElapsed = (): Elapsed => ({ wallMs: 0, pausedMs: 0, activeMs: 0 });
 function addElapsed(total: Elapsed, interval: Elapsed): void {
   total.wallMs += interval.wallMs;
@@ -61,10 +61,12 @@ function elapsedDistribution(intervals: Elapsed[]) {
   };
 }
 
+/** `observe` receives each reported run with the duration its summary counts. */
 export function generateWorkflowReport(
   store: Store,
   engine: Engine,
   input: ReportFilter,
+  observe?: (run: Run, duration: Elapsed) => void,
 ): WorkflowReport {
   const reportNowMs = Date.now();
   const filter = reportFilterSchema.parse(input);
@@ -201,36 +203,32 @@ export function generateWorkflowReport(
     set.add(w.id);
   }
 
+  // The last terminal event per run, indexed once rather than scanned per run.
+  const terminalAt = new Map<string, string>();
+  for (const e of eventsList)
+    if (['run.completed', 'node.failed', 'run.cancelled'].includes(e.type))
+      terminalAt.set(e.runId, e.at);
   for (const run of runs) {
     const createdAtMs = Date.parse(run.createdAt);
 
     // Run duration
-    if (
-      run.status === 'completed' ||
-      run.status === 'failed' ||
-      run.status === 'cancelled'
-    ) {
-      const terminalEvent = eventsList
-        .filter((e) => e.runId === run.id)
-        .findLast(
-          (e) =>
-            e.type === 'run.completed' ||
-            e.type === 'node.failed' ||
-            e.type === 'run.cancelled',
-        );
-      const endMs = terminalEvent?.at
-        ? Date.parse(terminalEvent.at)
-        : run.executions.findLast((e) => e.completedAt)?.completedAt
-          ? Date.parse(
-              run.executions.findLast((e) => e.completedAt)!.completedAt!,
-            )
+    let endMs = reportNowMs;
+    if (['completed', 'failed', 'cancelled'].includes(run.status)) {
+      const terminal = terminalAt.get(run.id);
+      const completedAt = run.executions.findLast(
+        (e) => e.completedAt,
+      )?.completedAt;
+      endMs = terminal
+        ? Date.parse(terminal)
+        : completedAt
+          ? Date.parse(completedAt)
           : run.updatedAt
             ? Date.parse(run.updatedAt)
             : createdAtMs;
-      runDurations.push(elapsed(run, createdAtMs, endMs));
-    } else {
-      runDurations.push(elapsed(run, createdAtMs, reportNowMs));
     }
+    const duration = elapsed(run, createdAtMs, endMs);
+    runDurations.push(duration);
+    observe?.(run, duration);
 
     // Admission queue wait
     if (run.admission?.queuedAt) {

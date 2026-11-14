@@ -12,7 +12,8 @@
     "./transfer": "./src/transfer.ts",
     "./versionIdentity": "./src/versionIdentity.ts",
     "./evaluationPlan": "./src/evaluationPlan.ts",
-    "./workflowSync": "./src/workflowSync.ts"
+    "./workflowSync": "./src/workflowSync.ts",
+    "./reportDashboard": "./src/reportDashboard.ts"
   },
   "dependencies": {
     "@interlock/core": "workspace:*",

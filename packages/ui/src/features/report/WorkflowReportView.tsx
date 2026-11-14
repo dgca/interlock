@@ -7,25 +7,18 @@ import {
   Select,
   Alert,
   Button,
+  EmptyState,
   SimpleGrid,
   Table,
   Progress,
   PageHeader,
+  PageToolbar,
   workspacePage,
 } from '../../design-system';
 
 import { useId, useState } from 'react';
 
-import {
-  Clock,
-  Coins,
-  CheckCircle2,
-  RefreshCw,
-  Layers,
-  UserCheck,
-  AlertCircle,
-} from 'lucide-react';
-import type { ElapsedDistributionMetric } from '@interlock/core';
+import { RefreshCw, AlertCircle } from 'lucide-react';
 import { api, errorMessage } from '../../lib/api';
 import { trpc, useQuery } from '../../lib/query';
 
@@ -34,39 +27,35 @@ import { ReportApprovals } from './ReportApprovals';
 import styles from './WorkflowReportView.module.css';
 import { RunTagFilter, AppliedRunTagFilters } from '../runs/RunTagFilter';
 import { PricingNote } from '../runs/PricingNote';
-
-function formatMs(ms: number | null | undefined): string {
-  if (ms === null || ms === undefined) return '—';
-  if (ms < 1000) return `${ms} ms`;
-  if (ms < 60_000) return `${(ms / 1000).toFixed(1)} s`;
-  return `${(ms / 60_000).toFixed(1)} min`;
-}
+import { DashboardSummary, DashboardTrendTable } from './DashboardSummary';
+import { DashboardDurations, DashboardSpend } from './DashboardBreakdowns';
+import { DashboardRuns } from './DashboardRuns';
+import {
+  basisMetric,
+  formatMs,
+  periodLabels,
+  type TimeBasis,
+} from './reportFormat';
 
 type TimePreset = '24h' | '7d' | '30d' | 'all';
 
-export function WorkflowReportView({
-  workflowId: initialWorkflowId,
-  onBack,
-}: {
-  workflowId?: string;
-  onBack?: () => void;
-}) {
-  const [timeBasis, setTimeBasis] = useState<'wall' | 'activeMs' | 'pausedMs'>(
-    'wall',
-  );
-  const metric = (value?: ElapsedDistributionMetric) =>
-    timeBasis === 'wall' ? value : value?.[timeBasis];
+/**
+ * The library Report page, or a workflow's Report tab when `workflowId` is set.
+ * Both show the dashboard and the detailed report from one bounded read.
+ */
+export function WorkflowReportView({ workflowId }: { workflowId?: string }) {
+  const [timeBasis, setTimeBasis] = useState<TimeBasis>('wall');
+  const metric = (value?: Parameters<typeof basisMetric>[0]) =>
+    basisMetric(value, timeBasis);
 
   const [selectedWorkflowId, setSelectedWorkflowId] = useState<string | null>(
-    initialWorkflowId ?? null,
+    workflowId ?? null,
   );
   const [timePreset, setTimePreset] = useState<TimePreset>('7d');
   const [tags, setTags] = useState<Record<string, string>>();
   const tagFilterId = useId();
   const workflowsQuery = useQuery(
-    trpc.workflows.catalog.queryOptions(
-      initialWorkflowId ? { id: initialWorkflowId } : undefined,
-    ),
+    trpc.workflows.catalog.queryOptions(undefined, { enabled: !workflowId }),
   );
   const workflowsList = (workflowsQuery.data ?? []).map((workflow) => ({
     value: workflow.id,
@@ -78,103 +67,107 @@ export function WorkflowReportView({
     ...(tags !== undefined ? { tags } : {}),
   };
   const reportQuery = useQuery({
-    ...trpc.report.summary.queryOptions(input),
+    ...trpc.report.dashboard.queryOptions(input),
     // Relative windows identify a view; calculate the actual boundary on each
     // fetch so remounts reuse cached data without freezing the report window.
     queryKey: [
-      trpc.report.summary.queryKey(input)[0],
+      trpc.report.dashboard.queryKey(input)[0],
       { input: { ...input, timePreset }, type: 'query' },
     ],
     queryFn: () => {
       const duration = { '24h': 86400000, '7d': 604800000, '30d': 2592000000 };
-      const since =
+      const now = Date.now();
+      const window =
         timePreset === 'all'
-          ? undefined
-          : new Date(Date.now() - duration[timePreset]).toISOString();
-      return api.report.summary.query({ ...input, since });
+          ? {}
+          : {
+              since: new Date(now - duration[timePreset]).toISOString(),
+              until: new Date(now).toISOString(),
+            };
+      return api.report.dashboard.query({ ...input, ...window });
     },
   });
-  const report = reportQuery.data;
+  const dashboard = reportQuery.data;
+  const report = dashboard?.report;
   const loading = reportQuery.isFetching;
   const error = reportQuery.error ? errorMessage(reportQuery.error) : null;
   const fetchReport = () => reportQuery.refetch({ cancelRefetch: false });
 
-  const summary = report?.summary;
   const claims = report?.claims;
   const usage = report?.usage;
-  const outcomes = report?.terminalOutcomes;
+  const noRuns =
+    report?.summary.totalRuns === 0 && !dashboard?.previous?.summary.totalRuns;
+
+  const controls = (
+    <>
+      {!workflowId && (
+        <Select
+          placeholder="All workflows"
+          clearable
+          searchable
+          value={selectedWorkflowId}
+          onChange={setSelectedWorkflowId}
+          data={workflowsList}
+          className={styles.workflowFilter}
+          aria-label="Filter by workflow"
+        />
+      )}
+      <Select
+        aria-label="Duration basis"
+        value={timeBasis}
+        onChange={(value) => setTimeBasis((value as TimeBasis) ?? 'wall')}
+        data={[
+          { value: 'wall', label: 'Wall time' },
+          { value: 'activeMs', label: 'Active time (excludes pauses)' },
+          { value: 'pausedMs', label: 'Paused time' },
+        ]}
+        className={styles.durationFilter}
+      />
+      <Select
+        value={timePreset}
+        onChange={(value) => setTimePreset((value as TimePreset) || '7d')}
+        data={[
+          { value: '24h', label: 'Past 24 hours' },
+          { value: '7d', label: 'Past 7 days' },
+          { value: '30d', label: 'Past 30 days' },
+          { value: 'all', label: 'All time' },
+        ]}
+        className={styles.timeFilter}
+        aria-label="Filter by time window"
+      />
+      <RunTagFilter
+        filterId={tagFilterId}
+        key={selectedWorkflowId ?? 'all'}
+        value={tags}
+        onChange={setTags}
+      />
+    </>
+  );
+  const refresh = (
+    <Button
+      variant="secondary"
+      leftSection={<RefreshCw size={14} />}
+      onClick={() => void fetchReport()}
+      disabled={loading}
+    >
+      Refresh
+    </Button>
+  );
 
   return (
     <section className={workspacePage.page} aria-busy={loading}>
-      <PageHeader
-        title="Performance & cost report"
-        status={
-          initialWorkflowId
-            ? workflowsList.find(
-                (workflow) => workflow.value === initialWorkflowId,
-              )?.label
-            : undefined
-        }
-        onBack={onBack}
-        backLabel="Back to workflow"
-        controls={
-          <>
-            {!initialWorkflowId && (
-              <Select
-                placeholder="All workflows"
-                clearable
-                searchable
-                value={selectedWorkflowId}
-                onChange={setSelectedWorkflowId}
-                data={workflowsList}
-                className={styles.workflowFilter}
-                aria-label="Filter by workflow"
-              />
-            )}
-            <Select
-              aria-label="Duration basis"
-              value={timeBasis}
-              onChange={(value) =>
-                setTimeBasis((value as typeof timeBasis) ?? 'wall')
-              }
-              data={[
-                { value: 'wall', label: 'Wall time' },
-                { value: 'activeMs', label: 'Active time (excludes pauses)' },
-                { value: 'pausedMs', label: 'Paused time' },
-              ]}
-              className={styles.durationFilter}
-            />
-            <Select
-              value={timePreset}
-              onChange={(value) => setTimePreset((value as TimePreset) || '7d')}
-              data={[
-                { value: '24h', label: 'Past 24 hours' },
-                { value: '7d', label: 'Past 7 days' },
-                { value: '30d', label: 'Past 30 days' },
-                { value: 'all', label: 'All time' },
-              ]}
-              className={styles.timeFilter}
-              aria-label="Filter by time window"
-            />
-            <RunTagFilter
-              filterId={tagFilterId}
-              key={selectedWorkflowId ?? 'all'}
-              value={tags}
-              onChange={setTags}
-            />
-          </>
-        }
-        actions={
-          <Button
-            variant="secondary"
-            leftSection={<RefreshCw size={14} />}
-            onClick={() => void fetchReport()}
-            disabled={loading}
-          >
-            Refresh
-          </Button>
-        }
-      />
+      {workflowId ? (
+        <PageToolbar>
+          {controls}
+          {refresh}
+        </PageToolbar>
+      ) : (
+        <PageHeader
+          title="Performance & cost report"
+          controls={controls}
+          actions={refresh}
+        />
+      )}
       <AppliedRunTagFilters
         filterId={tagFilterId}
         value={tags}
@@ -194,107 +187,38 @@ export function WorkflowReportView({
 
           {loading && !report && <ReportLoadingContent />}
 
-          {report && (
+          {dashboard && report && (
             <Stack gap="lg">
-              {/* Top Stat Cards */}
-              <SimpleGrid cols={{ base: 1, xs: 2, lg: 3 }} spacing="md">
-                <section className={workspacePage.card}>
-                  <Group justify="space-between" mb="xs">
-                    <Text size="sm" c="dimmed">
-                      Total Runs
-                    </Text>
-                    <Layers size={16} />
-                  </Group>
-                  <Text fz="xl" fw={700}>
-                    {summary?.totalRuns ?? 0}
-                  </Text>
-                  <Text size="xs" c="dimmed">
-                    {outcomes?.completedRuns ?? 0} completed ·{' '}
-                    {outcomes?.failedRuns ?? 0} failed
-                  </Text>
-                </section>
-
-                <section className={workspacePage.card}>
-                  <Group justify="space-between" mb="xs">
-                    <Text size="sm" c="dimmed">
-                      Run Duration
-                    </Text>
-                    <Clock size={16} />
-                  </Group>
-                  <Text fz="xl" fw={700}>
-                    {formatMs(metric(summary?.durationMs)?.median)}
-                  </Text>
-                  <Text size="xs" c="dimmed">
-                    p90: {formatMs(metric(summary?.durationMs)?.p90)}
-                  </Text>
-                </section>
-
-                <section className={workspacePage.card}>
-                  <Group justify="space-between" mb="xs">
-                    <Text size="sm" c="dimmed">
-                      Admission Wait
-                    </Text>
-                    <Clock size={16} />
-                  </Group>
-                  <Text fz="xl" fw={700}>
-                    {formatMs(metric(summary?.admissionQueueWaitMs)?.median)}
-                  </Text>
-                  <Text size="xs" c="dimmed">
-                    p90: {formatMs(metric(summary?.admissionQueueWaitMs)?.p90)}
-                  </Text>
-                </section>
-
-                <section className={workspacePage.card}>
-                  <Group justify="space-between" mb="xs">
-                    <Text size="sm" c="dimmed">
-                      Human Wait
-                    </Text>
-                    <UserCheck size={16} />
-                  </Group>
-                  <Text fz="xl" fw={700}>
-                    {formatMs(metric(summary?.humanWaitMs)?.median)}
-                  </Text>
-                  <Text size="xs" c="dimmed">
-                    p90: {formatMs(metric(summary?.humanWaitMs)?.p90)}
-                  </Text>
-                </section>
-
-                <section className={workspacePage.card}>
-                  <Group justify="space-between" mb="xs">
-                    <Text size="sm" c="dimmed">
-                      Unattended Rate
-                    </Text>
-                    <CheckCircle2 size={16} />
-                  </Group>
-                  <Text fz="xl" fw={700}>
-                    {outcomes?.unattendedCompletionRate ?? 0}%
-                  </Text>
-                  <Text size="xs" c="dimmed">
-                    escalated: {outcomes?.humanEscalationRate ?? 0}%
-                  </Text>
-                </section>
-
-                <section
-                  className={workspacePage.card}
-                  aria-label="Attributed spend"
-                >
-                  <Group justify="space-between" mb="xs">
-                    <Text size="sm" c="dimmed">
-                      Attributed Spend
-                    </Text>
-                    <Coins size={16} />
-                  </Group>
-                  <Text fz="xl" fw={700}>
-                    {!usage?.coverage.measuredPercentage || !usage.costs.length
-                      ? 'Unmeasured'
-                      : usage.costs.map((cost) => cost.formatted).join(' · ')}
-                  </Text>
-                  <Text size="xs" c="dimmed">
-                    {usage?.coverage.measuredPercentage ?? 0}% of attempts
-                    measured
-                  </Text>
-                </section>
-              </SimpleGrid>
+              {noRuns ? (
+                <EmptyState
+                  title="No runs in this period"
+                  description="Durations, outcomes and spend appear after runs start in the selected period."
+                />
+              ) : (
+                <DashboardSummary
+                  dashboard={dashboard}
+                  basis={timeBasis}
+                  comparedWith={
+                    timePreset === 'all' ? undefined : periodLabels[timePreset]
+                  }
+                />
+              )}
+              {dashboard.limited && (
+                <Text size="sm" c="dimmed">
+                  Each period includes its newest {input.limit} runs.
+                </Text>
+              )}
+              <DashboardRuns
+                workflowId={selectedWorkflowId ?? undefined}
+                tags={tags}
+              />
+            </Stack>
+          )}
+          {dashboard && report && !noRuns && (
+            <Stack gap="lg">
+              <DashboardTrendTable dashboard={dashboard} basis={timeBasis} />
+              <DashboardDurations dashboard={dashboard} basis={timeBasis} />
+              <DashboardSpend dashboard={dashboard} />
 
               {/* Operational Reliability & Claim Latencies */}
               <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
@@ -372,82 +296,42 @@ export function WorkflowReportView({
                 </section>
               </SimpleGrid>
 
-              {/* Stages & Terminal Outcomes */}
-              <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
-                <section className={workspacePage.card}>
-                  <Title order={2} size="h4" mb="sm">
-                    Stage Durations
-                  </Title>
-                  {report.stages.length === 0 ? (
-                    <Text size="sm" c="dimmed">
-                      No stage transitions recorded in this window.
-                    </Text>
-                  ) : (
-                    <Table.ScrollContainer minWidth={520}>
-                      <Table striped highlightOnHover>
-                        <Table.Thead>
-                          <Table.Tr>
-                            <Table.Th>Stage</Table.Th>
-                            <Table.Th>Runs</Table.Th>
-                            <Table.Th>Median</Table.Th>
-                            <Table.Th>P90</Table.Th>
-                          </Table.Tr>
-                        </Table.Thead>
-                        <Table.Tbody>
-                          {report.stages.map((st) => (
-                            <Table.Tr key={st.stage}>
-                              <Table.Td fw={500}>{st.stage}</Table.Td>
-                              <Table.Td>{st.runCount}</Table.Td>
-                              <Table.Td>
-                                {formatMs(metric(st.durationMs)?.median)}
-                              </Table.Td>
-                              <Table.Td>
-                                {formatMs(metric(st.durationMs)?.p90)}
-                              </Table.Td>
-                            </Table.Tr>
-                          ))}
-                        </Table.Tbody>
-                      </Table>
-                    </Table.ScrollContainer>
-                  )}
-                </section>
-
-                <section className={workspacePage.card}>
-                  <Title order={2} size="h4" mb="sm">
-                    Terminal Outcomes by Exit Node
-                  </Title>
-                  {report.terminalOutcomes.exitNodes.length === 0 ? (
-                    <Text size="sm" c="dimmed">
-                      No completed runs recorded in this window.
-                    </Text>
-                  ) : (
-                    <Stack gap="xs">
-                      {report.terminalOutcomes.exitNodes.map((exit) => (
-                        <div key={exit.nodeId}>
-                          <Group justify="space-between" mb={4}>
-                            <Text size="sm" fw={500}>
-                              {exit.label} ({exit.nodeId})
-                            </Text>
-                            <Text size="xs" c="dimmed">
-                              {exit.count} runs ({exit.percentage}%)
-                            </Text>
-                          </Group>
-                          <Progress
-                            value={exit.percentage}
-                            color={
-                              exit.label.toLowerCase().includes('escalat') ||
-                              exit.label.toLowerCase().includes('human')
-                                ? 'orange'
-                                : 'teal'
-                            }
-                            size="sm"
-                          />
-                        </div>
-                      ))}
-                    </Stack>
-                  )}
-                </section>
-              </SimpleGrid>
+              {/* Terminal Outcomes */}
+              <section className={workspacePage.card}>
+                <Title order={2} size="h4" mb="sm">
+                  Terminal Outcomes by Exit Node
+                </Title>
+                {report.terminalOutcomes.exitNodes.length === 0 ? (
+                  <Text size="sm" c="dimmed">
+                    No completed runs recorded in this window.
+                  </Text>
+                ) : (
+                  <Stack gap="xs">
+                    {report.terminalOutcomes.exitNodes.map((exit) => (
+                      <div key={exit.nodeId}>
+                        <Group justify="space-between" mb={4}>
+                          <Text size="sm" fw={500}>
+                            {exit.label} ({exit.nodeId})
+                          </Text>
+                          <Text size="xs" c="dimmed">
+                            {exit.count} runs ({exit.percentage}%)
+                          </Text>
+                        </Group>
+                        <Progress
+                          value={exit.percentage}
+                          color={
+                            exit.label.toLowerCase().includes('escalat') ||
+                            exit.label.toLowerCase().includes('human')
+                              ? 'orange'
+                              : 'teal'
+                          }
+                          size="sm"
+                        />
+                      </div>
+                    ))}
+                  </Stack>
+                )}
+              </section>
 
               {/* Model Spend and Token Attribution */}
               <section className={workspacePage.card}>
@@ -632,45 +516,6 @@ export function WorkflowReportView({
 
               {report.approvals && report.approvals.byRun.length > 0 && (
                 <ReportApprovals approvals={report.approvals} />
-              )}
-
-              {/* Node Durations */}
-              {report.nodes.length > 0 && (
-                <section className={workspacePage.card}>
-                  <Title order={2} size="h4" mb="sm">
-                    Node Durations (Median & P90)
-                  </Title>
-                  <Table.ScrollContainer minWidth={520}>
-                    <Table striped highlightOnHover>
-                      <Table.Thead>
-                        <Table.Tr>
-                          <Table.Th>Node</Table.Th>
-                          <Table.Th>Kind</Table.Th>
-                          <Table.Th>Stage</Table.Th>
-                          <Table.Th>Executions</Table.Th>
-                          <Table.Th>Median</Table.Th>
-                          <Table.Th>P90</Table.Th>
-                        </Table.Tr>
-                      </Table.Thead>
-                      <Table.Tbody>
-                        {report.nodes.slice(0, 15).map((n) => (
-                          <Table.Tr key={n.nodeId}>
-                            <Table.Td fw={500}>{n.label || n.nodeId}</Table.Td>
-                            <Table.Td>{n.kind}</Table.Td>
-                            <Table.Td>{n.stage ?? '—'}</Table.Td>
-                            <Table.Td>{n.executionCount}</Table.Td>
-                            <Table.Td>
-                              {formatMs(metric(n.durationMs)?.median)}
-                            </Table.Td>
-                            <Table.Td>
-                              {formatMs(metric(n.durationMs)?.p90)}
-                            </Table.Td>
-                          </Table.Tr>
-                        ))}
-                      </Table.Tbody>
-                    </Table>
-                  </Table.ScrollContainer>
-                </section>
               )}
             </Stack>
           )}

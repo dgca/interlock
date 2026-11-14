@@ -18,6 +18,7 @@ import type { Action } from '../../lib/useActionFeedback';
 import { useEditorDraft } from '../../lib/useEditorDraft';
 import { flushSync } from 'react-dom';
 import { WorkflowChildren } from './WorkflowChildren';
+import { workflowSection, type WorkflowSection } from './workflowSections';
 import { WorkflowCardsSkeleton } from '../../components/WorkflowCards/WorkflowCards';
 import {
   WorkspaceReads,
@@ -52,7 +53,6 @@ import {
   Redo2,
   MoreHorizontal,
   Trash2,
-  ChartNoAxesColumn,
 } from 'lucide-react';
 import {
   validateDefinition,
@@ -169,8 +169,8 @@ export function WorkflowEditor({
   section = 'editor',
   onSectionChange,
   runsView,
+  reportView,
   onOpenWorkflow,
-  onReport,
 }: {
   workflow: Workflow & { layoutRevision?: number };
   workflows: WorkflowCatalogEntry[];
@@ -184,11 +184,11 @@ export function WorkflowEditor({
   act: Action;
   onDirty: (dirty: boolean) => void;
   onDeleted?: () => void;
-  section?: 'editor' | 'runs' | 'children';
-  onSectionChange?: (section: 'editor' | 'runs' | 'children') => void;
+  section?: WorkflowSection;
+  onSectionChange?: (section: WorkflowSection) => void;
   onOpenWorkflow?: (id: string) => void;
-  onReport?: () => void;
   runsView?: ReactNode;
+  reportView?: ReactNode;
 }) {
   const [deleting, setDeleting] = useState(false);
   const [confirmReload, setConfirmReload] = useState(false);
@@ -945,14 +945,6 @@ export function WorkflowEditor({
                 </ActionIcon>
               </Menu.Target>
               <Menu.Dropdown>
-                {onReport && (
-                  <Menu.Item
-                    leftSection={<ChartNoAxesColumn size={14} />}
-                    onClick={onReport}
-                  >
-                    Performance & cost report
-                  </Menu.Item>
-                )}
                 {section === 'editor' && compactHeader && (
                   <>
                     <Menu.Item
@@ -1078,21 +1070,14 @@ export function WorkflowEditor({
         keepMounted
         keepMountedMode="display-none"
         value={section}
-        onChange={(value) =>
-          onSectionChange?.(
-            value === 'runs'
-              ? 'runs'
-              : value === 'children'
-                ? 'children'
-                : 'editor',
-          )
-        }
+        onChange={(value) => onSectionChange?.(workflowSection(value))}
       >
         <PageTabList
           label="Workflow sections"
           items={[
             { value: 'editor', label: 'Editor' },
             { value: 'runs', label: 'Runs' },
+            { value: 'report', label: 'Report' },
             ...(!workflow.ownerWorkflowId
               ? [{ value: 'children', label: 'Child workflows' }]
               : []),
@@ -1467,6 +1452,9 @@ export function WorkflowEditor({
           className={`${styles.runsView} ${styles.runListView}`}
         >
           {section === 'runs' && runsView}
+        </Tabs.Panel>
+        <Tabs.Panel value="report" className={styles.runsView}>
+          {section === 'report' && reportView}
         </Tabs.Panel>
       </Tabs>
       {confirmReload && remoteChanged && (

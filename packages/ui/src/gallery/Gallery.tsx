@@ -45,6 +45,7 @@ import {
   TextInput,
   Textarea,
   Title,
+  TrendBars,
   workspacePage,
 } from '../design-system';
 import { useState, type ReactNode } from 'react';
@@ -474,6 +475,26 @@ function Collections() {
       </Specimen>
       <Specimen name="Pagination">
         <Pagination total={5} defaultValue={2} />
+      </Specimen>
+      <Specimen name="TrendBars">
+        <TrendBars
+          label="Runs started per day"
+          values={[4, 9, 0, 6, 14, 11, 7].map((value, index) => ({
+            label: `Day ${index + 1}`,
+            value,
+            display: `${value} runs`,
+          }))}
+        />
+      </Specimen>
+      <Specimen name="TrendBars with unmeasured intervals">
+        <TrendBars
+          label="Median run duration per day"
+          values={[null, 52, null, 71, 64].map((value, index) => ({
+            label: `Day ${index + 1}`,
+            value,
+            display: value === null ? 'No runs' : `${value} min`,
+          }))}
+        />
       </Specimen>
     </Section>
   );

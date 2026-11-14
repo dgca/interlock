@@ -188,7 +188,6 @@ let layoutPositions: WorkflowPositions;
 const saved = vi.fn();
 const publicationChecked = vi.fn((_id: string, version: number) => version);
 const opened = vi.fn();
-const reportOpened = vi.fn();
 const onDirty = vi.fn();
 const errors: unknown[] = [];
 const runAction = async (fn: () => Promise<unknown>) => {
@@ -216,7 +215,6 @@ const render = async (visible = true, deletingOutside = false) => {
           workflows: [workflowCatalogEntry(workflow)],
           onBack: vi.fn(),
           onOpenWorkflow: opened,
-          onReport: reportOpened,
           onRun: vi.fn(),
           onSaved: saved,
           onPublicationChecked: publicationChecked,
@@ -1443,13 +1441,6 @@ it('keeps browser unload protection for unsaved workflow edits through the share
   expect(unload()).toBe(true);
   await click('Discard');
   expect(unload()).toBe(false);
-});
-
-it('opens the workflow report through its optional route callback', async () => {
-  await render();
-  await click('Workflow actions');
-  await click('Performance & cost report');
-  expect(reportOpened).toHaveBeenCalledOnce();
 });
 
 it('serializes and coalesces layout writes without dirtying content or saving a draft', async () => {

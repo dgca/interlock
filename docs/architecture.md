@@ -367,7 +367,7 @@ Workflow performance and cost reporting contracts live in `core`, query operatio
 
 Runtime aggregates only the selected run IDs and their retained attempts, streams, events, and holds. Metrics include run durations, admission queue delays, Input and work-hold wait times, stage and node duration distributions, claim wait split by new versus continuing sessions, reliability, reported usage, and Exit outcomes. Percentiles interpolate between sorted observations. Usage groups use reported provider/model identities; an additional alias breakdown uses the captured assignment alias revision and candidate retained on claim receipts, leaving missing attribution and run-level overhead unassigned. Coverage counts attempts with a selected model snapshot. Elapsed metrics preserve wall time and expose active/paused distributions using the union of applicable named pauses. See [report metrics and limits](usage-reporting.md#metrics-and-limits) for attribution and historical-data limits.
 
-The shared API exposes `report.summary` (with `system.report` as an alias), the MCP server provides the `workflow_report` tool, the CLI provides `interlock report`, and the UI presents an interactive dashboard at `/report` and `/workflows/:workflowId/report`.
+The shared API exposes `report.summary` (with `system.report` as an alias), the MCP server provides the `workflow_report` tool, the CLI provides `interlock report`, and the UI presents an interactive dashboard at `/report` and in each workflow's Report tab (`/workflows/:workflowId?view=report`). The UI reads `report.dashboard`, which returns the same report plus the equal-length previous window, run counts and duration medians per interval, and reported spend by stage; both windows stay bounded by the report limit.
 
 ## Local interfaces
 
@@ -435,7 +435,7 @@ React Router owns browser navigation through a shared application layout and chi
 | `/runs?tab=history`                        | Run history                                            |
 | `/runs/:runId`                             | Run inspector, including child runs                    |
 | `/report`                                  | Global workflow performance and cost report            |
-| `/workflows/:workflowId/report`            | Workflow-scoped performance and cost report            |
+| `/workflows/:workflowId/report`            | Redirects to the workflow's Report tab                 |
 | `/settings/ai`                             | Harnesses, Agent presets, and execution settings tabs  |
 | `/settings/ai/integrations/-/new`          | New custom integration editor                          |
 | `/settings/ai/integrations/:integrationId` | Saved custom integration editor                        |

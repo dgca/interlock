@@ -9,6 +9,7 @@ import {
   type UsageAttempt,
 } from '@interlock/core';
 import { parseReportArgs } from '../packages/cli/src/commands';
+import { appRouter } from '../packages/server/src/router';
 
 const stores: Store[] = [];
 const engines: Engine[] = [];
@@ -404,4 +405,117 @@ it('keeps supported year limits inclusive after offset and fraction normalizatio
       .report({ since: '0000-01-01T00:00:00.0001Z' })
       .usage.byRun.map((r) => r.runId),
   ).not.toContain('first');
+});
+
+it('builds the dashboard from the same report, with the previous window, trend and stage spend', async () => {
+  const { store, engine } = setup();
+  const def = blankDefinition();
+  const agent = def.nodes.find((node) => node.kind === 'agent')!;
+  agent.stage = 'review';
+  const wf = engine.create('Dashboard', '', def);
+  const { latestVersion } = engine.publish(wf.id);
+  const putRun = (id: string, createdAt: string, status: Run['status']) =>
+    store.put('runs', {
+      id,
+      workflowId: wf.id,
+      workflowName: 'Dashboard',
+      version: latestVersion,
+      status,
+      createdAt,
+      updatedAt: createdAt,
+      cursor: agent.id,
+      input: {},
+      value: {},
+      executions: [
+        {
+          id: `${id}-e`,
+          nodeId: agent.id,
+          kind: 'agent',
+          label: agent.label,
+          status,
+          startedAt: createdAt,
+          completedAt: new Date(Date.parse(createdAt) + 60_000).toISOString(),
+          childRunIds: [],
+          nextItem: 0,
+          input: {},
+        },
+      ],
+    } satisfies Run);
+  putRun('previous-1', '2026-11-03T10:00:00.000Z', 'completed');
+  putRun('current-1', '2026-11-09T10:00:00.000Z', 'completed');
+  putRun('current-2', '2026-11-12T10:00:00.000Z', 'completed');
+  putRun('current-3', '2026-11-14T10:00:00.000Z', 'failed');
+  const attempt = (workId: string, cost?: number): UsageAttempt => ({
+    id: `${workId}:1`,
+    workId,
+    runId: 'current-1',
+    attempt: 1,
+    nodeId: agent.id,
+    label: agent.label,
+    workerId: 'worker',
+    claimedAt: '2026-11-09T10:00:01.000Z',
+    endedAt: '2026-11-09T10:00:59.000Z',
+    outcome: 'completed',
+    ...(cost === undefined
+      ? {}
+      : {
+          snapshot: {
+            sequence: 1,
+            final: true,
+            models: [
+              {
+                provider: 'anthropic',
+                model: 'model-a',
+                inputTokens: 10,
+                outputTokens: 5,
+                cost: {
+                  amountMicros: cost,
+                  currency: 'USD',
+                  source: 'provider',
+                },
+              },
+            ],
+          },
+        }),
+  });
+  store.put('usageAttempts', attempt('work-a', 30_000));
+  store.put('usageAttempts', attempt('work-b'));
+  const caller = appRouter.createCaller({ engine });
+  const filter = {
+    workflowId: wf.id,
+    since: '2026-11-08T00:00:00.000Z',
+    until: '2026-11-15T00:00:00.000Z',
+    limit: 1000,
+  };
+  const dashboard = await caller.report.dashboard(filter);
+  const report = await caller.report.summary(filter);
+  expect({ ...dashboard.report, generatedAt: '' }).toEqual({
+    ...report,
+    generatedAt: '',
+  });
+  expect(dashboard.report.summary.totalRuns).toBe(3);
+  expect(dashboard.previous?.summary.totalRuns).toBe(1);
+  expect(dashboard.previous?.window.since).toBe('2026-11-01T00:00:00.000Z');
+  expect(dashboard.trend).toHaveLength(7);
+  expect(dashboard.trend.map((bucket) => bucket.runs)).toEqual([
+    0, 1, 0, 0, 1, 0, 1,
+  ]);
+  expect(dashboard.trend[6].failed).toBe(1);
+  expect(dashboard.trend[1].durationMs.median).toBe(60_000);
+  expect(dashboard.spendByStage).toEqual([
+    {
+      stage: 'review',
+      costMicros: 30_000,
+      currency: 'USD',
+      attempts: 2,
+      measuredAttempts: 1,
+    },
+  ]);
+  expect(dashboard.limited).toBe(false);
+  expect((await caller.report.dashboard({ ...filter, limit: 2 })).limited).toBe(
+    true,
+  );
+  const allTime = await caller.report.dashboard({ workflowId: wf.id });
+  expect(allTime.previous).toBeNull();
+  expect(allTime.trend).toEqual([]);
 });
