@@ -38,6 +38,8 @@ export function migrateRunExecutions(db: DatabaseSync) {
   db.exec(revisionTrigger);
   db.exec(`
     CREATE INDEX run_metadata_parent ON run_metadata(parent_id);
+    CREATE INDEX run_metadata_comparison ON run_metadata(
+      json_extract(value, '$.comparison.comparisonId'), json_extract(value, '$.comparison.sampleId'));
     CREATE INDEX run_metadata_human_input ON run_metadata(position)
       WHERE status = 'waiting' AND json_extract(execution, '$.status') = 'waiting'
         AND json_extract(execution, '$.humanInput') = 1;
