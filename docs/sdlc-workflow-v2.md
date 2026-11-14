@@ -45,7 +45,7 @@ The steps need a coding agent with file access, Git and the repository's tools: 
 
    Notes that only apply after delivery, such as the pull request description, are limitations starting with "For delivery:", not findings.
 
-6. **Delivery.** A Script confirms the checkout is still at the reviewed commit. With `createPr`, an agent pushes and opens the pull request; it does not wait for CI.
+6. **Delivery.** A Script confirms the checkout is still at the reviewed commit. With `createPr`, an agent pushes and opens the pull request; it does not wait for CI. The [pull request watcher](pr-watcher.md) can take over from there.
 
 ### Limits
 

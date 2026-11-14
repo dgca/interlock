@@ -5,12 +5,14 @@ New libraries start empty. Existing workflows remain intact after upgrades, incl
 ## Add a starter
 
 1. Open **Workflows → Import** or **Browse starter workflows** in an empty library.
-2. Choose **Starters** and select a procedure: **SDLC workflow**, **SDLC workflow v2** or **Evaluate workflow comparison**.
+2. Choose **Starters** and select a procedure: **SDLC workflow**, **SDLC workflow v2**, **Pull request watcher** or **Evaluate workflow comparison**.
 3. Review its purpose and requirements. For SDLC, choose whether to set up the suggested board. Then choose **Add to library**.
 
 This creates and publishes a copy without starting a run. Imported workflows belong to you. Editing, publishing, archive, ownership and deletion use the ordinary operations. The improvement recipe and specialized examples remain optional file imports.
 
 Both SDLC starters suggest the Planning, Implementation, Review, and Delivery columns. [SDLC workflow v2](sdlc-workflow-v2.md) has its own identity: adding it never changes copies of the original, and the original stays available. Each copy of SDLC v2 also gets its own published **Plan review** and **Change review**, owned by that copy, each with a permanent identity of its own. Create the suggested board, map the stages to an existing board, or skip board setup. When you skip setup, you can run the workflow without a board.
+
+[Pull request watcher](pr-watcher.md) fixes failing checks and trusted review comments on a GitHub pull request, and gets its own copy of SDLC v2's **Change review**. Its one outward action is pushing reviewed fixes to the pull request's branch.
 
 Known copies offer **Open workflow**. To deliberately create another one, select **Add another copy** before adding. Existing copies are never overwritten or republished. A recognized unpublished manual copy stays a draft; review and publish it on its workflow page if needed.
 
@@ -30,6 +32,7 @@ A single import opens its workflow. Multiple roots return to the library with th
 interlock starters
 interlock import-starter sdlc
 interlock import-starter sdlc-v2
+interlock import-starter pr-watcher
 interlock import-starter evaluate-comparison --copy --request-id review-copy-1
 ```
 

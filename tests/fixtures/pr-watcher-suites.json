@@ -1,0 +1,694 @@
+{
+  "interlock-pr-watcher": {
+    "name": "Pull request watcher routes",
+    "cases": [
+      {
+        "id": "fix-failing-check",
+        "name": "An SDLC run's event starts the watcher; a failing check is fixed, reviewed and pushed with no person involved",
+        "input": {
+          "eventId": "e1",
+          "type": "completed",
+          "occurredAt": "2026-11-13T10:00:00.000Z",
+          "runId": "run-1",
+          "workflowId": "sdlc",
+          "version": 1,
+          "stage": "Delivery",
+          "waiting": null,
+          "repoPath": "/tmp"
+        },
+        "fixtures": [
+          {
+            "nodeId": "setup",
+            "kind": "script",
+            "output": {
+              "route": "watch",
+              "repoPath": "/tmp",
+              "url": "https://github.com/o/r/pull/7",
+              "maxRepairs": 2,
+              "checkCommands": null,
+              "since": "2026-11-13T10:00:00.000Z",
+              "summary": "Watching"
+            }
+          },
+          {
+            "nodeId": "watch",
+            "kind": "script",
+            "output": {
+              "settled": true,
+              "status": "failing",
+              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "checkedAt": "2026-11-13T10:30:00.000Z",
+              "failed": [],
+              "blocked": [],
+              "pendingChecks": 0,
+              "comments": [],
+              "ignoredComments": 0
+            }
+          },
+          {
+            "nodeId": "triage",
+            "kind": "script",
+            "output": { "route": "fix", "kind": null, "summary": "fix" }
+          },
+          {
+            "nodeId": "prepare",
+            "kind": "script",
+            "output": {
+              "prHead": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "criteria": "CHECK1: the check passes",
+              "since": "2026-11-13T10:30:00.000Z"
+            }
+          },
+          {
+            "nodeId": "fix",
+            "kind": "workflow",
+            "output": {
+              "status": "done",
+              "summary": "fixed",
+              "headCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "resolutions": [
+                { "id": "CHECK1", "status": "fixed", "details": "d" }
+              ]
+            }
+          },
+          {
+            "nodeId": "changeReview",
+            "kind": "workflow",
+            "output": {
+              "verdict": "pass",
+              "summary": "review",
+              "reviewedCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "reviewScope": "full",
+              "criteria": [
+                { "id": "CHECK1", "status": "verified", "evidence": "e" }
+              ],
+              "findings": [],
+              "resolutions": [],
+              "limitations": [],
+              "baseCommit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "headCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "checksPassed": null,
+              "checks": []
+            }
+          },
+          {
+            "nodeId": "reviewRoute",
+            "kind": "script",
+            "output": { "route": "push", "review": null, "summary": "s" }
+          },
+          {
+            "nodeId": "push",
+            "kind": "script",
+            "output": {
+              "route": "watch",
+              "pushed": true,
+              "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "since": "2026-11-13T10:30:00.000Z",
+              "summary": "Pushed"
+            }
+          },
+          {
+            "nodeId": "watch",
+            "kind": "script",
+            "output": {
+              "settled": true,
+              "status": "merged",
+              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "checkedAt": "2026-11-13T10:30:00.000Z",
+              "failed": [],
+              "blocked": [],
+              "pendingChecks": 0,
+              "comments": [],
+              "ignoredComments": 0
+            }
+          },
+          {
+            "nodeId": "triage",
+            "kind": "script",
+            "output": {
+              "route": "done",
+              "kind": null,
+              "summary": "done",
+              "outcome": "merged"
+            }
+          },
+          {
+            "nodeId": "finish",
+            "kind": "script",
+            "output": {
+              "outcome": "merged",
+              "prUrl": "https://github.com/o/r/pull/7",
+              "repairs": 1,
+              "lastPushedCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "summary": "merged"
+            }
+          }
+        ],
+        "assertions": [
+          {
+            "kind": "output",
+            "path": "outcome",
+            "operator": "equals",
+            "expected": "merged"
+          },
+          { "kind": "route", "nodeId": "push", "visit": 1, "port": "watch" },
+          { "kind": "route", "nodeId": "watch", "visit": 2, "port": "default" }
+        ]
+      },
+      {
+        "id": "repair-limit",
+        "name": "Checks still fail after the repair limit, so a person decides and stops the watcher",
+        "input": {
+          "prUrl": "https://github.com/o/r/pull/7",
+          "repoPath": "/tmp",
+          "maxRepairs": 1
+        },
+        "fixtures": [
+          {
+            "nodeId": "setup",
+            "kind": "script",
+            "output": {
+              "route": "watch",
+              "repoPath": "/tmp",
+              "url": "https://github.com/o/r/pull/7",
+              "maxRepairs": 2,
+              "checkCommands": null,
+              "since": "2026-11-13T10:00:00.000Z",
+              "summary": "Watching"
+            }
+          },
+          {
+            "nodeId": "watch",
+            "kind": "script",
+            "output": {
+              "settled": true,
+              "status": "failing",
+              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "checkedAt": "2026-11-13T10:30:00.000Z",
+              "failed": [],
+              "blocked": [],
+              "pendingChecks": 0,
+              "comments": [],
+              "ignoredComments": 0
+            }
+          },
+          {
+            "nodeId": "triage",
+            "kind": "script",
+            "output": { "route": "fix", "kind": null, "summary": "fix" }
+          },
+          {
+            "nodeId": "prepare",
+            "kind": "script",
+            "output": {
+              "prHead": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "criteria": "CHECK1: the check passes",
+              "since": "2026-11-13T10:30:00.000Z"
+            }
+          },
+          {
+            "nodeId": "fix",
+            "kind": "workflow",
+            "output": {
+              "status": "done",
+              "summary": "fixed",
+              "headCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "resolutions": [
+                { "id": "CHECK1", "status": "fixed", "details": "d" }
+              ]
+            }
+          },
+          {
+            "nodeId": "changeReview",
+            "kind": "workflow",
+            "output": {
+              "verdict": "pass",
+              "summary": "review",
+              "reviewedCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "reviewScope": "full",
+              "criteria": [
+                { "id": "CHECK1", "status": "verified", "evidence": "e" }
+              ],
+              "findings": [],
+              "resolutions": [],
+              "limitations": [],
+              "baseCommit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "headCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "checksPassed": null,
+              "checks": []
+            }
+          },
+          {
+            "nodeId": "reviewRoute",
+            "kind": "script",
+            "output": { "route": "push", "review": null, "summary": "s" }
+          },
+          {
+            "nodeId": "push",
+            "kind": "script",
+            "output": {
+              "route": "watch",
+              "pushed": true,
+              "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "since": "2026-11-13T10:30:00.000Z",
+              "summary": "Pushed"
+            }
+          },
+          {
+            "nodeId": "watch",
+            "kind": "script",
+            "output": {
+              "settled": true,
+              "status": "failing",
+              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "checkedAt": "2026-11-13T10:30:00.000Z",
+              "failed": [],
+              "blocked": [],
+              "pendingChecks": 0,
+              "comments": [],
+              "ignoredComments": 0
+            }
+          },
+          {
+            "nodeId": "triage",
+            "kind": "script",
+            "output": {
+              "route": "attention",
+              "kind": "limit",
+              "summary": "attention"
+            }
+          },
+          {
+            "nodeId": "attentionAsk",
+            "kind": "script",
+            "output": {
+              "kind": "limit",
+              "question": "Keep watching?",
+              "context": "c",
+              "evidence": "e",
+              "revision": "limit"
+            }
+          },
+          {
+            "nodeId": "attention",
+            "kind": "input",
+            "output": { "choice": "stop" }
+          },
+          {
+            "nodeId": "grant",
+            "kind": "script",
+            "output": {
+              "route": "stop",
+              "outcome": "stopped",
+              "repairUntil": 2,
+              "summary": "stop"
+            }
+          },
+          {
+            "nodeId": "finish",
+            "kind": "script",
+            "output": {
+              "outcome": "stopped",
+              "prUrl": "https://github.com/o/r/pull/7",
+              "repairs": 1,
+              "lastPushedCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "summary": "stopped"
+            }
+          }
+        ],
+        "assertions": [
+          {
+            "kind": "output",
+            "path": "outcome",
+            "operator": "equals",
+            "expected": "stopped"
+          },
+          {
+            "kind": "route",
+            "nodeId": "triage",
+            "visit": 2,
+            "port": "attention"
+          },
+          {
+            "kind": "route",
+            "nodeId": "attention",
+            "visit": 1,
+            "port": "default"
+          }
+        ]
+      },
+      {
+        "id": "error-then-stop",
+        "name": "A setup error asks a person",
+        "input": {
+          "prUrl": "https://github.com/o/r/pull/7",
+          "repoPath": "/tmp",
+          "maxRepairs": 1
+        },
+        "fixtures": [
+          { "nodeId": "setup", "kind": "script", "error": "gh: not logged in" },
+          {
+            "nodeId": "attentionAsk",
+            "kind": "script",
+            "output": {
+              "kind": "error",
+              "question": "Keep watching?",
+              "context": "c",
+              "evidence": "e",
+              "revision": "error"
+            }
+          },
+          {
+            "nodeId": "attention",
+            "kind": "input",
+            "output": { "choice": "stop" }
+          },
+          {
+            "nodeId": "grant",
+            "kind": "script",
+            "output": {
+              "route": "stop",
+              "outcome": "stopped",
+              "repairUntil": 2,
+              "summary": "stop"
+            }
+          },
+          {
+            "nodeId": "finish",
+            "kind": "script",
+            "output": {
+              "outcome": "stopped",
+              "prUrl": "https://github.com/o/r/pull/7",
+              "repairs": 0,
+              "lastPushedCommit": null,
+              "summary": "stopped"
+            }
+          }
+        ],
+        "assertions": [
+          {
+            "kind": "output",
+            "path": "outcome",
+            "operator": "equals",
+            "expected": "stopped"
+          },
+          { "kind": "route", "nodeId": "setup", "visit": 1, "port": "failed" }
+        ]
+      },
+      {
+        "id": "fixer-failure",
+        "name": "A fixer whose executor fails asks a person instead of failing the run",
+        "input": {
+          "prUrl": "https://github.com/o/r/pull/7",
+          "repoPath": "/tmp",
+          "maxRepairs": 1
+        },
+        "fixtures": [
+          {
+            "nodeId": "setup",
+            "kind": "script",
+            "output": {
+              "route": "watch",
+              "repoPath": "/tmp",
+              "url": "https://github.com/o/r/pull/7",
+              "maxRepairs": 2,
+              "checkCommands": null,
+              "since": "2026-11-13T10:00:00.000Z",
+              "summary": "Watching"
+            }
+          },
+          {
+            "nodeId": "watch",
+            "kind": "script",
+            "output": {
+              "settled": true,
+              "status": "failing",
+              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "checkedAt": "2026-11-13T10:30:00.000Z",
+              "failed": [],
+              "blocked": [],
+              "pendingChecks": 0,
+              "comments": [],
+              "ignoredComments": 0
+            }
+          },
+          {
+            "nodeId": "triage",
+            "kind": "script",
+            "output": { "route": "fix", "kind": null, "summary": "fix" }
+          },
+          {
+            "nodeId": "prepare",
+            "kind": "script",
+            "output": {
+              "prHead": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "criteria": "CHECK1: the check passes",
+              "since": "2026-11-13T10:30:00.000Z"
+            }
+          },
+          {
+            "nodeId": "fix",
+            "kind": "workflow",
+            "error": "Agent failed twice"
+          },
+          {
+            "nodeId": "attentionAsk",
+            "kind": "script",
+            "output": {
+              "kind": "error",
+              "question": "Keep watching?",
+              "context": "c",
+              "evidence": "e",
+              "revision": "error"
+            }
+          },
+          {
+            "nodeId": "attention",
+            "kind": "input",
+            "output": { "choice": "stop" }
+          },
+          {
+            "nodeId": "grant",
+            "kind": "script",
+            "output": {
+              "route": "stop",
+              "outcome": "stopped",
+              "repairUntil": 2,
+              "summary": "stop"
+            }
+          },
+          {
+            "nodeId": "finish",
+            "kind": "script",
+            "output": {
+              "outcome": "stopped",
+              "prUrl": "https://github.com/o/r/pull/7",
+              "repairs": 1,
+              "lastPushedCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "summary": "stopped"
+            }
+          }
+        ],
+        "assertions": [
+          {
+            "kind": "output",
+            "path": "outcome",
+            "operator": "equals",
+            "expected": "stopped"
+          },
+          { "kind": "route", "nodeId": "fix", "visit": 1, "port": "failed" }
+        ]
+      }
+    ]
+  },
+  "interlock-pr-watcher (one-interval window)": {
+    "name": "Pull request watcher window",
+    "cases": [
+      {
+        "id": "window-green",
+        "name": "A window that ends with every check green and no trusted comment ends the run quietly",
+        "input": {
+          "prUrl": "https://github.com/o/r/pull/7",
+          "repoPath": "/tmp",
+          "maxRepairs": 1
+        },
+        "fixtures": [
+          {
+            "nodeId": "setup",
+            "kind": "script",
+            "output": {
+              "route": "watch",
+              "repoPath": "/tmp",
+              "url": "https://github.com/o/r/pull/7",
+              "maxRepairs": 2,
+              "checkCommands": null,
+              "since": "2026-11-13T10:00:00.000Z",
+              "summary": "Watching"
+            }
+          },
+          {
+            "nodeId": "watch",
+            "kind": "script",
+            "output": {
+              "settled": false,
+              "status": "passing",
+              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "checkedAt": "2026-11-13T10:30:00.000Z",
+              "failed": [],
+              "blocked": [],
+              "pendingChecks": 0,
+              "comments": [],
+              "ignoredComments": 0
+            }
+          },
+          {
+            "nodeId": "windowCheck",
+            "kind": "script",
+            "output": {
+              "settled": false,
+              "status": "passing",
+              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "checkedAt": "2026-11-13T10:30:00.000Z",
+              "failed": [],
+              "blocked": [],
+              "pendingChecks": 0,
+              "comments": [],
+              "ignoredComments": 0
+            }
+          },
+          {
+            "nodeId": "finish",
+            "kind": "script",
+            "output": {
+              "outcome": "checks_passed",
+              "prUrl": "https://github.com/o/r/pull/7",
+              "repairs": 0,
+              "lastPushedCommit": null,
+              "summary": "checks_passed"
+            }
+          }
+        ],
+        "assertions": [
+          {
+            "kind": "output",
+            "path": "outcome",
+            "operator": "equals",
+            "expected": "checks_passed"
+          },
+          { "kind": "route", "nodeId": "watch", "visit": 1, "port": "timeout" },
+          {
+            "kind": "route",
+            "nodeId": "windowCheck",
+            "visit": 1,
+            "port": "passing"
+          }
+        ]
+      },
+      {
+        "id": "window-pending",
+        "name": "A window that ends with checks still pending asks a person",
+        "input": {
+          "prUrl": "https://github.com/o/r/pull/7",
+          "repoPath": "/tmp",
+          "maxRepairs": 1
+        },
+        "fixtures": [
+          {
+            "nodeId": "setup",
+            "kind": "script",
+            "output": {
+              "route": "watch",
+              "repoPath": "/tmp",
+              "url": "https://github.com/o/r/pull/7",
+              "maxRepairs": 2,
+              "checkCommands": null,
+              "since": "2026-11-13T10:00:00.000Z",
+              "summary": "Watching"
+            }
+          },
+          {
+            "nodeId": "watch",
+            "kind": "script",
+            "output": {
+              "settled": false,
+              "status": "pending",
+              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "checkedAt": "2026-11-13T10:30:00.000Z",
+              "failed": [],
+              "blocked": [],
+              "pendingChecks": 0,
+              "comments": [],
+              "ignoredComments": 0
+            }
+          },
+          {
+            "nodeId": "windowCheck",
+            "kind": "script",
+            "output": {
+              "settled": false,
+              "status": "pending",
+              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "checkedAt": "2026-11-13T10:30:00.000Z",
+              "failed": [],
+              "blocked": [],
+              "pendingChecks": 1,
+              "comments": [],
+              "ignoredComments": 0
+            }
+          },
+          {
+            "nodeId": "attentionAsk",
+            "kind": "script",
+            "output": {
+              "kind": "window",
+              "question": "Keep watching?",
+              "context": "c",
+              "evidence": "e",
+              "revision": "window"
+            }
+          },
+          {
+            "nodeId": "attention",
+            "kind": "input",
+            "output": { "choice": "stop" }
+          },
+          {
+            "nodeId": "grant",
+            "kind": "script",
+            "output": {
+              "route": "stop",
+              "outcome": "stopped",
+              "repairUntil": 2,
+              "summary": "stop"
+            }
+          },
+          {
+            "nodeId": "finish",
+            "kind": "script",
+            "output": {
+              "outcome": "stopped",
+              "prUrl": "https://github.com/o/r/pull/7",
+              "repairs": 0,
+              "lastPushedCommit": null,
+              "summary": "stopped"
+            }
+          }
+        ],
+        "assertions": [
+          {
+            "kind": "output",
+            "path": "outcome",
+            "operator": "equals",
+            "expected": "stopped"
+          },
+          {
+            "kind": "route",
+            "nodeId": "windowCheck",
+            "visit": 1,
+            "port": "attention"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -15,6 +15,7 @@ import {
 } from '@interlock/runtime/boardImport';
 import sdlc from '../../../workflows/sdlc.json';
 import sdlcV2 from '../../../workflows/sdlc-v2.json';
+import prWatcher from '../../../workflows/pr-watcher.json';
 import evaluate from '../../../workflows/evaluate.json';
 
 const sdlcColumns = [
@@ -49,6 +50,7 @@ const bundleRoot = (bundle: StarterBundle) => {
   };
 };
 const sdlcV2Bundle = sdlcV2 as StarterBundle;
+const prWatcherBundle = prWatcher as StarterBundle;
 const catalog = [
   {
     id: 'sdlc',
@@ -68,6 +70,16 @@ const catalog = [
       'Plan, build, and review a change, with its own Plan and Change review.',
     requirements:
       'Coding agent and fresh reviewer. Agents ask until its Git worktree is on. Plan check commands run unprompted; pin them with checkCommands.',
+  },
+  {
+    id: 'pr-watcher',
+    template: bundleRoot(prWatcherBundle),
+    bundle: prWatcherBundle,
+    boardSuggestion: undefined,
+    summary:
+      'Experimental. Fix failing checks and trusted review comments on a pull request.',
+    requirements:
+      'gh signed in, coding agent and fresh reviewer. Pushes reviewed fixes to the pull request branch: never forced, never the default branch.',
   },
   {
     id: 'evaluate-comparison',

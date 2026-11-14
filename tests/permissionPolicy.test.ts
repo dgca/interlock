@@ -113,6 +113,8 @@ it.each<[string, PermissionAction]>([
     'find . -exec rm {} ;',
     'find . -delete',
     'rg --pre=sh x',
+    'find . -exec x {} ;',
+    'rg --pre cmd x',
     'cp f .GIT/config',
     'cp -vt.. f',
     'mv -ft.. f',
