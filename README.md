@@ -38,7 +38,7 @@ Interlock is a trusted local tool for one person. Workflows run Scripts, Fetch r
 
 New libraries start empty. Open **Workflows → Import → Starters**, select **SDLC workflow**, and choose **Add to library** for a published procedure that plans, implements, and reviews a software change. It creates a task branch, saves planning artifacts, and commits the completed change. It finishes locally by default. Existing libraries keep their workflows when you upgrade. Nothing is added or run automatically.
 
-The picker also offers **Evaluate workflow comparison**. Known existing copies have an **Open workflow** action; **Add another copy** is explicit. GitHub folders, local files and pasted JSON share the same import dialog and show a preview before importing. See [starter workflows](docs/starter-workflows.md).
+The picker also offers **SDLC workflow v2**, which adds parallel fresh reviewers, Interlock-run checks, native human checkpoints and a [low-approval permission policy](docs/sdlc-workflow-v2.md), and **Evaluate workflow comparison**. Known existing copies have an **Open workflow** action; **Add another copy** is explicit. GitHub folders, local files and pasted JSON share the same import dialog and show a preview before importing. See [starter workflows](docs/starter-workflows.md).
 
 For a standalone file import, use [workflows/sdlc.json](workflows/sdlc.json). In **Import → GitHub folder**, use `https://github.com/dgca/interlock/tree/main/workflows`, select **SDLC workflow**, and choose **Import workflow**. Review the imported draft and publish it before running. See [Import the SDLC starter](docs/sdlc-workflow.md#import-the-starter-into-an-existing-library) for local-file and CLI options.
 
