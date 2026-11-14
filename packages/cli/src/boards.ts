@@ -4,13 +4,17 @@ import { parse } from './json.js';
 import type { SaveBoardType } from '@interlock/core';
 
 const usage =
-  'Usage: board view [board-id] [--workflow ID] [--lane LANE] [--offset N] [--limit N] | board types | board save-type <json|@file>';
+  'Usage: board view [board-id] [--workflow ID] [--lane LANE] [--offset N] [--limit N] | board types | board save-type <json|@file> | board hold <run-id> <reason> | board release <run-id>';
 
 /** Board views and board types. */
 export async function runBoardCommand(args: string[]) {
   const client = engineClient();
   const [action, ...rest] = args;
   if (action === 'types' && !rest.length) return client.boardTypes.list.query();
+  if (action === 'hold' && rest.length === 2)
+    return client.boards.hold.mutate({ runId: rest[0], reason: rest[1] });
+  if (action === 'release' && rest.length === 1)
+    return client.boards.release.mutate({ runId: rest[0] });
   if (action === 'save-type' && rest.length === 1)
     return client.boardTypes.save.mutate(
       (await parse(rest[0])) as SaveBoardType,

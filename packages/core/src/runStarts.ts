@@ -71,6 +71,8 @@ export interface RunAdmission {
   admittedAt?: string;
   /** A held start stays queued until it is released. */
   hold?: { reason: string; at: string };
+  /** Time spent held before the latest release, excluded from queue wait. */
+  heldMs?: number;
 }
 export const runStartOptionsSchema = z
   .object({
@@ -100,6 +102,11 @@ export const runStartOptionsSchema = z
       .describe(
         'Library-wide active/queued task policy. Default allow; others require externalTask.',
       ),
+    hold: z
+      .object({ reason: z.string().trim().min(1).max(500) })
+      .strict()
+      .optional()
+      .describe('Keep the run queued until manage_pause release_start.'),
     after: z
       .array(startDependencySchema)
       .min(1)
@@ -111,6 +118,20 @@ export const runStartOptionsSchema = z
   })
   .strict();
 export type RunStartOptions = z.input<typeof runStartOptionsSchema>;
+/** Milliseconds a start has spent held, including a current hold. */
+export const heldMs = (admission: RunAdmission, now: number) =>
+  (admission.heldMs ?? 0) +
+  (admission.hold ? Math.max(0, now - Date.parse(admission.hold.at)) : 0);
+/** Park a queued run, or release one so admission can start it. */
+export const startHoldSchema = z
+  .object({
+    runId: z.string().min(1),
+    reason: z.string().trim().min(1).max(500),
+  })
+  .strict();
+export const startReleaseSchema = z
+  .object({ runId: z.string().min(1) })
+  .strict();
 export const runStartSchema = z.object({
   workflowId: z.string(),
   version: z.number().int().positive().optional(),

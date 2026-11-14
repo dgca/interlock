@@ -21,6 +21,7 @@ export function parseSummaryArgs(args: string[], withBudget = false) {
         '--after',
         '--on-active-external-task',
         '--version-policy',
+        '--hold',
       ].includes(arg)
     ) {
       if (i + 1 < args.length) optionArgs.push(`${arg}=${args[++i]}`);
@@ -50,6 +51,7 @@ export function parseSummaryArgs(args: string[], withBudget = false) {
             after: { type: 'string' as const },
             'on-active-external-task': { type: 'string' as const },
             'version-policy': { type: 'string' as const },
+            hold: { type: 'string' as const },
           }
         : {}),
     },

@@ -45,7 +45,9 @@ import { runSummaries } from './runSummaries.js';
 import { workflowCatalog, promptCatalog, suiteRuns } from './catalogs.js';
 import {
   boardRuns,
+  finishedBoardRuns,
   referencedBoardColumns,
+  type Tail,
   workflowBoardStageColumn,
 } from './workflowBoards.js';
 import { Transcripts } from './transcripts.js';
@@ -67,8 +69,6 @@ import type {
   WorkRequest,
   Workflow,
   WorkflowVersion,
-  WorkflowBoard,
-  BoardQuery,
   RunEvent,
   SavedPrompt,
   DeletedWorkflowVersion,
@@ -512,22 +512,10 @@ export class Store {
   workflowBoardStageColumn(workflowId: string, stageId: string) {
     return workflowBoardStageColumn(this.db, workflowId, stageId);
   }
-  boardRuns(
-    board: WorkflowBoard,
-    query: BoardQuery,
-    attentionCounts: Readonly<Record<string, number>>,
-    since: string,
-    terminalLimit: number,
-  ) {
-    return boardRuns(
-      this.db,
-      board,
-      query,
-      attentionCounts,
-      since,
-      terminalLimit,
-    );
-  }
+  boardRuns = (...args: Tail<Parameters<typeof boardRuns>>) =>
+    boardRuns(this.db, ...args);
+  finishedBoardRuns = (...args: Tail<Parameters<typeof finishedBoardRuns>>) =>
+    finishedBoardRuns(this.db, ...args);
   runsForReport = (filter: ReportFilter) => runsForReport(this.db, filter);
   countReportRuns = (filter: ReportFilter) => countReportRuns(this.db, filter);
   queuedRuns(): Run[] {

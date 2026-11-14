@@ -9,13 +9,20 @@ import type { api } from '../../lib/api';
 import { trpc, useQuery } from '../../lib/query';
 import { paths } from '../../routes/paths';
 import { BoardCard } from './BoardCard';
+import { BoardCardActions } from './BoardCardActions';
+import { runDisplayTitle } from '@interlock/core';
 import { BoardColumnsSkeleton } from './BoardSkeleton';
 import classes from './Boards.module.css';
 
-export type BoardView = Awaited<ReturnType<typeof api.boards.view.query>>;
+type BoardView = Awaited<ReturnType<typeof api.boards.view.query>>;
 type Lane = BoardView['lanes'][number];
 type ViewCard = Lane['cards'][number];
 const pageSize = 30;
+// Views rebuild every card, so poll instead of refetching on every engine event.
+const viewRefresh = {
+  meta: { engineRefresh: false },
+  refetchInterval: 5_000,
+} as const;
 
 /**
  * Lanes computed from run state for a typed board or a workflow's own stage
@@ -25,15 +32,13 @@ export function BoardLanes({
   scope,
   returnTo,
   empty,
-  cardActions,
 }: {
   scope: { id: string } | { workflowId: string };
   returnTo: string;
   empty?: ReactNode;
-  cardActions?: (card: ViewCard, view: BoardView) => ReactNode;
 }) {
   const query = useQuery(
-    trpc.boards.view.queryOptions({ ...scope, limit: pageSize }),
+    trpc.boards.view.queryOptions({ ...scope, limit: pageSize }, viewRefresh),
   );
   const read = workspaceRead('board', query);
   if (read.error)
@@ -55,6 +60,12 @@ export function BoardLanes({
           )}
         </Group>
       )}
+      {view.finished.total > view.finished.shown && (
+        <Text size="sm" c="dimmed" className={classes.empty}>
+          Showing the newest {view.finished.shown} of {view.finished.total} runs
+          finished in the last 24 hours.
+        </Text>
+      )}
       <div
         className={classes.scroller}
         tabIndex={0}
@@ -74,9 +85,21 @@ export function BoardLanes({
                   fields={view.fields}
                   runLink={paths.run(card.runId, { returnTo })}
                   requestLink={
-                    card.request && paths.request(card.request, returnTo)
+                    card.request &&
+                    (!('actions' in card) || card.actions.includes('answer'))
+                      ? paths.request(card.request, returnTo)
+                      : undefined
                   }
-                  actions={cardActions?.(card, view)}
+                  actions={
+                    'actions' in card && (
+                      <BoardCardActions
+                        card={card}
+                        title={runDisplayTitle(card)}
+                        runLink={paths.run(card.runId, { returnTo })}
+                        returnTo={returnTo}
+                      />
+                    )
+                  }
                 />
               )}
             />
@@ -99,12 +122,15 @@ function LaneColumn({
   const [pages, setPages] = useState(1);
   const extra = useQueries({
     queries: Array.from({ length: pages - 1 }, (_, page) =>
-      trpc.boards.view.queryOptions({
-        ...scope,
-        lane: lane.id,
-        offset: (page + 1) * pageSize,
-        limit: pageSize,
-      }),
+      trpc.boards.view.queryOptions(
+        {
+          ...scope,
+          lane: lane.id,
+          offset: (page + 1) * pageSize,
+          limit: pageSize,
+        },
+        viewRefresh,
+      ),
     ),
   });
   const ready = extra.every((page) => page.data && !page.isFetching);

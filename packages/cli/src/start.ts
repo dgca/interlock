@@ -14,7 +14,7 @@ export async function runStartCommand(args: string[]) {
   const { values, positionals } = parseSummaryArgs(args, true);
   if (positionals.length < 2 || positionals.length > 3)
     throw new Error(
-      'Usage: start <workflow-id> <json|@file> [version] [--title TEXT] [--summary] [--budget json|@file] [--request-id key] [--external-task json|@file] [--tag KEY=VALUE ...] [--priority N] [--after json|@file] [--on-active-external-task allow|reuse|reject|cancel_previous] [--version-policy pinned|latest-compatible]',
+      'Usage: start <workflow-id> <json|@file> [version] [--title TEXT] [--summary] [--budget json|@file] [--request-id key] [--external-task json|@file] [--tag KEY=VALUE ...] [--priority N] [--after json|@file] [--on-active-external-task allow|reuse|reject|cancel_previous] [--version-policy pinned|latest-compatible] [--hold REASON]',
     );
   const input = {
     title: typeof values.title === 'string' ? values.title : undefined,

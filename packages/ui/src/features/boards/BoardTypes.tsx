@@ -10,6 +10,8 @@ import {
   ActionError,
   Anchor,
   Button,
+  Checkbox,
+  Group,
   EmptyState,
   Loader,
   PageHeader,
@@ -135,6 +137,13 @@ const presets = {
   design: 'Design',
   research: 'Research',
 } as const;
+const actionLabels: Record<BoardTypeContent['actions'][number], string> = {
+  open: 'Open run',
+  answer: 'Answer requests',
+  cancel: 'Cancel run',
+  backlog: 'Move to backlog',
+  release: 'Release',
+};
 const blank: BoardTypeContent = {
   name: '',
   lanes: [{ id: 'in-progress', name: 'In progress' }],
@@ -296,6 +305,23 @@ function BoardTypeEditor({ initial }: { initial?: Saved }) {
               disabled={busy}
               onChange={(fields) => update({ fields })}
             />
+            <Checkbox.Group
+              label="Card actions"
+              description="Each action appears on a card only when its run allows it."
+              value={draft.actions}
+              onChange={(actions) => update({ actions })}
+            >
+              <Group gap="md" mt="xs">
+                {Object.entries(actionLabels).map(([value, label]) => (
+                  <Checkbox
+                    key={value}
+                    value={value}
+                    label={label}
+                    disabled={busy}
+                  />
+                ))}
+              </Group>
+            </Checkbox.Group>
             <ActionError message={error || (dirty ? problem : '')} />
           </Stack>
         </form>

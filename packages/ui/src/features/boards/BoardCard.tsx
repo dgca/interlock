@@ -74,14 +74,6 @@ function FieldValue({ value }: { value: unknown }) {
         {elapsed(value)}
       </time>
     );
-  if (value && typeof value === 'object')
-    return (
-      <>
-        {Object.entries(value)
-          .map(([key, item]) => `${key}=${String(item)}`)
-          .join(', ')}
-      </>
-    );
   return <>{String(value)}</>;
 }
 
@@ -120,7 +112,10 @@ export function BoardCard({
       card.fields[id] !== card.externalTask?.url,
   );
   return (
-    <li className={`${classes.card} ${stretched.container}`}>
+    <li
+      className={`${classes.card} ${stretched.container}`}
+      data-card-run={card.runId}
+    >
       <h3>
         <Link className={stretched.link} to={runLink}>
           {title}
@@ -205,7 +200,11 @@ export function BoardCard({
           withArrow
           className={stretched.action}
         />
-        {actions}
+        {actions && (
+          <Group gap={4} ml="auto" wrap="nowrap">
+            {actions}
+          </Group>
+        )}
       </Group>
     </li>
   );

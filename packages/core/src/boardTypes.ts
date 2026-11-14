@@ -310,6 +310,7 @@ const [coding, design, research] = boardTypeContentSchema.array().parse([
   {
     name: 'Design',
     lanes: [
+      { id: 'queued', name: 'Queued', match: [{ status: ['held', 'queued'] }] },
       stageLane('brief', 'Brief'),
       stageLane('explore', 'Explore'),
       {
@@ -323,6 +324,11 @@ const [coding, design, research] = boardTypeContentSchema.array().parse([
       stageLane('refine', 'Refine'),
       stageLane('handoff', 'Handoff'),
       { id: 'done', name: 'Done', match: [{ status: ['completed'] }] },
+      {
+        id: 'stopped',
+        name: 'Stopped',
+        match: [{ status: ['failed', 'cancelled'] }],
+      },
     ],
     fields: [
       { id: 'link', label: 'Brief', source: 'link' },

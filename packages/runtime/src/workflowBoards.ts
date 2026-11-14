@@ -13,6 +13,7 @@ import type { Store } from '@interlock/storage';
 import type { Requests } from './requests.js';
 import { boardCollection as collection } from './boardImport.js';
 import { BoardTypes, boardTypeCollection } from './boardTypes.js';
+import { RunAdmission } from './runAdmission.js';
 import { BoardViews, type BoardEngine } from './boardView.js';
 
 const terminalWindowMs = 86_400_000;
@@ -210,6 +211,27 @@ export class WorkflowBoards {
     };
     this.store.put(collection, board);
     return board;
+  }
+
+  /** Card action: park a queued top-level start until release (the Backlog lane). */
+  hold(input: { runId: string; reason: string }) {
+    this.store.transaction(() => {
+      const run = new RunAdmission(this.store).hold(input.runId, input.reason);
+      if (run) this.engine.event(run, 'run.held', `Held: ${input.reason}`);
+    });
+    const run = this.store.currentRun(input.runId)!;
+    return { runId: run.id, status: run.status, hold: run.admission?.hold };
+  }
+
+  /** Card action: return a held start to admission, which may start it now. */
+  release(input: { runId: string }) {
+    this.store.transaction(() => {
+      const run = new RunAdmission(this.store).release(input.runId);
+      if (run) this.engine.event(run, 'run.released', 'Released from hold');
+    });
+    this.engine.pump();
+    const run = this.store.currentRun(input.runId)!;
+    return { runId: run.id, status: run.status };
   }
 
   read(query: BoardQuery) {
