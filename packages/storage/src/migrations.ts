@@ -367,6 +367,16 @@ export const migrations: readonly Migration[] = [
   },
   // One-way: run documents no longer embed executions after this version.
   { version: 21, up: migrateRunExecutions },
+  {
+    version: 22,
+    up(db) {
+      // Boards list the runs that finished most recently.
+      db.exec(`
+        CREATE INDEX run_metadata_finished ON run_metadata(json_extract(value, '$.updatedAt') DESC)
+          WHERE status IN ('completed','failed','cancelled');
+      `);
+    },
+  },
 ];
 
 type Migration = { version: number; up: (db: DatabaseSync) => void };

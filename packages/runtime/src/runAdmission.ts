@@ -43,19 +43,31 @@ export class RunAdmission {
     };
   }
 
-  /** Park a queued run until release; admitted runs cannot return to the queue. */
+  /** Park a queued top-level start until release; admitted runs cannot return to the queue. */
   hold(runId: string, reason: string) {
     const run = this.queued(runId);
-    if (run.admission!.hold?.reason === reason) return run;
+    if (run.parentRunId && run.parentMode !== 'detached')
+      throw new InterlockError('Hold the parent run instead of a child run');
+    if (run.comparison || run.schedule)
+      throw new InterlockError(
+        'Comparison trials and scheduled starts cannot be held',
+      );
+    if (run.admission!.hold) return undefined;
     run.admission!.hold = { reason, at: new Date().toISOString() };
     run.admission!.blockers = [`Held: ${reason}`];
+    run.updatedAt = run.admission!.hold.at;
     this.store.put('runs', run);
     return run;
   }
 
   release(runId: string) {
     const run = this.queued(runId);
-    if (!run.admission!.hold) return run;
+    const hold = run.admission!.hold;
+    if (!hold) return undefined;
+    run.updatedAt = new Date().toISOString();
+    run.admission!.heldMs =
+      (run.admission!.heldMs ?? 0) +
+      Math.max(0, Date.parse(run.updatedAt) - Date.parse(hold.at));
     delete run.admission!.hold;
     run.admission!.blockers = [];
     this.store.put('runs', run);
@@ -67,7 +79,7 @@ export class RunAdmission {
     if (!run) throw new InterlockError('Run not found');
     if (run.status !== 'queued' || !run.admission)
       throw new InterlockError(
-        'Only queued runs can be held or released. Cancel a started run instead.',
+        'Only queued runs can be held or released. This run has already started; cancel it instead.',
       );
     return run;
   }

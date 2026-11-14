@@ -9,7 +9,7 @@ export function registerPauseTools(
 ) {
   tool(
     'manage_pause',
-    'Create, release and list persistent, independent pause holds. pause requires target {scope:"library"} or {scope:"workflow",workflowId}, an actor label and a reason; keep the returned ID. resume releases one exact ID and is idempotent when it is already released. Release only your own record; work continues only when all applicable holds clear. list without workflowId returns library holds, and with workflowId returns library holds plus that workflow\'s; an optional scope filter of workflow requires workflowId. offset and limit default to 0 and 20, with a maximum of 100, exact total and nextOffset. Pauses gate claims and launches, graph boundaries and input acceptance. Submissions, revisions, completion of in-flight work, reads, cancellation and cleanup continue. Manual starts may wait while paused. actor is only a label. list never mutates. hold {runId,reason} parks a queued start until release {runId}.',
+    'Create, release and list persistent, independent pause holds. pause requires target {scope:"library"} or {scope:"workflow",workflowId}, an actor label and a reason; keep the returned ID. resume releases one exact ID and is idempotent when it is already released. Release only your own record; work continues only when all applicable holds clear. list without workflowId returns library holds, and with workflowId returns library holds plus that workflow\'s; an optional scope filter of workflow requires workflowId. offset and limit default to 0 and 20, with a maximum of 100, exact total and nextOffset. Pauses gate claims and launches, graph boundaries and input acceptance. Submissions, revisions, completion of in-flight work, reads, cancellation and cleanup continue. Manual starts may wait while paused. actor is only a label. list never mutates. hold_start {runId,reason} parks a queued top-level start until release_start {runId}.',
     { request: pauseRequestSchema },
     ({ request }) =>
       request.action === 'list'
@@ -27,7 +27,7 @@ export function registerPauseTools(
             })
           : request.action === 'resume'
             ? client.pauses.resume({ id: request.id })
-            : request.action === 'hold'
+            : request.action === 'hold_start'
               ? client.boards.hold({
                   runId: request.runId,
                   reason: request.reason,

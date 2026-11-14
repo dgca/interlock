@@ -67,7 +67,7 @@ it('upgrades the published 0.2.13 database unchanged and executes both published
     const e = engine(file);
     expect(e.store.migration).toMatchObject({
       from: 7,
-      to: 21,
+      to: 22,
       backup: expect.any(String),
     });
     expect(db.prepare(existingDocuments).all()).toEqual(before);
@@ -174,7 +174,7 @@ it.each([12, 13, 14])(
       const upgrade = migrate(db, file);
       expect(upgrade).toMatchObject({
         from: version,
-        to: 21,
+        to: 22,
         backup: expect.any(String),
       });
       expect(
@@ -187,7 +187,7 @@ it.each([12, 13, 14])(
           )
           .all(),
       ).toEqual([]);
-      expect(migrate(db, file)).toEqual({ from: 21, to: 21 });
+      expect(migrate(db, file)).toEqual({ from: 22, to: 22 });
     } finally {
       db.close();
     }

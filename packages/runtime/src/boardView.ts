@@ -49,10 +49,20 @@ type CandidateRun = Pick<
 type Placed = CandidateRun & RunProjection;
 
 const terminalWindowMs = 86_400_000;
-const terminalLanePerCap = 20;
-const terminalScanLimit = 500;
-const terminalStatuses = ['completed', 'failed', 'cancelled'] as const;
+const finishedLimit = 100;
+const viewCardLimit = 300;
+const fieldLength = 200;
 const activeStatuses = new Set<RunStatus>(['queued', 'running', 'waiting']);
+
+/** Card fields carry short scalars only; structures become a placeholder. */
+function scalar(
+  value: Json | undefined,
+): string | number | boolean | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value === 'string') return value.slice(0, fieldLength);
+  if (typeof value === 'number' || typeof value === 'boolean') return value;
+  return Array.isArray(value) ? '(list)' : '(object)';
+}
 
 /** Stage names in graph order from Entry, then any unreachable stages. */
 function graphStages(definition: WorkflowDefinition) {
@@ -113,6 +123,7 @@ export type BoardEngine = {
   projectRuns<T extends { id: string }>(runs: T[]): (T & RunProjection)[];
   nowMs(): number;
   pump(): void;
+  event(run: Run, type: string, text: string): void;
   readonly usage: Usage;
 };
 
@@ -156,11 +167,10 @@ export class BoardViews {
     };
   }
 
-  /** Root and detached runs in scope: every active run plus the last day's finished runs. */
-  private candidates(scope: Resolved['scope']): CandidateRun[] {
+  private inScope(scope: Resolved['scope']) {
     const workflows = scope.workflowIds && new Set(scope.workflowIds);
     const systems = scope.systems && new Set(scope.systems);
-    const inScope = (run: CandidateRun) =>
+    return (run: CandidateRun) =>
       (!run.parentRunId || run.parentMode === 'detached') &&
       !run.batchNodeId &&
       !run.parallelBranch &&
@@ -169,45 +179,42 @@ export class BoardViews {
       Object.entries(scope.tags ?? {}).every(
         ([name, value]) => run.tags?.[name] === value,
       );
+  }
+
+  /** Root and detached runs in scope: every active run plus the newest runs finished today. */
+  private candidates(scope: Resolved['scope']) {
     const runs: CandidateRun[] = this.store
       .activeRunState()
       .map(({ run, execution }) => ({
         ...run,
         ...(execution && { stepStartedAt: execution.startedAt }),
       }))
-      .filter(inScope);
-    const since = new Date(
-      this.engine.nowMs() - terminalWindowMs,
-    ).toISOString();
-    const perWorkflow =
-      scope.workflowIds && scope.workflowIds.length <= 10
-        ? scope.workflowIds
-        : [undefined];
-    for (const workflowId of perWorkflow)
-      for (const status of terminalStatuses)
-        for (const found of this.store.findRuns({
-          status,
-          workflowId,
-          tags: scope.tags,
-          rootOnly: false,
-          limit: terminalScanLimit,
-        })) {
-          if (found.updatedAt < since) continue;
-          const run = this.store.currentRun(found.id);
-          if (run && inScope(run)) runs.push(run);
-        }
-    return runs;
+      .filter(this.inScope(scope));
+    const finished = this.store.finishedBoardRuns({
+      ...scope,
+      since: new Date(this.engine.nowMs() - terminalWindowMs).toISOString(),
+      limit: finishedLimit,
+    });
+    for (const id of finished.ids) {
+      const run = this.store.currentRun(id);
+      if (run) runs.push(run);
+    }
+    return {
+      runs,
+      finished: { total: finished.total, shown: finished.ids.length },
+    };
   }
 
   private cards(resolved: Resolved) {
-    const placed = this.engine.projectRuns(this.candidates(resolved.scope));
+    const { runs: candidates, finished } = this.candidates(resolved.scope);
+    const placed = this.engine.projectRuns(candidates);
     const groups = new Map<string, Placed[]>();
     for (const run of placed) {
       const key = boardCardKey(run);
       groups.set(key, [...(groups.get(key) ?? []), run]);
     }
     const requests = this.requests.byCard();
-    return [...groups].map(([id, runs]) => {
+    const cards = [...groups].map(([id, runs]) => {
       const run = placingRun(runs);
       const status: BoardLaneStatus =
         run.status === 'queued' && run.admission?.hold ? 'held' : run.status;
@@ -233,6 +240,7 @@ export class BoardViews {
         open,
       };
     });
+    return { cards, finished };
   }
 
   view(input: BoardViewQuery) {
@@ -240,7 +248,16 @@ export class BoardViews {
     if (query.id && !this.boards.get(query.id).typeId)
       return this.columnView(query);
     const resolved = this.resolve(query);
-    const cards = this.cards(resolved);
+    const { cards, finished } = this.cards(resolved);
+    const laneCount = resolved.type.lanes.length + 1;
+    // Bound the whole response: without a lane, each lane gets a share.
+    const limit =
+      query.lane === undefined
+        ? Math.min(
+            query.limit,
+            Math.max(5, Math.floor(viewCardLimit / laneCount)),
+          )
+        : query.limit;
     const lanes = [...resolved.type.lanes, unmappedLane].map((lane) => {
       const inLane = cards
         .filter((card) => card.lane === lane.id)
@@ -250,21 +267,14 @@ export class BoardViews {
             b.run.updatedAt.localeCompare(a.run.updatedAt) ||
             a.id.localeCompare(b.id),
         );
-      let finished = 0;
-      const kept = inLane.filter(
-        (card) =>
-          activeStatuses.has(card.run.status) ||
-          card.open.length > 0 ||
-          ++finished <= terminalLanePerCap,
-      );
       const page =
         query.lane === undefined || query.lane === lane.id
-          ? kept.slice(query.offset, query.offset + query.limit)
+          ? inLane.slice(query.offset, query.offset + limit)
           : [];
       return {
         id: lane.id,
         name: lane.name,
-        total: kept.length,
+        total: inLane.length,
         cards: page.map((card) => this.card(card, resolved)),
       };
     });
@@ -273,6 +283,7 @@ export class BoardViews {
       fields: resolved.type.fields.map(({ id, label }) => ({ id, label })),
       actions: resolved.type.actions,
       attentionCount: cards.reduce((sum, card) => sum + card.open.length, 0),
+      finished,
       lanes: lanes.filter(
         (lane) =>
           lane.total > 0 ||
@@ -285,25 +296,23 @@ export class BoardViews {
     };
   }
 
-  /** Request count for the Boards library; computes the same cards as the view. */
+  /** Request count for the Boards library: open requests whose card root is in scope. */
   attentionCount(board: WorkflowBoard) {
-    try {
-      return this.cards(this.resolve({ id: board.id })).reduce(
-        (sum, card) => sum + card.open.length,
-        0,
-      );
-    } catch (error) {
-      if (error instanceof InterlockError) return 0;
-      throw error;
+    const inScope = this.inScope(board.scope ?? {});
+    let count = 0;
+    for (const [cardId, open] of this.requests.byCard()) {
+      const run = this.store.currentRun(cardId);
+      if (run && inScope(run)) count += open.length;
     }
+    return count;
   }
 
   private card(
-    card: ReturnType<BoardViews['cards']>[number],
+    card: ReturnType<BoardViews['cards']>['cards'][number],
     resolved: Resolved,
   ) {
     const { run, runs, open } = card;
-    const fields: Record<string, Json> = {};
+    const fields: Record<string, string | number | boolean> = {};
     for (const field of resolved.type.fields) {
       const source =
         resolved.fieldPaths[run.workflowId]?.[field.id] ?? field.source;
@@ -323,7 +332,11 @@ export class BoardViews {
       stage: card.stage,
       waiting: run.waiting,
       actor: run.actor,
-      since: run.waiting?.since ?? run.stepStartedAt ?? run.updatedAt,
+      since:
+        run.admission?.hold?.at ??
+        run.waiting?.since ??
+        run.stepStartedAt ??
+        run.updatedAt,
       createdAt: run.createdAt,
       changedAt: run.updatedAt,
       ...(run.tags && { tags: run.tags }),
@@ -343,7 +356,7 @@ export class BoardViews {
   }
 
   private actions(
-    card: ReturnType<BoardViews['cards']>[number],
+    card: ReturnType<BoardViews['cards']>['cards'][number],
     allowed: BoardCardAction[],
   ) {
     const valid: Record<BoardCardAction, boolean> = {
@@ -360,14 +373,14 @@ export class BoardViews {
     source: string,
     run: Placed,
     runs: Placed[],
-  ): Json | undefined {
+  ): string | number | boolean | undefined {
     switch (source) {
       case 'link':
         return run.externalTask?.url;
       case 'workflow':
         return run.workflowName;
       case 'stage':
-        return run.stage;
+        return run.stage ?? undefined;
       case 'waiting':
         return run.waiting?.detail.message ?? run.waiting?.kind;
       case 'actor':
@@ -375,7 +388,11 @@ export class BoardViews {
       case 'age':
         return run.createdAt;
       case 'tags':
-        return run.tags;
+        return scalar(
+          Object.entries(run.tags ?? {})
+            .map(([name, value]) => `${name}=${value}`)
+            .join(', ') || undefined,
+        );
       case 'spend': {
         const scope = new Set(
           this.store
@@ -401,8 +418,7 @@ export class BoardViews {
         );
       if (!execution) continue;
       try {
-        const value = readPath(execution.output!, path.join('.'));
-        return typeof value === 'string' ? value.slice(0, 500) : value;
+        return scalar(readPath(execution.output!, path.join('.')));
       } catch {
         return undefined;
       }
@@ -424,6 +440,7 @@ export class BoardViews {
       fields: [],
       actions: ['open', 'answer'] as BoardCardAction[],
       attentionCount: read.attentionCount,
+      finished: { total: 0, shown: 0 },
       lanes: read.columns.map((column) => ({
         id: column.id,
         name: column.name,

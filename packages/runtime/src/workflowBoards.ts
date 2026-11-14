@@ -213,22 +213,23 @@ export class WorkflowBoards {
     return board;
   }
 
-  /** Card action: park a queued start until release (the Backlog lane). */
+  /** Card action: park a queued top-level start until release (the Backlog lane). */
   hold(input: { runId: string; reason: string }) {
-    const run = this.store.transaction(() =>
-      new RunAdmission(this.store).hold(input.runId, input.reason),
-    );
-    this.changed();
+    this.store.transaction(() => {
+      const run = new RunAdmission(this.store).hold(input.runId, input.reason);
+      if (run) this.engine.event(run, 'run.held', `Held: ${input.reason}`);
+    });
+    const run = this.store.currentRun(input.runId)!;
     return { runId: run.id, status: run.status, hold: run.admission?.hold };
   }
 
   /** Card action: return a held start to admission, which may start it now. */
   release(input: { runId: string }) {
-    this.store.transaction(() =>
-      new RunAdmission(this.store).release(input.runId),
-    );
+    this.store.transaction(() => {
+      const run = new RunAdmission(this.store).release(input.runId);
+      if (run) this.engine.event(run, 'run.released', 'Released from hold');
+    });
     this.engine.pump();
-    this.changed();
     const run = this.store.currentRun(input.runId)!;
     return { runId: run.id, status: run.status };
   }

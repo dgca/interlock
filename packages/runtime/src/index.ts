@@ -585,7 +585,7 @@ export class Engine {
   private notify() {
     queueMicrotask(() => this.listeners.forEach((listener) => listener()));
   }
-  private event(run: Run, type: string, text: string, boardColumnId?: string) {
+  event(run: Run, type: string, text: string, boardColumnId?: string) {
     if (type === 'external_input.held' || type === 'external_input.released')
       this.stalls.hold(
         `input:${run.id}`,

@@ -41,6 +41,7 @@ export function registerBoardTools(
             id: z.string().optional(),
             workflowId: z.string().optional(),
             lane: z.string().optional(),
+            offset: z.number().int().min(0).default(0),
             limit: z.number().int().min(1).max(100).default(10),
           })
           .strict(),
@@ -70,6 +71,7 @@ export function registerBoardTools(
           id: request.id,
           workflowId: request.workflowId,
           lane: request.lane,
+          offset: request.offset,
           limit: request.limit,
         });
       return client.boards.get(withoutAction(request));

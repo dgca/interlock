@@ -1,6 +1,10 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { afterEach, expect, it } from 'vitest';
 import {
   blankDefinition,
+  boardQuerySchema,
   boardTypePresets,
   definitionSchema,
   nodeSchema,
@@ -9,6 +13,7 @@ import {
 } from '@interlock/core';
 import { Engine } from '@interlock/runtime';
 import { Store } from '@interlock/storage';
+import { workflowCall } from './fixtures/detached';
 
 const engines = new Set<Engine>();
 afterEach(() => {
@@ -255,4 +260,144 @@ it('keeps a held start in the Backlog until release, offers only valid card acti
   engine.cancel(queued.id);
   expect(engine.run(held.id).status).toBe('waiting');
   expect(engine.run(waiting.id).status).toBe('queued');
+});
+
+it('lists runs on Done by when they finished, newest first, and says how many it shows', () => {
+  const engine = open();
+  const quick = publish(
+    engine,
+    'Quick',
+    definitionSchema.parse({
+      ...blankDefinition(),
+      nodes: [blankDefinition().nodes[0], blankDefinition().nodes[2]],
+      edges: [{ id: 'e', source: 'entry', target: 'exit' }],
+    }),
+  );
+  const slow = publish(engine, 'Slow', staged({ stage: 'Build' }));
+  const long = engine.start(slow, {}, undefined, undefined, {
+    title: 'Long run',
+  }).run;
+  for (let i = 0; i < 520; i++) engine.start(quick, {});
+  const work = engine.available(long.id)[0];
+  engine.submit(work.id, engine.claim(work.id, worker).token!, {});
+  const type = engine.boards.types.save({ type: boardTypePresets.coding });
+  const board = engine.boards.save(
+    saveBoardSchema.parse({ name: 'All', typeId: type.id }),
+  );
+  const view = engine.boards.views.view({ id: board.id, lane: 'done' });
+  expect(view.finished).toEqual({ total: 521, shown: 100 });
+  expect(view.lanes.find((lane) => lane.id === 'done')!.cards[0]).toMatchObject(
+    { runId: long.id },
+  );
+});
+
+it('shows node results only as short scalars', () => {
+  const engine = open();
+  const workflow = publish(
+    engine,
+    'Results',
+    staged({ stage: 'Open' }, { stage: 'Review' }),
+  );
+  const type = engine.boards.types.save({
+    type: {
+      name: 'Fields',
+      lanes: [{ id: 'all', name: 'All' }],
+      fields: [
+        { id: 'url', label: 'URL', source: 'node.step0.url' },
+        { id: 'long', label: 'Long', source: 'node.step0.long' },
+        { id: 'list', label: 'List', source: 'node.step0.items' },
+        { id: 'whole', label: 'Whole', source: 'node.step0' },
+        { id: 'missing', label: 'Missing', source: 'node.nowhere.url' },
+      ],
+    },
+  });
+  const board = engine.boards.save(
+    saveBoardSchema.parse({ name: 'Results', typeId: type.id }),
+  );
+  const run = engine.start(workflow, {}).run;
+  const work = engine.available(run.id)[0];
+  engine.submit(work.id, engine.claim(work.id, worker).token!, {
+    url: 'https://example.com/pull/1',
+    long: 'x'.repeat(5000),
+    items: Array.from({ length: 20_000 }, (_, i) => ({ i })),
+  });
+  const view = engine.boards.views.view({ id: board.id });
+  expect((view.lanes[0].cards[0] as { fields?: unknown }).fields).toEqual({
+    url: 'https://example.com/pull/1',
+    long: 'x'.repeat(200),
+    list: '(list)',
+    whole: '(object)',
+  });
+  expect(JSON.stringify(view).length).toBeLessThan(10_000);
+});
+
+it('keeps a held start queued across restart and pauses, and refuses holds on child runs', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'interlock-held-'));
+  try {
+    const file = join(dir, 'held.db');
+    let engine = new Engine(new Store(file), dir);
+    const child = publish(
+      engine,
+      'Child',
+      definitionSchema.parse({
+        ...staged({ stage: 'Build' }),
+        maxActiveRuns: 1,
+      }),
+    );
+    const parent = publish(engine, 'Parent', workflowCall(child));
+    const held = engine.start(child, {}, undefined, undefined, {
+      hold: { reason: 'Later' },
+    }).run;
+    engine.start(child, {});
+    const queuedChild = engine.inspect(engine.start(parent, {}).run.id)
+      .children[0];
+    expect(engine.run(queuedChild.id).status).toBe('queued');
+    expect(() =>
+      engine.boards.hold({ runId: queuedChild.id, reason: 'x' }),
+    ).toThrow('Hold the parent run');
+    engine.stop();
+    engine.store.close();
+    engine = new Engine(new Store(file), dir);
+    engines.add(engine);
+    engine.pump();
+    expect(engine.run(held.id).admission?.hold?.reason).toBe('Later');
+    engine.pauses.create({
+      target: { scope: 'workflow', workflowId: child },
+      actor: 'test',
+      reason: 'freeze',
+    });
+    engine.boards.release({ runId: held.id });
+    expect(engine.run(held.id).status).toBe('queued');
+    expect(engine.store.events(held.id).map((event) => event.type)).toEqual(
+      expect.arrayContaining(['run.released']),
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+it('reads a column board through the view exactly as the board read', () => {
+  const engine = open();
+  const board = engine.boards.save({
+    name: 'Columns',
+    columns: [{ name: 'Build' }],
+    workflowIds: [],
+  });
+  const workflow = publish(engine, 'Member', staged({ stage: 'Build' }));
+  engine.boards.assign({
+    workflowId: workflow,
+    boardId: board.id,
+    expectedBoardId: null,
+  });
+  engine.start(workflow, {});
+  const read = engine.boards.read(boardQuerySchema.parse({ id: board.id }));
+  const view = engine.boards.views.view({ id: board.id });
+  expect(view.lanes).toEqual(
+    read.columns.map(({ id, name, total, cards }) => ({
+      id,
+      name,
+      total,
+      cards,
+    })),
+  );
 });

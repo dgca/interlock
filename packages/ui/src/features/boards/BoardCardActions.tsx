@@ -13,7 +13,7 @@ import {
 } from '../../design-system';
 import stretched from '../../components/StretchedLink.module.css';
 import { api, errorMessage } from '../../lib/api';
-import { refreshQueries, useQueryClient } from '../../lib/query';
+import { refreshQueries, trpc, useQueryClient } from '../../lib/query';
 import { paths } from '../../routes/paths';
 import { RunCancellationDialog } from '../runs/RunCancellationDialog';
 
@@ -46,8 +46,19 @@ export function BoardCardActions({
     setError('');
     try {
       await mutation();
-      await refreshQueries(client);
+      await Promise.all([
+        refreshQueries(client),
+        client.invalidateQueries(trpc.boards.view.queryFilter()),
+      ]);
       setOpen(null);
+      // The card moved lanes; keep focus on it rather than the page body.
+      requestAnimationFrame(() =>
+        document
+          .querySelector<HTMLElement>(
+            `[data-card-run="${CSS.escape(card.runId)}"] h3 a`,
+          )
+          ?.focus(),
+      );
     } catch (failure) {
       setError(errorMessage(failure));
     } finally {
@@ -114,7 +125,7 @@ export function BoardCardActions({
           <ModalBody>
             <Textarea
               label="Reason"
-              description="The run stays queued until someone releases it."
+              description="The run stays queued until someone releases it. Only runs that have not started can move to the backlog."
               required
               autosize
               minRows={2}

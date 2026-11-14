@@ -25,7 +25,7 @@ A board type is a reusable layout: ordered lanes, the conditions that place a ca
 
 Workflows that use the type's stage names, such as Plan, Build and Review, appear in the matching lanes without setup. Under **Stage mapping**, map another workflow's stage name to one of the type's stages without changing the workflow. A misnamed stage never fails validation; its cards appear in **Unmapped**.
 
-Runs that share an external task (system and ID) form one card, as do the runs of a continue-as-new chain. When a card spans several runs, a run waiting on a person places it; otherwise the newest active run does, then the newest run. A typed board shows every active run in scope and runs finished in the last 24 hours, up to 20 finished cards per lane.
+Runs that share an external task (system and ID) form one card, as do the runs of a continue-as-new chain. When a card spans several runs, a run waiting on a person places it; otherwise the newest active run does, then the newest run. A typed board shows every active run in scope and the 100 most recently finished runs from the last 24 hours; when more finished, the board says how many it is showing.
 
 A type in use by a board cannot be deleted. Typed boards do not take workflow membership, so a workflow can appear on any number of them, and column boards keep working as before.
 
@@ -36,10 +36,10 @@ Cards on typed boards and stage boards change only when run state changes. To ac
 - **Open run** opens the run inspector.
 - The review link answers the card's oldest request, as on column boards.
 - **Cancel run** cancels the run tree with a reason, after the same preview as the inspector.
-- **Move to backlog** holds a queued start with a reason. It stays queued, and admission skips it, until someone releases it. A run that has started cannot return to the backlog.
+- **Move to backlog** holds a queued start with a reason. It stays queued, and admission skips it, until someone releases it. Only queued top-level starts can be held: Interlock has no per-run pause, so a run that has started cannot return to the backlog (cancel it, or pause its workflow). Child runs, comparison trials and scheduled starts cannot be held. Held time does not count as admission waiting in reports.
 - **Release** returns a held start to admission. It starts when capacity and its other start conditions allow.
 
-Actions apply to the run that places the card. A board type chooses which actions its cards offer. To start a run held, enter a **Hold reason** in the start dialog, pass `hold: { "reason": "..." }` to MCP `start_run` or `POST /api/runs`, or use `interlock start ... --hold REASON`. Hold or release a queued run with `interlock board hold RUN_ID REASON` and `interlock board release RUN_ID`, or MCP `manage_pause` actions `hold` and `release`. A held start is the only backlog item; there are no work items without a run.
+Actions apply to the run that places the card. A board type chooses which actions its cards offer. To start a run held, enter a **Hold reason** in the start dialog, pass `hold: { "reason": "..." }` to MCP `start_run` or `POST /api/runs`, or use `interlock start ... --hold REASON`. Hold or release a queued run with `interlock board hold RUN_ID REASON` and `interlock board release RUN_ID`, or MCP `manage_pause` actions `hold_start` and `release_start`. A held start is the only backlog item; there are no work items without a run.
 
 ## See a workflow's stages
 

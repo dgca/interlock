@@ -18,6 +18,11 @@ type BoardView = Awaited<ReturnType<typeof api.boards.view.query>>;
 type Lane = BoardView['lanes'][number];
 type ViewCard = Lane['cards'][number];
 const pageSize = 30;
+// Views rebuild every card, so poll instead of refetching on every engine event.
+const viewRefresh = {
+  meta: { engineRefresh: false },
+  refetchInterval: 5_000,
+} as const;
 
 /**
  * Lanes computed from run state for a typed board or a workflow's own stage
@@ -33,7 +38,7 @@ export function BoardLanes({
   empty?: ReactNode;
 }) {
   const query = useQuery(
-    trpc.boards.view.queryOptions({ ...scope, limit: pageSize }),
+    trpc.boards.view.queryOptions({ ...scope, limit: pageSize }, viewRefresh),
   );
   const read = workspaceRead('board', query);
   if (read.error)
@@ -54,6 +59,12 @@ export function BoardLanes({
             </Text>
           )}
         </Group>
+      )}
+      {view.finished.total > view.finished.shown && (
+        <Text size="sm" c="dimmed" className={classes.empty}>
+          Showing the newest {view.finished.shown} of {view.finished.total} runs
+          finished in the last 24 hours.
+        </Text>
       )}
       <div
         className={classes.scroller}
@@ -111,12 +122,15 @@ function LaneColumn({
   const [pages, setPages] = useState(1);
   const extra = useQueries({
     queries: Array.from({ length: pages - 1 }, (_, page) =>
-      trpc.boards.view.queryOptions({
-        ...scope,
-        lane: lane.id,
-        offset: (page + 1) * pageSize,
-        limit: pageSize,
-      }),
+      trpc.boards.view.queryOptions(
+        {
+          ...scope,
+          lane: lane.id,
+          offset: (page + 1) * pageSize,
+          limit: pageSize,
+        },
+        viewRefresh,
+      ),
     ),
   });
   const ready = extra.every((page) => page.data && !page.isFetching);
