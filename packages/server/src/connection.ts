@@ -9,7 +9,7 @@ export type ConnectionConfig = {
   fallback?: { command: string; args: string[] };
   /** Per-install API token, sent by first-party clients in both modes. */
   token?: string;
-  /** INTERLOCK_REQUIRE_TOKEN: reject /trpc, /mcp and /events without the token. */
+  /** INTERLOCK_REQUIRE_TOKEN: reject /api, /trpc, /mcp and /events without the token. */
   requireToken?: boolean;
 };
 

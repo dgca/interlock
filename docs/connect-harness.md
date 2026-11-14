@@ -27,7 +27,7 @@ Interlock creates a per-install API token on startup. The file is named `api-tok
 
 First-party clients send the token as `Authorization: Bearer <token>`. The UI receives it with the page. The `interlock` CLI and the stdio bridge read the file, so stdio configuration carries no token. Custom harness launchers inherit the server environment, so an `interlock mcp` bridge they start reads the same file. HTTP configuration copied from **Connect with MCP** includes the header.
 
-The token is optional in 0.2. Set `INTERLOCK_REQUIRE_TOKEN=1` before starting Interlock to reject requests without it on `/trpc`, `/mcp` and `/events` with HTTP 401. Existing configurations without the header keep working while the setting is off. With it on:
+The token is optional in 0.2. Set `INTERLOCK_REQUIRE_TOKEN=1` before starting Interlock to reject requests without it on `/api`, `/trpc`, `/mcp` and `/events` with HTTP 401. Existing configurations without the header keep working while the setting is off. With it on:
 
 - Startup prints a UI link that carries the token. Open it once per browser; the page keeps the token for later visits at that address.
 - Copy HTTP configuration again from **Connect with MCP** for clients configured without the header.
