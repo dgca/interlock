@@ -1,4 +1,4 @@
-import { afterEach, expect, it } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import {
   existsSync,
@@ -68,6 +68,7 @@ function setup() {
   return { root, repository, git, open, worktrees };
 }
 afterEach(async () => {
+  vi.unstubAllEnvs();
   for (const f of fixtures.splice(0)) {
     for (const engine of f.engines) {
       engine.stop();
@@ -348,9 +349,12 @@ it('runs hooks in the checkout and keeps a failed run’s checkout when asked', 
       repository: f.repository,
       retention: 'keep_on_failure',
       hooks: {
+        // Minimal mode withholds server variables except the named ones.
         afterCreate: {
+          environmentMode: 'minimal',
+          environmentPassthrough: ['HOOK_PASSED'],
           command:
-            'echo created > hook.txt && echo hook.txt >> "$(git rev-parse --git-path info/exclude)"',
+            'echo "created${HOOK_SECRET:-}${HOOK_PASSED}" > hook.txt && echo hook.txt >> "$(git rev-parse --git-path info/exclude)"',
         },
         beforeRemove: {
           command: `echo "$INTERLOCK_WORKSPACE_PATH $(cat hook.txt)" >> ${JSON.stringify(log)}`,
@@ -374,6 +378,8 @@ it('runs hooks in the checkout and keeps a failed run’s checkout when asked', 
       { id: 'b', source: 'script', target: 'exit' },
     ],
   });
+  vi.stubEnv('HOOK_SECRET', ' secret');
+  vi.stubEnv('HOOK_PASSED', ' passed');
   const failed = engine.start(id, { fail: true }).run.id;
   const passed = engine.start(id, {}).run.id;
   await until(
@@ -382,10 +388,10 @@ it('runs hooks in the checkout and keeps a failed run’s checkout when asked', 
       engine.workspaces.get(failed)?.state === 'retained' &&
       engine.workspaces.get(passed)?.state === 'removed',
   );
-  expect(engine.run(passed).output).toBe('created\n');
+  expect(engine.run(passed).output).toBe('created passed\n');
   expect(existsSync(engine.workspaces.get(failed)!.path)).toBe(true);
   expect(readFileSync(log, 'utf8')).toBe(
-    `${engine.workspaces.get(passed)!.path} created\n`,
+    `${engine.workspaces.get(passed)!.path} created passed\n`,
   );
 });
 

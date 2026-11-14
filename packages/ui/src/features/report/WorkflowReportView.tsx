@@ -30,6 +30,7 @@ import { api, errorMessage } from '../../lib/api';
 import { trpc, useQuery } from '../../lib/query';
 
 import { ReportLoadingContent } from './ReportSkeleton';
+import { ReportApprovals } from './ReportApprovals';
 import styles from './WorkflowReportView.module.css';
 import { RunTagFilter, AppliedRunTagFilters } from '../runs/RunTagFilter';
 import { PricingNote } from '../runs/PricingNote';
@@ -628,6 +629,10 @@ export function WorkflowReportView({
                   </>
                 )}
               </section>
+
+              {report.approvals && report.approvals.byRun.length > 0 && (
+                <ReportApprovals approvals={report.approvals} />
+              )}
 
               {/* Node Durations */}
               {report.nodes.length > 0 && (

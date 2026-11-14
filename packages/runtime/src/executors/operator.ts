@@ -17,6 +17,7 @@ import type { Engine } from '../index.js';
 import { HarnessRequestError, type HarnessRequest } from './contracts.js';
 import type { LauncherSession } from './launcher.js';
 import type { ManagedTranscripts } from './transcripts.js';
+import { policyRequests } from './permissionPolicy.js';
 import { active, attemptsCollection, now, type Job } from './supervision.js';
 
 /** Supervision state and operations the operator channel reads but does not own. */
@@ -30,7 +31,10 @@ export interface OperatorChannelHost {
 /** Operator messages to live executions, and harness questions answered by a person. */
 export class OperatorChannel {
   constructor(
-    private readonly engine: Pick<Engine, 'store'>,
+    private readonly engine: Pick<
+      Engine,
+      'store' | 'scriptApprovals' | 'workspaces'
+    >,
     private readonly transcripts: ManagedTranscripts,
     private readonly jobs: Map<string, Job>,
     private readonly launchedWork: Map<string, LauncherSession>,
@@ -214,6 +218,15 @@ export class OperatorChannel {
     });
     this.engine.store.touchRun(record.runId);
     return receipt;
+  }
+  /**
+   * Request handling for one session run: the workflow permission policy
+   * answers what it allows, and a person answers everything else.
+   */
+  sessionRequests(job: Job) {
+    return policyRequests(this.engine, job.work, job.record, (request) =>
+      this.request(job, request),
+    );
   }
   request(job: Job, input: HarnessRequest): Promise<ExecutorAnswer> {
     if (this.stopped || job.abort.signal.aborted)

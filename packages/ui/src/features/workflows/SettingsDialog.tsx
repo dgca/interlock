@@ -38,6 +38,7 @@ import { workflowTargets } from './workflowTargets';
 import type { WorkspaceRead } from '../../components/WorkspaceReads';
 import { NodeInspector } from './NodeInspector';
 import { WorkspaceSettings } from './WorkspaceSettings';
+import { PermissionPolicySettings } from './PermissionPolicySettings';
 import { nodeDescriptions } from './nodeDescriptions';
 import type { NodeSectionName } from './NodeSettingsSections';
 import { api, download } from '../../lib/api';
@@ -614,6 +615,12 @@ export function SettingsDialog({
                     <WorkspaceSettings
                       value={settings.definition.workspace}
                       onChange={(workspace) => patchDefinition({ workspace })}
+                    />
+                    <PermissionPolicySettings
+                      value={settings.definition.permissionPolicy}
+                      onChange={(permissionPolicy) =>
+                        patchDefinition({ permissionPolicy })
+                      }
                     />
                     <StallPolicyEditor
                       value={settings.definition}

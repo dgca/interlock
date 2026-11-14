@@ -8,7 +8,10 @@ import {
   blankDefinition,
   definitionSchema,
   scheduleConfigSchema,
+  type ManagedExecution,
+  type WorkRequest,
 } from '@interlock/core';
+import { policyRequests } from '../packages/runtime/src/executors/permissionPolicy';
 import {
   exportWorkflows,
   importWorkflows,
@@ -253,4 +256,65 @@ it('keeps imported Script content held in a duplicated workflow', async () => {
   const run = engine.start(copy.id, { marker }).run;
   await vi.waitFor(() => expect(engine.run(run.id).status).toBe('waiting'));
   expect(existsSync(marker)).toBe(false);
+});
+
+it('applies an imported or agent-written permission policy only after a person approves it', async () => {
+  const { engine, marker, person, agent } = setup();
+  const policy = {
+    allow: [{ kind: 'command' as const, pattern: 'git status' }],
+  };
+  const withPolicy = definitionSchema.parse({
+    ...scriptDefinition(),
+    permissionPolicy: policy,
+  });
+  const workflowId = imported(engine, [withPolicy]);
+  const run = engine.start(workflowId, { marker }).run;
+  await vi.waitFor(() => expect(engine.run(run.id).status).toBe('waiting'));
+  const held = latest(engine, run.id);
+  expect(held.kind).toBe('entry');
+  const session = () => {
+    const record = {
+      profile: { harness: 'claude-code' },
+      cwd: process.cwd(),
+    } as ManagedExecution;
+    const work = { runId: run.id, executionId: held.id } as WorkRequest;
+    return {
+      record,
+      active: policyRequests(engine, work, record, () => Promise.resolve({}))
+        .permissionPolicy,
+    };
+  };
+  expect(session()).toMatchObject({
+    active: undefined,
+    record: { permissionPolicy: { state: 'awaiting_approval' } },
+  });
+  const [request] = engine.requests.current();
+  expect(await person.requests.get(request.target)).toMatchObject({
+    question: 'Approve permission policy',
+    script: { language: 'permission-policy' },
+  });
+  await person.scripts.approve({ runId: run.id, executionId: held.id });
+  // The imported Script in the same workflow still waits for its own approval.
+  await vi.waitFor(() =>
+    expect(latest(engine, run.id)).toMatchObject({
+      kind: 'script',
+      status: 'waiting',
+    }),
+  );
+  expect(existsSync(marker)).toBe(false);
+  expect(session()).toMatchObject({
+    active: true,
+    record: { permissionPolicy: { state: 'applied' } },
+  });
+
+  // An agent cannot grant its own sessions permissions in the default mode.
+  const created = await agent.workflows.create({
+    name: 'Agent policy',
+    definition: { ...blankDefinition(), permissionPolicy: policy },
+  });
+  engine.publish(created.id);
+  const agentRun = engine.start(created.id, {}).run;
+  await vi.waitFor(() =>
+    expect(latest(engine, agentRun.id).scriptApproval).toBeDefined(),
+  );
 });

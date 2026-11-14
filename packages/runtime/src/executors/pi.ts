@@ -22,6 +22,7 @@ import {
   findExecutable,
   JsonLinesProcess,
 } from './process.js';
+import { piAction } from './permissionPolicy.js';
 
 /** Loaded explicitly by Pi; no package imports or checkout-relative assets. */
 export function piPermissions(
@@ -38,7 +39,7 @@ export function piPermissions(
       const detail = JSON.stringify(event.input, null, 2);
       if (!detail || detail.length > 12000 || !ctx.hasUI) return { block: true, reason: 'Approval details unavailable or too large' };
       let allowed = false;
-      try { allowed = await ctx.ui.confirm('Interlock requests ' + event.toolName, detail); }
+      try { allowed = await ctx.ui.confirm(${JSON.stringify(command + ':')} + event.toolName, detail); }
       catch { return { block: true, reason: 'Interlock approval failed' }; }
       if (!allowed) return { block: true, reason: 'User denied this action in Interlock' };
     });
@@ -213,7 +214,9 @@ export const piAdapter: HarnessAdapter = {
         if (event.type === 'tool_execution_start')
           input.onProgress(`Using ${String(event.toolName).slice(0, 160)}`);
         if (event.type === 'extension_ui_request') {
-          void answerUi(input, rpc!, event).catch((error) => fail(error));
+          void answerUi(input, rpc!, event, bridge).catch((error) =>
+            fail(error),
+          );
         }
       };
       const commands = await rpc.request('get_commands', {});
@@ -328,16 +331,34 @@ export const piAdapter: HarnessAdapter = {
   },
 };
 
-async function answerUi(input: HarnessRun, rpc: JsonLinesProcess, event: any) {
+async function answerUi(
+  input: HarnessRun,
+  rpc: JsonLinesProcess,
+  event: any,
+  bridge: string,
+) {
   const respond = (value: object) => {
     if (!input.signal.aborted)
       rpc.send({ type: 'extension_ui_response', id: event.id, ...value });
   };
   if (event.method === 'confirm') {
+    // The bridge names the tool; other extensions' confirmations stay unjudged.
+    const title = String(event.title ?? 'Pi requests approval');
+    const tool = title.startsWith(`${bridge}:`)
+      ? title.slice(bridge.length + 1)
+      : undefined;
+    const detail = String(event.message ?? '');
+    let action;
+    try {
+      action = tool ? piAction(tool, JSON.parse(detail), input.cwd) : undefined;
+    } catch {
+      action = undefined;
+    }
     const answer = await input.request({
       kind: 'permission',
-      title: String(event.title ?? 'Pi requests approval'),
-      detail: String(event.message ?? ''),
+      title: tool ? `Interlock requests ${tool}` : title,
+      detail,
+      ...(action ? { action } : {}),
     });
     respond({ confirmed: answer.allow === true });
   } else if (['select', 'input', 'editor'].includes(event.method)) {

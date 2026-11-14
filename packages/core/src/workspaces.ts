@@ -1,4 +1,10 @@
 import { z } from 'zod';
+import {
+  environmentModeSchema,
+  environmentPassthroughSchema,
+} from './environmentMode.js';
+import { permissionPolicySchema } from './permissionPolicy.js';
+export * from './permissionPolicy.js';
 
 /** The only template token; it makes every branch name unique to its run. */
 const workspaceBranchToken = '{runId}';
@@ -26,9 +32,17 @@ const hookSchema = z
     language: z.enum(['javascript', 'bash']).optional(),
     command: z.string().min(1),
     timeoutMs: z.number().int().min(100).max(600000).default(60000),
+    // Omitted mode passes the full server environment, as before modes existed.
+    environmentMode: environmentModeSchema.optional(),
+    environmentPassthrough: environmentPassthroughSchema
+      .refine(
+        (names) => names.every((name) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(name)),
+        'Use letters, digits and underscores in passthrough names',
+      )
+      .optional(),
   })
   .strict();
-export const workspaceSettingsSchema = z
+const workspaceSettingsSchema = z
   .object({
     repository: z
       .string()
@@ -83,6 +97,12 @@ export const workspaceSettingsSchema = z
   .describe(
     'Give each run its own Git worktree on a new branch. Agent and Script nodes without their own cwd work there.',
   );
+
+/** Workflow settings for where a run works and what its agents may do there. */
+export const workspaceFields = {
+  workspace: workspaceSettingsSchema.optional(),
+  permissionPolicy: permissionPolicySchema.optional(),
+};
 
 /** Stored lifecycle of a run's worktree, keyed by the run that owns it. */
 export interface ManagedWorkspace {

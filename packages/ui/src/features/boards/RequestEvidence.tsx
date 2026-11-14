@@ -5,7 +5,11 @@ import type { api } from '../../lib/api';
 import classes from './Boards.module.css';
 
 type Detail = Awaited<ReturnType<typeof api.requests.get.query>>;
-const languages = { javascript: 'JavaScript', bash: 'Bash' };
+const languages = {
+  javascript: 'JavaScript',
+  bash: 'Bash',
+  'permission-policy': 'Policy',
+};
 
 export function ReviewText({ children }: { children: string }) {
   const links =
@@ -25,6 +29,14 @@ export function ReviewText({ children }: { children: string }) {
   parts.push(children.slice(cursor));
   return <p className={classes.reviewText}>{parts}</p>;
 }
+
+/** Outcome of an approved Script or permission policy request. */
+export const approvedLabel = (
+  detail: Extract<Detail, { kind: 'scriptApproval' }>,
+) =>
+  detail.script.language === 'permission-policy'
+    ? 'Policy approved'
+    : 'Script approved';
 
 /** Material a person reviews before answering: Human input evidence or Script code. */
 export function RequestEvidence({ detail }: { detail: Detail }) {

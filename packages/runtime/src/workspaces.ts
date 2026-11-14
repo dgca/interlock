@@ -21,7 +21,11 @@ import {
 import type { ContextContinuityGroups } from './contextContinuity.js';
 import { sourceQuiescence } from './quiescence.js';
 import type { ScriptApprovals } from './scriptApprovals.js';
-import { executeScript } from './scripts.js';
+import {
+  baseEnvironment,
+  executeScript,
+  withheldEnvironmentNames,
+} from './scripts.js';
 import type { TrialEnvironments } from './trialEnvironments.js';
 import {
   resolveAndValidateCwd,
@@ -152,6 +156,11 @@ export class ManagedWorkspaces {
    * for preparation, and text is a preparation error that fails the step.
    */
   gate(run: Run, definition: WorkflowDefinition): boolean | string | undefined {
+    // A permission policy scoped to this workspace may first wait for a person.
+    const policy = this.host.scriptApprovals.policyGate(run, definition, () =>
+      this.pendingHookFor(run, definition),
+    );
+    if (policy !== undefined) return policy;
     if (!this.owns(run, definition)) return undefined;
     const settings = definition.workspace!;
     const held = run.executions.at(-1);
@@ -245,6 +254,12 @@ export class ManagedWorkspaces {
     );
     return false;
   }
+  /** An imported hook that would hold this run before its worktree is created. */
+  pendingHookFor(run: Run, definition: WorkflowDefinition) {
+    return this.owns(run, definition) && !usable(this.get(run.id))
+      ? this.pendingHook(run, definition.workspace!)
+      : undefined;
+  }
   private pendingHook(run: Run, settings: Settings) {
     for (const hook of Object.values(settings.hooks ?? {})) {
       const hash = this.host.scriptApprovals.required(run.workflowId, hook);
@@ -277,10 +292,17 @@ export class ManagedWorkspaces {
       workspace.path,
       signal,
       hook.language,
-      { ...process.env, ...context },
+      { ...baseEnvironment(hook), ...context },
     ).catch((error: Error) => {
-      if (error.message !== 'Script stdout must contain one JSON value')
-        throw new InterlockError(`The ${name} hook failed: ${error.message}`);
+      if (error.message === 'Script stdout must contain one JSON value') return;
+      const withheld = withheldEnvironmentNames(
+        hook,
+        [hook.command, error.message],
+        [],
+      );
+      throw new InterlockError(
+        `The ${name} hook failed: ${error.message}${withheld.length ? ` Minimal environment mode did not pass ${withheld.join(', ')}; add ${withheld.length > 1 ? 'these names' : 'it'} to the hook's passthrough names or use inherit.` : ''}`,
+      );
     });
   }
   private job(id: string, work: (signal: AbortSignal) => Promise<unknown>) {

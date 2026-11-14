@@ -92,6 +92,13 @@ it.each(['standard', 'read-only', 'full-access'] as const)(
     expect(args.request).toHaveBeenCalledTimes(
       permissions === 'standard' ? 1 : 0,
     );
+    if (permissions === 'standard')
+      expect(args.request).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: 'Interlock requests bash',
+          action: { kind: 'command', command: 'test command', cwd: args.cwd },
+        }),
+      );
     expect(result.usageScope).toBe('attempt');
     expect(result.usage).toEqual([
       {

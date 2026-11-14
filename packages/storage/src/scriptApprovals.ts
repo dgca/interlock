@@ -12,8 +12,13 @@ export type ScriptApproval = {
   approvedAt?: string;
 };
 
-/** Omitted language is Bash, so both spellings of a legacy Script share a hash. */
-export function scriptContentHash(script: ScriptContent) {
+/**
+ * Omitted language is Bash, so both spellings of a legacy Script share a hash.
+ * A permission policy uses its own language tag, so it never shares a Script's hash.
+ */
+export function scriptContentHash(
+  script: ScriptContent | { language: 'permission-policy'; command: string },
+) {
   return createHash('sha256')
     .update(JSON.stringify([script.language ?? 'bash', script.command]))
     .digest('hex');

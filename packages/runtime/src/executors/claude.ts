@@ -17,6 +17,7 @@ import {
   findExecutable,
   spawnManagedProcess,
 } from './process.js';
+import { claudeAction } from './permissionPolicy.js';
 
 export const claudeAdapter: HarnessAdapter = {
   id: 'claude-code',
@@ -132,6 +133,15 @@ export const claudeAdapter: HarnessAdapter = {
           ...(input.sessionId ? { resume: input.sessionId } : {}),
           abortController,
           settingSources: ['user', 'project', 'local'],
+          // Policy paths resolve from the session directory, so Bash returns there.
+          ...(input.permissionPolicy
+            ? {
+                env: {
+                  ...process.env,
+                  CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR: '1',
+                },
+              }
+            : {}),
           permissionMode:
             input.profile.permissions === 'read-only'
               ? 'plan'
@@ -195,6 +205,7 @@ export const claudeAdapter: HarnessAdapter = {
               kind: 'permission',
               title: `Claude Code requests ${name}`,
               detail: JSON.stringify(parameters, null, 2),
+              action: claudeAction(name, parameters, input.cwd),
             });
             return answer.allow
               ? { behavior: 'allow', updatedInput: parameters }
