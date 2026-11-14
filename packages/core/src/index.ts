@@ -28,7 +28,9 @@ export * from './simulation.js';
 export * from './runChains.js';
 export * from './runStarts.js';
 export * from './runTags.js';
+export * from './runPages.js';
 import { runTagsSchema } from './runTags.js';
+import { runPageCursorSchema, runStatusSchema } from './runPages.js';
 export * from './runVersions.js';
 import {
   startRequestIdSchema,
@@ -715,19 +717,17 @@ export interface WorkflowVersion {
   pinnedPromptRevisions?: Record<string, number>;
   createdAt: string;
 }
-export type RunStatus =
-  'queued' | 'running' | 'waiting' | 'completed' | 'failed' | 'cancelled';
+export type RunStatus = z.infer<typeof runStatusSchema>;
 export const runQuerySchema = z.object({
   requestId: startRequestIdSchema.optional(),
   externalTask: externalTaskIdentitySchema.optional(),
   tags: runTagsSchema.optional(),
   chainRootRunId: z.string().min(1).optional(),
   workflowId: z.string().optional(),
-  status: z
-    .enum(['queued', 'running', 'waiting', 'completed', 'failed', 'cancelled'])
-    .optional(),
+  status: runStatusSchema.optional(),
   rootOnly: z.boolean().default(false),
   limit: z.number().int().min(1).max(1000).default(50),
+  afterRunId: runPageCursorSchema.optional(),
   inputMatch: z.object({ path: z.string(), equals: jsonSchema }).optional(),
 });
 export type RunQuery = z.infer<typeof runQuerySchema>;

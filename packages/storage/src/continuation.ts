@@ -107,8 +107,9 @@ export function continuationState(db: DatabaseSync, id: string) {
       '$.checkSummary', CASE WHEN json_type(e.value, '$.check.output') IS NOT NULL THEN json_object(
         'output', substr(e.value -> '$.check.output', 1, 512),
         'truncated', length(e.value -> '$.check.output') > 512) END) AS value
-    FROM tree CROSS JOIN documents d ON d.collection = 'runs' AND d.id = tree.id, json_each(d.value, '$.executions') e
-    ORDER BY d.rowid, CAST(e.key AS INTEGER)
+    FROM tree CROSS JOIN documents d ON d.collection = 'runs' AND d.id = tree.id
+    CROSS JOIN run_executions e ON e.run_id = d.id
+    ORDER BY d.rowid, e.position
   `,
       )
       .all(id),

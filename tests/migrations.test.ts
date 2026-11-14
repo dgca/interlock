@@ -16,10 +16,18 @@ import { Engine } from '@interlock/runtime';
 import { migrate, migrations } from '../packages/storage/src/migrations';
 import { blankDefinition, nodeSchema } from '@interlock/core';
 import fixture from './fixtures/schema-v1.json';
+import { batchDefinition } from './fixtures/batch';
+import { parallelDefinition } from './fixtures/parallel';
+import { workflowCall } from './fixtures/detached';
 import previousRelease from './fixtures/schema-v2.json';
-// Schema 20 adds approval records for stored Scripts; other documents stay as written.
-const existingDocuments =
-  "SELECT * FROM documents WHERE collection != 'scriptApprovals' ORDER BY rowid";
+// Schema 20 adds approval records for stored Scripts. Schema 21 moves executions
+// into their own rows; reassemble run documents so their content compares as written.
+const existingDocuments = `SELECT collection, id, CASE
+    WHEN collection = 'runs' AND json_type(value, '$.executions') = 'array'
+    THEN json_set(value, '$.executions', (SELECT json_group_array(json(e.value) ORDER BY e.position)
+      FROM run_executions e WHERE e.run_id = d.id))
+    ELSE value END AS value
+  FROM documents d WHERE collection != 'scriptApprovals' ORDER BY rowid`;
 
 const directories: string[] = [];
 const connections: { close(): void }[] = [];
@@ -74,9 +82,9 @@ const next = [
 it('initializes empty databases and reopens current databases without a backup', () => {
   const file = path();
   const db = open(file);
-  expect(migrate(db, file)).toEqual({ from: 0, to: 20 });
+  expect(migrate(db, file)).toEqual({ from: 0, to: 21 });
   expect(db.prepare('PRAGMA synchronous').get()).toEqual({ synchronous: 2 });
-  expect(migrate(db, file)).toEqual({ from: 20, to: 20 });
+  expect(migrate(db, file)).toEqual({ from: 21, to: 21 });
   expect(existsSync(`${file}.backups`)).toBe(false);
 });
 
@@ -99,7 +107,7 @@ it('indexes queued comparison roots during schema-8 upgrade without rewriting ru
   const before = db.prepare('SELECT * FROM documents ORDER BY rowid').all();
   expect(migrate(db, file)).toMatchObject({
     from: 8,
-    to: 20,
+    to: 21,
     backup: expect.any(String),
   });
   expect(db.prepare('SELECT * FROM documents ORDER BY rowid').all()).toEqual(
@@ -278,7 +286,7 @@ it('opens the previous release without rewriting records and executes its publis
   connections.push(store);
   expect(store.migration).toMatchObject({
     from: 1,
-    to: 20,
+    to: 21,
     backup: expect.any(String),
   });
   expect(
@@ -325,7 +333,7 @@ it('upgrades schema-2 documents without rewriting them and persists revisions ac
   connections.push(store);
   expect(store.migration).toMatchObject({
     from: 2,
-    to: 20,
+    to: 21,
     backup: expect.any(String),
   });
   expect(db.prepare(existingDocuments).all()).toEqual(before);
@@ -336,7 +344,7 @@ it('upgrades schema-2 documents without rewriting them and persists revisions ac
   expect(revision).toBeGreaterThan(0);
   const reopened = new Store(file);
   connections.push(reopened);
-  expect(reopened.migration).toEqual({ from: 20, to: 20 });
+  expect(reopened.migration).toEqual({ from: 21, to: 21 });
   expect(reopened.continuation(run.id).revision).toBe(revision);
   store.remove('runs', run.id);
   expect(
@@ -358,7 +366,7 @@ it('adds run summary indexes to schema-6 databases without rewriting records', (
   connections.push(store);
   expect(store.migration).toMatchObject({
     from: 6,
-    to: 20,
+    to: 21,
     backup: expect.any(String),
   });
   expect(store.get('runs', run.id)).toEqual(run);
@@ -449,7 +457,7 @@ it('indexes unresolved stalls during schema-10 upgrade without discarding resolv
   const before = db.prepare('SELECT * FROM documents ORDER BY rowid').all();
   expect(migrate(db, file)).toMatchObject({
     from: 10,
-    to: 20,
+    to: 21,
     backup: expect.any(String),
   });
   expect(db.prepare('SELECT * FROM documents ORDER BY rowid').all()).toEqual(
@@ -493,12 +501,10 @@ it('adds lifecycle indexes and active background projection to schema-12 without
   const before = db.prepare('SELECT * FROM documents ORDER BY rowid').all();
   expect(migrate(db, file)).toMatchObject({
     from: 12,
-    to: 20,
+    to: 21,
     backup: expect.any(String),
   });
-  expect(db.prepare('SELECT * FROM documents ORDER BY rowid').all()).toEqual(
-    before,
-  );
+  expect(db.prepare(existingDocuments).all()).toEqual(before);
   const indexes = db
     .prepare(
       "SELECT name FROM sqlite_schema WHERE type = 'index' AND name LIKE 'event_deliveries_%'",
@@ -555,7 +561,7 @@ it('approves Scripts stored before approvals existed so schema-19 workflows keep
   source.store.close();
   const store = new Store(file);
   connections.push(store);
-  expect(store.migration).toMatchObject({ from: 19, to: 20 });
+  expect(store.migration).toMatchObject({ from: 19, to: 21 });
   expect(store.list('scriptApprovals')).toEqual([
     expect.objectContaining({ workflowId: workflow.id, state: 'approved' }),
   ]);
@@ -564,6 +570,115 @@ it('approves Scripts stored before approvals existed so schema-19 workflows keep
     const run = engine.start(workflow.id, {}).run;
     await vi.waitFor(() => expect(engine.run(run.id).status).toBe('completed'));
     expect(engine.run(run.id).output).toBe(42);
+  } finally {
+    engine.stop();
+  }
+});
+
+it('moves executions of active, waiting, failed and nested runs into rows and keeps them running after restart', () => {
+  // Runs written through the engine, copied into a schema-20 database as the previous release stored them.
+  const source = new Engine(new Store(':memory:'), process.cwd());
+  const publish = (definition: ReturnType<typeof blankDefinition>) => {
+    const workflow = source.create('Upgrade', '', definition);
+    source.publish(workflow.id);
+    return workflow.id;
+  };
+  const once = blankDefinition();
+  once.nodes[1] = nodeSchema.parse({ ...once.nodes[1], maxAttempts: 1 });
+  const agent = publish(once);
+  const batch = publish(batchDefinition());
+  const parallel = publish(parallelDefinition());
+  const caller = publish(workflowCall(agent, 'wait'));
+  const worker = {
+    workerId: 'upgrade',
+    freshContext: false,
+    tools: [],
+    skills: [],
+  };
+  const claim = (engine: Engine, runId?: string) =>
+    engine.claim(engine.available(runId)[0].id, worker);
+  const start = (workflowId: string, input: unknown = {}) =>
+    source.start(workflowId, input as never).run.id;
+  for (let index = 0; index < 40; index++) {
+    const work = claim(source, start(agent, { index }));
+    source.submit(work.id, work.token!, { index });
+  }
+  const failed = start(agent);
+  const failing = claim(source, failed);
+  source.reportFailure(failing.id, failing.token!, 'step failed');
+  const claimed = start(agent);
+  const held = claim(source, claimed);
+  const waiting = start(agent);
+  const batchRun = start(batch, ['a', 'b', 'c']);
+  const item = claim(source, batchRun);
+  source.submit(item.id, item.token!, 'A');
+  const parallelRun = start(parallel);
+  const branch = claim(source, parallelRun);
+  source.submit(branch.id, branch.token!, 'reviewed');
+  const callerRun = start(caller);
+  const sourceRuns = source.store.runs();
+  expect(new Set(sourceRuns.map((run) => run.status))).toEqual(
+    new Set(['completed', 'failed', 'waiting']),
+  );
+  expect(sourceRuns.filter((run) => run.parentRunId).length).toBeGreaterThan(3);
+  const file = path(),
+    db = open(file);
+  migrate(db, file, migrations.slice(0, 20));
+  const insert = db.prepare('INSERT INTO documents VALUES (?, ?, ?)');
+  for (const { collection } of source.store['db']
+    .prepare('SELECT DISTINCT collection FROM documents')
+    .all())
+    for (const record of source.store.list<{ id: string }>(
+      collection as string,
+    ))
+      insert.run(collection, record.id, JSON.stringify(record));
+  source.stop();
+  const derived =
+    'SELECT id, status, execution, execution_count FROM run_metadata ORDER BY position';
+  const before = {
+    derived: db.prepare(derived).all(),
+    revisions: db.prepare('SELECT * FROM run_revisions ORDER BY run_id').all(),
+    documents: db
+      .prepare(
+        "SELECT * FROM documents WHERE collection != 'scriptApprovals' ORDER BY rowid",
+      )
+      .all(),
+  };
+
+  const store = new Store(file);
+  connections.push(store);
+  expect(existsSync(store.migration.backup!)).toBe(true);
+  expect(store.migration).toMatchObject({ from: 20, to: 21 });
+  expect(db.prepare(existingDocuments).all()).toEqual(before.documents);
+  expect(db.prepare(derived).all()).toEqual(before.derived);
+  expect(
+    db.prepare('SELECT * FROM run_revisions ORDER BY run_id').all(),
+  ).toEqual(before.revisions);
+  expect(
+    db
+      .prepare(
+        "SELECT count(*) AS embedded FROM documents WHERE collection = 'runs' AND json_array_length(value, '$.executions') > 0",
+      )
+      .get(),
+  ).toEqual({ embedded: 0 });
+  for (const run of sourceRuns) expect(store.get('runs', run.id)).toEqual(run);
+
+  const engine = new Engine(store, process.cwd());
+  try {
+    engine.submit(held.id, held.token!, { resumed: true });
+    for (
+      let work = engine.available();
+      work.length;
+      work = engine.available()
+    ) {
+      const next = claim(engine);
+      engine.submit(next.id, next.token!, 'done');
+    }
+    for (const id of [claimed, waiting, batchRun, parallelRun, callerRun])
+      expect(engine.run(id).status).toBe('completed');
+    expect(engine.run(claimed).output).toEqual({ resumed: true });
+    expect(engine.run(failed).status).toBe('failed');
+    expect(engine.run(batchRun).executions.at(-1)!.nodeId).toBe('exit');
   } finally {
     engine.stop();
   }

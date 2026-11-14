@@ -21,7 +21,7 @@ export const usage = [
   'publish <id> [--cascade]',
   'work-resources <json|@file> (inspect by workId or runId+executionId; release exact uncertain attempt after stop confirmation)',
   'start <workflow-id> <json|@file> [version] [--title TEXT] [--summary] [--budget json|@file] [--request-id key] [--external-task json|@file] [--tag KEY=VALUE ...] [--priority N] [--after json|@file] [--on-active-external-task allow|reuse|reject|cancel_previous] [--version-policy pinned|latest-compatible] [--hold REASON] (--hold keeps the run queued until board release)',
-  'runs [--tag KEY=VALUE ...] [--request-id KEY] [--external-task json|@file] [--workflow ID] [--chain ROOT_RUN_ID] [--status STATUS] [--root-only] [--limit N] [--input-path PATH --equals JSON] (no flags preserves the full history dump)',
+  'runs [--tag KEY=VALUE ...] [--request-id KEY] [--external-task json|@file] [--workflow ID] [--chain ROOT_RUN_ID] [--status STATUS] [--root-only] [--limit N] [--after-run RUN_ID] [--input-path PATH --equals JSON] (without filters: full runs, newest first, 1000 per page; filters: summaries)',
   "board view [board-id] [--workflow ID] [--lane LANE] [--offset N] [--limit N] (lanes and cards computed from run state; --workflow alone reads that workflow's stage board)",
   'board types | board save-type <json|@file: {"id"?,"expectedRevision"?,"type":{...}}> (list, create or update board types)',
   'board hold <run-id> <reason> | board release <run-id> (park a queued start in the Backlog, or release it to admission)',
