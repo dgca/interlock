@@ -19,6 +19,7 @@ import {
   spawnManagedProcess,
 } from './process.js';
 import { claudeAction } from './permissionPolicy.js';
+import { toolCallEnvironment } from '../toolCalls.js';
 
 export const claudeAdapter: HarnessAdapter = {
   id: 'claude-code',
@@ -136,14 +137,14 @@ export const claudeAdapter: HarnessAdapter = {
           abortController,
           settingSources: ['user', 'project', 'local'],
           // Policy paths resolve from the session directory, so Bash returns there.
-          ...(input.permissionPolicy
-            ? {
-                env: {
-                  ...process.env,
-                  CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR: '1',
-                },
-              }
-            : {}),
+          env: {
+            ...process.env,
+            // Assignment tool calls use a tool-only credential, never the claim.
+            ...toolCallEnvironment(input.work),
+            ...(input.permissionPolicy
+              ? { CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR: '1' }
+              : {}),
+          },
           permissionMode:
             input.profile.permissions === 'read-only'
               ? 'plan'

@@ -11,10 +11,6 @@ import {
   pauseCreateSchema,
   pauseListSchema,
   pauseResumeSchema,
-} from '@interlock/core';
-import { startersQuery, importStarter } from './starters.js';
-import { parseImportDocument } from '@interlock/core/importDocument';
-import {
   scriptOperationSchema,
   workResourceRequestSchema,
   variableReadSchema,
@@ -23,6 +19,9 @@ import {
   executorOperationSchema,
   executorModelsQuerySchema,
 } from '@interlock/core';
+import { startersQuery, importStarter } from './starters.js';
+import { callTool } from './toolCallProcedures.js';
+import { parseImportDocument } from '@interlock/core/importDocument';
 import { z } from 'zod';
 import { developmentConnection } from './connection.js';
 import {
@@ -823,6 +822,7 @@ export const appRouter = t.router({
     }),
   }),
   work: t.router({
+    callTool,
     resources: p
       .input(workResourceRequestSchema)
       .mutation(({ ctx, input }) => ctx.engine.manageWorkResources(input)),

@@ -36,6 +36,7 @@ export function validateBatchScopes(
     }
   }
   for (const edge of definition.edges) {
+    if (edge.kind === 'tool') continue; // Tool edges are checked by toolEdgeProblems.
     const source = nodes.get(edge.source),
       target = nodes.get(edge.target);
     if (!source || !target)
@@ -73,6 +74,7 @@ export function validateBatchScopes(
     for (const edge of definition.edges)
       if (
         edge.source === id &&
+        edge.kind !== 'tool' &&
         !(nodes.get(id)?.kind === 'batch' && edge.port === 'item') &&
         edge.targetHandle !== 'end'
       )

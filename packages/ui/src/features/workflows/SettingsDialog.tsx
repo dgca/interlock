@@ -19,7 +19,6 @@ import {
   type MemorySettingsDraft,
 } from '../memory/MemorySettingsFields';
 import { ExecutorSelect } from '../executors/ExecutorSelect';
-
 import { useEffect, useRef, useState } from 'react';
 import { Download, Plus, Trash2 } from 'lucide-react';
 import {
@@ -41,6 +40,7 @@ import {
 import { workflowTargets } from './workflowTargets';
 import type { WorkspaceRead } from '../../components/WorkspaceReads';
 import { NodeInspector } from './NodeInspector';
+import { ToolEdgesContext } from './AgentToolsEditor';
 import { WorkspaceSettings } from './WorkspaceSettings';
 import { PermissionPolicySettings } from './PermissionPolicySettings';
 import { nodeDescriptions } from './nodeDescriptions';
@@ -333,6 +333,7 @@ export function SettingsDialog({
                 ]
               : current.edges.filter(
                   (e) =>
+                    e.kind === 'tool' ||
                     e.source !== parsed.id ||
                     !node ||
                     !outgoingPorts(node).includes(e.port) ||
@@ -498,41 +499,45 @@ export function SettingsDialog({
                     </div>
                   )}
                 {nodeDraft ? (
-                  <NodeInspector
-                    section={nodeSection}
-                    onSectionChange={setNodeSection}
-                    workflowsRead={workflowsRead}
-                    node={nodeDraft}
-                    creating={creating}
-                    workflowId={workflowId}
-                    board={assignedBoard}
-                    boardStageColumns={boardStageColumns}
-                    previousBoard={boards?.find((board) =>
-                      board.columns.some(
-                        (column) => column.id === nodeDraft.boardColumnId,
-                      ),
-                    )}
-                    hideWorkflowTarget={
-                      creating &&
-                      targetMode === 'child' &&
-                      Boolean(onCreateChild)
-                    }
-                    onOpenWorkflow={
-                      JSON.stringify(nodeDraft) === JSON.stringify(node)
-                        ? onOpenWorkflow
-                        : undefined
-                    }
-                    workflows={workflows}
-                    definition={settings.definition}
-                    onBoundaryChange={(schema) =>
-                      patchDefinition(
-                        nodeDraft.kind === 'entry'
-                          ? { inputSchema: schema }
-                          : { outputSchema: schema },
-                      )
-                    }
-                    onChange={setNodeDraft}
-                  />
+                  <ToolEdgesContext.Provider
+                    value={(edges) => patchDefinition({ edges })}
+                  >
+                    <NodeInspector
+                      section={nodeSection}
+                      onSectionChange={setNodeSection}
+                      workflowsRead={workflowsRead}
+                      node={nodeDraft}
+                      creating={creating}
+                      workflowId={workflowId}
+                      board={assignedBoard}
+                      boardStageColumns={boardStageColumns}
+                      previousBoard={boards?.find((board) =>
+                        board.columns.some(
+                          (column) => column.id === nodeDraft.boardColumnId,
+                        ),
+                      )}
+                      hideWorkflowTarget={
+                        creating &&
+                        targetMode === 'child' &&
+                        Boolean(onCreateChild)
+                      }
+                      onOpenWorkflow={
+                        JSON.stringify(nodeDraft) === JSON.stringify(node)
+                          ? onOpenWorkflow
+                          : undefined
+                      }
+                      workflows={workflows}
+                      definition={settings.definition}
+                      onBoundaryChange={(schema) =>
+                        patchDefinition(
+                          nodeDraft.kind === 'entry'
+                            ? { inputSchema: schema }
+                            : { outputSchema: schema },
+                        )
+                      }
+                      onChange={setNodeDraft}
+                    />
+                  </ToolEdgesContext.Provider>
                 ) : creating ? (
                   <p className="hint">
                     Choose the type of step you want to add, then configure it
@@ -715,6 +720,7 @@ export function SettingsDialog({
           nodeDraft &&
           settings.definition.edges.some(
             (edge) =>
+              edge.kind !== 'tool' &&
               edge.source === node.id &&
               outgoingPorts(node).includes(edge.port) &&
               !outgoingPorts(nodeDraft).includes(edge.port),
@@ -726,6 +732,7 @@ export function SettingsDialog({
                   settings.definition.edges
                     .filter(
                       (edge) =>
+                        edge.kind !== 'tool' &&
                         edge.source === node.id &&
                         outgoingPorts(node).includes(edge.port) &&
                         !outgoingPorts(nodeDraft).includes(edge.port),

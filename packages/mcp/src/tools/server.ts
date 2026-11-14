@@ -1,6 +1,5 @@
-import { stallRequestSchema, historyRequestSchema } from '@interlock/core';
+import { stallRequestSchema, scriptOperationSchema } from '@interlock/core';
 import { scheduleReadSchema, scheduleManageInputSchema } from '@interlock/core';
-import { scriptOperationSchema } from '@interlock/core';
 import { workResourceRequestSchema } from '@interlock/core';
 import {
   variableReadSchema,
@@ -10,7 +9,7 @@ import {
   modelAliasReadSchema,
   modelAliasMutationSchema,
 } from '@interlock/core';
-import { executorOperationSchema } from '@interlock/core';
+import { historyRequestSchema, executorOperationSchema } from '@interlock/core';
 import { z } from 'zod';
 import {
   simulationToolSchema,
@@ -71,6 +70,7 @@ import {
   claimResponseSchema,
 } from './responses.js';
 import { createProfileServer } from './register.js';
+import { registerAssignmentTools } from './assignmentTools.js';
 import { parseMcpProfile } from './profiles.js';
 import { VERSION } from '@interlock/core/version';
 import type { createMcpClient } from '../client.js';
@@ -319,8 +319,7 @@ export function createMcpServer(
     usageQuerySchema.shape,
     (input) => client.runs.usage(input),
   );
-  registerBoardTools(tool, client);
-  registerMemoryTools(tool, client);
+  [registerBoardTools, registerMemoryTools].forEach((r) => r(tool, client));
   tool(
     'workflow_requests',
     'Find individual Human input, managed-agent, recovery, budget, and stall requests. list filters by boardId or runId and returns oldest first, exact total and nextOffset (25 default, 100 max). Discover board IDs with read_workflow_boards list. get takes the exact request target and loads captured context, state and answer. For Human input, answer uses a stable submissionId and current expectedRevision, initially 0. Repeat identical arguments after uncertain delivery. A saved answer under a pause or hold stays open. Release an acceptance hold through external_input using holding.runId/revision, then accept the saved revision. Use get.actions to select the operation. For managed requests use manage_executors with managedExecutionId and requestId when needed. Script and permission policy approval items need a person, not manage_script. For resource or Script recovery use manage_work_resources or manage_script with the exact target. Inspect stalls in the run. For budget items use set_run_budget.',
@@ -775,6 +774,7 @@ export function createMcpServer(
     },
     (input) => client.work.renew(input),
   );
+  registerAssignmentTools(tool, client);
   tool(
     'fail_work',
     'Report a failed assignment attempt. Use manage_work_hold for recoverable blockers. Consumes failureCount against maxAttempts budget. Executors must stop using resources and stop subprocesses before reporting failure. If retry attempts remain, work becomes available with a fresh timeout interval; otherwise exhausted attempts fail the run.',

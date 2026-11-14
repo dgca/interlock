@@ -73,14 +73,19 @@ function nodeContent(node: WorkflowNode): Record<string, unknown> {
 }
 
 function routeKey(edge: WorkflowEdge): string {
-  return `${edge.source}\0${edge.port}`;
+  return edge.kind === 'tool'
+    ? `${edge.source}\0tool\0${edge.target}`
+    : `${edge.source}\0${edge.port}`;
 }
 
 function routeValue(edge: WorkflowEdge) {
-  return {
-    target: edge.target,
-    targetHandle: edge.targetHandle ?? 'default',
-  };
+  return edge.kind === 'tool'
+    ? {
+        tool: edge.target,
+        maxCallsPerAttempt: edge.maxCallsPerAttempt ?? null,
+        maxCallsPerExecution: edge.maxCallsPerExecution ?? null,
+      }
+    : { target: edge.target, targetHandle: edge.targetHandle ?? 'default' };
 }
 
 export function compareWorkflow(
@@ -130,20 +135,22 @@ export function compareWorkflow(
     const edge = after ?? before!;
     const source = newNodes.get(edge.source) ?? oldNodes.get(edge.source);
     const port =
-      source?.kind === 'parallel'
-        ? edge.port === 'complete'
-          ? 'Out'
-          : source.branches.find(
-              ({ id }) => parallelBranchPort(id) === edge.port,
-            )?.key || 'Branch start'
-        : edge.port;
+      edge.kind === 'tool'
+        ? `Tool ${(newNodes.get(edge.target) ?? oldNodes.get(edge.target))?.label ?? edge.target}`
+        : source?.kind === 'parallel'
+          ? edge.port === 'complete'
+            ? 'Out'
+            : source.branches.find(
+                ({ id }) => parallelBranchPort(id) === edge.port,
+              )?.key || 'Branch start'
+          : edge.port;
     routes.push({
       id: key,
       title: `${source?.label ?? edge.source} · ${port}`,
       kind: !before ? 'added' : !after ? 'removed' : 'changed',
       details: [
         {
-          path: 'Route',
+          path: edge.kind === 'tool' ? 'Tool' : 'Route',
           before: before && routeValue(before),
           after: after && routeValue(after),
         },

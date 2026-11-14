@@ -31,6 +31,7 @@ const gallerySections = [
   'dialogs',
   'testing',
   'boards',
+  'agent-tools',
   'memory',
 ];
 

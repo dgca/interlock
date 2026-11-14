@@ -1,4 +1,5 @@
 import type { WorkRequest } from '@interlock/core';
+import { toolCallToken } from './toolCalls.js';
 export function freshContextInstructions(runId: string, workId: string) {
   return `This assignment requires fresh context.
 
@@ -19,6 +20,11 @@ export function assignmentInstructions(
   options: { managedSession?: boolean; lifecycleRunId?: string } = {},
 ) {
   return [
+    ...(work.tools?.length
+      ? [
+          `Assignment tools: ${work.tools.map((t) => t.name).join(', ')}. Each runs a workflow step and returns its output. Call one with call_work_tool using workId ${work.id}, ${options.managedSession ? `token ${work.token ? toolCallToken(work.token) : ''} (a tool-only credential; the stdio MCP bridge fills workId and token from INTERLOCK_WORK_ID and INTERLOCK_TOOL_TOKEN)` : 'your claim token'}, its name and arguments matching its inputSchema in tools. If status is still running or waiting, call again with the returned callId.${options.managedSession ? `\nTools: ${JSON.stringify(work.tools)}` : ''}`,
+        ]
+      : []),
     ...(work.resources?.length
       ? [
           'Exclusive Agent resources: ' +

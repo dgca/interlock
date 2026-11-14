@@ -10,6 +10,7 @@ import {
   type WorkRequest,
   type Workflow,
   type Json,
+  workTools,
 } from '@interlock/core';
 import type { Store } from '@interlock/storage';
 import type { Prompts } from './prompts.js';
@@ -54,6 +55,7 @@ export class AssignmentSizes {
               ? known(work.executionInstructions)
               : absent,
             savedPrompts: work.savedPrompts ? known(work.savedPrompts) : absent,
+            tools: work.tools ? known(work.tools) : absent,
           },
           q.warningBytes,
         ),
@@ -187,6 +189,9 @@ export class AssignmentSizes {
           : snapshots.length
             ? known(snapshots)
             : absent,
+        tools: workTools(definition, node.id).tools
+          ? known(workTools(definition, node.id).tools)
+          : absent,
       },
       q.warningBytes,
     );
