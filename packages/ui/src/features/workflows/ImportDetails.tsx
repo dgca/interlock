@@ -7,9 +7,13 @@ type DocumentPreview = Awaited<
 
 const languages = { javascript: 'JavaScript', bash: 'Bash' };
 
-/** Every Script an import contains, so a person can read the code before importing. */
+/**
+ * Every Script an import contains, so a person can read the code before
+ * importing, and each Git worktree setting with its repository path.
+ */
 function ImportedScripts({
   scripts,
+  workspaces,
 }: {
   scripts: {
     workflowName: string;
@@ -17,13 +21,23 @@ function ImportedScripts({
     language: 'javascript' | 'bash';
     command: string;
   }[];
+  workspaces: DocumentPreview['workspaces'];
 }) {
   return (
     <details className={styles.details}>
       <summary>
-        {scripts.length} Script{scripts.length === 1 ? '' : 's'} to review ·
-        imported Scripts wait for approval before their first run
+        {scripts.length
+          ? `${scripts.length} Script${scripts.length === 1 ? '' : 's'} to review · imported Scripts wait for approval before their first run`
+          : 'Git worktree settings to review'}
       </summary>
+      {workspaces.map((workspace, index) => (
+        <div key={`workspace-${index}`}>
+          <p>Git worktree · {workspace.workflowName}</p>
+          <pre tabIndex={0} aria-label="Git worktree setting">
+            {`repository: ${workspace.repository}\nstart from: ${workspace.baseRef}\nbranch: ${workspace.branch}`}
+          </pre>
+        </div>
+      ))}
       {scripts.map((script, index) => (
         <div key={index}>
           <p>
@@ -47,6 +61,7 @@ export function Details({
 }: {
   item: Pick<DocumentPreview, 'workflows' | 'prompts'> & {
     scripts?: DocumentPreview['scripts'];
+    workspaces?: DocumentPreview['workspaces'];
   };
   filename?: string;
   commit?: string;
@@ -62,10 +77,20 @@ export function Details({
     .filter(Boolean)
     .join(' · ');
   const scripts = item.scripts ?? [];
-  if (!included && !filename && !commit && !scripts.length) return null;
+  const workspaces = item.workspaces ?? [];
+  if (
+    !included &&
+    !filename &&
+    !commit &&
+    !scripts.length &&
+    !workspaces.length
+  )
+    return null;
   return (
     <>
-      {scripts.length > 0 && <ImportedScripts scripts={scripts} />}
+      {(scripts.length > 0 || workspaces.length > 0) && (
+        <ImportedScripts scripts={scripts} workspaces={workspaces} />
+      )}
       {(included || filename || commit) && (
         <details className={styles.details}>
           <summary>{included || 'File details'}</summary>

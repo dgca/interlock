@@ -124,6 +124,7 @@ export function draftChanges(
       'idleRecovery',
       'sessionNameTemplate',
       'cwd',
+      'workspace',
       'pinPromptsAtPublish',
     ].filter(
       (key) =>
@@ -228,6 +229,7 @@ export function applyWorkflowEdits(
       } else {
         const current = {
           ...(definition.cwd !== undefined ? { cwd: definition.cwd } : {}),
+          ...(definition.workspace ? { workspace: definition.workspace } : {}),
           ...(definition.pinPromptsAtPublish !== undefined
             ? { pinPromptsAtPublish: definition.pinPromptsAtPublish }
             : {}),
@@ -282,6 +284,7 @@ export function applyWorkflowEdits(
         const nextSettings = parseStrict(
           definitionSchema.pick({
             cwd: true,
+            workspace: true,
             pinPromptsAtPublish: true,
             executor: true,
             agentPermissions: true,
@@ -306,6 +309,7 @@ export function applyWorkflowEdits(
           updateFields(current, edit.set, edit.unset, []),
         );
         delete definition.cwd;
+        delete definition.workspace;
         delete definition.pinPromptsAtPublish;
         delete definition.maxActiveRuns;
         delete definition.excludeStages;
