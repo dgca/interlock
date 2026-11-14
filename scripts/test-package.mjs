@@ -308,7 +308,7 @@ try {
   const choices = await call('list_workflows', { source: 'starters' });
   assert.deepEqual(
     choices.map((s) => s.id),
-    ['sdlc', 'sdlc-v2', 'evaluate-comparison'],
+    ['sdlc', 'sdlc-v2', 'pr-watcher', 'evaluate-comparison'],
   );
   const cliStarters = JSON.parse(
     execFileSync(bin, ['starters'], {
