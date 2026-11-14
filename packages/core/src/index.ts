@@ -102,6 +102,8 @@ export * from './contextContinuity.js';
 export * from './modelTiers.js';
 export * from './providers.js';
 export * from './trialEnvironments.js';
+export * from './workspaces.js';
+import { workspaceSettingsSchema } from './workspaces.js';
 export * from './authoringLayout.js';
 import { modelTierSchema } from './modelTiers.js';
 import { continuityGroupSchema } from './contextContinuity.js';
@@ -606,6 +608,7 @@ export const definitionSchema = z.object({
     .describe(
       'Default working directory or dynamic binding for nodes in this workflow. Node cwd overrides it.',
     ),
+  workspace: workspaceSettingsSchema.optional(),
   agentModel: executorModelSchema
     .optional()
     .describe(
@@ -1462,8 +1465,6 @@ export {
   briefingQuerySchema,
   waitQuerySchema,
   resultQuerySchema,
-} from './continuation.js';
-export {
   continuationLimitSchema,
   mutationDetailSchema,
   mutationSummarySchema,

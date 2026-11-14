@@ -27,6 +27,7 @@ import { baseEnvironment, executeScript, scriptFailure } from './scripts.js';
 import { secretRedaction } from './secretRedaction.js';
 import type { TrialEnvironments } from './trialEnvironments.js';
 import type { Variables } from './variables.js';
+import type { ManagedWorkspaces } from './workspaces.js';
 import { resolveAndValidateCwd } from './workingDirectory.js';
 
 const message = (error: unknown) =>
@@ -63,6 +64,7 @@ export class LocalOperations {
     private readonly cwd: string,
     private readonly scriptApprovals: ScriptApprovals,
     private readonly trials: TrialEnvironments,
+    private readonly workspaces: ManagedWorkspaces,
     private readonly variables: Variables,
     private readonly backgroundScripts: BackgroundScripts,
     private readonly isStopped: () => boolean,
@@ -190,8 +192,14 @@ export class LocalOperations {
         ]),
       );
       const definition = this.definition(run);
-      const cwdBinding = operation.cwd ?? definition.cwd;
-      let effectiveCwd = environment?.cwd ?? this.cwd;
+      // Node cwd, then the run's workspace, then workflow cwd.
+      const workspace =
+        operation.cwd === undefined
+          ? this.workspaces.path(run, definition)
+          : undefined;
+      const cwdBinding =
+        operation.cwd ?? (workspace ? undefined : definition.cwd);
+      let effectiveCwd = environment?.cwd ?? workspace ?? this.cwd;
       if (cwdBinding !== undefined) {
         const source = this.bindingSource(run, input);
         const allowed = this.getAllowedRoots();
