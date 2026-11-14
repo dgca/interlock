@@ -14,7 +14,6 @@ import {
   type Workflow,
 } from '@interlock/core';
 import { trpc, useQueryClient } from '../packages/ui/src/lib/query';
-
 let libraryClient: ReturnType<typeof useQueryClient>;
 beforeAll(async () => {
   await import('../packages/ui/src/features/workflows/WorkflowLibrary');
@@ -23,7 +22,6 @@ beforeAll(async () => {
   await import('../packages/ui/src/features/prompts/Prompts');
   await import('../packages/ui/src/features/automations/Automations');
 });
-
 const queries = vi.hoisted(() => ({
   workflows: vi.fn(),
   workflow: vi.fn(),
@@ -78,6 +76,9 @@ vi.mock('../packages/ui/src/lib/api', async () => {
         },
       },
       connection: { query: queries.connection },
+      memory: {
+        read: { query: () => Promise.resolve({ items: [], total: 0 }) },
+      },
       workflows: {
         catalog: {
           query: async (input?: unknown) =>
@@ -229,7 +230,6 @@ vi.mock('../packages/ui/src/components/ConnectDialog/ConnectDialog', () => ({
 let root: Root;
 let container: HTMLDivElement;
 let router: ReturnType<typeof createBrowserRouter>;
-
 function mockWorkflowDetails(items: (Partial<Workflow> & { id: string })[]) {
   queries.workflow.mockReset().mockImplementation(async ({ id }) => {
     const item = items.find((workflow) => workflow.id === id);

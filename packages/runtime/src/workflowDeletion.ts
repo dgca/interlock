@@ -22,6 +22,7 @@ import type { Usage } from './usage.js';
 import type { WorkHolds } from './workHolds.js';
 import type { WorkResources } from './workResources.js';
 import { deleteWorkflowProposals } from './workflowProposals.js';
+import { deleteWorkflowMemory } from './memory.js';
 
 const terminal = (s: string) =>
   ['completed', 'failed', 'cancelled'].includes(s);
@@ -198,6 +199,7 @@ export class WorkflowDeletion {
       }
       this.retention.deleteWorkflow(id);
       deleteWorkflowProposals(this.store, id);
+      deleteWorkflowMemory(this.store, id);
       this.store.remove('workflowLayouts', id);
       this.store.remove('workflows', id);
       return { id };

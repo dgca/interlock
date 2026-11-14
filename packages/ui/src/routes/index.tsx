@@ -42,6 +42,7 @@ import {
 import { DiagnosticsPageSkeleton } from '../features/diagnostics/DiagnosticsSkeleton';
 import { workflowSection } from '../features/workflows/workflowListConfig';
 import { TestsViewSkeleton } from '../features/testing/TestsViewSkeleton';
+import { MemoryViewSkeleton } from '../features/memory/MemoryViewSkeleton';
 import { testRoutes } from '../features/testing/testRoutes';
 
 const Automations = lazy(() =>
@@ -52,6 +53,11 @@ const Automations = lazy(() =>
 const TestsView = lazy(() =>
   import('../features/testing/TestsView').then((m) => ({
     default: m.TestsView,
+  })),
+);
+const MemoryView = lazy(() =>
+  import('../features/memory/MemoryView').then((m) => ({
+    default: m.MemoryView,
   })),
 );
 const WorkflowLibrary = lazy(() =>
@@ -390,7 +396,8 @@ function WorkflowRoute() {
         !redirectToSchedules &&
         section !== 'runs' &&
         section !== 'tests' &&
-        section !== 'report',
+        section !== 'report' &&
+        section !== 'memory',
     }),
   );
   const ownerId = workflow?.ownerWorkflowId ?? undefined;
@@ -469,6 +476,10 @@ function WorkflowRoute() {
           section === 'tests' ? (
             <Suspense fallback={<TestsViewSkeleton />}>
               <TestsView workflow={workflow} />
+            </Suspense>
+          ) : section === 'memory' ? (
+            <Suspense fallback={<MemoryViewSkeleton />}>
+              <MemoryView workflow={workflow} act={context.act} />
             </Suspense>
           ) : section === 'report' ? (
             <Suspense fallback={<ReportLoadingContent />}>

@@ -14,8 +14,11 @@ import {
 } from '../../design-system';
 
 import { StallPolicyEditor } from '../executors/StallSettings';
+import {
+  MemorySettingsFields,
+  type MemorySettingsDraft,
+} from '../memory/MemorySettingsFields';
 import { ExecutorSelect } from '../executors/ExecutorSelect';
-
 import { useEffect, useRef, useState } from 'react';
 import { Download, Plus, Trash2 } from 'lucide-react';
 import {
@@ -106,6 +109,7 @@ export function SettingsDialog({
   );
   const [originalBoardId] = useState(workflowBoardId ?? null);
   const [boardId, setBoardId] = useState(originalBoardId);
+  const [memory, setMemory] = useState<MemorySettingsDraft>({});
   const [boards, setBoards] =
     useState<Awaited<ReturnType<typeof api.boards.list.query>>>();
   useEffect(() => {
@@ -370,6 +374,15 @@ export function SettingsDialog({
           });
           onBoardSaved?.(saved);
         }
+        if (workflowId && Object.keys(memory).length) {
+          setCreatingChild(true);
+          await api.memory.manage.mutate({
+            action: 'configure',
+            workflowId,
+            ...memory,
+          });
+          setMemory({});
+        }
         onApply(settings);
       }
     } catch (e) {
@@ -633,6 +646,13 @@ export function SettingsDialog({
                       value={settings.definition}
                       onChange={patchDefinition}
                     />
+                    {workflowId && (
+                      <MemorySettingsFields
+                        workflowId={workflowId}
+                        value={memory}
+                        onChange={setMemory}
+                      />
+                    )}
                     <ContractEditor
                       label="Workflow input"
                       value={settings.definition.inputSchema}

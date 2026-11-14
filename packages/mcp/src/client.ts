@@ -15,6 +15,7 @@ export function createMcpClient(url?: string) {
       report: client.system.report.query,
     },
     stalls: { manage: client.stalls.manage.mutate },
+    memory: { work: client.memory.work.mutate },
     triggers: {
       read: client.triggers.read.query,
       manage: client.triggers.manage.mutate,

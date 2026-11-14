@@ -56,6 +56,7 @@ import { ContractEditor } from '../components/ContractEditor/ContractEditor';
 import { WorkflowSyncAlertList } from '../features/workflows/WorkflowSyncAlerts';
 import { Section, Specimen } from './GalleryLayout';
 import { Testing } from './TestingSpecimens';
+import { Memory } from './MemorySpecimens';
 import { BoardCard, type BoardCardData } from '../features/boards/BoardCard';
 import { LanesEditor } from '../features/boards/BoardTypeFields';
 import boardClasses from '../features/boards/Boards.module.css';
@@ -749,6 +750,7 @@ export default function Gallery() {
         <Testing />
         <Boards />
         <AgentTools />
+        <Memory />
       </div>
     </main>
   );
