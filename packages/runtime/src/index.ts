@@ -81,6 +81,7 @@ import {
   hasFailureRoute,
   parallelBranchPort,
   decideJoin,
+  type JoinCancel as Why,
   type FailureCategory,
   blankDefinition,
   InterlockError,
@@ -144,6 +145,7 @@ import { ContextContinuityGroups } from './contextContinuity.js';
 import { claimTokenHash, leaseCounts, expiredClaimMessage } from './leases.js';
 
 class ExpiredClaimError extends InterlockError {}
+type Cb = (() => void)[];
 const now = () => new Date().toISOString();
 const terminal = (s: string) =>
   ['completed', 'failed', 'cancelled'].includes(s);
@@ -2102,10 +2104,15 @@ export class Engine {
     // The ordinary failure path cancels unfinished waited descendants.
     if (join.kind === 'fail') throw new InterlockError(join.error);
     if (join.kind === 'complete') {
-      // Same transaction as the join, so a restart never sees one without the other.
-      for (const id of execution.childRunIds)
-        this.cancelTree(id, undefined, join.reason);
-      this.finish(run, execution, node, join.output, 'complete');
+      try {
+        this.finish(run, execution, node, join.output, 'complete');
+      } catch (error) {
+        join.cancel = { reason: `${node.label} failed: ${message(error)}` };
+        throw error;
+      } finally {
+        for (const id of execution.childRunIds)
+          this.cancelTree(id, undefined, join.cancel);
+      }
       return true;
     }
     let changed = starting;
@@ -3173,23 +3180,19 @@ export class Engine {
   } {
     return this.scriptControl.manageScript(request);
   }
-  /** A reason is recorded on each cancelled run and its unfinished step. */
-  private cancelTree(id: string, afterCommit?: (() => void)[], why?: string) {
+  /** Records why on each run and unfinished step; joins cancel in their transaction. */
+  private cancelTree(id: string, afterCommit?: Cb, why?: Why) {
     const run = this.run(id);
     if (terminal(run.status)) return;
     for (const child of this.store.runScopes.attachedChildIds(id))
       this.cancelTree(child, afterCommit, why);
-    this.cancelOne(run, afterCommit, why, why);
+    this.cancelOne(run, afterCommit, why?.reason, why);
   }
-  private cancelOne(
-    run: Run,
-    afterCommit?: (() => void)[],
-    reason?: string,
-    stepReason?: string,
-  ) {
+  private cancelOne(run: Run, afterCommit?: Cb, reason?: string, why?: Why) {
     const id = run.id;
     run.status = 'cancelled';
     if (reason) run.cancellationReason = reason;
+    if (why?.join) run.cancellationKind = 'join';
     const execution = run.executions.at(-1);
     if (execution?.resourceActive)
       this.resources.endExecution(run.id, execution, true);
@@ -3221,7 +3224,7 @@ export class Engine {
     else stop();
     if (execution && !terminal(execution.status)) {
       execution.status = 'cancelled';
-      if (stepReason) execution.error = stepReason;
+      if (why) execution.error = why.reason;
     }
     for (const work of this.store
       .work(undefined, id)

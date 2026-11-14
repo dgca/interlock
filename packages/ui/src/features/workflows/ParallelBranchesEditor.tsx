@@ -132,7 +132,7 @@ function JoinSettings({
     <>
       <Radio.Group
         label="Continue after"
-        description="Branches still running when enough succeed are cancelled."
+        description="Continuing before all succeed cancels branches still running and moves the output to results.<branch>, with each status in branches.<branch>."
         value={mode}
         onChange={(value) => {
           setCounting(value === 'count');

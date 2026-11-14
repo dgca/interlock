@@ -1,5 +1,4 @@
 import {
-  isPartialJoin,
   parallelBranchPort,
   STARTED_RUN_SCHEMA,
   type NodeExecution,
@@ -93,11 +92,11 @@ export function computeCoverage(
 }
 
 // Simulation runs one Batch item or Parallel branch at a time, in input and
-// branch order. Partial joins keep their concurrency, so branches still
-// running when the join is satisfied are cancelled as in a live run, and
-// claims follow branch order. A detached call with a workflow fixture takes the waited path,
-// where the fixture supplies the run reference, checked against the Started
-// run contract, and no child starts.
+// branch order, whatever the step kinds. A partial join is therefore
+// satisfied by the first joinAfter successes in branch order; later branches
+// never start and need no fixtures. A detached call with a workflow fixture
+// takes the waited path, where the fixture supplies the run reference,
+// checked against the Started run contract, and no child starts.
 export const forSimulation = <V extends { definition: WorkflowDefinition }>(
   version: V,
   substituted: Set<string>,
@@ -106,8 +105,7 @@ export const forSimulation = <V extends { definition: WorkflowDefinition }>(
   definition: {
     ...version.definition,
     nodes: version.definition.nodes.map((node) =>
-      node.kind === 'batch' ||
-      (node.kind === 'parallel' && !isPartialJoin(node))
+      node.kind === 'batch' || node.kind === 'parallel'
         ? { ...node, concurrency: 1 }
         : node.kind === 'workflow' &&
             node.mode === 'detached' &&

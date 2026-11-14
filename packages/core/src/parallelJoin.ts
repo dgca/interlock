@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import type { Json } from './index.js';
+import type { Json, WorkflowDefinition } from './index.js';
+import { bindingLeaves } from './valueBindings.js';
 
 type ParallelBranchStatus = 'completed' | 'failed' | 'cancelled';
 
@@ -29,9 +30,83 @@ type JoinSettings = {
   onBranchFailure?: 'fail' | 'continue';
 };
 
-/** Groups without either setting keep the original all-branches join and output. */
+/**
+ * Only a setting that changes behaviour makes a partial join. Explicit
+ * defaults (joinAfter equal to the branch count, onBranchFailure "fail") keep
+ * the original all-branches join and output. Publication rejects "continue"
+ * without a smaller joinAfter.
+ */
 export const isPartialJoin = (node: JoinSettings) =>
-  node.joinAfter !== undefined || node.onBranchFailure !== undefined;
+  (node.joinAfter ?? node.branches.length) < node.branches.length;
+
+/** Output shape of a partial join, for hints and contract checks. */
+export function joinOutputSchema(node: JoinSettings) {
+  if (!isPartialJoin(node)) return;
+  const keyed = (schema: object) => ({
+    type: 'object',
+    properties: Object.fromEntries(
+      node.branches.map(({ key }) => [key, schema]),
+    ),
+  });
+  return {
+    type: 'object',
+    properties: {
+      results: keyed({}),
+      branches: keyed({
+        type: 'string',
+        enum: ['completed', 'failed', 'cancelled'],
+      }),
+    },
+    required: ['results', 'branches'],
+  };
+}
+
+const topFields = (schema: Record<string, unknown>) => [
+  ...Object.keys((schema.properties ?? {}) as object),
+  ...(Array.isArray(schema.required) ? (schema.required as string[]) : []),
+];
+
+/**
+ * A contract, binding or next-step input written for the all-branches result
+ * object reads branch keys at the top level, which a partial join moves.
+ */
+export function partialJoinShapeError(
+  definition: WorkflowDefinition,
+): string | undefined {
+  for (const group of definition.nodes) {
+    if (group.kind !== 'parallel' || !isPartialJoin(group)) continue;
+    const keys = new Set(group.branches.map(({ key }) => key));
+    keys.delete('results');
+    keys.delete('branches');
+    const stale = (field: string) => keys.has(field);
+    const advice = `${group.label} continues before every branch finishes, so results are under results.<branch> and statuses under branches.<branch>`;
+    const field = topFields(group.outputSchema).find(stale);
+    if (field)
+      return `${group.label}: output contract reads "${field}". ${advice}.`;
+    const next = definition.edges
+      .filter((edge) => edge.source === group.id && edge.port === 'complete')
+      .map((edge) => definition.nodes.find((node) => node.id === edge.target));
+    for (const node of definition.nodes) {
+      const binding = [
+        ...bindingLeaves(node.inputBindings ?? {}),
+        ...bindingLeaves(node.outputBindings ?? {}),
+      ].find(
+        (leaf) =>
+          leaf.source === 'node' &&
+          leaf.nodeId === group.id &&
+          stale(leaf.path.split('.')[0]),
+      );
+      if (binding)
+        return `${node.label}: binding reads "${binding.path}" from ${group.label}. ${advice}.`;
+      const input =
+        !node.inputBindings && next.includes(node)
+          ? topFields(node.inputSchema).find(stale)
+          : undefined;
+      if (input)
+        return `${node.label}: input contract expects "${input}" from ${group.label}. ${advice}.`;
+    }
+  }
+}
 
 export function parallelJoinError(node: JoinSettings): string | undefined {
   const count = node.branches.length;
@@ -46,7 +121,9 @@ type Branch = { status: string; output?: Json; error?: string; id: string };
 export type JoinDecision =
   | { kind: 'wait' }
   | { kind: 'fail'; error: string }
-  | { kind: 'complete'; output: Json; reason: string };
+  | { kind: 'complete'; output: Json; cancel: JoinCancel };
+/** Recorded on branch runs a join cancels. join marks a satisfied join. */
+export type JoinCancel = { reason: string; join?: true };
 
 /**
  * Decide a group visit from its branch runs, ordered by branch. Retried
@@ -68,7 +145,7 @@ export function decideJoin(
         output: Object.fromEntries(
           children.map((child) => [child.parallelBranch!.key, child.output!]),
         ),
-        reason: '',
+        cancel: { reason: '' },
       };
     const status = new Map<string, ParallelBranchStatus>(
       children.map((child) => [
@@ -88,7 +165,10 @@ export function decideJoin(
           node.branches.map(({ key }) => [key, status.get(key) ?? 'cancelled']),
         ),
       },
-      reason: `${node.label} join satisfied after ${required} of ${count} branches`,
+      cancel: {
+        reason: `${node.label} join satisfied after ${required} of ${count} branches`,
+        join: true,
+      },
     };
   }
   const unsuccessful = children.filter(

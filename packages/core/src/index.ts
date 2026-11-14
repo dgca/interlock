@@ -780,6 +780,8 @@ export interface PollCheckResult {
 }
 export interface Run {
   cancellationReason?: string;
+  /** join: cancelled because its Parallel join was satisfied; reports skip it. */
+  cancellationKind?: 'join';
   versionPolicy?: import('./runVersions.js').RunVersionPolicy;
   versionRevision?: number;
   versionBlocker?: import('./runVersions.js').RunVersionBlocker;

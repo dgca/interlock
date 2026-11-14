@@ -177,6 +177,18 @@ it('saves incomplete drafts while rejecting branch crossings, cycles, bad keys a
     ],
     [
       (d: typeof valid) => {
+        Object.assign(
+          d.nodes.find((n) => n.kind === 'parallel')!,
+          {
+            joinAfter: 1,
+            outputSchema: { type: 'object', required: ['spec'] },
+          },
+        );
+      },
+      /reads "spec".*results\.<branch>.*branches\.<branch>/,
+    ],
+    [
+      (d: typeof valid) => {
         d.nodes.find((n) => n.id === 'r0')!.inputBindings = {
           other: { source: 'node', nodeId: 'r1', path: '' },
         };

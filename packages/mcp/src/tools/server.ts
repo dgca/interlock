@@ -115,7 +115,7 @@ export function createMcpServer(
   );
   tool(
     'workflow_simulation',
-    'Simulate a published workflow with ordered case fixtures; no model calls or network effects. action:run requires suiteId, suiteRevision, caseId, version, unique requestId. Poll action:get with id, offset, limit (default 20/max 100). Supports every node except continue-as-new Exits, which reject before execution. Human input fixture output is the answer; a detached Workflow fixture supplies the started run reference. Batch items/Parallel branches run one at a time, except partial joins (joinAfter), which keep concurrency and cancel unneeded branches; their steps take the next unused fixture for their node. Agent unclaimed timeouts and onFailure:route branches are simulated. Max 4 active simulations. action:list filters workflowId. action:capture returns definition, case, prompts, and output. action:cancel stops simulation.',
+    'Simulate a published workflow with ordered case fixtures; no model calls or network effects. action:run requires suiteId, suiteRevision, caseId, version, unique requestId. Poll action:get with id, offset, limit (default 20/max 100). Supports every node except continue-as-new Exits, which reject before execution. Human input fixture output is the answer; a detached Workflow fixture supplies the started run reference. Batch items/Parallel branches run one at a time; their steps take the next unused fixture for their node. Agent unclaimed timeouts and onFailure:route branches are simulated. Max 4 active simulations. action:list filters workflowId. action:capture returns definition, case, prompts, and output. action:cancel stops simulation.',
     simulationToolSchema,
     ({ request }) => client.testbench.simulation(request),
   );

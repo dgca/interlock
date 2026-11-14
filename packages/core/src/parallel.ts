@@ -5,7 +5,7 @@ import {
   type WorkflowNode,
 } from './index.js';
 import { bindingLeaves } from './valueBindings.js';
-import { parallelJoinError } from './parallelJoin.js';
+import { parallelJoinError, partialJoinShapeError } from './parallelJoin.js';
 
 export const parallelBranchPort = (id: string) => `branch:${id}`;
 
@@ -155,6 +155,8 @@ export function validateParallelScopes(definition: WorkflowDefinition) {
     if (edges) edges.push(edge);
     else outgoing.set(edge.source, [edge]);
   }
+  const shape = partialJoinShapeError(definition);
+  if (shape) throw new InterlockError(shape);
   for (const group of groups) {
     const visited = new Set<string>(),
       active = new Set<string>();

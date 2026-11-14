@@ -19,7 +19,7 @@ Parallel groups belong at main workflow scope. Batch and Parallel groups cannot 
 
 ## Continue before every branch finishes
 
-By default the group waits for every branch. To continue sooner, open the group's settings and change **Continue after** to **Any branch succeeds** or **A number of branches succeed**, then enter how many, from 1 to the branch count. When enough branches succeed, Interlock cancels the branches that are still running or have not started. Cancellation works as it does when you cancel a run: claims are released, managed sessions and Scripts are stopped, and waited child workflows are cancelled. Detached child runs keep running. The cancelled branch runs and steps record a reason that names the group, for example `Reviews join satisfied after 1 of 3 branches`.
+By default the group waits for every branch. To continue sooner, open the group's settings and change **Continue after** to **Any branch succeeds** or **A number of branches succeed**, then enter how many, from 1 to the branch count. When enough branches succeed, Interlock cancels the branches that are still running or have not started. Cancellation works as it does when you cancel a run: claims are revoked (a revoked claim keeps its [exclusive resources](work-resources.md) until you confirm the agent stopped), managed sessions and Scripts are stopped, and waited child workflows are cancelled. Detached child runs keep running. The cancelled branch runs and steps record a reason that names the group, for example `Reviews join satisfied after 1 of 3 branches`.
 
 **When a branch fails** decides what a failure does. **Fail and stop other branches** fails the group, as before. **Continue while enough branches can succeed** keeps waiting while the remaining branches can still reach the number. The group fails once they cannot.
 
@@ -36,7 +36,7 @@ A group with one of these settings sends a different output. `results` holds the
 }
 ```
 
-Branches that complete in the same step as the winner are kept, so `results` can hold more branches than the number required. A group that waits for all branches keeps the original output.
+Branches that complete in the same step as the winner are kept, so `results` can hold more branches than the number required. A group that waits for all branches keeps the original output, including one that sets the number to the branch count or **Fail and stop other branches** explicitly. Publication rejects an output contract, a binding, or the next step's input contract that still reads a branch key at the top level of a partial join's output. If the joined output fails the group's output contract, the group fails and the cancelled branches record that the group failed.
 
 ## Inspect and retry
 
@@ -63,4 +63,4 @@ interlock start WORKFLOW_ID '{"checks":["lint","test"]}' --summary
 interlock run RUN_ID
 ```
 
-Replace the IDs with the ones returned by import and start. The completed run returns `{"count":2,"hasTests":true}`. Inspect the same workflow through MCP with `get_run_briefing` for bounded `parallels` counts and descendant references, then `get_run_result` for the joined output. [Fixture simulation](workflow-simulation.md) runs the branches one at a time in branch order and reports coverage for each branch. A group with `joinAfter` starts its branches up to its concurrency instead, so the simulation shows the branches it cancels.
+Replace the IDs with the ones returned by import and start. The completed run returns `{"count":2,"hasTests":true}`. Inspect the same workflow through MCP with `get_run_briefing` for bounded `parallels` counts and descendant references, then `get_run_result` for the joined output. [Fixture simulation](workflow-simulation.md) runs the branches one at a time in branch order and reports coverage for each branch. With `joinAfter`, the first branches to succeed in branch order satisfy the join, and later branches are reported as cancelled without running.

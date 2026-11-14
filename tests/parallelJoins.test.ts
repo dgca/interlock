@@ -1,4 +1,4 @@
-import { afterEach, expect, it } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -128,6 +128,21 @@ it('continues with successes while enough branches can still succeed', () => {
   );
   const group = engine.run(short.id).executions.at(-1)!;
   expect(engine.run(group.childRunIds[2]).status).toBe('cancelled');
+
+  // Explicit defaults wait for all and keep the original output.
+  const defaults = engine.start(
+    publish(engine, firstOf(3, { onBranchFailure: 'fail' })),
+    {},
+  ).run;
+  for (const [node, value] of [
+    ['r0', 0],
+    ['r1', 1],
+    ['r2', 2],
+  ] as const)
+    submit(engine, defaults.id, node, value);
+  expect(JSON.stringify(engine.run(defaults.id).output)).toBe(
+    '{"spec":0,"code":1,"lint":2}',
+  );
 
   // Without continue, a first 1 of 3 group still fails on the first failure.
   const strict = engine.start(publish(engine, firstOf(1)), {}).run;
@@ -347,4 +362,91 @@ it('joins each visit of a re-entered first 1 of 2 group independently', () => {
     branches: { spec: 'cancelled', code: 'completed' },
   });
   expect(groups()[1].childRunIds).not.toContain(stale.runId);
+});
+
+it('says the group failed when the joined output breaks its contract', () => {
+  const engine = setup();
+  const d = firstOf(1);
+  d.nodes.find((n) => n.kind === 'parallel')!.outputSchema = {
+    type: 'object',
+    properties: {
+      results: { type: 'object', required: ['code'] },
+    },
+  };
+  const run = engine.start(publish(engine, d), {}).run;
+  submit(engine, run.id, 'r0', 'first');
+  const failed = engine.run(run.id);
+  expect(failed.status).toBe('failed');
+  for (const id of groupOf(failed).childRunIds.slice(1)) {
+    const branch = engine.run(id);
+    expect(branch.status).toBe('cancelled');
+    expect(branch.cancellationReason).toMatch(
+      /^Reviews failed: Reviews output/,
+    );
+    expect(branch.cancellationKind).toBeUndefined();
+  }
+});
+
+it('terminates a running Script and releases the resource of a cancelled branch once stopped', async () => {
+  const engine = setup();
+  const resource = [{ source: 'literal', value: 'repo' }];
+  const d = firstOf(1);
+  replaceBranch(d, 'r1', {
+    kind: 'script',
+    language: 'bash',
+    command: 'sleep 30',
+    timeoutMs: 60_000,
+  });
+  replaceBranch(d, 'r2', {
+    kind: 'agent',
+    prompt: 'Hold.',
+    resources: resource,
+  });
+  const run = engine.start(publish(engine, d), {}).run;
+  const holder = claim(engine, run.id, 'r2');
+  const other = engine.start(
+    publish(engine, {
+      nodes: [
+        { id: 'entry', kind: 'entry', label: 'In' },
+        {
+          id: 'a',
+          kind: 'agent',
+          label: 'A',
+          prompt: 'Use it.',
+          resources: resource,
+        },
+        { id: 'exit', kind: 'exit', label: 'Out' },
+      ],
+      edges: [
+        { id: 'in', source: 'entry', target: 'a' },
+        { id: 'out', source: 'a', target: 'exit' },
+      ],
+    }),
+    {},
+  ).run;
+  expect(engine.available(other.id)).toEqual([]);
+  const script = engine.run(groupOf(engine.run(run.id)).childRunIds[1]);
+  await vi.waitFor(() =>
+    expect(engine.run(script.id).executions.at(-1)!.status).toBe('running'),
+  );
+  submit(engine, run.id, 'r0', 'first');
+  expect(engine.store.work(undefined, holder.runId)[0].status).toBe(
+    'cancelled',
+  );
+  // As with run-tree cancellation, a revoked claim keeps its resource until
+  // someone confirms the agent stopped; then the next run can claim it.
+  expect(engine.available(other.id)).toEqual([]);
+  engine.manageWorkResources({
+    action: 'release',
+    workId: holder.id,
+    expectedAttempt: holder.attempt,
+    actor: 'test',
+    confirmStopped: true,
+  });
+  expect(engine.available(other.id)).toHaveLength(1);
+  // The Script settles well before its 30 second sleep would end.
+  const jobs = (engine as unknown as { localJobs: Map<string, unknown> })
+    .localJobs;
+  await vi.waitFor(() => expect(jobs.size).toBe(0), { timeout: 5000 });
+  expectJoinCancelled(engine.run(script.id));
 });

@@ -4,6 +4,7 @@ import { Store } from '@interlock/storage';
 import { Engine } from '@interlock/runtime';
 import {
   definitionSchema,
+  nodeSchema,
   type Json,
   type SimulationFixture,
 } from '@interlock/core';
@@ -329,17 +330,18 @@ it('accepts item-by-item and step-by-step fixture order for Batch items', async 
   }
 });
 
-it('simulates a first 1 of 3 join with the other branches cancelled', async () => {
+it('simulates a first 1 of 3 join in branch order with the other branches cancelled', async () => {
   const e = engine();
-  const w = e.create(
-    'First of three',
-    '',
-    parallelDefinition({
-      keys: ['spec', 'code', 'lint'],
-      concurrency: 3,
-      join: { joinAfter: 1 },
-    }),
+  const d = parallelDefinition({
+    keys: ['spec', 'code', 'lint'],
+    concurrency: 3,
+    join: { joinAfter: 1 },
+  });
+  // A Script branch would finish on its own if it started.
+  d.nodes[d.nodes.findIndex((n) => n.id === 'r1')] = nodeSchema.parse(
+    script('r1', { parallelId: 'parallel', parallelBranchId: 'r1' }),
   );
+  const w = e.create('First of three', '', d);
   e.publish(w.id);
   const report = await simulate(e, w.id, {}, [
     { nodeId: 'r0', kind: 'agent', output: 'first' },
@@ -353,18 +355,14 @@ it('simulates a first 1 of 3 join with the other branches cancelled', async () =
     results: { spec: 'first' },
     branches: { spec: 'completed', code: 'cancelled', lint: 'cancelled' },
   });
+  // Branches run in branch order whatever their kind, so the later two never start.
   expect(
-    report.executions.items
-      .filter((x) => x.branch)
-      .map((x) => [x.branch, (x as { status?: string }).status]),
-  ).toEqual([
-    ['spec', 'completed'],
-    ['code', 'cancelled'],
-    ['lint', 'cancelled'],
-  ]);
-  // Cancelled branches started but never returned to the join.
+    report.executions.items.filter((x) => x.branch).map((x) => x.branch),
+  ).toEqual(['spec']);
   expect(report.coverage!.untested.map((u) => u.edgeId)).toEqual([
+    'start-r1',
     'join-r1',
+    'start-r2',
     'join-r2',
   ]);
 });
