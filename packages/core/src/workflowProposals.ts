@@ -151,6 +151,8 @@ export interface WorkflowProposal {
     at: string;
     reason?: string;
     edited?: boolean;
+    /** The operations applied, when a person edited them before approval. */
+    edits?: unknown[];
     draftRevision?: number;
   };
   createdAt: string;

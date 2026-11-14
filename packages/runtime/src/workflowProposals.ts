@@ -199,7 +199,13 @@ class WorkflowProposals {
       ]) {
         if (!this.store.currentRun(source.runId))
           throw new InterlockError(`Source run not found: ${source.runId}`);
-        if (!sources.some((s) => structuralEqual(s, source)))
+        if (
+          !sources.some(
+            (s) =>
+              structuralEqual(s, source) ||
+              (s.runId === source.runId && !source.executionId),
+          )
+        )
           sources.push(source);
       }
       const time = now();
