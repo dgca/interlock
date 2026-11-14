@@ -9,6 +9,8 @@ import {
   workMemorySchema,
   type MemoryAuthor,
   type MemoryCapture,
+  type MemoryHistory,
+  type MemoryListing,
   type MemoryNote,
   type MemoryNoteRevision,
   type MemorySettings,
@@ -77,14 +79,14 @@ export class WorkflowMemory {
       'workflowId',
     );
   }
-  list(workflowId: string) {
+  list(workflowId: string): MemoryListing {
     this.workflow(workflowId);
     return {
       settings: this.settings(workflowId),
       notes: this.notes(workflowId),
     };
   }
-  history(noteId: string, offset = 0, limit = 20) {
+  history(noteId: string, offset = 0, limit = 20): MemoryHistory {
     return this.revisions(this.note(noteId), offset, limit);
   }
   read(input: unknown) {
@@ -432,6 +434,7 @@ export class WorkflowMemory {
       ...note,
       revision: note.revision + 1,
       content,
+      author,
       updatedAt: time,
     };
     const revision: MemoryNoteRevision = {

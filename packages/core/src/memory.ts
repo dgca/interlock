@@ -86,6 +86,17 @@ export function memorySettingsFor(
   );
 }
 
+export interface MemoryListing {
+  settings: MemorySettings;
+  notes: MemoryNote[];
+}
+export interface MemoryHistory {
+  note: MemoryNote;
+  items: MemoryNoteRevision[];
+  total: number;
+  nextOffset: number | null;
+}
+
 interface MemorySnapshot {
   id: string;
   nodeId?: string;
