@@ -4,6 +4,7 @@ import { TRPCClientError } from '@interlock/client';
 import { engineClient } from './engineClient.js';
 import { parseArgs } from 'node:util';
 import { usage } from './usage.js';
+import { pricingLines, runPricesCommand } from './prices.js';
 import {
   externalInputRequestSchema,
   boardImportSetupSchema,
@@ -467,14 +468,15 @@ export async function runCommand(argv: string[]) {
     case 'set-budget':
       if (args.length !== 1) throw new Error('Usage: set-budget <json|@file>');
       return client.runs.setBudget.mutate(await parse(args[0]));
-    case 'usage': {
+    case 'usage':
       if (!args[0])
         throw new Error('Usage: usage <run-id> [options-json|@file]');
       return client.runs.usage.query({
         ...(args[1] ? await parse(args[1]) : {}),
         runId: args[0],
       });
-    }
+    case 'prices':
+      return runPricesCommand(args);
     case 'report-usage':
       if (args.length !== 1)
         throw new Error('Usage: report-usage <json|@file>');
@@ -608,7 +610,7 @@ export async function runCommand(argv: string[]) {
             reason: values.reason!,
           });
     }
-    case 'cancel': {
+    case 'cancel':
       if (
         args.length < 1 ||
         args.length > 2 ||
@@ -619,7 +621,6 @@ export async function runCommand(argv: string[]) {
         id: args[0],
         scope: args[1] === '--chain' ? 'chain' : 'run',
       });
-    }
     case 'script':
       return client.runs.script.mutate(await parse(args[0]));
     case 'retry':
@@ -834,7 +835,7 @@ export function formatWorkflowReport(report: WorkflowReport): string {
   );
   const costStr =
     report.usage.costs.map((c) => c.formatted).join(', ') || '0 USD';
-  lines.push(`  Attributed Cost: ${costStr}`);
+  lines.push(`  Attributed Cost: ${costStr}`, ...pricingLines(report.usage));
   lines.push(
     `  Coverage: ${report.usage.coverage.measuredPercentage}% measured (${report.usage.coverage.measuredAttempts}/${report.usage.coverage.totalAttempts} attempts), ${report.usage.coverage.unknownPercentage}% unknown (${report.usage.coverage.unknownAttempts}/${report.usage.coverage.totalAttempts} attempts)`,
   );

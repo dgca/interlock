@@ -107,10 +107,9 @@ import {
   previewBoardImport,
   previewLegacyBoardImport,
 } from '@interlock/runtime/boardImport';
-
 import { GithubImporter, githubSourceSchema } from './githubImport.js';
 const githubImporter = new GithubImporter();
-
+import { pricesRouter } from './prices.js';
 import { id, inputMutation, p, t } from './trpc.js';
 import {
   agentDraftEdit,
@@ -136,6 +135,7 @@ const updateWorkflowInput = id.extend({
 const claim = z.object({ workId: z.string(), token: z.string() });
 export const appRouter = t.router({
   scripts: scriptRouter,
+  prices: pricesRouter,
   triggers: t.router({
     read: p
       .input(scheduleReadSchema)

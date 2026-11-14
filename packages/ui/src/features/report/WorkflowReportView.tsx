@@ -32,6 +32,7 @@ import { trpc, useQuery } from '../../lib/query';
 import { ReportLoadingContent } from './ReportSkeleton';
 import styles from './WorkflowReportView.module.css';
 import { RunTagFilter, AppliedRunTagFilters } from '../runs/RunTagFilter';
+import { PricingNote } from '../runs/PricingNote';
 
 function formatMs(ms: number | null | undefined): string {
   if (ms === null || ms === undefined) return '—';
@@ -497,6 +498,11 @@ export function WorkflowReportView({
                     </Text>
                   </div>
                 </SimpleGrid>
+                {usage?.pricing && (
+                  <Stack mb="md">
+                    <PricingNote pricing={usage.pricing} />
+                  </Stack>
+                )}
 
                 {usage && usage.byProvider.length > 0 && (
                   <Table.ScrollContainer minWidth={520}>
