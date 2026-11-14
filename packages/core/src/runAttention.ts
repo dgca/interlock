@@ -1,6 +1,12 @@
 /** Compact presentation data. Does not contain prompts, inputs, or claim tokens. */
 export type RunAttentionReason =
-  'approval' | 'question' | 'model' | 'recovery' | 'stalled' | 'human';
+  | 'approval'
+  | 'question'
+  | 'model'
+  | 'recovery'
+  | 'stalled'
+  | 'human'
+  | 'budget';
 export type RunAttention = {
   runId: string;
   reasons: RunAttentionReason[];

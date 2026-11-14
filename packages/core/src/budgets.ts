@@ -26,8 +26,9 @@ export const budgetPolicySchema = z
       ),
     unknownUsage: z
       .enum(['allow', 'block'])
+      .default('allow')
       .describe(
-        'Allow incomplete reports with warnings, or block until final figures are available. No attempts means zero consumption.',
+        'allow (default) counts incomplete reports with warnings; block holds claims until final figures arrive. No attempts means zero consumption.',
       ),
     limits: z
       .object({

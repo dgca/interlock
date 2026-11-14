@@ -5,6 +5,7 @@ import {
   type RunWaiting,
 } from '@interlock/core';
 import type { ProjectionState, Store } from '@interlock/storage';
+import { approvalSubject, waitingApprovalContent } from './scriptApprovals.js';
 
 const active = (status: string) =>
   status === 'queued' || status === 'running' || status === 'waiting';
@@ -221,7 +222,7 @@ export function createRunProjector(
         wait(
           'human_request',
           'person',
-          'Waiting for imported Script approval',
+          `Waiting for ${approvalSubject(waitingApprovalContent(versions.get(versionKey)?.definition, current))} approval`,
           current.scriptApproval.since,
         );
       else if (current?.kind === 'input') {

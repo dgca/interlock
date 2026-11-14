@@ -52,7 +52,8 @@ export type LauncherClientErrorCode =
   | 'launcher_client_conflict'
   | 'launcher_lease_invalid'
   | 'launcher_operation_not_found'
-  | 'launcher_poll_busy';
+  | 'launcher_poll_busy'
+  | 'launcher_profile_disabled';
 
 /** A pull client request Interlock refused; `code` is stable for clients. */
 export class LauncherClientError extends InterlockError {

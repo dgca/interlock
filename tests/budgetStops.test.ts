@@ -81,6 +81,7 @@ function budgetRun(
           limits: { cost: { currency: 'USD', threshold: { max: 1_000_000 } } },
         }
       : undefined,
+    { title: 'Nightly triage' },
   ).run;
 }
 // Cumulative usage after a number of turns; one model has no price.
@@ -131,8 +132,9 @@ it('stops a managed attempt within one model turn of a 1 USD budget and resumes 
   expect(turnsAfterStop).toBe(1);
   expect(calls).toHaveLength(1);
   expect(e.projectRun(run.id).waiting?.detail.message).toMatch(
-    /Stopped at the run budget limit: cost USD 1\.20 of 1\.00/,
+    /Stopped at the run budget limit: cost USD 1\.20 of 1\.00 \(budget on run "Nightly triage"/,
   );
+  expect(e.requests.current()).toMatchObject([{ target: { kind: 'budget' } }]);
   const [gate] = e.budgets.read(run.id).governing;
   expect(gate.checks[0]).toMatchObject({
     value: 4 * turnTokens,
@@ -145,6 +147,7 @@ it('stops a managed attempt within one model turn of a 1 USD budget and resumes 
   expect(work).toMatchObject({ status: 'available', heldClaimCount: 1 });
   expect(work.failureCount ?? 0).toBe(0);
   expect(work.budgetBlocked).toBeDefined();
+  expect(e.executors.inspect(work.id).items[0].state).toBe('held');
   expect(
     e.usage.read({ runId: run.id, groupBy: 'attempt' }).groups[0],
   ).toMatchObject({
@@ -160,6 +163,7 @@ it('stops a managed attempt within one model turn of a 1 USD budget and resumes 
     },
   });
   await vi.waitFor(() => expect(e.run(run.id).status).toBe('completed'));
+  expect(e.requests.current()).toEqual([]);
   expect(calls).toHaveLength(2);
   expect(calls[1].sessionId).toBe('native-session');
   // Differenced against the stopped attempt's streamed usage, and final.
@@ -198,6 +202,11 @@ it('says how to leave a stop that incomplete usage still blocks', async () => {
   expect(e.projectRun(run.id).waiting?.kind).toBe('budget');
   expect(message()).not.toMatch(/Raise the budget/);
   expect(message()).toMatch(/report final figures.*set unknownUsage to allow/);
+  expect(e.requests.current()).toMatchObject([
+    { label: 'Run budget needs final usage' },
+  ]);
+  e.cancel(run.id);
+  expect(e.requests.current()).toEqual([]);
 });
 
 it('never stops a run without a budget while usage streams', async () => {

@@ -290,6 +290,14 @@ it('applies an imported or agent-written permission policy only after a person a
     record: { permissionPolicy: { state: 'awaiting_approval' } },
   });
   const [request] = engine.requests.current();
+  // The list and the run's waiting message name the policy, as the detail does.
+  expect([
+    request.label,
+    engine.projectRun(run.id).waiting?.detail.message,
+  ]).toEqual([
+    'Approve permission policy',
+    'Waiting for permission policy approval',
+  ]);
   expect(await person.requests.get(request.target)).toMatchObject({
     question: 'Approve permission policy',
     script: { language: 'permission-policy' },

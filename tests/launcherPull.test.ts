@@ -195,6 +195,14 @@ it('runs the reference pull launcher over the HTTP API, deduplicating a redelive
   await expect(
     pullOnce({ ...client, credential: 'wrong', waitMs: 0 }),
   ).rejects.toMatchObject({ code: 'launcher_credential_invalid' });
+  const missing = await app.request('/api/launchers/plugin/poll', {
+    method: 'POST',
+    body: JSON.stringify({ clientId: 'reference', waitMs: 0 }),
+  });
+  expect([
+    missing.status,
+    ((await missing.json()) as { code: string }).code,
+  ]).toEqual([401, 'launcher_credential_missing']);
   const run = start(e);
   // The client creates the session, then dies before reporting it.
   const [first] = await pullOnce({ ...client, waitMs: 5000, report: false });
@@ -279,4 +287,23 @@ it('ends a poll open across a credential rotation without work and admits the ne
     waitMs: 5000,
   });
   expect(leased.map((op) => op.kind)).toEqual(['launch']);
+  // Disabling the profile ends an open poll and refuses later ones.
+  const open = pull(e).poll({
+    profileId: 'plugin',
+    credential,
+    clientId: 'new-plugin',
+    waitMs: 20_000,
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  const { revision, ...profile } = e.executors
+    .profiles()
+    .find((p) => p.id === 'plugin')!;
+  e.executors.saveProfile({
+    ...profile,
+    enabled: false,
+    expectedRevision: revision ?? 0,
+  });
+  await expect(open).rejects.toMatchObject({
+    code: 'launcher_profile_disabled',
+  });
 });

@@ -2,6 +2,7 @@ import type {
   RequestTarget,
   RunAttention,
   RunAttentionReason,
+  RunWaiting,
   RunSummary,
 } from '@interlock/core';
 import { paths } from '../../routes/paths';
@@ -16,9 +17,14 @@ export function attentionText(entry: RunAttention) {
     recovery: 'Recovery needed',
     stalled: 'Stalled',
     human: 'Human input needed',
+    budget: 'Budget blocked',
   };
   return entry.reasons.map((reason) => labels[reason]).join(' · ');
 }
+
+/** Waits whose projected label already names the attention reason. */
+export const attentionWait = (run: { waiting?: RunWaiting | null }) =>
+  run.waiting?.kind === 'human_request' || run.waiting?.kind === 'budget';
 
 export const waitReasonText: Record<
   NonNullable<RunSummary['waitReason']>,
