@@ -18,6 +18,7 @@ const workflowSections = [
   'runs',
   'tests',
   'report',
+  'memory',
   'children',
 ] as const;
 export type WorkflowSection = (typeof workflowSections)[number];

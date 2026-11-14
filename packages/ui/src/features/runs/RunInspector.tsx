@@ -11,10 +11,9 @@ import {
   PageHeader,
   workspacePage,
 } from '../../design-system';
-
 import { formatDuration } from '../workflows/DurationInput';
 import { PauseBanner } from '../pauses/PauseControls';
-
+import { CapturedMemory } from '../memory/CapturedMemory';
 import {
   runDisplayTitle,
   type NodeExecution,
@@ -854,6 +853,7 @@ export function RunInspector({
           ))}
         </details>
       )}
+      <CapturedMemory run={run} className={styles.independent} />
       {independent.length > 0 && (
         <div className={styles.independent}>
           <p>

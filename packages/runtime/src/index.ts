@@ -755,7 +755,6 @@ export class Engine {
     const capturedPrompts = comparison
       ? this.testbench.promptsFor(comparison)
       : undefined;
-    // Continuations, Batch items and Parallel branches inherit captures.
     const inherit =
       continuedFrom ??
       (sameWorkflowChild && parentRunId ? this.run(parentRunId) : undefined);
@@ -839,7 +838,7 @@ export class Engine {
                   : this.variables.capture(definition),
           }
         : {}),
-      ...this.memory.capture(workflowId, definition, inherit, comparison),
+      ...this.memory.capture(workflowId, inherit, comparison),
       ...(() => {
         const captures = this.options.substituteOperation
           ? []
@@ -1585,10 +1584,11 @@ export class Engine {
           executionId: execution.id,
           nodeId: node.id,
           label: node.label,
-          prompt: composePrompt(node.prompt, savedPrompts, {
-            capture: run.memoryCapture,
-            nodeId: node.id,
-          }),
+          prompt: composePrompt(
+            node.prompt,
+            savedPrompts,
+            this.memory.section(run, node.id, executorSettings),
+          ),
           ...(savedPrompts.length ? { savedPrompts } : {}),
           input: execution.input,
           context: trialEnvironment

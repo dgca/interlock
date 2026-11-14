@@ -1,25 +1,28 @@
 import { randomUUID } from 'node:crypto';
 import {
   InterlockError,
+  capFences,
   memoryLimits,
   memoryManageSchema,
   memoryOffMessage,
   memoryReadSchema,
+  memorySection,
   memorySettingsFor,
   workMemorySchema,
   type MemoryAuthor,
   type MemoryCapture,
   type MemoryHistory,
   type MemoryListing,
+  type MemoryReviews,
   type MemoryNote,
   type MemoryNoteRevision,
   type MemorySettings,
+  type MemorySnapshot,
   type MemorySource,
   type Run,
   type WorkMemoryRequest,
   type WorkRequest,
   type Workflow,
-  type WorkflowDefinition,
 } from '@interlock/core';
 import type { Store } from '@interlock/storage';
 
@@ -29,8 +32,17 @@ const revisionsCollection = 'memoryNoteRevisions';
 /** Notes written by live comparison trials: never read back into real memory. */
 const trialCollection = 'memoryTrialNotes';
 const comparisonCollection = 'memoryComparisonCaptures';
+/** Live notes stored once per workflow memory revision that a run captured. */
+const snapshotCollection = 'memorySnapshots';
 
-type TrialNote = MemoryNote & { comparisonId: string };
+/** Isolated per comparison sample, so sides and repetitions stay independent. */
+type TrialNote = MemoryNote & { comparisonId: string; sampleId: string };
+type Snapshot = {
+  id: string;
+  workflowId: string;
+  revision: number;
+  notes: MemorySnapshot[];
+};
 type ComparisonCaptures = {
   id: string;
   captures: Record<string, MemoryCapture | null>;
@@ -44,6 +56,8 @@ export interface SimulationMemory {
 const iso = (ms: number) => new Date(ms).toISOString();
 const sameScope = (note: MemoryNote, nodeId: string | undefined) =>
   note.nodeId === nodeId;
+const snapshotId = (workflowId: string, revision: number) =>
+  `${workflowId}:${revision}`;
 const summary = (note: MemoryNote) => ({
   id: note.id,
   scope: note.nodeId ? 'node' : 'workflow',
@@ -91,9 +105,24 @@ export class WorkflowMemory {
   }
   read(input: unknown) {
     const q = memoryReadSchema.parse(input);
+    if (q.action === 'reviews') return this.reviews(q.workflowId);
     return q.action === 'list'
       ? this.list(q.workflowId)
       : this.history(q.noteId, q.offset, q.limit);
+  }
+  /** Pending note counts per workflow, without note content. */
+  reviews(workflowId?: string): MemoryReviews {
+    const counts = new Map<string, number>();
+    for (const note of workflowId
+      ? this.notes(workflowId)
+      : this.store.list<MemoryNote>(notesCollection))
+      if (note.status === 'pending')
+        counts.set(note.workflowId, (counts.get(note.workflowId) ?? 0) + 1);
+    const items = [...counts].flatMap(([id, count]) => {
+      const workflow = this.store.get<Workflow>('workflows', id);
+      return workflow ? [{ workflowId: id, name: workflow.name, count }] : [];
+    });
+    return { items, total: items.reduce((sum, item) => sum + item.count, 0) };
   }
   manage(input: unknown) {
     const q = memoryManageSchema.parse(input);
@@ -127,6 +156,10 @@ export class WorkflowMemory {
         return this.create(q.workflowId, q.nodeId, q.content, 'person', 'live');
       }
       const note = this.note(q.noteId);
+      if (q.revision !== note.revision)
+        throw new InterlockError(
+          'Note changed elsewhere. Reload before saving. Your edits have not been saved.',
+        );
       if (q.action === 'reject' || q.action === 'delete') {
         if (q.action === 'reject' && note.status !== 'pending')
           throw new InterlockError(
@@ -136,14 +169,10 @@ export class WorkflowMemory {
         if (note.status === 'live') this.bump(note.workflowId);
         return { id: note.id, removed: true };
       }
-      if (q.revision !== note.revision)
-        throw new InterlockError(
-          'Note changed elsewhere. Reload before saving. Your edits have not been saved.',
-        );
       if (q.action === 'approve') {
         if (note.status !== 'pending')
           throw new InterlockError('Note is not waiting for review');
-        const content = q.content ?? note.content;
+        const content = capFences(q.content ?? note.content);
         this.assertRoom(note.workflowId, note.nodeId, content, note.id);
         const time = iso(this.now());
         const approved: MemoryNote = {
@@ -161,7 +190,7 @@ export class WorkflowMemory {
         throw new InterlockError(
           'Approve or reject a note that is waiting for review before changing it',
         );
-      let content = q.action === 'edit' ? q.content : note.content;
+      let content = q.action === 'edit' ? capFences(q.content) : note.content;
       if (q.action === 'revert') {
         const target = this.store.get<MemoryNoteRevision>(
           revisionsCollection,
@@ -200,11 +229,17 @@ export class WorkflowMemory {
       const run = this.store.get<Run>('runs', work.runId)!;
       const settings = this.settings(run.workflowId);
       if (!settings.enabled) throw new InterlockError(memoryOffMessage);
-      const comparisonId = run.comparison?.comparisonId;
-      const visible = [
+      const trial = run.comparison;
+      const own = (note: MemoryNote) =>
+        note.status === 'live' || note.source?.runId === run.id;
+      const inScope = (note: MemoryNote) =>
+        !note.nodeId || note.nodeId === work.nodeId;
+      const all = [
         ...this.notes(run.workflowId),
-        ...(comparisonId ? this.trialNotes(comparisonId) : []),
-      ].filter((note) => !note.nodeId || note.nodeId === work.nodeId);
+        ...(trial ? this.trialNotes(trial.comparisonId, trial.sampleId) : []),
+      ].filter(inScope);
+      // Another run's pending note is unreviewed: agents see only a count.
+      const visible = all.filter(own);
       if (q.action === 'read') {
         if (q.noteId === undefined) {
           const items = visible.sort((a, b) =>
@@ -215,6 +250,7 @@ export class WorkflowMemory {
             capturedRevision: run.memoryCapture?.revision ?? null,
             items: items.slice(0, 50).map(summary),
             total: items.length,
+            pendingFromOtherRuns: all.length - visible.length,
           };
         }
         const note = visible.find((n) => n.id === q.noteId);
@@ -225,17 +261,24 @@ export class WorkflowMemory {
         return this.revisions(note, 0, 10);
       }
       const nodeId = q.scope === 'node' ? work.nodeId : undefined;
-      const content = q.content;
-      const duplicate = visible.find(
+      const content = capFences(q.content);
+      const duplicate = all.find(
         (note) => sameScope(note, nodeId) && note.content === content,
       );
-      if (duplicate) return { ...summary(duplicate), duplicate: true };
+      if (duplicate)
+        return own(duplicate)
+          ? { ...summary(duplicate), duplicate: true }
+          : {
+              status: 'pending',
+              duplicate: true,
+              message: 'An identical note is already waiting for review.',
+            };
       const status = settings.agentWrites === 'live' ? 'live' : 'pending';
       const source = { runId: run.id, executionId: work.executionId };
       if (status === 'pending') {
         const pending = (
-          comparisonId
-            ? this.trialNotes(comparisonId)
+          trial
+            ? this.trialNotes(trial.comparisonId, trial.sampleId)
             : this.notes(run.workflowId)
         ).filter((note) => note.status === 'pending');
         if (pending.length >= memoryLimits.pendingPerWorkflow)
@@ -250,7 +293,7 @@ export class WorkflowMemory {
             `This run already has ${memoryLimits.pendingPerRun} notes waiting for review. Continue without saving more.`,
           );
       }
-      if (comparisonId) {
+      if (trial) {
         const time = iso(this.now());
         const note: TrialNote = {
           id: randomUUID(),
@@ -261,7 +304,8 @@ export class WorkflowMemory {
           content,
           author: 'agent',
           source,
-          comparisonId,
+          comparisonId: trial.comparisonId,
+          sampleId: trial.sampleId,
           createdAt: time,
           updatedAt: time,
         };
@@ -270,7 +314,7 @@ export class WorkflowMemory {
           ...summary(note),
           isolated: true,
           message:
-            'Saved to isolated comparison memory. Real workflow memory is unchanged.',
+            'Saved to memory isolated to this comparison sample. Real workflow memory is unchanged.',
         };
       }
       const note = this.create(
@@ -291,13 +335,12 @@ export class WorkflowMemory {
     });
   }
   /**
-   * Memory for a starting run. Continuations, Batch items and Parallel
-   * branches inherit; comparisons share one capture per workflow; other runs
-   * capture live notes when memory is on.
+   * Memory for a starting run: a reference to the workflow memory revision.
+   * Continuations, Batch items and Parallel branches inherit the reference;
+   * comparisons share one per workflow; other runs capture when memory is on.
    */
   capture(
     workflowId: string,
-    definition: WorkflowDefinition,
     inherit?: Run,
     comparison?: Run['comparison'],
   ): Pick<Run, 'memoryCapture'> {
@@ -305,55 +348,64 @@ export class WorkflowMemory {
       ? inherit.memoryCapture
       : comparison
         ? this.comparisonCapture(comparison.comparisonId, workflowId)
-        : this.snapshot(
-            workflowId,
-            new Set(
-              definition.nodes.flatMap((n) =>
-                n.kind === 'agent' ? [n.id] : [],
-              ),
-            ),
-          );
+        : this.snapshot(workflowId);
     return capture ? { memoryCapture: capture } : {};
   }
-  private snapshot(workflowId: string, agents?: Set<string>) {
+  /** The memory section for an Agent assignment, resolved from the run's reference. */
+  section(run: Run, nodeId: string, settings: { executor?: string }) {
+    const capture = run.memoryCapture;
+    if (!capture) return undefined;
+    return memorySection({
+      notes: this.snapshotNotes(capture.workflowId, capture.revision),
+      revision: capture.revision,
+      budget: capture.budget,
+      nodeId,
+      // Managed sessions have no claim token for work_memory yet.
+      canWrite: !settings.executor,
+    });
+  }
+  private snapshotNotes(workflowId: string, revision: number) {
+    const stored = this.store.get<Snapshot>(
+      snapshotCollection,
+      snapshotId(workflowId, revision),
+    );
+    if (!stored)
+      throw new InterlockError(
+        `Memory revision ${revision} for workflow ${workflowId} is missing`,
+      );
+    return stored.notes;
+  }
+  private snapshot(workflowId: string): MemoryCapture | undefined {
     const settings = this.settings(workflowId);
     if (!settings.enabled) return undefined;
+    const id = snapshotId(workflowId, settings.revision);
+    const existing = this.store.get<Snapshot>(snapshotCollection, id);
+    const stored =
+      existing ?? liveSnapshot(this.store, workflowId, settings.revision);
+    if (!existing) this.store.put(snapshotCollection, stored);
     return {
       workflowId,
       revision: settings.revision,
       budget: settings.promptBudget,
-      notes: this.notes(workflowId)
-        .filter(
-          (note) =>
-            note.status === 'live' &&
-            (!note.nodeId || !agents || agents.has(note.nodeId)),
-        )
-        .map(({ id, nodeId, revision, content, updatedAt }) => ({
-          id,
-          ...(nodeId ? { nodeId } : {}),
-          revision,
-          content,
-          updatedAt,
-        })),
-    } satisfies MemoryCapture;
+      noteCount: stored.notes.length,
+    };
   }
   private comparisonCapture(comparisonId: string, workflowId: string) {
     const doc = this.store.get<ComparisonCaptures>(
       comparisonCollection,
       comparisonId,
     ) ?? { id: comparisonId, captures: {} };
-    if (!(workflowId in doc.captures)) {
-      doc.captures[workflowId] = this.snapshot(workflowId) ?? null;
-      this.store.put(comparisonCollection, doc);
-    }
-    return doc.captures[workflowId] ?? undefined;
+    if (doc.captures[workflowId]) return doc.captures[workflowId];
+    const capture = this.snapshot(workflowId);
+    if (!capture) return undefined;
+    doc.captures[workflowId] = capture;
+    this.store.put(comparisonCollection, doc);
+    return capture;
   }
-  private trialNotes(comparisonId: string) {
-    return this.store.forWork<TrialNote>(
-      trialCollection,
-      comparisonId,
-      'comparisonId',
-    );
+  private trialNotes(comparisonId: string, sampleId: string) {
+    return this.store
+      .forWork<TrialNote>(trialCollection, comparisonId, 'comparisonId')
+      .filter((note) => note.sampleId === sampleId);
   }
   private note(id: string) {
     const note = this.store.get<MemoryNote>(notesCollection, id);
@@ -429,6 +481,7 @@ export class WorkflowMemory {
     revertedFrom?: number,
     source?: MemorySource,
   ) {
+    content = capFences(content);
     const time = iso(this.now());
     const next: MemoryNote = {
       ...note,
@@ -471,6 +524,45 @@ export class WorkflowMemory {
   }
 }
 
+function liveSnapshot(
+  store: Store,
+  workflowId: string,
+  revision: number,
+): Snapshot {
+  return {
+    id: snapshotId(workflowId, revision),
+    workflowId,
+    revision,
+    notes: store
+      .forWork<MemoryNote>(notesCollection, workflowId, 'workflowId')
+      .filter((note) => note.status === 'live')
+      .map(({ id, nodeId, revision, content, updatedAt }) => ({
+        id,
+        ...(nodeId ? { nodeId } : {}),
+        revision,
+        content,
+        updatedAt,
+      })),
+  };
+}
+
+/** The memory section a new run of the workflow would give this Agent step. */
+export function memoryPreview(
+  store: Store,
+  workflowId: string,
+  nodeId: string,
+) {
+  const settings = store.get<MemorySettings>(settingsCollection, workflowId);
+  if (!settings?.enabled) return undefined;
+  return memorySection({
+    notes: liveSnapshot(store, workflowId, settings.revision).notes,
+    revision: settings.revision,
+    budget: settings.promptBudget,
+    nodeId,
+    canWrite: true,
+  });
+}
+
 /** Live memory a fixture simulation reads, for the workflows it can run. */
 export function simulationMemory(
   store: Store,
@@ -507,6 +599,7 @@ export function deleteWorkflowMemory(store: Store, workflowId: string) {
     notesCollection,
     revisionsCollection,
     trialCollection,
+    snapshotCollection,
   ])
     for (const doc of store.forWork<{ id: string }>(
       collection,

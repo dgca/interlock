@@ -52,6 +52,8 @@ function WorkflowLoading() {
               { value: 'editor', label: 'Editor' },
               { value: 'runs', label: 'Runs' },
               { value: 'tests', label: 'Tests' },
+              { value: 'report', label: 'Report' },
+              { value: 'memory', label: 'Memory' },
               { value: 'children', label: 'Child workflows' },
             ]}
             value={section}
