@@ -156,6 +156,8 @@ export class WorkflowMemory {
         return this.create(q.workflowId, q.nodeId, q.content, 'person', 'live');
       }
       const note = this.note(q.noteId);
+      if (q.workflowId !== undefined && q.workflowId !== note.workflowId)
+        throw new InterlockError('Note belongs to another workflow');
       if (q.revision !== note.revision)
         throw new InterlockError(
           'Note changed elsewhere. Reload before saving. Your edits have not been saved.',

@@ -24,7 +24,8 @@ export const usage = [
   'start <workflow-id> <json|@file> [version] [--title TEXT] [--summary] [--budget json|@file] [--request-id key] [--external-task json|@file] [--tag KEY=VALUE ...] [--priority N] [--after json|@file] [--on-active-external-task allow|reuse|reject|cancel_previous] [--version-policy pinned|latest-compatible] [--hold REASON] (--hold keeps the run queued until board release)',
   'runs [--tag KEY=VALUE ...] [--request-id KEY] [--external-task json|@file] [--workflow ID] [--chain ROOT_RUN_ID] [--status STATUS] [--root-only] [--limit N] [--after-run RUN_ID] [--input-path PATH --equals JSON] (without filters: full runs, newest first, 1000 per page; filters: summaries)',
   "board view [board-id] [--workflow ID] [--lane LANE] [--offset N] [--limit N] (lanes and cards computed from run state; --workflow alone reads that workflow's stage board)",
-  'board types | board save-type <json|@file: {"id"?,"expectedRevision"?,"type":{...}}> (list, create or update board types)',
+  'board types | board save-type <json|@file: {"id"?,"expectedRevision"?,"type":{...}}> (list board types, including the built-in coding, design and research until saved, or create or update one)',
+  'board save <json|@file: {"name","typeId","scope"?} or {"id","expectedRevision",...}> (create or update a board; a built-in typeId stores an editable copy of that type)',
   'proposals list [--workflow ID] [--run ID] [--status open|approved|rejected|all] [--offset N] [--limit N] | proposals get <id> (review queue; get adds the conflict state, the proposed draft and its simulation result)',
   'proposals create <json|@file: {"workflowId","title","rationale","edits","sources"?}> | proposals approve <id> [--edits json|@file] | proposals reject <id> <reason> | proposals reapply <id> (approval applies the edits as a new draft revision and never publishes; reapply moves a stale proposal onto the current draft)',
   'proposals settings <workflow-id> [json|@file: {"agents":bool,"nodeKinds"?,"fields"?,"otherWorkflows"?}] (read, or save, whether agents may propose and what they may touch)',
@@ -61,3 +62,12 @@ export const usage = [
   'cancel <run-id> [--chain] (stop the latest successor from any chain member; detached descendants remain independent)',
   'retry <run-id> (retry a failed Parallel group from its parent; successful branches remain)',
 ];
+
+/** `interlock <command> --help`: that command's usage lines. */
+export function commandHelp(command: string) {
+  const name = command === 'schedules' ? 'triggers' : command;
+  const lines = usage.filter((line) => line.split(/[\s<[]/)[0] === name);
+  return lines.length
+    ? lines.map((line) => `Usage: interlock ${line}`).join('\n')
+    : "Run 'interlock commands' for argument syntax.";
+}

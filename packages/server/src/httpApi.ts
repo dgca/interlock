@@ -4,6 +4,9 @@ import { ZodError, z } from 'zod';
 import {
   InterlockError,
   RunStartConflict,
+  boardFieldPathsSchema,
+  boardScopeSchema,
+  boardStageMapSchema,
   runStartSchema,
 } from '@interlock/core';
 import { LauncherClientError } from '@interlock/core/launcherClient';
@@ -21,6 +24,16 @@ const startBody = runStartSchema
     title: true,
     tags: true,
     hold: true,
+  })
+  .strict();
+/** Creates a typed board; column boards and updates stay with the UI, CLI and MCP. */
+const boardBody = z
+  .object({
+    name: z.string(),
+    typeId: z.string().min(1),
+    scope: boardScopeSchema.optional(),
+    stageMap: boardStageMapSchema.optional(),
+    fieldPaths: boardFieldPathsSchema.optional(),
   })
   .strict();
 const resultQuery = z.object({
@@ -142,6 +155,35 @@ export function createHttpApi(
           limit: limit === undefined ? undefined : Number(limit),
         }),
       );
+    } catch (error) {
+      return rejection(c, error);
+    }
+  });
+
+  api.get('/board-types', async (c) => {
+    try {
+      return c.json({
+        items: await caller(c).boardTypes.list({ builtIn: true }),
+      });
+    } catch (error) {
+      return rejection(c, error);
+    }
+  });
+
+  api.post('/boards', async (c) => {
+    let body: unknown;
+    try {
+      body = await c.req.json();
+    } catch {
+      return failure(c, 400, 'invalid_request', 'Body must be JSON');
+    }
+    const parsed = boardBody.safeParse(body);
+    if (!parsed.success)
+      return failure(c, 400, 'invalid_request', 'Invalid request', {
+        issues: issues(parsed.error),
+      });
+    try {
+      return c.json(await caller(c).boards.save(parsed.data), 201);
     } catch (error) {
       return rejection(c, error);
     }

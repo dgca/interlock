@@ -92,8 +92,9 @@ export function partialJoinShapeError(
         ...bindingLeaves(node.outputBindings ?? {}),
       ].find(
         (leaf) =>
-          leaf.source === 'node' &&
-          leaf.nodeId === group.id &&
+          // The step after the group receives its output as its input.
+          ((leaf.source === 'node' && leaf.nodeId === group.id) ||
+            (leaf.source === 'input' && next.includes(node))) &&
           stale(leaf.path.split('.')[0]),
       );
       if (binding)

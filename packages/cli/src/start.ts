@@ -44,6 +44,7 @@ export async function runStartCommand(args: string[]) {
             values['external-task'],
           )) as RunStartRequest['externalTask'])
         : undefined,
+    hold: typeof values.hold === 'string' ? { reason: values.hold } : undefined,
     budget:
       typeof values.budget === 'string'
         ? ((await parse(values.budget)) as RunStartRequest['budget'])

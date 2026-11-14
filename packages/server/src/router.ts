@@ -702,24 +702,19 @@ export const appRouter = t.router({
       .query(({ ctx, input }) => ctx.engine.usage.read(input)),
     startSummary: p
       .input(runStartSchema.extend({ limit: continuationLimitSchema }))
-      .mutation(({ ctx, input }) =>
-        ctx.engine.startSummary(
-          input.workflowId,
-          input.input,
-          input.version,
-          input.limit,
-          input.budget,
-          {
-            requestId: input.requestId,
-            externalTask: input.externalTask,
-            title: input.title,
-            tags: input.tags,
-            priority: input.priority,
-            after: input.after,
-            onActiveExternalTask: input.onActiveExternalTask,
-            versionPolicy: input.versionPolicy,
-          },
-        ),
+      .mutation(
+        ({
+          ctx,
+          input: { workflowId, input, version, limit, budget, ...options },
+        }) =>
+          ctx.engine.startSummary(
+            workflowId,
+            input,
+            version,
+            limit,
+            budget,
+            options,
+          ),
       ),
     briefing: p
       .input(briefingQuerySchema)
@@ -771,24 +766,13 @@ export const appRouter = t.router({
         };
       }),
     attention: p.query(({ ctx }) => ctx.engine.runAttention()),
-    start: p.input(runStartSchema).mutation(({ ctx, input }) =>
-      ctx.engine.start(
-        input.workflowId,
-        input.input,
-        input.version,
-        input.budget,
-        {
-          requestId: input.requestId,
-          externalTask: input.externalTask,
-          title: input.title,
-          tags: input.tags,
-          priority: input.priority,
-          after: input.after,
-          onActiveExternalTask: input.onActiveExternalTask,
-          versionPolicy: input.versionPolicy,
-        },
+    // Every remaining field is a start option, so new options reach the engine.
+    start: p
+      .input(runStartSchema)
+      .mutation(
+        ({ ctx, input: { workflowId, input, version, budget, ...options } }) =>
+          ctx.engine.start(workflowId, input, version, budget, options),
       ),
-    ),
     previewCancellation: p
       .input(previewRunCancellationSchema)
       .query(({ ctx, input }) => ctx.engine.previewRunCancellation(input)),

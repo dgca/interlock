@@ -22,6 +22,8 @@ it.each(['http', 'stdio'])(
       engine = new Engine(store, root);
     const w = engine.create('Subject', '', blankDefinition());
     engine.publish(w.id);
+    const h = engine.create('Held', '', blankDefinition());
+    engine.publish(h.id);
     const server = serve({
       fetch: createApp(engine).fetch,
       hostname: '127.0.0.1',
@@ -166,6 +168,37 @@ it.each(['http', 'stdio'])(
       expect(JSON.stringify(deleted.content)).toContain('deleted or missing');
       expect(store.runs()).toHaveLength(0);
       expect(store.list('runStarts')).toHaveLength(1);
+
+      // A hold on start keeps the run queued through every transport.
+      const hold = (reason: string) => ({
+        workflowId: h.id,
+        input: {},
+        hold: { reason },
+      });
+      const http = await fetch(url + '/api/runs', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(hold('http')),
+      });
+      const started = [
+        await call('start_run', hold('mcp')),
+        await http.json(),
+        await runCommand(['start', h.id, '{}', '--hold', 'cli']),
+      ] as [{ runId: string }, { runId: string }, { run: { id: string } }];
+      const held = [started[0].runId, started[1].runId, started[2].run.id];
+      const work = (id: string) => store.work().filter((x) => x.runId === id);
+      for (const [i, id] of held.entries()) {
+        expect(engine.run(id)).toMatchObject({
+          status: 'queued',
+          admission: { hold: { reason: ['mcp', 'http', 'cli'][i] } },
+        });
+        expect(work(id)).toHaveLength(0);
+        await call('manage_pause', {
+          request: { action: 'release_start', runId: id },
+        });
+        expect(engine.run(id).status).not.toBe('queued');
+        expect(work(id)).toHaveLength(1);
+      }
     } finally {
       vi.unstubAllEnvs();
       await client.close();

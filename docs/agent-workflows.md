@@ -285,7 +285,7 @@ Omit `executionId` for run data. `field` is `input` or `output`, defaulting to `
 
 ### Inspect a run
 
-`get_run` (shared API `runs.get`, CLI `interlock run RUN_ID`) returns full inspection, including execution errors and resolved Fetch requests, when its JSON is at most 64 KiB (65536 bytes). Above that, the response is compacted and gets `compacted: {limitBytes, fullBytes, read}`:
+`get_run` (shared API `runs.get`, CLI `interlock run RUN_ID`) returns full inspection, including execution errors and resolved Fetch requests, when its compact JSON is at most 64 KiB (65536 bytes); the CLI prints it indented, so its output can be larger. Above that, the response is compacted and gets `compacted: {limitBytes, fullBytes, read}`:
 
 - The workflow `definition` and other fields over 1 KiB on the run, its descendants, their executions and assignments are dropped. IDs (including `childRunIds`), status, stage, waiting, port, labels and timestamps always stay.
 - An `error` over 1 KiB is truncated and states its full size.

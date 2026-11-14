@@ -113,7 +113,7 @@ it('runs a tool call as a linked child run without charging route steps', async 
   expect(result).toMatchObject({
     status: 'completed',
     output: { passed: true, target: 'all' },
-    calls: { attempt: 1, execution: 1 },
+    calls: { inAttempt: 1, inExecution: 1 },
   });
   const parent = e.run(runId);
   const agent = parent.executions.at(-1)!;
