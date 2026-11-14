@@ -48,6 +48,7 @@ Run commands: runs, run, run-history, run-version, context-group, handoff-contex
 Usage and budget commands: usage, report-usage, budget, set-budget, prices
 Local harness configuration and execution: executors, launcher
 Workflow variables: variables <read|manage> <json|@file> [--value-stdin]
+Workflow memory: memory <read|manage|work> <json|@file>
 Workflow triggers: triggers (schedules is an alias) <read|manage> <json|@file>
 Kinds: schedule, event. Event triggers match run transitions with optional quiescence.
 Stall monitoring: stalls
@@ -94,6 +95,7 @@ Commands and the mcp bridge read the token from the api-token file beside the ke
       'executors',
       'launcher',
       'variables',
+      'memory',
       'schedules',
       'triggers',
       'pause',
