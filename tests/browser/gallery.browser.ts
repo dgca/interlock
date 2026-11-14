@@ -15,6 +15,7 @@ const sections = [
   'Editors',
   'Dialogs',
   'Test suites',
+  'Workflow proposals',
   'Boards',
 ];
 
