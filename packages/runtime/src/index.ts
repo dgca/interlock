@@ -80,6 +80,7 @@ import {
   hasTimeoutRoute,
   hasFailureRoute,
   parallelBranchPort,
+  decideJoin,
   type FailureCategory,
   blankDefinition,
   InterlockError,
@@ -2097,15 +2098,16 @@ export class Engine {
     starting: boolean,
   ) {
     const children = execution.childRunIds.map((id) => this.run(id));
-    const failed = children.find(
-      (child) =>
-        (child.status === 'failed' || child.status === 'cancelled') &&
-        !execution.retryChildRunIds?.includes(child.id),
-    );
-    if (failed)
-      throw new InterlockError(
-        `Parallel branch "${failed.parallelBranch?.key}" ${failed.status}: ${failed.error ?? failed.id}`,
-      ); // The ordinary failure path cancels unfinished waited descendants.
+    const join = decideJoin(node, children, execution.retryChildRunIds);
+    // The ordinary failure path cancels unfinished waited descendants.
+    if (join.kind === 'fail') throw new InterlockError(join.error);
+    if (join.kind === 'complete') {
+      // Same transaction as the join, so a restart never sees one without the other.
+      for (const id of execution.childRunIds)
+        this.cancelTree(id, undefined, join.reason);
+      this.finish(run, execution, node, join.output, 'complete');
+      return true;
+    }
     let changed = starting;
     let active = children.filter((child) => !terminal(child.status)).length;
     while (execution.retryChildRunIds?.length && active < node.concurrency) {
@@ -2147,19 +2149,6 @@ export class Engine {
       Object.assign(execution, next);
       active++;
       changed = true;
-    }
-    // Any child resumed or dispatched above needs a chance to advance first.
-    if (
-      active === 0 &&
-      !execution.retryChildRunIds?.length &&
-      children.length === node.branches.length &&
-      children.every((child) => child.status === 'completed')
-    ) {
-      const output: Json = Object.fromEntries(
-        children.map((child) => [child.parallelBranch!.key, child.output!]),
-      );
-      this.finish(run, execution, node, output, 'complete');
-      return true;
     }
     if (changed || execution.status !== 'waiting' || run.status !== 'waiting') {
       execution.status = 'waiting';
@@ -3184,14 +3173,20 @@ export class Engine {
   } {
     return this.scriptControl.manageScript(request);
   }
-  private cancelTree(id: string, afterCommit?: (() => void)[]) {
+  /** A reason is recorded on each cancelled run and its unfinished step. */
+  private cancelTree(id: string, afterCommit?: (() => void)[], why?: string) {
     const run = this.run(id);
     if (terminal(run.status)) return;
     for (const child of this.store.runScopes.attachedChildIds(id))
-      this.cancelTree(child, afterCommit);
-    this.cancelOne(run, afterCommit);
+      this.cancelTree(child, afterCommit, why);
+    this.cancelOne(run, afterCommit, why, why);
   }
-  private cancelOne(run: Run, afterCommit?: (() => void)[], reason?: string) {
+  private cancelOne(
+    run: Run,
+    afterCommit?: (() => void)[],
+    reason?: string,
+    stepReason?: string,
+  ) {
     const id = run.id;
     run.status = 'cancelled';
     if (reason) run.cancellationReason = reason;
@@ -3224,8 +3219,10 @@ export class Engine {
     // requesting external stops. A rolled-back start leaves the old job alone.
     if (afterCommit) afterCommit.push(stop);
     else stop();
-    if (execution && !terminal(execution.status))
+    if (execution && !terminal(execution.status)) {
       execution.status = 'cancelled';
+      if (stepReason) execution.error = stepReason;
+    }
     for (const work of this.store
       .work(undefined, id)
       .filter((w) => ['available', 'claimed', 'held'].includes(w.status))) {

@@ -5,6 +5,7 @@ import {
   type WorkflowNode,
 } from './index.js';
 import { bindingLeaves } from './valueBindings.js';
+import { parallelJoinError } from './parallelJoin.js';
 
 export const parallelBranchPort = (id: string) => `branch:${id}`;
 
@@ -91,6 +92,8 @@ export function validateParallelScopes(definition: WorkflowDefinition) {
       throw new InterlockError(
         `${group.label}: branch result keys must be nonblank and unique`,
       );
+    const join = parallelJoinError(group);
+    if (join) throw new InterlockError(join);
   }
   for (const node of definition.nodes) {
     if (node.parallelId === undefined && node.parallelBranchId === undefined)

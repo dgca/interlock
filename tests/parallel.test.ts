@@ -155,6 +155,28 @@ it('saves incomplete drafts while rejecting branch crossings, cycles, bad keys a
     ],
     [
       (d: typeof valid) => {
+        Object.assign(
+          d.nodes.find((n) => n.kind === 'parallel')!,
+          {
+            joinAfter: 3,
+          },
+        );
+      },
+      /continue after 1 to 2 branches/,
+    ],
+    [
+      (d: typeof valid) => {
+        Object.assign(
+          d.nodes.find((n) => n.kind === 'parallel')!,
+          {
+            onBranchFailure: 'continue',
+          },
+        );
+      },
+      /fewer required branches/,
+    ],
+    [
+      (d: typeof valid) => {
         d.nodes.find((n) => n.id === 'r0')!.inputBindings = {
           other: { source: 'node', nodeId: 'r1', path: '' },
         };

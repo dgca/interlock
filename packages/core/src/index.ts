@@ -133,6 +133,8 @@ import {
   sameExecutionScope,
   validateParallelScopes,
 } from './parallel.js';
+import { parallelFields } from './parallelJoin.js';
+export * from './parallelJoin.js';
 import { isStartedRunSchema } from './workflowMode.js';
 export { STARTED_RUN_SCHEMA, isStartedRunSchema } from './workflowMode.js';
 export {
@@ -570,18 +572,7 @@ const nodeShapeSchema = z.discriminatedUnion('kind', [
   z.object({
     ...nodeBase(),
     kind: z.literal('parallel'),
-    branches: z
-      .array(
-        z.object({
-          id: z.string().min(1).max(64),
-          key: z.string().max(64),
-        }),
-      )
-      .max(50)
-      .describe(
-        'Publish with 2–50 unique branch IDs and nonblank result keys. Members set parallelId and parallelBranchId. Wire branch:<id> in, join back and complete out.',
-      ),
-    concurrency: z.number().int().min(1).max(50).default(5),
+    ...parallelFields,
   }),
 ]);
 export const nodeSchema = z.preprocess((value, ctx) => {

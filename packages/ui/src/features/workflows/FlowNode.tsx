@@ -320,6 +320,9 @@ function FlowNodeBody({ data, selected }: NodeProps<CanvasNode>) {
                 {progress}
                 <small>
                   {n.branches.length} branches
+                  {n.joinAfter !== undefined
+                    ? ` · Continues after ${n.joinAfter}`
+                    : ''}
                   {n.concurrency < n.branches.length
                     ? ` · Up to ${n.concurrency} at once`
                     : ''}

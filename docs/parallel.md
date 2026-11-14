@@ -17,6 +17,27 @@ Published groups have 2–50 branches. Result keys are nonblank, unique, and at 
 
 Parallel groups belong at main workflow scope. Batch and Parallel groups cannot be nested inline with Parallel. Use a waited Workflow call for a procedure that contains a group. Paths inside a Parallel branch must be acyclic. A detached Workflow call returns its run reference and keeps running independently.
 
+## Continue before every branch finishes
+
+By default the group waits for every branch. To continue sooner, open the group's settings and change **Continue after** to **Any branch succeeds** or **A number of branches succeed**, then enter how many, from 1 to the branch count. When enough branches succeed, Interlock cancels the branches that are still running or have not started. Cancellation works as it does when you cancel a run: claims are released, managed sessions and Scripts are stopped, and waited child workflows are cancelled. Detached child runs keep running. The cancelled branch runs and steps record a reason that names the group, for example `Reviews join satisfied after 1 of 3 branches`.
+
+**When a branch fails** decides what a failure does. **Fail and stop other branches** fails the group, as before. **Continue while enough branches can succeed** keeps waiting while the remaining branches can still reach the number. The group fails once they cannot.
+
+A group with one of these settings sends a different output. `results` holds the output of each branch that completed, and `branches` gives every branch's outcome as `completed`, `failed` or `cancelled`. For a group of three that continues after the first success:
+
+```json
+{
+  "results": { "specReview": { "approved": true } },
+  "branches": {
+    "specReview": "completed",
+    "codeReview": "cancelled",
+    "securityReview": "cancelled"
+  }
+}
+```
+
+Branches that complete in the same step as the winner are kept, so `results` can hold more branches than the number required. A group that waits for all branches keeps the original output.
+
 ## Inspect and retry
 
 Select a Parallel execution in the timeline to expand its named paths and see their statuses. Select a step on the canvas or in the expanded timeline to inspect its input, output, and attempts in the parent run. Use the group link in the details pane to return to the joined output. Select an earlier group execution to inspect that visit. Unstarted paths stay visible if the group fails.
@@ -29,7 +50,7 @@ Parallel branch steps count toward the owning workflow run's `maxSteps`. The gro
 
 ## Author through CLI or MCP
 
-A definition uses `kind: "parallel"` with `branches: [{id, key}]` and optional `concurrency`. Give each member the owning `parallelId` and its `parallelBranchId`. Use a source port `branch:<id>` to start each path. Return a path to its group with `targetHandle: "join"`. The visual editor saves these returns automatically and displays each one at its lane's **End** dot. The group's `complete` port forwards the collected object. Renaming a result key leaves the branch ID and edges intact.
+A definition uses `kind: "parallel"` with `branches: [{id, key}]` and optional `concurrency`. Optional `joinAfter` (1 to the branch count) continues after that many successes; omit it to wait for all. Optional `onBranchFailure: "continue"` keeps going after a failure while `joinAfter` can still be reached; it requires `joinAfter` below the branch count. Give each member the owning `parallelId` and its `parallelBranchId`. Use a source port `branch:<id>` to start each path. Return a path to its group with `targetHandle: "join"`. The visual editor saves these returns automatically and displays each one at its lane's **End** dot. The group's `complete` port forwards the collected object. Renaming a result key leaves the branch ID and edges intact.
 
 A branch can read its own completed node output or execution provenance. To share earlier parent values, pass them through the group's input. The parent's continuation can read the whole joined object. See [step data](node-data.md).
 
@@ -42,4 +63,4 @@ interlock start WORKFLOW_ID '{"checks":["lint","test"]}' --summary
 interlock run RUN_ID
 ```
 
-Replace the IDs with the ones returned by import and start. The completed run returns `{"count":2,"hasTests":true}`. Inspect the same workflow through MCP with `get_run_briefing` for bounded `parallels` counts and descendant references, then `get_run_result` for the joined output. [Fixture simulation](workflow-simulation.md) runs the branches one at a time in branch order and reports coverage for each branch.
+Replace the IDs with the ones returned by import and start. The completed run returns `{"count":2,"hasTests":true}`. Inspect the same workflow through MCP with `get_run_briefing` for bounded `parallels` counts and descendant references, then `get_run_result` for the joined output. [Fixture simulation](workflow-simulation.md) runs the branches one at a time in branch order and reports coverage for each branch. A group with `joinAfter` starts its branches up to its concurrency instead, so the simulation shows the branches it cancels.

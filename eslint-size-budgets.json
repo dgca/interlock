@@ -2,11 +2,11 @@
   "maxLines": 800,
   "ceilings": {
     "packages/cli/src/commands.ts": 888,
-    "packages/core/src/index.ts": 1541,
+    "packages/core/src/index.ts": 1532,
     "packages/mcp/src/tools/server.ts": 888,
     "packages/runtime/src/doctor.ts": 804,
     "packages/runtime/src/executors/manager.ts": 1800,
-    "packages/runtime/src/index.ts": 3432,
+    "packages/runtime/src/index.ts": 3429,
     "packages/runtime/src/report.ts": 933,
     "packages/runtime/src/testbench.ts": 1018,
     "packages/runtime/src/transfer.ts": 806,

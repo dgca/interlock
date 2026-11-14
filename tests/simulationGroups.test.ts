@@ -10,6 +10,7 @@ import {
 import { importWorkflows } from '../packages/runtime/src/transfer';
 import allNodes from '../workflows/all-nodes.json';
 import evaluate from '../workflows/evaluate.json';
+import { parallelDefinition } from './fixtures/parallel';
 
 // Kept apart from simulation.test.ts, which is at its size ceiling. These
 // simulate bundled workflows that use Batch and Parallel end to end.
@@ -58,7 +59,7 @@ async function simulate(
       id: requestId,
       limit: 100,
     }) as unknown as Report;
-    if (r.state !== 'running') return r;
+    if (r.state !== 'running') return { ...r, requestId };
     await tick();
   }
   throw new Error('Simulation did not settle');
@@ -326,4 +327,44 @@ it('accepts item-by-item and step-by-step fixture order for Batch items', async 
     const r = await simulate(e, id, { items: [1, 2] }, [...fixtures]);
     expect(r.state, r.error ?? r.unsupported.items.join()).toBe('passed');
   }
+});
+
+it('simulates a first 1 of 3 join with the other branches cancelled', async () => {
+  const e = engine();
+  const w = e.create(
+    'First of three',
+    '',
+    parallelDefinition({
+      keys: ['spec', 'code', 'lint'],
+      concurrency: 3,
+      join: { joinAfter: 1 },
+    }),
+  );
+  e.publish(w.id);
+  const report = await simulate(e, w.id, {}, [
+    { nodeId: 'r0', kind: 'agent', output: 'first' },
+  ]);
+  expect(report.state, report.error).toBe('passed');
+  const capture = e.simulations.request({
+    action: 'capture',
+    id: report.requestId,
+  }) as { result?: Json };
+  expect(capture.result).toEqual({
+    results: { spec: 'first' },
+    branches: { spec: 'completed', code: 'cancelled', lint: 'cancelled' },
+  });
+  expect(
+    report.executions.items
+      .filter((x) => x.branch)
+      .map((x) => [x.branch, (x as { status?: string }).status]),
+  ).toEqual([
+    ['spec', 'completed'],
+    ['code', 'cancelled'],
+    ['lint', 'cancelled'],
+  ]);
+  // Cancelled branches started but never returned to the join.
+  expect(report.coverage!.untested.map((u) => u.edgeId)).toEqual([
+    'join-r1',
+    'join-r2',
+  ]);
 });

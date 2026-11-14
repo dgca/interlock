@@ -4,7 +4,13 @@ export function parallelDefinition({
   keys = ['spec', 'code'],
   concurrency = 2,
   maxSteps = 100,
-}: { keys?: string[]; concurrency?: number; maxSteps?: number } = {}) {
+  join = {},
+}: {
+  keys?: string[];
+  concurrency?: number;
+  maxSteps?: number;
+  join?: { joinAfter?: number; onBranchFailure?: 'fail' | 'continue' };
+} = {}) {
   const branches = keys.map((key, index) => ({ id: `r${index}`, key }));
   return definitionSchema.parse({
     maxSteps,
@@ -16,6 +22,7 @@ export function parallelDefinition({
         label: 'Reviews',
         branches,
         concurrency,
+        ...join,
       },
       ...branches.map(({ id, key }, index) => ({
         id,
