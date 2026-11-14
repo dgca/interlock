@@ -137,20 +137,24 @@ export type ScriptEnvironmentSettings = {
   environmentPassthrough?: string[];
 };
 
-function EnvironmentModeField({
+export function EnvironmentModeField({
   value,
   onChange,
+  title,
 }: {
   value: ScriptEnvironmentSettings;
   onChange: (value: ScriptEnvironmentSettings) => void;
+  /** Names the field when a form holds more than one, as in workspace hooks. */
+  title?: string;
 }) {
+  const label = title ? `${title} server environment` : 'Server environment';
   const passthrough = value.environmentPassthrough ?? [];
   const invalid = passthrough.filter((name) => !environmentName.test(name));
   return (
     <>
       <Stack gap={4}>
         <Text size="sm" fw={550}>
-          Server environment
+          {label}
         </Text>
         <Text size="xs" c="dimmed">
           {value.environmentMode === 'minimal'
@@ -159,7 +163,7 @@ function EnvironmentModeField({
         </Text>
         <SegmentedControl
           style={{ display: 'flex', width: 'fit-content' }}
-          aria-label="Server environment"
+          aria-label={label}
           value={value.environmentMode ?? 'inherit'}
           data={[
             { value: 'inherit', label: 'Inherit all' },

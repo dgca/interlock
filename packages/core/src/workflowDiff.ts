@@ -168,6 +168,7 @@ export function compareWorkflow(
     ['agentModelMode', 'Agent model selection'],
     ['agentEffort', 'Agent thinking effort'],
     ['cwd', 'Working directory'],
+    ['permissionPolicy', 'Permission policy'],
     ['continueOnMissingResult', 'Missing result continuation'],
     ['transientRetry', 'Transient retry'],
     ['sessionNameTemplate', 'Session name template'],

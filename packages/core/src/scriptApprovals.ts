@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { describeRule, type PermissionPolicy } from './permissionPolicy.js';
 
 /**
  * Who must approve Script content before it runs. `imports` gates content that
@@ -44,6 +45,7 @@ type ScriptSource = {
     branch?: string;
     hooks?: { afterCreate?: ScriptContent; beforeRemove?: ScriptContent };
   };
+  permissionPolicy?: PermissionPolicy;
 };
 const hookLabels = {
   afterCreate: 'Workspace hook after create',
@@ -146,10 +148,27 @@ function importedWorkspaces(workflows: Parameters<typeof importedScripts>[0]) {
     );
   });
 }
-/** What a person reviews before importing: Scripts and Git worktree settings. */
+/** Each distinct permission policy, one line per allowed action. */
+function importedPolicies(workflows: Parameters<typeof importedScripts>[0]) {
+  return workflows.flatMap((workflow) => {
+    const seen = new Set<string>();
+    return [
+      workflow.draft?.permissionPolicy,
+      ...(workflow.versions ?? []).map((v) => v.definition.permissionPolicy),
+    ].flatMap((policy) => {
+      const rules = policy?.allow.map(describeRule) ?? [];
+      const key = JSON.stringify(rules);
+      return rules.length && !seen.has(key) && seen.add(key)
+        ? [{ workflowName: workflow.name, rules }]
+        : [];
+    });
+  });
+}
+/** What a person reviews before importing: Scripts, Git worktree settings and permission policies. */
 export const importReview = (
   workflows: Parameters<typeof importedScripts>[0],
 ) => ({
   scripts: importedScripts(workflows),
   workspaces: importedWorkspaces(workflows),
+  policies: importedPolicies(workflows),
 });

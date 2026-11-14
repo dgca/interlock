@@ -12,6 +12,7 @@ import {
   type StallRecord,
   type Workflow,
   type WorkRequest,
+  describePolicyContent,
 } from '@interlock/core';
 import type { Store } from '@interlock/storage';
 import type { ExternalInputs } from './externalInputs.js';
@@ -333,9 +334,17 @@ export class Requests {
         ...base,
         target,
         kind: 'scriptApproval' as const,
-        question: 'Approve imported Script',
-        context:
-          'This Script came from an imported workflow and runs as your user with your files and network access. Review the code before approving. Approval applies to this exact code in this workflow.',
+        ...(script.language === 'permission-policy'
+          ? {
+              question: 'Approve permission policy',
+              context:
+                'This policy came from an import or an agent. Once approved, managed Agent sessions in this workflow run the listed actions inside the run workspace without asking. Other actions still ask. Approval applies to this exact policy in this workflow.',
+            }
+          : {
+              question: 'Approve imported Script',
+              context:
+                'This Script came from an imported workflow and runs as your user with your files and network access. Review the code before approving. Approval applies to this exact code in this workflow.',
+            }),
         agentNote:
           'A person must approve this in the Interlock UI or CLI; agents cannot approve it.',
         state: (active
@@ -346,7 +355,11 @@ export class Requests {
         script: {
           label: script.label,
           language: script.language ?? 'bash',
-          command: script.command,
+          // A policy reads as one allowed action per line, as in import review.
+          command:
+            script.language === 'permission-policy'
+              ? describePolicyContent(script.command)
+              : script.command,
         },
         actions: [],
       };

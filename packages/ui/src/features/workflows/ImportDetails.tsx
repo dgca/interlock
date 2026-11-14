@@ -9,11 +9,13 @@ const languages = { javascript: 'JavaScript', bash: 'Bash' };
 
 /**
  * Every Script an import contains, so a person can read the code before
- * importing, and each Git worktree setting with its repository path.
+ * importing, each Git worktree setting with its repository path, and each
+ * permission policy with the actions it allows.
  */
 function ImportedScripts({
   scripts,
   workspaces,
+  policies,
 }: {
   scripts: {
     workflowName: string;
@@ -22,14 +24,25 @@ function ImportedScripts({
     command: string;
   }[];
   workspaces: DocumentPreview['workspaces'];
+  policies: DocumentPreview['policies'];
 }) {
   return (
     <details className={styles.details}>
       <summary>
         {scripts.length
           ? `${scripts.length} Script${scripts.length === 1 ? '' : 's'} to review · imported Scripts wait for approval before their first run`
-          : 'Git worktree settings to review'}
+          : policies.length
+            ? 'Permission policy to review · it waits for approval before it applies'
+            : 'Git worktree settings to review'}
       </summary>
+      {policies.map((policy, index) => (
+        <div key={`policy-${index}`}>
+          <p>Permission policy · {policy.workflowName}</p>
+          <pre tabIndex={0} aria-label="Permission policy">
+            {policy.rules.join('\n')}
+          </pre>
+        </div>
+      ))}
       {workspaces.map((workspace, index) => (
         <div key={`workspace-${index}`}>
           <p>Git worktree · {workspace.workflowName}</p>
@@ -62,6 +75,7 @@ export function Details({
   item: Pick<DocumentPreview, 'workflows' | 'prompts'> & {
     scripts?: DocumentPreview['scripts'];
     workspaces?: DocumentPreview['workspaces'];
+    policies?: DocumentPreview['policies'];
   };
   filename?: string;
   commit?: string;
@@ -78,18 +92,17 @@ export function Details({
     .join(' · ');
   const scripts = item.scripts ?? [];
   const workspaces = item.workspaces ?? [];
-  if (
-    !included &&
-    !filename &&
-    !commit &&
-    !scripts.length &&
-    !workspaces.length
-  )
-    return null;
+  const policies = item.policies ?? [];
+  const review = scripts.length + workspaces.length + policies.length > 0;
+  if (!included && !filename && !commit && !review) return null;
   return (
     <>
-      {(scripts.length > 0 || workspaces.length > 0) && (
-        <ImportedScripts scripts={scripts} workspaces={workspaces} />
+      {review && (
+        <ImportedScripts
+          scripts={scripts}
+          workspaces={workspaces}
+          policies={policies}
+        />
       )}
       {(included || filename || commit) && (
         <details className={styles.details}>

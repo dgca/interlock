@@ -28,6 +28,7 @@ import {
 } from '@interlock/core';
 import type { Store } from '@interlock/storage';
 import type { Engine } from './index.js';
+import { approvalsReport } from './reportApprovals.js';
 
 interface RecoveryEventRecord {
   workId: string;
@@ -886,10 +887,7 @@ export function generateWorkflowReport(
   return {
     filter,
     generatedAt: new Date(reportNowMs).toISOString(),
-    window: {
-      since: filter.since ?? null,
-      until: filter.until ?? null,
-    },
+    window: { since: filter.since ?? null, until: filter.until ?? null },
     summary: {
       totalRuns: totalRunsCount,
       durationMs: elapsedDistribution(runDurations),
@@ -939,5 +937,6 @@ export function generateWorkflowReport(
       unattendedCompletionRate,
       humanEscalationRate,
     },
+    approvals: approvalsReport(runs, managedAttemptsList),
   };
 }

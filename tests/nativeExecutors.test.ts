@@ -367,6 +367,13 @@ it.each(
     });
     expect(result.output).toEqual({ ok: permissions === 'full-access' });
     expect(requests).toHaveLength(permissions === 'standard' ? 1 : 0);
+    // The policy judges the same action each harness asks about.
+    if (permissions === 'standard')
+      expect(requests[0]).toHaveProperty('action', {
+        kind: 'command',
+        command: 'test command',
+        cwd: process.cwd(),
+      });
   },
   15000,
 );

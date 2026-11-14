@@ -37,7 +37,7 @@ import { ManagedRequestControls } from '../executors/ManagedExecutionPanel';
 import { ModelPicker } from '../executors/ModelPicker';
 import { ExternalTaskLink } from '../../components/ExternalTaskLink';
 import classes from './Boards.module.css';
-import { RequestEvidence, ReviewText } from './RequestEvidence';
+import { approvedLabel, RequestEvidence, ReviewText } from './RequestEvidence';
 
 type Detail = Awaited<ReturnType<typeof api.requests.get.query>>;
 type HumanDetail = Extract<Detail, { kind: 'human' }>;
@@ -665,7 +665,7 @@ function decision(detail: Detail) {
     return detail.request.answer?.allow ? 'Allowed once' : 'Denied';
   if (detail.kind === 'model') return 'Replacement model recorded';
   if (detail.kind === 'recovery') return 'Stop confirmed';
-  if (detail.kind === 'scriptApproval') return 'Script approved';
+  if (detail.kind === 'scriptApproval') return approvedLabel(detail);
   return 'Answer accepted';
 }
 

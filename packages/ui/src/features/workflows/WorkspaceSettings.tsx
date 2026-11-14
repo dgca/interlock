@@ -1,6 +1,7 @@
 import { NativeSelect, Stack, Switch, TextInput } from '../../design-system';
 import type { WorkflowDefinition } from '@interlock/core';
 import { ScriptCode } from './ScriptCode';
+import { EnvironmentModeField } from '../variables/EnvironmentEditor';
 
 type Workspace = NonNullable<WorkflowDefinition['workspace']>;
 const hooks = [
@@ -98,6 +99,7 @@ export function WorkspaceSettings({
                               language: 'bash',
                               command: '# Runs in the worktree\n',
                               timeoutMs: 60000,
+                              environmentMode: 'minimal',
                             }
                           : undefined,
                       },
@@ -105,15 +107,32 @@ export function WorkspaceSettings({
                   }
                 />
                 {hook && (
-                  <ScriptCode
-                    title={title}
-                    value={hook}
-                    onChange={(code) =>
-                      patch({
-                        hooks: { ...value.hooks, [name]: { ...hook, ...code } },
-                      })
-                    }
-                  />
+                  <Stack gap="sm">
+                    <ScriptCode
+                      title={title}
+                      value={hook}
+                      onChange={(code) =>
+                        patch({
+                          hooks: {
+                            ...value.hooks,
+                            [name]: { ...hook, ...code },
+                          },
+                        })
+                      }
+                    />
+                    <EnvironmentModeField
+                      title={title}
+                      value={hook}
+                      onChange={(environment) =>
+                        patch({
+                          hooks: {
+                            ...value.hooks,
+                            [name]: { ...hook, ...environment },
+                          },
+                        })
+                      }
+                    />
+                  </Stack>
                 )}
               </div>
             );

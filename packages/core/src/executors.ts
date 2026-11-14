@@ -388,6 +388,16 @@ export interface ManagedExecution {
   state: ExecutorState;
   profile: ExecutorProfile;
   permissionSource?: 'workflow' | 'harness' | 'preset';
+  /** Present when the workflow has a permission policy. */
+  permissionPolicy?: {
+    state: 'applied' | 'awaiting_approval' | 'unavailable';
+    /** Permission requests the policy answered without asking. */
+    autoAllowed: number;
+    /** Rules this harness cannot apply, or why none apply. Those actions ask. */
+    notApplied?: string[];
+    /** The latest auto-allowed actions, at most 50, with the rules that matched. */
+    allowed?: { action: string; rule: string; at: string }[];
+  };
   modelSource?: z.infer<typeof executorSettingSourceSchema>;
   effortSource?: z.infer<typeof executorSettingSourceSchema>;
   command: string;

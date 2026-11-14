@@ -125,6 +125,7 @@ export function draftChanges(
       'sessionNameTemplate',
       'cwd',
       'workspace',
+      'permissionPolicy',
       'pinPromptsAtPublish',
     ].filter(
       (key) =>
@@ -230,6 +231,9 @@ export function applyWorkflowEdits(
         const current = {
           ...(definition.cwd !== undefined ? { cwd: definition.cwd } : {}),
           ...(definition.workspace ? { workspace: definition.workspace } : {}),
+          ...(definition.permissionPolicy
+            ? { permissionPolicy: definition.permissionPolicy }
+            : {}),
           ...(definition.pinPromptsAtPublish !== undefined
             ? { pinPromptsAtPublish: definition.pinPromptsAtPublish }
             : {}),
@@ -285,6 +289,7 @@ export function applyWorkflowEdits(
           definitionSchema.pick({
             cwd: true,
             workspace: true,
+            permissionPolicy: true,
             pinPromptsAtPublish: true,
             executor: true,
             agentPermissions: true,
@@ -310,6 +315,7 @@ export function applyWorkflowEdits(
         );
         delete definition.cwd;
         delete definition.workspace;
+        delete definition.permissionPolicy;
         delete definition.pinPromptsAtPublish;
         delete definition.maxActiveRuns;
         delete definition.excludeStages;

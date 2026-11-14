@@ -246,6 +246,27 @@ export type TerminalOutcomesReport = z.infer<
   typeof terminalOutcomesReportSchema
 >;
 
+/** Managed Agent permission requests: answered by the workflow policy or by a person. */
+const approvalsReportSchema = z
+  .object({
+    prompted: z.number().int().min(0),
+    autoAllowed: z.number().int().min(0),
+    byRun: z.array(
+      z
+        .object({
+          runId: z.string(),
+          workflowId: z.string(),
+          prompted: z.number().int().min(0),
+          autoAllowed: z.number().int().min(0),
+          /** Policy rules a harness could not apply, or why none applied. */
+          notApplied: z.array(z.string()).optional(),
+        })
+        .strict(),
+    ),
+  })
+  .strict();
+export type ApprovalsReport = z.infer<typeof approvalsReportSchema>;
+
 export const workflowReportSummarySchema = z
   .object({
     totalRuns: z.number().int().min(0),
@@ -273,6 +294,7 @@ export const workflowReportSchema = z
     claims: claimWaitReportSchema,
     usage: usageCostReportSchema,
     terminalOutcomes: terminalOutcomesReportSchema,
+    approvals: approvalsReportSchema.optional(),
   })
   .strict();
 

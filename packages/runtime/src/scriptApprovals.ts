@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import {
   definitionScripts,
   InterlockError,
+  policyApprovalContent,
   type NodeExecution,
   type Run,
   type ScriptApprovalMode,
@@ -23,6 +24,15 @@ type Effects = {
   event: (run: Run, message: string) => void;
 };
 const collection = 'scriptApprovals';
+/** Content a person approves: Scripts, and a permission policy, which grants an agent actions. */
+const approvalContents = (definition: WorkflowDefinition) => [
+  ...definitionScripts(definition),
+  ...[policyApprovalContent(definition)].flatMap((policy) =>
+    policy
+      ? [{ ...policy, nodeId: 'permissionPolicy', label: 'Permission policy' }]
+      : [],
+  ),
+];
 
 /**
  * One-time approval of imported Script content. Approval is keyed by workflow
@@ -45,7 +55,11 @@ export class ScriptApprovals {
   }
 
   /** The content hash when this Script must wait for approval. */
-  required(workflowId: string, script: ScriptContent) {
+  required(
+    workflowId: string,
+    script:
+      ScriptContent | NonNullable<ReturnType<typeof policyApprovalContent>>,
+  ) {
     if (this.settings().mode === 'off') return undefined;
     const hash = scriptContentHash(script);
     const record = this.store.get<ScriptApproval>(
@@ -78,8 +92,19 @@ export class ScriptApprovals {
     return true;
   }
 
-  /** Hold a run at its entry until imported workspace hooks are approved. */
-  holdRun(run: Run, entry: WorkflowNode, hash: string) {
+  /** The hash when a policy from an import or an agent waits for a person. */
+  pendingPolicy(workflowId: string, definition: WorkflowDefinition) {
+    const content = policyApprovalContent(definition);
+    return content && this.required(workflowId, content);
+  }
+
+  /** Hold a run at its entry until imported workspace hooks or a policy are approved. */
+  holdRun(
+    run: Run,
+    entry: WorkflowNode,
+    hash: string,
+    what = 'workspace hook',
+  ) {
     const since = new Date().toISOString();
     run.executions.push({
       id: randomUUID(),
@@ -96,9 +121,51 @@ export class ScriptApprovals {
     });
     run.status = 'waiting';
     this.effects?.save(run);
-    this.effects?.event(run, 'Waiting for workspace hook approval');
+    this.effects?.event(run, `Waiting for ${what} approval`);
     return true;
   }
+  /**
+   * Hold a new run at its entry while its permission policy waits for a person.
+   * A run already past its entry keeps going; the policy does not apply to it
+   * until approved. After approval, a hold moves on to pending workspace hooks.
+   */
+  policyGate(
+    run: Run,
+    definition: WorkflowDefinition,
+    pendingHook: () => string | undefined,
+  ): boolean | undefined {
+    const hash = this.pendingPolicy(run.workflowId, definition);
+    const held = run.executions.at(-1);
+    if (held?.kind === 'entry' && held.scriptApproval) {
+      if (hash) {
+        // A hold whose hook was approved now shows the policy request instead.
+        const current = this.store.get<ScriptApproval>(
+          collection,
+          scriptApprovalId(run.workflowId, held.scriptApproval.hash),
+        );
+        if (held.scriptApproval.hash !== hash && current?.state !== 'pending') {
+          held.scriptApproval = { hash, since: new Date().toISOString() };
+          this.effects?.save(run);
+          this.effects?.event(run, 'Waiting for permission policy approval');
+        }
+        return false;
+      }
+      const policy = policyApprovalContent(definition);
+      if (!policy || held.scriptApproval.hash !== scriptContentHash(policy))
+        return undefined;
+      const hook = pendingHook();
+      if (!hook) return this.releaseRun(run, held);
+      held.scriptApproval = { hash: hook, since: new Date().toISOString() };
+      this.effects?.save(run);
+      this.effects?.event(run, 'Waiting for workspace hook approval');
+      return false;
+    }
+    const entry = definition.nodes.find((n) => n.id === run.cursor);
+    if (!hash || run.executions.length || entry?.kind !== 'entry')
+      return undefined;
+    return this.holdRun(run, entry, hash, 'permission policy');
+  }
+
   releaseRun(run: Run, entry: NodeExecution) {
     delete entry.scriptApproval;
     entry.status = run.status = 'running';
@@ -131,12 +198,14 @@ export class ScriptApprovals {
     previous: WorkflowDefinition[],
     next: WorkflowDefinition[],
     source: 'import' | 'agent' = 'import',
+    policiesOnly = false,
   ) {
     const known = new Set(
-      previous.flatMap((d) => definitionScripts(d).map(scriptContentHash)),
+      previous.flatMap((d) => approvalContents(d).map(scriptContentHash)),
     );
     const createdAt = new Date().toISOString();
-    for (const script of next.flatMap(definitionScripts)) {
+    for (const script of next.flatMap(approvalContents)) {
+      if (policiesOnly && script.language !== 'permission-policy') continue;
       const hash = scriptContentHash(script);
       const id = scriptApprovalId(workflowId, hash);
       if (known.has(hash) || this.store.get(collection, id)) continue;
@@ -180,24 +249,36 @@ export class ScriptApprovals {
         });
   }
 
-  /** Gate an agent's draft change when the library extends approval to agents. */
+  /**
+   * Gate an agent's draft change when the library extends approval to agents.
+   * A permission policy an agent writes always waits: it would grant itself actions.
+   */
   recordAgentEdit(workflowId: string, previous: WorkflowDefinition[]) {
-    if (this.settings().mode !== 'imports_and_agents') return;
+    const mode = this.settings().mode;
+    if (mode === 'off') return;
     const workflow = this.store.get<Workflow>('workflows', workflowId);
-    if (workflow) this.record(workflowId, previous, [workflow.draft], 'agent');
+    if (workflow)
+      this.record(
+        workflowId,
+        previous,
+        [workflow.draft],
+        'agent',
+        mode !== 'imports_and_agents',
+      );
   }
 
   /** The Script a waiting step runs, with its approval record. */
   step(run: Run, execution: NodeExecution) {
     // The same definition the engine gates: the run's current version.
     const version = this.store.getVersion(run.workflowId, run.version);
-    const scripts = version ? definitionScripts(version.definition) : [];
+    const scripts = version ? approvalContents(version.definition) : [];
     // A workspace hook holds the run's entry step under the hook's hash.
     const script =
       scripts.find((s) => s.nodeId === execution.nodeId) ??
       scripts.find(
         (s) =>
-          s.nodeId.startsWith('workspace.') &&
+          (s.nodeId.startsWith('workspace.') ||
+            s.nodeId === 'permissionPolicy') &&
           scriptContentHash(s) === execution.scriptApproval?.hash,
       );
     if (!script) return undefined;

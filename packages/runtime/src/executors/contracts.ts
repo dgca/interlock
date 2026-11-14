@@ -2,6 +2,7 @@ import { assignmentInstructions } from '../agentInstructions.js';
 import type {
   ExecutorAnswer,
   ExecutorProfile,
+  PermissionAction,
   ExecutorQuestion,
   Json,
   ModelUsage,
@@ -16,6 +17,8 @@ export interface HarnessRequest {
   title: string;
   detail: string;
   questions?: ExecutorQuestion[];
+  /** What a permission request would do, for the workflow permission policy. */
+  action?: PermissionAction;
 }
 export interface HarnessRun {
   profile: ExecutorProfile;
@@ -34,6 +37,8 @@ export interface HarnessRun {
     send: ((message: string) => Promise<void>) | undefined,
   ) => void;
   request: (request: HarnessRequest) => Promise<ExecutorAnswer>;
+  /** A workflow permission policy answers some requests. */
+  permissionPolicy?: boolean;
 }
 export interface HarnessResult {
   output: Json;

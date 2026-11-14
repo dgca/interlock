@@ -451,6 +451,37 @@ describe('Workflow performance and cost report (interlock report)', () => {
 
       // Stalls
       expect(report.claims.stalls).toBe(1);
+
+      // Approvals per run: questions are not approvals; policy answers count apart.
+      store.put('managedExecutions', {
+        id: 'work-2:1',
+        workId: 'work-2',
+        attempt: 1,
+        runId,
+        requests: [
+          { kind: 'permission' },
+          { kind: 'question' },
+          { kind: 'permission' },
+        ],
+        permissionPolicy: {
+          state: 'applied',
+          autoAllowed: 5,
+          notApplied: ['Use tool: WebSearch: codex asks instead'],
+        },
+      });
+      expect(engine.report({ workflowId: wf.id }).approvals).toEqual({
+        prompted: 2,
+        autoAllowed: 5,
+        byRun: [
+          {
+            runId,
+            workflowId: wf.id,
+            prompted: 2,
+            autoAllowed: 5,
+            notApplied: ['Use tool: WebSearch: codex asks instead'],
+          },
+        ],
+      });
     });
 
     it('aggregates model tokens and cost attribution with measured vs unknown coverage', () => {

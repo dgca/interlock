@@ -14,6 +14,7 @@ import {
   findExecutable,
   JsonLinesProcess,
 } from './process.js';
+import { codexAction } from './permissionPolicy.js';
 import { transcriptText } from './transcriptEvents.js';
 import { codexResult } from './codexResult.js';
 
@@ -226,6 +227,7 @@ export const codexAdapter: HarnessAdapter = {
                 ? 'Codex requests a command'
                 : 'Codex requests file changes',
               detail: String(detail),
+              action: codexAction(params, changes, input.cwd),
             });
             result = { decision: answer.allow ? 'accept' : 'decline' };
           } else if (message.method === 'item/tool/requestUserInput') {

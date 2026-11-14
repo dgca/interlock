@@ -1252,7 +1252,7 @@ export class ExecutorManager {
                     this.log(r, message);
                   }
                 },
-                request: (request) => this.operator.request(job, request),
+                ...this.operator.sessionRequests(job),
               });
               job.sendMessage = undefined;
               if (turnResult?.resumeCommand) {
