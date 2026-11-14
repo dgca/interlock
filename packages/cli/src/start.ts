@@ -5,7 +5,8 @@ import {
 } from '@interlock/core';
 import { engineClient } from './engineClient.js';
 import { parse } from './json.js';
-import { parseSummaryArgs, parseTags } from './args.js';
+import { parseSummaryArgs } from './args.js';
+import { parseTags } from './runsCommand.js';
 
 /** `start <workflow-id> <json|@file> [version] [options]`. */
 export async function runStartCommand(args: string[]) {

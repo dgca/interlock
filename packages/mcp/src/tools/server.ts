@@ -613,7 +613,7 @@ export function createMcpServer(
   );
   tool(
     'list_runs',
-    'Find newest run summaries with projections, tags, correlation and ancestry. Filters combine; tags require every exact case-sensitive pair. inputMatch uses dot paths, blank for whole input, structural equality. Limit default 50/max 1000. rootOnly excludes all children, including detached. Lookup reserves nothing; use start_run for retry/active-task policy. Chains inherit externalTask, not requestId.',
+    'Find newest run summaries with projections, tags, correlation and ancestry. Filters combine; tags require every exact case-sensitive pair. inputMatch uses dot paths, blank for whole input, structural equality. Limit default 50/max 1000; next page: afterRunId = last id. rootOnly excludes all children, including detached. Lookup reserves nothing; use start_run for retry/active-task policy. Chains inherit externalTask, not requestId.',
     runQuerySchema.shape,
     (input) => client.runs.find(input),
   );

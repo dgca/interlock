@@ -1,17 +1,5 @@
 import { parseArgs } from 'node:util';
-import { runTagsSchema } from '@interlock/core';
 
-export function parseTags(values: string[] | undefined) {
-  if (!values) return undefined;
-  const entries = values.map((value) => {
-    const equals = value.indexOf('=');
-    if (equals < 1) throw new Error('Use --tag KEY=VALUE with a nonempty key');
-    return [value.slice(0, equals), value.slice(equals + 1)] as const;
-  });
-  if (new Set(entries.map(([key]) => key)).size !== entries.length)
-    throw new Error('Supply each --tag key once');
-  return runTagsSchema.parse(Object.fromEntries(entries));
-}
 export function parseSummaryArgs(args: string[], withBudget = false) {
   const optionArgs: string[] = [];
   const positionals: string[] = [];

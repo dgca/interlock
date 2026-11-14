@@ -75,6 +75,17 @@ export function historyInventory(db: DatabaseSync, ids: Set<string>) {
     }
     collections[collection] = count;
   }
+  // Executions are stored beside their run documents and count toward the run's bytes.
+  for (const row of db
+    .prepare(
+      `SELECT run_id, position, value FROM run_executions
+    WHERE run_id IN (SELECT value FROM json_each(?)) ORDER BY run_id, position`,
+    )
+    .iterate(encoded)) {
+    const value = row.value as string;
+    digest.update(JSON.stringify([row.run_id, row.position])).update(value);
+    documentBytes += Buffer.byteLength(value);
+  }
   for (const [collection, table] of [
     ['transcriptEntries', 'transcript_entries'],
     ['transcriptReceipts', 'transcript_receipts'],
