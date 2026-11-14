@@ -314,7 +314,6 @@ try {
       'pr-watcher',
       'evaluate-comparison',
       'github-issue-intake',
-      'run-notifications',
     ],
   );
   const cliStarters = JSON.parse(

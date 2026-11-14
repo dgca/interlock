@@ -95,7 +95,6 @@ it.each(['http', 'stdio'])(
         'pr-watcher',
         'evaluate-comparison',
         'github-issue-intake',
-        'run-notifications',
       ]);
       expect(JSON.stringify(choices).length).toBeLessThan(2000);
       expect(e.store.workflows()).toEqual([]);
