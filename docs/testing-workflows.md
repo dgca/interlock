@@ -11,7 +11,7 @@ Open a workflow's **Tests** tab to create and edit suites and run their cases as
 
 ## Edit a suite
 
-**New test suite** opens the suite editor. Each case has a name, a stable case ID, workflow input (entered, or copied from one of the workflow's runs when you save), checks, simulation fixtures and optional quality guidance. A check either compares an output value (exists, equals, at least or at most) at a path of the workflow output or of one step's output, or expects a step to take a route. Fixtures are an ordered JSON list of step outcomes; see [fixtures](workflow-simulation.md#save-fixtures). Saving creates a new suite revision. If the suite changed elsewhere, your edits stay in the form and **Load latest** replaces them after you confirm.
+**New test suite** opens the suite editor. Each case has a name, a stable case ID, workflow input (entered, or copied from one of the workflow's runs when you save), checks, simulation fixtures and optional quality guidance. A check either compares an output value (exists, equals, at least or at most) at a path of the workflow output or of one step's output, or expects a step to take a route. Fixtures are an ordered JSON list of step outcomes, each with a `nodeId`, a `kind` and an `output` or `error`, in the same format agents save with `save_test_suite`. Saving creates a new suite revision. If the suite changed elsewhere, your edits stay in the form and **Load latest** replaces them after you confirm.
 
 ## Run a suite
 
