@@ -20,6 +20,7 @@ const startBody = runStartSchema
     requestId: true,
     title: true,
     tags: true,
+    hold: true,
   })
   .strict();
 const resultQuery = z.object({

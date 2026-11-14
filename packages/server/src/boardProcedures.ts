@@ -4,6 +4,8 @@ import {
   boardViewQuerySchema,
   saveBoardSchema,
   saveBoardTypeSchema,
+  startHoldSchema,
+  startReleaseSchema,
 } from '@interlock/core';
 import { id, p, t } from './trpc.js';
 
@@ -27,6 +29,12 @@ export const boardsRouter = t.router({
   view: p
     .input(boardViewQuerySchema)
     .query(({ ctx, input }) => ctx.engine.boards.views.view(input)),
+  hold: p
+    .input(startHoldSchema)
+    .mutation(({ ctx, input }) => ctx.engine.boards.hold(input)),
+  release: p
+    .input(startReleaseSchema)
+    .mutation(({ ctx, input }) => ctx.engine.boards.release(input)),
 });
 export const boardTypesRouter = t.router({
   list: p.query(({ ctx }) => ctx.engine.boards.types.list()),

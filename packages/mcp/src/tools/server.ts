@@ -1,6 +1,5 @@
 import { stallRequestSchema } from '@interlock/core';
 import { scheduleReadSchema, scheduleManageInputSchema } from '@interlock/core';
-import { pauseRequestSchema } from '@interlock/core';
 import { scriptOperationSchema } from '@interlock/core';
 import { workResourceRequestSchema } from '@interlock/core';
 import { historyRequestSchema } from '@interlock/core';
@@ -78,6 +77,7 @@ import { parseMcpProfile } from './profiles.js';
 import { VERSION } from '@interlock/core/version';
 import type { createMcpClient } from '../client.js';
 import { registerBoardTools } from './boards.js';
+import { registerPauseTools } from './pauses.js';
 import { workflowBundleSchema } from '@interlock/core/transfer';
 import {
   publishSchemaResources,
@@ -735,26 +735,7 @@ export function createMcpServer(
     { request: workResourceRequestSchema },
     ({ request }) => client.work.resources(request),
   );
-  tool(
-    'manage_pause',
-    'Create, release and list persistent, independent pause holds. pause requires target {scope:"library"} or {scope:"workflow",workflowId}, an actor label and a reason; keep the returned ID. resume releases one exact ID and is idempotent when it is already released. Release only your own record; work continues only when all applicable holds clear. list without workflowId returns library holds, and with workflowId returns library holds plus that workflow\'s; an optional scope filter of workflow requires workflowId. offset and limit default to 0 and 20, with a maximum of 100, exact total and nextOffset. Pauses gate claims and launches, graph boundaries and input acceptance. Submissions, revisions, completion of in-flight work, reads, cancellation and cleanup continue. Manual starts may wait while paused. actor is only a label. list never mutates.',
-    { request: pauseRequestSchema },
-    ({ request }) =>
-      request.action === 'list'
-        ? client.pauses.list({
-            workflowId: request.workflowId,
-            scope: request.scope,
-            offset: request.offset,
-            limit: request.limit,
-          })
-        : request.action === 'pause'
-          ? client.pauses.pause({
-              target: request.target,
-              actor: request.actor,
-              reason: request.reason,
-            })
-          : client.pauses.resume({ id: request.id }),
-  );
+  registerPauseTools(tool, client);
   tool(
     'manage_work_hold',
     'Hold or resume one Agent assignment for an external blocker. hold needs the current expectedAttempt, expectedRevision (holdRevision, or 0), actor and category, and reason or checkpointRef; token optionally proves a claim, and local coordinators may omit it. Holds revoke claims, freeze unclaimed deadlines, and spend no failure or expiry allowance. Claimed resources become uncertain until a stop is confirmed. resume needs attempt, revision and actor, keeps budget and context gates, and returns the work for a fresh claim. needs_model holds require manage_executors retry_model instead. Changes return applied, status, attempt and holdRevision; an identical latest retry is a no-op and an intervening change conflicts. Holds on available work keep unclaimed-stall time; held claims resume as fresh availability. Read-only history defaults to 20 and caps at 100, with offset. Briefings show blockers and get_run shows recent history. External work is never replayed.',

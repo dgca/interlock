@@ -3,7 +3,7 @@
   "ceilings": {
     "packages/cli/src/commands.ts": 837,
     "packages/core/src/index.ts": 1541,
-    "packages/mcp/src/tools/server.ts": 828,
+    "packages/mcp/src/tools/server.ts": 809,
     "packages/runtime/src/doctor.ts": 804,
     "packages/runtime/src/executors/manager.ts": 1800,
     "packages/runtime/src/index.ts": 3433,

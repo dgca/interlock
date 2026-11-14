@@ -210,3 +210,49 @@ it('keeps typed boards out of column membership and protects board types in use'
     }),
   ).toThrow('Board type changed');
 });
+
+it('keeps a held start in the Backlog until release, offers only valid card actions, and never re-queues an admitted run', () => {
+  const engine = open();
+  const workflow = publish(
+    engine,
+    'Capped',
+    definitionSchema.parse({ ...staged({ stage: 'Plan' }), maxActiveRuns: 1 }),
+  );
+  const view = () => engine.boards.views.view({ workflowId: workflow });
+  const card = (runId: string) =>
+    view()
+      .lanes.flatMap((lane) =>
+        lane.cards.map((card) => ({ lane: lane.id, card })),
+      )
+      .find(({ card }) => card.runId === runId)!;
+  const held = engine.start(workflow, {}, undefined, undefined, {
+    hold: { reason: 'After the freeze' },
+  }).run;
+  const queued = engine.start(workflow, {}).run;
+  // The held start never takes the free slot; the later start does.
+  expect(engine.run(held.id).status).toBe('queued');
+  expect(engine.run(queued.id).status).toBe('waiting');
+  expect(card(held.id)).toMatchObject({
+    lane: 'backlog',
+    card: {
+      held: { reason: 'After the freeze' },
+      actions: ['open', 'cancel', 'release'],
+    },
+  });
+  expect(() => engine.boards.hold({ runId: queued.id, reason: 'x' })).toThrow(
+    'Only queued runs',
+  );
+  const waiting = engine.start(workflow, {}).run;
+  expect(card(waiting.id)).toMatchObject({
+    lane: 'queued',
+    card: { actions: ['open', 'cancel', 'backlog'] },
+  });
+  engine.boards.hold({ runId: waiting.id, reason: 'Later' });
+  expect(card(waiting.id).lane).toBe('backlog');
+  // Release returns a start to admission; capacity still applies.
+  engine.boards.release({ runId: held.id });
+  expect(card(held.id).lane).toBe('queued');
+  engine.cancel(queued.id);
+  expect(engine.run(held.id).status).toBe('waiting');
+  expect(engine.run(waiting.id).status).toBe('queued');
+});

@@ -112,6 +112,7 @@ export type BoardEngine = {
   projectRun(id: string): RunProjection;
   projectRuns<T extends { id: string }>(runs: T[]): (T & RunProjection)[];
   nowMs(): number;
+  pump(): void;
   readonly usage: Usage;
 };
 

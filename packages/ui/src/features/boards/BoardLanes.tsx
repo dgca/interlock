@@ -9,10 +9,12 @@ import type { api } from '../../lib/api';
 import { trpc, useQuery } from '../../lib/query';
 import { paths } from '../../routes/paths';
 import { BoardCard } from './BoardCard';
+import { BoardCardActions } from './BoardCardActions';
+import { runDisplayTitle } from '@interlock/core';
 import { BoardColumnsSkeleton } from './BoardSkeleton';
 import classes from './Boards.module.css';
 
-export type BoardView = Awaited<ReturnType<typeof api.boards.view.query>>;
+type BoardView = Awaited<ReturnType<typeof api.boards.view.query>>;
 type Lane = BoardView['lanes'][number];
 type ViewCard = Lane['cards'][number];
 const pageSize = 30;
@@ -25,12 +27,10 @@ export function BoardLanes({
   scope,
   returnTo,
   empty,
-  cardActions,
 }: {
   scope: { id: string } | { workflowId: string };
   returnTo: string;
   empty?: ReactNode;
-  cardActions?: (card: ViewCard, view: BoardView) => ReactNode;
 }) {
   const query = useQuery(
     trpc.boards.view.queryOptions({ ...scope, limit: pageSize }),
@@ -74,9 +74,21 @@ export function BoardLanes({
                   fields={view.fields}
                   runLink={paths.run(card.runId, { returnTo })}
                   requestLink={
-                    card.request && paths.request(card.request, returnTo)
+                    card.request &&
+                    (!('actions' in card) || card.actions.includes('answer'))
+                      ? paths.request(card.request, returnTo)
+                      : undefined
                   }
-                  actions={cardActions?.(card, view)}
+                  actions={
+                    'actions' in card && (
+                      <BoardCardActions
+                        card={card}
+                        title={runDisplayTitle(card)}
+                        runLink={paths.run(card.runId, { returnTo })}
+                        returnTo={returnTo}
+                      />
+                    )
+                  }
                 />
               )}
             />

@@ -100,6 +100,11 @@ export const runStartOptionsSchema = z
       .describe(
         'Library-wide active/queued task policy. Default allow; others require externalTask.',
       ),
+    hold: z
+      .object({ reason: z.string().trim().min(1).max(500) })
+      .strict()
+      .optional()
+      .describe('Keep the run queued until manage_pause release.'),
     after: z
       .array(startDependencySchema)
       .min(1)
@@ -111,6 +116,16 @@ export const runStartOptionsSchema = z
   })
   .strict();
 export type RunStartOptions = z.input<typeof runStartOptionsSchema>;
+/** Park a queued run, or release one so admission can start it. */
+export const startHoldSchema = z
+  .object({
+    runId: z.string().min(1),
+    reason: z.string().trim().min(1).max(500),
+  })
+  .strict();
+export const startReleaseSchema = z
+  .object({ runId: z.string().min(1) })
+  .strict();
 export const runStartSchema = z.object({
   workflowId: z.string(),
   version: z.number().int().positive().optional(),

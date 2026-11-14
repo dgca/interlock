@@ -1,9 +1,10 @@
 import { isDeepStrictEqual } from 'node:util';
-import type {
-  Run,
-  RunStartOptions,
-  RunStartReceipt,
-  WorkflowDefinition,
+import {
+  InterlockError,
+  type Run,
+  type RunStartOptions,
+  type RunStartReceipt,
+  type WorkflowDefinition,
 } from '@interlock/core';
 import type { Store } from '@interlock/storage';
 import { fingerprint } from './versionIdentity.js';
@@ -25,6 +26,7 @@ export class RunAdmission {
       isGroupedChild(run) ||
       (!definition.maxActiveRuns &&
         !options.after?.length &&
+        !options.hold &&
         !(run.schedule?.waitForPrevious && run.schedule.previousRunIds.length))
     )
       return;
@@ -35,7 +37,39 @@ export class RunAdmission {
       position: 1,
       after: (options.after ?? []).map((reference) => ({ reference })),
       blockers: [],
+      ...(options.hold && {
+        hold: { reason: options.hold.reason, at: run.createdAt },
+      }),
     };
+  }
+
+  /** Park a queued run until release; admitted runs cannot return to the queue. */
+  hold(runId: string, reason: string) {
+    const run = this.queued(runId);
+    if (run.admission!.hold?.reason === reason) return run;
+    run.admission!.hold = { reason, at: new Date().toISOString() };
+    run.admission!.blockers = [`Held: ${reason}`];
+    this.store.put('runs', run);
+    return run;
+  }
+
+  release(runId: string) {
+    const run = this.queued(runId);
+    if (!run.admission!.hold) return run;
+    delete run.admission!.hold;
+    run.admission!.blockers = [];
+    this.store.put('runs', run);
+    return run;
+  }
+
+  private queued(runId: string) {
+    const run = this.store.get<Run>('runs', runId);
+    if (!run) throw new InterlockError('Run not found');
+    if (run.status !== 'queued' || !run.admission)
+      throw new InterlockError(
+        'Only queued runs can be held or released. Cancel a started run instead.',
+      );
+    return run;
   }
 
   promote(onPromoted: (run: Run) => void): boolean {
@@ -48,6 +82,7 @@ export class RunAdmission {
       admission.position = (positions.get(run.workflowId) ?? 0) + 1;
       positions.set(run.workflowId, admission.position);
       const blockers: string[] = [];
+      if (admission.hold) blockers.push(`Held: ${admission.hold.reason}`);
       if (this.store.pauseHolds(run.workflowId).length)
         blockers.push('Workflow admission is paused');
       if (run.schedule?.waitForPrevious) {

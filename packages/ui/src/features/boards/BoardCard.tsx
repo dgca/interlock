@@ -205,7 +205,11 @@ export function BoardCard({
           withArrow
           className={stretched.action}
         />
-        {actions}
+        {actions && (
+          <Group gap={4} ml="auto" wrap="nowrap">
+            {actions}
+          </Group>
+        )}
       </Group>
     </li>
   );

@@ -59,6 +59,7 @@ export function RunDialog({
   const tagsDetailsRef = useRef<HTMLDetailsElement>(null);
   const [raw, setRaw] = useState(false);
   const [title, setTitle] = useState('');
+  const [hold, setHold] = useState('');
   const [tags, setTags] = useState<TagRow[]>([]);
   const [tagsError, setTagsError] = useState('');
   const [versionPolicy, setVersionPolicy] =
@@ -126,6 +127,14 @@ export function RunDialog({
               value={title}
               description="If blank, Runs and Boards use the linked task title or workflow name."
               onChange={(event) => setTitle(event.currentTarget.value)}
+            />
+            <TextInput
+              label="Hold reason"
+              mb="md"
+              maxLength={500}
+              value={hold}
+              description="Optional. The run waits in the Backlog until someone releases it."
+              onChange={(event) => setHold(event.currentTarget.value)}
             />
             {hasConnectedAgents && (
               <p className="hint">
@@ -261,6 +270,7 @@ export function RunDialog({
               const result = await api.runs.start.mutate({
                 workflowId: workflow.id,
                 title: title.trim() || undefined,
+                hold: hold.trim() ? { reason: hold.trim() } : undefined,
                 version,
                 versionPolicy,
                 input: JSON.parse(input),
@@ -277,9 +287,11 @@ export function RunDialog({
           <Play />
           {busy
             ? 'Starting…'
-            : cost?.exceedsThreshold
-              ? 'Start anyway'
-              : 'Start run'}
+            : hold.trim()
+              ? 'Add to backlog'
+              : cost?.exceedsThreshold
+                ? 'Start anyway'
+                : 'Start run'}
         </Button>
       </ModalFooter>
     </Modal>

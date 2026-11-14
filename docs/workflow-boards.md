@@ -29,6 +29,18 @@ Runs that share an external task (system and ID) form one card, as do the runs o
 
 A type in use by a board cannot be deleted. Typed boards do not take workflow membership, so a workflow can appear on any number of them, and column boards keep working as before.
 
+## Act on a card
+
+Cards on typed boards and stage boards change only when run state changes. To act, use the card's menu; each action is an existing run operation and appears only when the run allows it:
+
+- **Open run** opens the run inspector.
+- The review link answers the card's oldest request, as on column boards.
+- **Cancel run** cancels the run tree with a reason, after the same preview as the inspector.
+- **Move to backlog** holds a queued start with a reason. It stays queued, and admission skips it, until someone releases it. A run that has started cannot return to the backlog.
+- **Release** returns a held start to admission. It starts when capacity and its other start conditions allow.
+
+Actions apply to the run that places the card. A board type chooses which actions its cards offer. To start a run held, enter a **Hold reason** in the start dialog, pass `hold: { "reason": "..." }` to MCP `start_run` or `POST /api/runs`, or use `interlock start ... --hold REASON`. Hold or release a queued run with `interlock board hold RUN_ID REASON` and `interlock board release RUN_ID`, or MCP `manage_pause` actions `hold` and `release`. A held start is the only backlog item; there are no work items without a run.
+
 ## See a workflow's stages
 
 Each workflow also has its own board without setup. Open the workflow's **Runs** and choose **Stages**. It shows one lane per stage in graph order, plus **Needs you**, **Done** and **Failed**, and **Queued**, **Cancelled** or **Unmapped** when they have cards. Runs started by another workflow's step appear on that workflow's cards instead.
