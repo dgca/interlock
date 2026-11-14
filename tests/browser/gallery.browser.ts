@@ -16,6 +16,7 @@ const sections = [
   'Dialogs',
   'Test suites',
   'Boards',
+  'Memory',
 ];
 
 let browser: Browser;

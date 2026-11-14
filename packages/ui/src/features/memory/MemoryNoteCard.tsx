@@ -39,7 +39,7 @@ export function NoteMeta({
               workflowId: note.workflowId,
               executionId: note.source.executionId,
             })}
-            underline="hover"
+            underline="always"
             inherit
           >
             Run {note.source.runId.slice(0, 8)}

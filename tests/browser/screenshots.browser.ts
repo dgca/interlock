@@ -30,8 +30,8 @@ const gallerySections = [
   'editors',
   'dialogs',
   'testing',
-  'memory',
   'boards',
+  'memory',
 ];
 
 /** Main screens, each with a locator that proves the screen finished loading. */

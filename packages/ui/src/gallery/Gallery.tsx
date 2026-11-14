@@ -747,8 +747,8 @@ export default function Gallery() {
         <Editors />
         <Dialogs />
         <Testing />
-        <Memory />
         <Boards />
+        <Memory />
       </div>
     </main>
   );
