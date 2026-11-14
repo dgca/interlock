@@ -9,6 +9,7 @@ import { appRouter } from './router.js';
 import type { ConnectionConfig } from './connection.js';
 import { largeQueryProcedures } from './transport.js';
 import { pageWithApiToken, requireApiToken } from './apiToken.js';
+import { createHttpApi } from './httpApi.js';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
@@ -57,6 +58,8 @@ export function createApp(engine: Engine, connection?: ConnectionConfig) {
   app.use('/mcp', requireApiToken(connection));
   app.use('/mcp/*', requireApiToken(connection));
   app.use('/trpc/*', requireApiToken(connection));
+  app.use('/api', requireApiToken(connection));
+  app.use('/api/*', requireApiToken(connection));
   // EventSource cannot send headers, so the stream also accepts ?token=.
   app.use('/events', requireApiToken(connection, { query: true }));
   app.all('/mcp/:profile?', async (c) => {
@@ -110,6 +113,7 @@ export function createApp(engine: Engine, connection?: ConnectionConfig) {
     }
   });
   app.get('/health', (c) => c.json({ ok: true }));
+  app.route('/api', createHttpApi(engine, connection));
   app.all('/trpc/*', (c) =>
     fetchRequestHandler({
       endpoint: '/trpc',

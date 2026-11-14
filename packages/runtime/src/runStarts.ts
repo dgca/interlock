@@ -1,5 +1,5 @@
 import {
-  InterlockError,
+  RunStartConflict,
   type Run,
   type RunStartRequest,
   type RunStartReceipt,
@@ -38,11 +38,11 @@ export class RunStarts {
       const receipt = this.store.get<RunStartReceipt>(collection, id);
       if (receipt) {
         if (receipt.requestHash !== requestHash)
-          throw new InterlockError(
+          throw new RunStartConflict(
             'Run start requestId was already used with different arguments; no run was started',
           );
         if (receipt.deletedAt || !this.store.get<Run>('runs', receipt.runId))
-          throw new InterlockError(
+          throw new RunStartConflict(
             'Run start refers to deleted or missing history; no run was started. Use a new requestId for an explicit new attempt',
           );
         return { id: receipt.runId, replayed: true };
@@ -55,7 +55,7 @@ export class RunStarts {
           rootOnly: false,
         }).length
       )
-        throw new InterlockError(
+        throw new RunStartConflict(
           'Run start receipt is unavailable; inspect retained runs before choosing a new requestId. No run was started',
         );
       const { run, reused } = create();
