@@ -121,7 +121,6 @@ export function SuiteView({
             <Button
               variant="primary"
               disabled={running || !version}
-              loading={running}
               leftSection={<Play size={16} aria-hidden="true" />}
               onClick={() => version && void run(suite, version)}
             >
