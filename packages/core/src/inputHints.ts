@@ -10,6 +10,7 @@ import {
 import type { Contract } from './contracts.js';
 import { STARTED_RUN_SCHEMA } from './workflowMode.js';
 import { sameExecutionScope } from './parallel.js';
+import { joinOutputSchema } from './parallelJoin.js';
 import { humanAnswerContract } from './humanInput.js';
 
 export type InputHint = {
@@ -218,7 +219,8 @@ export function nodeInputHint(
     )
       return input(source).schema;
     if (source.kind === 'batch') return { type: 'array' };
-    if (source.kind === 'parallel') return { type: 'object' };
+    if (source.kind === 'parallel')
+      return joinOutputSchema(source) ?? { type: 'object' };
     return {};
   };
 
