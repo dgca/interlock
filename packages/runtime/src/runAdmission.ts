@@ -1,9 +1,10 @@
 import { isDeepStrictEqual } from 'node:util';
-import type {
-  Run,
-  RunStartOptions,
-  RunStartReceipt,
-  WorkflowDefinition,
+import {
+  InterlockError,
+  type Run,
+  type RunStartOptions,
+  type RunStartReceipt,
+  type WorkflowDefinition,
 } from '@interlock/core';
 import type { Store } from '@interlock/storage';
 import { fingerprint } from './versionIdentity.js';
@@ -25,6 +26,7 @@ export class RunAdmission {
       isGroupedChild(run) ||
       (!definition.maxActiveRuns &&
         !options.after?.length &&
+        !options.hold &&
         !(run.schedule?.waitForPrevious && run.schedule.previousRunIds.length))
     )
       return;
@@ -35,7 +37,51 @@ export class RunAdmission {
       position: 1,
       after: (options.after ?? []).map((reference) => ({ reference })),
       blockers: [],
+      ...(options.hold && {
+        hold: { reason: options.hold.reason, at: run.createdAt },
+      }),
     };
+  }
+
+  /** Park a queued top-level start until release; admitted runs cannot return to the queue. */
+  hold(runId: string, reason: string) {
+    const run = this.queued(runId);
+    if (run.parentRunId && run.parentMode !== 'detached')
+      throw new InterlockError('Hold the parent run instead of a child run');
+    if (run.comparison || run.schedule)
+      throw new InterlockError(
+        'Comparison trials and scheduled starts cannot be held',
+      );
+    if (run.admission!.hold) return undefined;
+    run.admission!.hold = { reason, at: new Date().toISOString() };
+    run.admission!.blockers = [`Held: ${reason}`];
+    run.updatedAt = run.admission!.hold.at;
+    this.store.put('runs', run);
+    return run;
+  }
+
+  release(runId: string) {
+    const run = this.queued(runId);
+    const hold = run.admission!.hold;
+    if (!hold) return undefined;
+    run.updatedAt = new Date().toISOString();
+    run.admission!.heldMs =
+      (run.admission!.heldMs ?? 0) +
+      Math.max(0, Date.parse(run.updatedAt) - Date.parse(hold.at));
+    delete run.admission!.hold;
+    run.admission!.blockers = [];
+    this.store.put('runs', run);
+    return run;
+  }
+
+  private queued(runId: string) {
+    const run = this.store.get<Run>('runs', runId);
+    if (!run) throw new InterlockError('Run not found');
+    if (run.status !== 'queued' || !run.admission)
+      throw new InterlockError(
+        'Only queued runs can be held or released. This run has already started; cancel it instead.',
+      );
+    return run;
   }
 
   promote(onPromoted: (run: Run) => void): boolean {
@@ -48,6 +94,7 @@ export class RunAdmission {
       admission.position = (positions.get(run.workflowId) ?? 0) + 1;
       positions.set(run.workflowId, admission.position);
       const blockers: string[] = [];
+      if (admission.hold) blockers.push(`Held: ${admission.hold.reason}`);
       if (this.store.pauseHolds(run.workflowId).length)
         blockers.push('Workflow admission is paused');
       if (run.schedule?.waitForPrevious) {

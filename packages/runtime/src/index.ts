@@ -273,12 +273,8 @@ export class Engine {
     this.requests = new Requests(store, this.externalInputs, (id) =>
       this.projectRun(id),
     );
-    this.boards = new WorkflowBoards(
-      store,
-      this.requests,
-      (id) => this.projectRun(id),
-      () => this.nowMs(),
-      () => this.notify(),
+    this.boards = new WorkflowBoards(store, this.requests, this, () =>
+      this.notify(),
     );
     this.holds = new WorkHolds(
       store,
@@ -554,7 +550,7 @@ export class Engine {
   private notify() {
     queueMicrotask(() => this.listeners.forEach((listener) => listener()));
   }
-  private event(run: Run, type: string, text: string, boardColumnId?: string) {
+  event(run: Run, type: string, text: string, boardColumnId?: string) {
     if (type === 'external_input.held' || type === 'external_input.released')
       this.stalls.hold(
         `input:${run.id}`,

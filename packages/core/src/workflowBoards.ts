@@ -1,5 +1,12 @@
 import { z } from 'zod';
 import type { RunStatus, WorkflowNode } from './index.js';
+import {
+  boardFieldPathsSchema,
+  boardScopeSchema,
+  boardStageMapSchema,
+  type BoardScope,
+} from './boardTypes.js';
+export * from './boardTypes.js';
 
 const id = z.string().min(1).max(200);
 const name = z.string().trim().min(1).max(200);
@@ -88,16 +95,34 @@ export function workflowStageColumn(
 export const boardSettingsRevisionConflict =
   'Board settings changed. Refresh and try again.';
 
+const columnBoard = {
+  id: id.optional(),
+  expectedRevision: z.number().int().nonnegative().optional(),
+  name,
+  columns: z.array(z.object({ id: id.optional(), name })).max(100),
+  workflowIds: z.array(id).max(1000),
+  expectedBoards: z.record(id, id.nullable()).optional(),
+};
+/** The column board save that MCP exposes. */
+export const columnBoardSchema = z.object(columnBoard).strict();
 export const saveBoardSchema = z
   .object({
-    id: id.optional(),
-    expectedRevision: z.number().int().nonnegative().optional(),
-    name,
-    columns: z.array(z.object({ id: id.optional(), name })).max(100),
-    workflowIds: z.array(id).max(1000),
-    expectedBoards: z.record(id, id.nullable()).optional(),
+    ...columnBoard,
+    columns: columnBoard.columns.default([]),
+    workflowIds: columnBoard.workflowIds.default([]),
+    typeId: id.optional(),
+    scope: boardScopeSchema.optional(),
+    stageMap: boardStageMapSchema.optional(),
+    fieldPaths: boardFieldPathsSchema.optional(),
   })
-  .strict();
+  .strict()
+  .refine(
+    (board) =>
+      board.typeId
+        ? !board.columns.length && !board.workflowIds.length
+        : !board.scope && !board.stageMap && !board.fieldPaths,
+    'Typed boards use scope instead of columns and workflowIds; column boards cannot set scope, stageMap or fieldPaths',
+  );
 
 export const boardMembershipSchema = z
   .object({
@@ -130,7 +155,7 @@ export const boardQuerySchema = z
 
 export type BoardStatus = z.infer<typeof boardStatusSchema>;
 export type BoardQuery = z.infer<typeof boardQuerySchema>;
-export type SaveBoard = z.infer<typeof saveBoardSchema>;
+export type SaveBoard = z.input<typeof saveBoardSchema>;
 export type BoardMembership = z.infer<typeof boardMembershipSchema>;
 export type BoardColumn = { id: string; name: string };
 export type WorkflowBoard = {
@@ -138,6 +163,10 @@ export type WorkflowBoard = {
   revision: number;
   name: string;
   columns: BoardColumn[];
+  typeId?: string;
+  scope?: BoardScope;
+  stageMap?: z.infer<typeof boardStageMapSchema>;
+  fieldPaths?: z.infer<typeof boardFieldPathsSchema>;
 };
 export type BoardRun = {
   id: string;

@@ -40,6 +40,11 @@ type Pending = { run: RunRow; label: string; since: string };
 /** Held and queued active runs; attention requests come from the server's attention read. */
 function blockedEntry(run: RunRow): Pending | null {
   const reason = runProjectionLabels(run).waiting;
+  const held = run.waiting?.detail.blockers?.find((blocker) =>
+    blocker.startsWith('Held: '),
+  );
+  if (held && run.waiting)
+    return { run, label: held.replace(': ', ' · '), since: run.waiting.since };
   if (run.waiting?.kind === 'hold' || run.waiting?.kind === 'pause')
     return {
       run,
