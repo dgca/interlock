@@ -133,7 +133,7 @@ Each group execution starts ordinary child runs on its captured version. The par
 
 Branch runs share workflow admission. Each new branch step charges the owning run's `maxSteps` in the same transaction as its execution record. The group itself counts once, and Join has no separate step. Called workflows retain their limits. Budget scopes and detached boundaries apply as for ordinary descendants.
 
-The group validates and forwards a named result object only after every branch succeeds. On failure, the runtime cancels unfinished waited branches. Retry uses the existing invocation and keeps completed branch outputs. Uncertain external work requires stop confirmation before retry. Briefings expose bounded `parallels` counts and named branch references in descendants. See [authoring and recovery](parallel.md).
+The group validates and forwards a named result object only after every branch succeeds. On failure, the runtime cancels unfinished waited branches. Optional `joinAfter` and `onBranchFailure` make a partial join: core `decideJoin` completes the visit once enough branches succeed, and the runtime cancels the remaining branch trees in the same transaction, recording the join in each cancellation reason and `cancellationKind: "join"`, which reports leave out of run outcomes. Partial joins output `{results, branches}` with per-branch status; groups without the settings keep the keyed result object. Retry uses the existing invocation and keeps completed branch outputs. Uncertain external work requires stop confirmation before retry. Briefings expose bounded `parallels` counts and named branch references in descendants. See [authoring and recovery](parallel.md).
 
 ## Agent work
 

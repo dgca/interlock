@@ -45,7 +45,9 @@ export function runsForReport(db: DatabaseSync, filter: ReportFilter): Run[] {
 
 /** Exact run counts for a report window from the indexed run metadata, without the run limit. */
 export function countReportRuns(db: DatabaseSync, filter: ReportFilter) {
-  const conditions = ['1'];
+  const conditions = [
+    "json_extract(value, '$.cancellationKind') IS NOT 'join'",
+  ];
   const params: string[] = [];
   for (const [key, value] of Object.entries(filter.tags ?? {})) {
     conditions.push(
