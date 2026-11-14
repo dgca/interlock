@@ -183,16 +183,6 @@
     {
       "file": "packages/core/src/index.ts",
       "type": "exports",
-      "symbol": "evaluationEvidenceSchema"
-    },
-    {
-      "file": "packages/core/src/index.ts",
-      "type": "exports",
-      "symbol": "evaluationReferenceSchema"
-    },
-    {
-      "file": "packages/core/src/index.ts",
-      "type": "exports",
       "symbol": "executionProvenanceSchema"
     },
     {

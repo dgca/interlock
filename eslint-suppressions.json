@@ -132,9 +132,6 @@
     }
   },
   "packages/runtime/src/evaluationReceipts.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "@typescript-eslint/no-unused-vars": {
       "count": 1
     }
@@ -1475,22 +1472,19 @@
   },
   "tests/evaluation.test.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 13
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
+      "count": 12
     },
     "@typescript-eslint/no-unsafe-argument": {
-      "count": 6
+      "count": 4
     },
     "@typescript-eslint/no-unsafe-assignment": {
-      "count": 27
+      "count": 16
     },
     "@typescript-eslint/no-unsafe-call": {
-      "count": 3
+      "count": 2
     },
     "@typescript-eslint/no-unsafe-member-access": {
-      "count": 45
+      "count": 34
     },
     "@typescript-eslint/no-unsafe-return": {
       "count": 2
@@ -1700,25 +1694,25 @@
   },
   "tests/improvement.test.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 26
+      "count": 24
     },
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 1
     },
     "@typescript-eslint/no-unsafe-argument": {
-      "count": 16
+      "count": 15
     },
     "@typescript-eslint/no-unsafe-assignment": {
-      "count": 38
+      "count": 25
     },
     "@typescript-eslint/no-unsafe-call": {
       "count": 2
     },
     "@typescript-eslint/no-unsafe-member-access": {
-      "count": 77
+      "count": 63
     },
     "@typescript-eslint/no-unsafe-return": {
-      "count": 7
+      "count": 5
     },
     "@typescript-eslint/no-unused-vars": {
       "count": 1

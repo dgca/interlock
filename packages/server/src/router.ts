@@ -87,7 +87,6 @@ import {
   trialReadSchema,
   trialCleanupSchema,
   comparisonCancelSchema,
-  qualityJudgmentSchema,
   continuationLimitSchema,
   reportUsageSchema,
   usageQuerySchema,
@@ -109,6 +108,7 @@ import { GithubImporter, githubSourceSchema } from './githubImport.js';
 const githubImporter = new GithubImporter();
 import { pricesRouter } from './prices.js';
 import { launcherRouter } from './launcherRouter.js';
+import { evaluationProcedures } from './evaluationProcedures.js';
 import { id, inputMutation, p, t } from './trpc.js';
 import {
   agentDraftEdit,
@@ -303,9 +303,7 @@ export const appRouter = t.router({
       ctx.engine.pump();
       return ctx.engine.testbench.progress(result.id);
     }),
-    judge: p
-      .input(qualityJudgmentSchema)
-      .mutation(({ ctx, input }) => ctx.engine.testbench.judge(input)),
+    ...evaluationProcedures,
   }),
   prompts: t.router({
     list: p.query(({ ctx }) => ctx.engine.prompts.list()),

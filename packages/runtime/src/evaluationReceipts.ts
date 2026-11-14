@@ -13,6 +13,69 @@ import {
 import type { Store } from '@interlock/storage';
 import { fingerprint } from './versionIdentity.js';
 
+type Specification = ReturnType<typeof evaluationInputSchema.parse>;
+
+/** Why a sample has no retained, originally completed trial root, if it has none. */
+export function trialGap(
+  store: Store,
+  c: WorkflowComparison,
+  sample: ComparisonSample,
+) {
+  const status = sample.observation?.status;
+  if (!status) return 'Trial has not finished';
+  if (status !== 'completed')
+    return `Original trial is ${status}; a later retry cannot replace it`;
+  const target = sample.runId
+    ? store.get<Run>('runs', sample.runId)
+    : undefined;
+  if (!target) return 'Trial run is no longer retained';
+  if (target.status !== 'completed') return `Trial run is now ${target.status}`;
+  if (target.workflowId !== c.workflowId || target.version !== sample.version)
+    return 'Trial run no longer matches its compared version';
+  return undefined;
+}
+
+/** The exact grader input a receipt later expects for this sample. */
+export function graderInput(
+  specification: Specification,
+  evaluationRunId: string,
+  c: WorkflowComparison,
+  sample: ComparisonSample,
+) {
+  return {
+    ...specification,
+    evaluationRunId,
+    sampleId: sample.id,
+    runId: sample.runId!,
+    caseId: sample.caseId,
+    guidance:
+      c.suite.cases.find((s) => s.id === sample.caseId)?.qualityGuidance ?? '',
+    checks: sample.observation?.checks ?? [],
+  };
+}
+
+/** The evaluation run and the fixed settings its input captured for comparison `c`. */
+export function evaluationSpecification(
+  store: Store,
+  c: WorkflowComparison,
+  runId: string,
+) {
+  const fail = (message: string): never => {
+    throw new InterlockError(`Evaluation receipt: ${message}`);
+  };
+  const evaluationRun = store.get<Run>('runs', runId);
+  if (!evaluationRun || evaluationRun.comparison)
+    return fail('use a retained evaluation run outside the compared trials');
+  const parsed = evaluationInputSchema.safeParse(evaluationRun.input);
+  if (!parsed.success)
+    return fail(
+      'evaluation run input must capture comparisonId, rubric and supported evaluation settings',
+    );
+  if (parsed.data.comparisonId !== c.id)
+    return fail('comparison or rubric differs from captured evaluation input');
+  return { evaluationRun, specification: parsed.data };
+}
+
 export function validateEvaluationReceipt(
   store: Store,
   c: WorkflowComparison,
@@ -29,19 +92,12 @@ export function validateEvaluationReceipt(
     throw new InterlockError(`Evaluation receipt: ${message}`);
   };
   const reference = input.evaluation;
-  const evaluationRun = store.get<Run>('runs', reference.runId);
-  if (!evaluationRun || evaluationRun.comparison)
-    return fail('use a retained evaluation run outside the compared trials');
-  const parsed = evaluationInputSchema.safeParse(evaluationRun.input);
-  if (!parsed.success)
-    return fail(
-      'evaluation run input must capture comparisonId, rubric and supported evaluation settings',
-    );
-  const specification = parsed.data;
-  if (
-    specification.comparisonId !== c.id ||
-    specification.rubric !== input.rubric
-  )
+  const { evaluationRun, specification } = evaluationSpecification(
+    store,
+    c,
+    reference.runId,
+  );
+  if (specification.rubric !== input.rubric)
     return fail('comparison or rubric differs from captured evaluation input');
   if (input.requestId !== `${reference.runId}:${sample.id}`)
     return fail('requestId must be evaluation run ID + colon + sample ID');
@@ -74,38 +130,21 @@ export function validateEvaluationReceipt(
   if (!gradeResult.success)
     return fail('accepted grader output does not satisfy the grade contract');
   const grade = gradeResult.data;
-  const target = sample.runId
-    ? store.get<Run>('runs', sample.runId)
-    : undefined;
-  if (
-    sample.observation?.status !== 'completed' ||
-    !target ||
-    target.status !== 'completed' ||
-    target.workflowId !== c.workflowId ||
-    target.version !== sample.version
-  )
+  if (trialGap(store, c, sample))
     return fail(
       'first-version evaluation requires a retained completed trial root',
     );
-  const expectedInput = {
-    ...specification,
-    evaluationRunId: evaluationRun.id,
-    sampleId: sample.id,
-    runId: target.id,
-    caseId: sample.caseId,
-    guidance:
-      c.suite.cases.find((s) => s.id === sample.caseId)?.qualityGuidance ?? '',
-    checks: sample.observation?.checks ?? [],
-  };
-  const graderInput = execution.input;
+  const target = store.get<Run>('runs', sample.runId!)!;
+  const expectedInput = graderInput(specification, evaluationRun.id, c, sample);
+  const actualInput = execution.input;
   if (
-    !graderInput ||
-    typeof graderInput !== 'object' ||
-    Array.isArray(graderInput) ||
+    !actualInput ||
+    typeof actualInput !== 'object' ||
+    Array.isArray(actualInput) ||
     Object.entries(expectedInput).some(
       ([key, value]) =>
-        !Object.hasOwn(graderInput, key) ||
-        fingerprint(graderInput[key]) !== fingerprint(value),
+        !Object.hasOwn(actualInput, key) ||
+        fingerprint(actualInput[key]) !== fingerprint(value),
     )
   )
     return fail(

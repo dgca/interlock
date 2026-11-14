@@ -50,6 +50,13 @@ export const evaluationGradeSchema = z
       .max(10),
   })
   .strict();
+/** HTTP plan and record-by-reference requests for the evaluation starter. */
+export const evaluationPlanQuerySchema = z
+  .object({ id, evaluationRunId: id })
+  .strict();
+export const evaluationRecordSchema = z
+  .object({ id, evaluationRunId: id, reviewerRunId: id, sampleId: id })
+  .strict();
 export type EvaluationReference = z.infer<typeof evaluationReferenceSchema>;
 export function qualityRubricKey(judgment: {
   rubric: string;

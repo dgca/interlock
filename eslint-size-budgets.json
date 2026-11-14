@@ -2,7 +2,7 @@
   "maxLines": 800,
   "ceilings": {
     "packages/cli/src/commands.ts": 946,
-    "packages/core/src/index.ts": 1549,
+    "packages/core/src/index.ts": 1541,
     "packages/mcp/src/tools/server.ts": 888,
     "packages/runtime/src/doctor.ts": 804,
     "packages/runtime/src/executors/manager.ts": 1800,
@@ -10,7 +10,7 @@
     "packages/runtime/src/report.ts": 942,
     "packages/runtime/src/testbench.ts": 1032,
     "packages/runtime/src/transfer.ts": 806,
-    "packages/server/src/router.ts": 934,
+    "packages/server/src/router.ts": 932,
     "packages/storage/src/index.ts": 1004,
     "packages/ui/src/features/automations/AutomationEditor.tsx": 1073,
     "packages/ui/src/features/executors/AgentPresets.tsx": 837,

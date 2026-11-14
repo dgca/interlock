@@ -1,4 +1,4 @@
-import { afterEach, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import {
   mkdtempSync,
@@ -18,6 +18,8 @@ import {
   type Json,
   type BudgetPolicy,
 } from '@interlock/core';
+import { serve } from '@hono/node-server';
+import { createApp } from '../packages/server/src/app';
 import { importWorkflows } from '../packages/runtime/src/transfer';
 import { fingerprint } from '../packages/runtime/src/versionIdentity';
 
@@ -30,6 +32,29 @@ const worker = {
   modelSelection: { provider: 'fake', model: 'fixture' },
 };
 const fixtures: { root: string; e: Engine }[] = [];
+// The evaluator's Scripts call Interlock over HTTP; one listener serves the
+// current test's engine.
+let handle: (req: Request) => Response | Promise<Response>,
+  base = '';
+const server = serve({
+  hostname: '127.0.0.1',
+  port: 0,
+  fetch: (req) => handle(req),
+});
+beforeAll(async () => {
+  await new Promise<void>((r) =>
+    server.listening ? r() : server.once('listening', r),
+  );
+  base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+});
+afterAll(() => {
+  if ('closeAllConnections' in server) server.closeAllConnections();
+  server.close();
+});
+function connect(e: Engine) {
+  handle = createApp(e).fetch;
+  e.executors.mcpUrl = `${base}/mcp/execute`;
+}
 afterEach(async () => {
   for (const f of fixtures.splice(0)) {
     f.e.stop();
@@ -71,6 +96,7 @@ function setup(extra: Record<string, unknown> = {}) {
   const commit = git('rev-parse', 'HEAD');
   const e = new Engine(new Store(join(root, 'state.db')), repository);
   fixtures.push({ root, e });
+  connect(e);
   const definition = blankDefinition();
   if (definition.nodes[1].kind === 'agent') {
     definition.nodes[1].prompt = 'Baseline response';
@@ -220,60 +246,6 @@ function grade(e: Engine, w: WorkRequest, fractional = false) {
     ],
   };
 }
-function evaluatorPrepare(e: Engine, w: WorkRequest) {
-  const s = w.input as any,
-    c = e.store.get<WorkflowComparison>('comparisons', s.comparisonId)!;
-  return {
-    ...s,
-    evaluationRunId: w.runId,
-    remaining: 0,
-    skipped: [],
-    samples: c.samples
-      .filter((x) => x.observation?.status === 'completed')
-      .map((x) => ({
-        ...s,
-        evaluationRunId: w.runId,
-        sampleId: x.id,
-        runId: x.runId,
-        caseId: x.caseId,
-        guidance: c.suite.cases.find((c) => c.id === x.caseId)!.qualityGuidance,
-        checks: x.observation!.checks,
-        evidence: [],
-      })),
-  };
-}
-function record(e: Engine, w: WorkRequest) {
-  const { sample: s, grade: g } = w.input as any,
-    execution = e
-      .run(w.runId)
-      .executions.find(
-        (x) => x.nodeId === 'review' && x.status === 'completed',
-      )!;
-  const receipt = e.testbench.judge({
-    id: s.comparisonId,
-    sampleId: g.sampleId,
-    reviewer: 'evaluation:' + g.evaluationRunId,
-    reviewerKind: 'agent',
-    rubric: g.rubric,
-    score: g.score,
-    notes: g.notes,
-    requestId: g.evaluationRunId + ':' + g.sampleId,
-    evaluation: {
-      runId: g.evaluationRunId,
-      reviewerRunId: w.runId,
-      executionId: execution.id,
-      evidence: g.evidence,
-    },
-  });
-  return {
-    sampleId: g.sampleId,
-    judgmentId: receipt.id,
-    requestId: receipt.requestId,
-    verdict: g.verdict,
-    score: g.score,
-    comparisonSampleCount: receipt.evaluation!.comparisonSampleCount,
-  };
-}
 function collect(f: ReturnType<typeof setup>, w: WorkRequest, options: any) {
   const e = f.e,
     { experiment: x, dispatch: d } = w.input as any,
@@ -421,9 +393,8 @@ async function drive(f: ReturnType<typeof setup>, options: any = {}) {
           selfReport: true,
         };
       } else if (a.runId !== f.runId) {
-        if (a.nodeId === 'prepare') out = evaluatorPrepare(e, w);
-        else if (a.nodeId === 'review') out = grade(e, w, options.fractional);
-        else if (a.nodeId === 'record') out = record(e, w);
+        // Selection and recording are Scripts; only fresh review is agent work.
+        if (a.nodeId === 'review') out = grade(e, w, options.fractional);
         else throw Error('Unknown evaluator ' + a.nodeId);
       } else if (a.nodeId === 'prepare') out = prepare(f, w);
       else if (a.nodeId === 'propose') {
@@ -657,6 +628,7 @@ it('resumes the same candidate and comparisons after an ambiguous dispatch and r
   f.e.store.close();
   const resumed = new Engine(new Store(join(f.root, 'state.db')), f.repository);
   fixtures.find((x) => x.root === f.root)!.e = resumed;
+  connect(resumed);
   f.e = resumed;
   resumed.retry(f.runId);
   await drive(f);
