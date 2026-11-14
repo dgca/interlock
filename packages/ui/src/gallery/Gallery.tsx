@@ -52,6 +52,7 @@ import { useSearchParams } from 'react-router';
 import { EllipsisVertical, Plus, Trash2 } from 'lucide-react';
 import type { Contract, Json } from '@interlock/core';
 import { ContractEditor } from '../components/ContractEditor/ContractEditor';
+import { WorkflowSyncAlertList } from '../features/workflows/WorkflowSyncAlerts';
 import {
   ListTable,
   ListTableRow,
@@ -325,6 +326,24 @@ function Feedback() {
             Automation paused.
           </Alert>
         </Stack>
+      </Specimen>
+      <Specimen name="WorkflowSyncAlertList">
+        <WorkflowSyncAlertList
+          folder="~/team/workflows"
+          items={[
+            {
+              file: 'release-notes.json',
+              reason:
+                'Not valid JSON: Unexpected token < in JSON at position 61',
+            },
+            {
+              file: 'triage.json',
+              workflowId: 'triage',
+              reason:
+                '"Triage" has draft edits in Interlock that are not in this file, and the file changed too. Publish or discard the draft to load the file, or restore the file.',
+            },
+          ]}
+        />
       </Specimen>
       <Specimen name="Notification">
         <Notification title="Saved" withCloseButton={false}>

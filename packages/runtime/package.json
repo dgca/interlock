@@ -11,7 +11,8 @@
     "./importSelection": "./src/importSelection.ts",
     "./transfer": "./src/transfer.ts",
     "./versionIdentity": "./src/versionIdentity.ts",
-    "./evaluationPlan": "./src/evaluationPlan.ts"
+    "./evaluationPlan": "./src/evaluationPlan.ts",
+    "./workflowSync": "./src/workflowSync.ts"
   },
   "dependencies": {
     "@interlock/core": "workspace:*",

@@ -15,16 +15,14 @@ import {
   pauseListSchema,
   pauseResumeSchema,
 } from '@interlock/core';
-import { scriptOperationSchema } from '@interlock/core';
 import { startersQuery, importStarter } from './starters.js';
 import { parseImportDocument } from '@interlock/core/importDocument';
-import { workResourceRequestSchema } from '@interlock/core';
 import {
+  scriptOperationSchema,
+  workResourceRequestSchema,
   variableReadSchema,
   variableMutationSchema,
   variableImportBindingsSchema,
-} from '@interlock/core';
-import {
   executorOperationSchema,
   executorModelsQuerySchema,
 } from '@interlock/core';
@@ -99,6 +97,7 @@ import {
   modelAliasMutationSchema,
 } from '@interlock/core';
 import { exportWorkflows, importWorkflows } from '@interlock/runtime/transfer';
+import { workflowSyncStatus } from '@interlock/runtime/workflowSync';
 import { workflowBundleSchema } from '@interlock/core/transfer';
 import {
   previewBoardImport,
@@ -921,6 +920,7 @@ export const appRouter = t.router({
       .query(({ ctx, input }) => ctx.engine.report(input ?? {})),
   }),
   system: t.router({
+    workflowSync: p.query(({ ctx }) => workflowSyncStatus(ctx.engine)),
     doctor: p
       .input(doctorOptionsSchema.optional())
       .query(({ ctx, input }) => ctx.engine.doctor(input ?? undefined)),
