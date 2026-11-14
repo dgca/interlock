@@ -13,6 +13,8 @@ Reports summarize run and step durations, time waiting for agents or people, fai
 
 **Duration basis** switches between wall time, paused time, and active time. Active time excludes declared library and workflow pauses. It measures elapsed time, not processor activity or time spent generating model responses.
 
+**Permission approvals** lists, per run, how many managed Agent permission requests asked a person and how many the workflow permission policy allowed, with any policy rule a harness could not apply. It appears when a run had permission requests or a policy.
+
 ## Check usage coverage
 
 Token and cost totals come from executor or observer reports. Interlock does not calculate provider prices or verify a bill. Missing measurements stay unknown; partial totals contain only the reported amounts. Costs in different currencies remain separate.

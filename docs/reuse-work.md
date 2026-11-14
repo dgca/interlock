@@ -19,7 +19,7 @@ Script steps and polling Script checks run as your user. The import preview list
 
 Choose which Scripts need approval in **Settings → AI → Execution settings → Script approval**, or with `interlock script-approval`. **Imported and agent Scripts** also holds Script content an agent adds or changes over MCP. **Off** runs every Script without approval. Only a person can approve Scripts or change this setting; MCP callers are refused.
 
-A [permission policy](permission-policy.md) from an import, or one an agent writes over MCP, waits the same way under any setting except **Off**: a new run holds at its entry with an **Approve permission policy** request, and `interlock approve-script` approves it too.
+A workflow permission policy from an import, or one an agent writes over MCP, waits the same way under any setting except **Off**: a new run holds at its entry with an **Approve permission policy** request, and `interlock approve-script` approves it too.
 
 ## Set up a board during import
 
