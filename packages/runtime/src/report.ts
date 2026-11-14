@@ -776,15 +776,13 @@ export function generateWorkflowReport(
     providerUsageMap.values(),
   ).sort((a, b) => b.count - a.count);
 
-  // 5. Terminal Outcomes Grouped by Exit Node
-  const completedRuns = runs.filter((r) => r.status === 'completed').length;
-  const failedRuns = runs.filter((r) => r.status === 'failed').length;
-  const cancelledRuns = runs.filter((r) => r.status === 'cancelled').length;
-  const activeRuns = runs.filter(
-    (r) =>
-      r.status === 'running' || r.status === 'waiting' || r.status === 'queued',
-  ).length;
-
+  // 5. Terminal Outcomes Grouped by Exit Node, without branch runs a satisfied join cancelled
+  const outcomes = runs.filter((r) => r.cancellationKind !== 'join');
+  const completedRuns = outcomes.filter((r) => r.status === 'completed').length;
+  const failedRuns = outcomes.filter((r) => r.status === 'failed').length;
+  const cancelledRuns = outcomes.filter((r) => r.status === 'cancelled').length;
+  const activeRuns =
+    outcomes.length - completedRuns - failedRuns - cancelledRuns;
   const exitNodeCounts = new Map<string, { label: string; count: number }>();
 
   let unattendedCount = 0;
@@ -865,7 +863,7 @@ export function generateWorkflowReport(
   }));
   exitNodesOutcomes.sort((a, b) => b.count - a.count);
 
-  const totalRunsCount = runs.length;
+  const totalRunsCount = outcomes.length;
   const unattendedCompletionRate =
     totalRunsCount > 0
       ? Math.round((unattendedCount / totalRunsCount) * 1000) / 10
