@@ -67,7 +67,7 @@ export class ExecutorManager {
   ]);
   private transcripts: ManagedTranscripts;
   private config: ExecutorConfiguration;
-  readonly launcher: LauncherSupervisor;
+  private launcher: LauncherSupervisor;
   private operator: OperatorChannel;
   private recovery: RecoveryPolicies;
   private adapters = new Map<string, HarnessAdapter>();
@@ -146,6 +146,9 @@ export class ExecutorManager {
   }
   profiles() {
     return this.config.profiles();
+  }
+  get pull() {
+    return this.launcher.pull;
   }
   configuredPresetProfile(profile: ExecutorProfile | undefined) {
     return this.config.configuredPresetProfile(profile);
@@ -1021,9 +1024,9 @@ export class ExecutorManager {
         void this.pollLauncherStatus(session).catch(failed('launcher status'));
       }
       if (!session.cleanupFailed && current?.status === 'claimed')
-        void this.recoverIdleLauncher(session, current).catch(
-          failed('recovery'),
-        );
+        void this.launcher
+          .recoverIdleLauncher(session, current)
+          .catch(failed('recovery'));
       const runEnded =
         run && ['completed', 'failed', 'cancelled'].includes(run.status);
       const workEnded =
@@ -1057,11 +1060,6 @@ export class ExecutorManager {
     ...args: Parameters<LauncherSupervisor['pollLauncherStatus']>
   ) {
     return this.launcher.pollLauncherStatus(...args);
-  }
-  private recoverIdleLauncher(
-    ...args: Parameters<LauncherSupervisor['recoverIdleLauncher']>
-  ) {
-    return this.launcher.recoverIdleLauncher(...args);
   }
   private sendLauncherMessage(
     ...args: Parameters<LauncherSupervisor['sendLauncherMessage']>

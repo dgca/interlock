@@ -26,6 +26,7 @@ const pullOnce = referencePullOnce as (
 const engines: Engine[] = [];
 const dirs: string[] = [];
 afterEach(async () => {
+  vi.useRealTimers();
   for (const e of engines.splice(0)) await close(e);
   for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
 });
@@ -59,14 +60,7 @@ function start(e: Engine) {
   e.publish(w.id);
   return e.start(w.id, { task: 'pull' }).run;
 }
-const pull = (e: Engine) => e.executors.launcher.pull;
-const rejection = (call: () => unknown) => {
-  try {
-    call();
-  } catch (error) {
-    return (error as { code?: string }).code;
-  }
-};
+const pull = (e: Engine) => e.executors.pull;
 const operations = (e: Engine) =>
   e.store.list<{ id: string; kind: string; state: string }>(
     'launcherOperations',
@@ -110,13 +104,7 @@ it('leases a launch to the credentialed client and accepts its result once', asy
       deepLink: 'https://app.example/s/1',
     },
   };
-  expect(
-    rejection(() => pull(e).complete({ ...done, leaseToken: 'someone-else' })),
-  ).toBe('launcher_lease_invalid');
   expect(pull(e).complete(done)).toMatchObject({ late: false });
-  expect(rejection(() => pull(e).complete(done))).toBe(
-    'launcher_operation_not_found',
-  );
   await vi.waitFor(() =>
     expect(e.executors.inspect(work.id).items[0]).toMatchObject({
       state: 'running',
@@ -138,7 +126,8 @@ it('keeps work unclaimed while no client polls and allows one active client', as
   const e = setup();
   const { credential } = pull(e).rotateCredential({ profileId: 'plugin' });
   const run = start(e);
-  await new Promise((resolve) => setTimeout(resolve, 1200));
+  // The dispatch scan runs in a microtask after the run starts.
+  await new Promise((resolve) => setImmediate(resolve));
   expect(operations(e)).toEqual([]);
   const managed = e.inspect(run.id).work[0].managedExecution;
   expect(managed?.reason).toContain('launcher_client_offline');
@@ -191,6 +180,8 @@ it('keeps cleanup across a restart and turns a late launch result into a stop', 
 });
 
 it('runs the reference pull launcher over the HTTP API, deduplicating a redelivered launch', async () => {
+  // Archiving waits for the supervisor's one-second tick.
+  vi.useFakeTimers({ toFake: ['setInterval'] });
   const e = setup();
   const app = createApp(e);
   const { credential } = pull(e).rotateCredential({ profileId: 'plugin' });
@@ -213,19 +204,25 @@ it('runs the reference pull launcher over the HTTP API, deduplicating a redelive
     ...stored,
     leaseUntil: new Date(Date.now() - 1).toISOString(),
   });
-  const [second] = await pullOnce({ ...client, waitMs: 0 });
+  const [second] = await pullOnce({ ...client, waitMs: 0, report: false });
   expect(second.operationId).toBe(first.operationId);
-  const stale = await app.request(
-    `/api/launchers/plugin/operations/${first.operationId}/complete`,
-    {
-      method: 'POST',
-      headers: { 'X-Interlock-Launcher-Credential': credential },
-      body: JSON.stringify({ leaseToken: first.leaseToken, result: {} }),
-    },
-  );
-  // The redelivery already completed the operation; the dead lease cannot.
-  expect(stale.status).toBe(404);
   const work = e.available(run.id)[0];
+  const complete = (leaseToken: string) =>
+    app.request(
+      `/api/launchers/plugin/operations/${first.operationId}/complete`,
+      {
+        method: 'POST',
+        headers: { 'X-Interlock-Launcher-Credential': credential },
+        body: JSON.stringify({
+          leaseToken,
+          result: { sessionHandle: `launcher-sess-${work.id}` },
+        }),
+      },
+    );
+  // The dead lease cannot complete the redelivery; the live one completes once.
+  expect((await complete(first.leaseToken)).status).toBe(409);
+  expect((await complete(second.leaseToken)).status).toBe(200);
+  expect((await complete(second.leaseToken)).status).toBe(404);
   await vi.waitFor(() =>
     expect(e.executors.inspect(work.id).items[0]).toMatchObject({
       state: 'running',
@@ -248,6 +245,7 @@ it('runs the reference pull launcher over the HTTP API, deduplicating a redelive
   e.submit(claimed.id, claimed.token!, { done: true });
   expect(e.run(run.id).status).toBe('completed');
   // Interlock archives the finished session through the client.
+  vi.advanceTimersByTime(1000);
   await vi.waitFor(
     async () => {
       await pullOnce({ ...client, waitMs: 2000 });
@@ -257,4 +255,28 @@ it('runs the reference pull launcher over the HTTP API, deduplicating a redelive
     },
     { timeout: 8000 },
   );
+});
+
+it('ends a poll open across a credential rotation without work and admits the new client at once', async () => {
+  const e = setup();
+  const old = pull(e).rotateCredential({ profileId: 'plugin' }).credential;
+  const waiting = pull(e).poll({
+    profileId: 'plugin',
+    credential: old,
+    clientId: 'old-plugin',
+    waitMs: 20_000,
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  const { credential } = pull(e).rotateCredential({ profileId: 'plugin' });
+  await expect(waiting).rejects.toMatchObject({
+    code: 'launcher_credential_invalid',
+  });
+  start(e);
+  const { operations: leased } = await pull(e).poll({
+    profileId: 'plugin',
+    credential,
+    clientId: 'new-plugin',
+    waitMs: 5000,
+  });
+  expect(leased.map((op) => op.kind)).toEqual(['launch']);
 });

@@ -74,6 +74,7 @@ export interface PullSessionRef {
 }
 export interface PullHost {
   stopped(): boolean;
+  schedule(): void;
   latest(workId: string): ManagedExecution | undefined;
   log(record: ManagedExecution, message: string): void;
 }
@@ -188,7 +189,10 @@ export class PullLaunchers {
           message: `launcher_client_offline: no launcher client has polled in the last ${profile.clientTimeoutSeconds ?? defaultClientTimeoutSeconds} seconds`,
         };
   }
-  /** Profile list entries gain client liveness; credentials are never returned. */
+  /**
+   * Client liveness goes in the read-only `detection`, which callers drop
+   * before saving a listed profile. Credentials are never returned.
+   */
   async annotate<T extends ExecutorProfile>(profiles: Promise<T[]>) {
     return (await profiles).map((profile) => {
       const detection = this.detection(profile);
@@ -196,14 +200,15 @@ export class PullLaunchers {
       const client = this.client(profile.id);
       return {
         ...profile,
-        detection,
-        launcherClient: {
-          credential: !!client?.credentialHash,
-          online: detection.status === 'detected',
-          ...(client?.clientId ? { clientId: client.clientId } : {}),
-          ...(client?.lastPolledAt
-            ? { lastPolledAt: client.lastPolledAt }
-            : {}),
+        detection: {
+          ...detection,
+          client: {
+            credential: !!client?.credentialHash,
+            ...(client?.clientId ? { clientId: client.clientId } : {}),
+            ...(client?.lastPolledAt
+              ? { lastPolledAt: client.lastPolledAt }
+              : {}),
+          },
         },
       };
     });
@@ -223,6 +228,8 @@ export class PullLaunchers {
       credentialHash: digest(credential).toString('hex'),
       rotatedAt,
     } satisfies ClientRecord);
+    // Waiting polls hold the old credential; wake them so they end now.
+    this.notify(profileId);
     return { profileId, credential, rotatedAt };
   }
   private authorize(profileId: string, credential: string) {
@@ -254,7 +261,16 @@ export class PullLaunchers {
       );
     const deadline = Date.now() + q.waitMs;
     for (;;) {
+      // A rotation during the wait revokes this poll before it leases work.
+      if (this.client(profile.id)?.credentialHash !== client.credentialHash)
+        throw new LauncherClientError(
+          'launcher_credential_invalid',
+          'Launcher credential is not valid for this profile',
+        );
+      const offline = !this.online(profile);
       this.touch(profile.id, q.clientId);
+      // A client coming online can take waiting launches without the next scan tick.
+      if (offline) this.host.schedule();
       const operations = this.lease(profile, q.clientId, q.limit);
       const remaining = deadline - Date.now();
       if (

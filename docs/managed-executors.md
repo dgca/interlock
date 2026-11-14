@@ -152,14 +152,14 @@ Launcher mode delegates execution to an external agent application (such as a de
 
 ### Pull transport for launchers Interlock cannot call
 
-Some hosts can make outbound HTTP requests but cannot run a command or accept a connection: an app plugin, a browser extension, or a runner behind NAT. For these, set `transport: "pull"` on a launcher profile. Interlock queues each launcher operation, and the client polls for it, performs it, and reports the result. No bridge process is needed. The pull transport supports launcher mode only.
+Some hosts can make outbound HTTP requests but cannot run a command or accept a connection: an app plugin, a browser extension, or a runner behind NAT. For these, set `transport: "pull"` on a launcher profile, or choose **Delegated launcher** and **Pull** in **Edit integration**. Interlock queues each launcher operation, and the client polls for it, performs it, and reports the result. No bridge process is needed. The pull transport supports launcher mode only.
 
 ```sh
 interlock executors '{"action":"save","profile":{"id":"app-plugin","harness":"custom","name":"App plugin","enabled":true,"mode":"launcher","transport":"pull","expectedRevision":0}}'
 interlock launcher '{"action":"credential","profileId":"app-plugin"}'
 ```
 
-The second command creates a launcher credential and prints it once. Store it in the client. Running the command again replaces the credential, and the old one stops working. Interlock keeps only a digest of it.
+The second command creates a launcher credential and prints it once. Store it in the client. Running the command again replaces the credential. The old one stops working at once, including for a poll that is waiting. Interlock keeps only a digest of it.
 
 The client calls these routes under `/api`. Send the credential in `X-Interlock-Launcher-Credential`. When the server requires the [API token](connect-harness.md#api-token), also send `Authorization: Bearer <token>`.
 
@@ -177,7 +177,7 @@ The same calls are available as tRPC `launcher.poll`, `launcher.complete` and `l
 - **Leases**: a polled operation is leased to the client for 30 seconds. If the client does not complete or fail it in time, it returns to the queue and is delivered again with a new `leaseToken` and the same payload. A launch redelivered with an `idempotencyKey` the client has already handled must return the existing session, not start another. After an operation is completed, or delivered again, its earlier lease token is rejected. `fail` with `retryable: true` returns the operation to the queue; otherwise the operation fails. After five deliveries Interlock stops delivering it.
 - **Timeouts and late results**: Interlock waits for a launch for `timeoutSeconds` (default 60) and for other operations for up to 30 seconds. A launch the client received but never reported is treated as uncertain: the execution is interrupted, and you confirm the session stopped before retrying. If its result arrives later, Interlock accepts it with `late: true`, records the session on the execution and queues a `stop` for it. A status that gets no answer leaves the session state unknown, and idle recovery does not treat it as idle.
 - **Restarts**: queued `stop` and `archive` operations survive a restart. Launch, status and message operations that were not delivered are dropped. A delivered launch can still report a late result.
-- **Client offline**: the profile list shows `launcherClient` with `online`, `lastPolledAt` and `clientId`. If no client has polled within `clientTimeoutSeconds` (10 to 3,600, default 60), Interlock queues no launches for that profile. Its assignments stay unclaimed with the reason `launcher_client_offline` and appear in **Runs → Needs attention** as **Launcher client offline**. They start when the client polls again.
+- **Client offline**: the profile list's `detection` shows `detected` while a client is online and `client` with `credential`, `lastPolledAt` and `clientId`. If no client has polled within `clientTimeoutSeconds` (**Client offline after** in the editor; 10 to 3,600, default 60), Interlock queues no launches for that profile. Its assignments stay unclaimed with the reason `launcher_client_offline` and appear in **Runs → Needs attention** as **Launcher client offline**. They start when the client polls again.
 - **Queue limits**: a profile holds at most 200 pending operations. Operations for cancelled or finished assignments are dropped, except `stop` and `archive`.
 
 Errors return `{ "error", "code" }`: `launcher_credential_invalid` (403), `launcher_client_conflict` (409), `launcher_lease_invalid` (409), `launcher_operation_not_found` (404) and `launcher_poll_busy` (429, more than two waiting polls for a profile).
