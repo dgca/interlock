@@ -92,12 +92,12 @@ Restart or reconnect your harness after changing configuration. Enable Interlock
 
 Every tool definition a client lists costs context in each conversation. Profiles serve a smaller tool set:
 
-| Profile   | Tools                                                                                                                      | Endpoint             |
-| --------- | -------------------------------------------------------------------------------------------------------------------------- | -------------------- |
-| `all`     | Every tool. The default, so existing configurations keep the same tools.                                                   | `/mcp` or `/mcp/all` |
-| `execute` | Assignment execution: list, claim, renew, preflight, submit, fail and hold work, usage, resources, run reads.              | `/mcp/execute`       |
-| `author`  | Workflows, versions, ownership, prompts, variables, presets, triggers, boards and the testbench.                           | `/mcp/author`        |
-| `operate` | Starting, inspecting, waiting on, pausing, holding, retrying and cancelling runs, resource release, executors and budgets. | `/mcp/operate`       |
+| Profile   | Tools                                                                                                                           | Endpoint             |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
+| `all`     | Every tool. The default, so existing configurations keep the same tools.                                                        | `/mcp` or `/mcp/all` |
+| `execute` | Assignment execution: list, claim, renew, preflight, submit, fail and hold work, usage, resources, run reads, change proposals. | `/mcp/execute`       |
+| `author`  | Workflows, versions, ownership, change proposals, prompts, variables, presets, triggers, boards and the testbench.              | `/mcp/author`        |
+| `operate` | Starting, inspecting, waiting on, pausing, holding, retrying and cancelling runs, resource release, executors and budgets.      | `/mcp/operate`       |
 
 Select a profile with the URL path, such as `http://127.0.0.1:4310/mcp/execute`, or send the header `X-Interlock-Mcp-Profile: execute` to `/mcp`. Unknown profiles are rejected; a path and header that disagree are rejected. For the stdio bridge, use `interlock mcp --profile execute` or set `INTERLOCK_MCP_PROFILE`. Connect more than one profile under different names when an agent needs tools from several. A tool outside the connected profile is not found, and the profile's server instructions, tool descriptions and schemas omit guidance and values that name one. When a compact mutation would suggest a `nextCall` tool outside the profile, it suggests `get_run_briefing` for the same run instead. A profile without `claim_work` reports `next: wait_for_worker` with a `wait_for_run_change` call where other profiles report `claim_work`.
 
@@ -259,6 +259,8 @@ Set Agent `promptIds` to distinct IDs in the desired order, alongside the node `
 | `export_workflow`, `import_workflows`                                           | Transfer workflow drafts, dependencies, and published pins in portable bundles.                   |
 | `preview_workflow_ownership`, `set_workflow_owner`                              | Preview and move existing workflows while preserving identity and history.                        |
 | `delete_workflow`                                                               | Permanently remove an unreferenced workflow and its inactive history.                             |
+
+Use `propose_workflow_change` to suggest a draft edit for a person to review, during a claim with its `workId` and `token` or with a `workflowId`. It is in the `execute` and `author` profiles, and refuses unless the workflow allows agent proposals. People review and decide outside MCP. See [proposed workflow changes](workflow-proposals.md).
 
 Use `read_workflow_boards` and `manage_workflow_boards` to inspect run cards, save board settings, and assign workflows. See [Manage boards through MCP](workflow-boards.md#manage-boards-through-mcp).
 

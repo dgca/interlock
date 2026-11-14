@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { setImmediate as yieldTurn } from 'node:timers/promises';
 import { Store } from '@interlock/storage';
 import {
@@ -111,6 +112,7 @@ export class Simulations {
       engine?: Engine;
       childWorkflows?: Workflow[];
       childVersions?: NonNullable<ReturnType<Store['getVersion']>>[];
+      persist?: boolean;
     }
   >();
   private stopped = false;
@@ -188,7 +190,9 @@ export class Simulations {
         );
       return this.report(previous);
     }
-    if (this.active.size >= 4)
+    if (
+      [...this.active.values()].filter((a) => a.persist !== false).length >= 4
+    )
       throw new InterlockError('At most four simulations may be active');
     const suite = this.store.get<TestSuite>('testSuites', q.suiteId);
     if (!suite || suite.revision !== q.suiteRevision)
@@ -200,6 +204,90 @@ export class Simulations {
     if (!workflow || !version)
       throw new InterlockError('Published workflow version not found');
     const definition = version.definition;
+    const { unsupported, childWorkflows, childVersions, prompts } =
+      this.prepare(definition, testCase);
+    const record: Record = {
+      id: q.requestId,
+      requestHash,
+      mode: 'simulation',
+      workflowId: workflow.id,
+      suiteId: suite.id,
+      suiteRevision: suite.revision,
+      caseId: testCase.id,
+      version: q.version,
+      definitionHash: definitionHash(definition),
+      caseHash: fingerprint(testCase),
+      capture: {
+        definition,
+        case: testCase,
+        prompts: unsupported.length ? [] : prompts,
+      },
+      state: unsupported.length ? 'unsupported' : 'running',
+      substitutions: [],
+      executions: [],
+      checks: evaluateAssertions(testCase.assertions),
+      unsupported: unsupported.map((s) => s.slice(0, 512)),
+      createdAt: now(),
+      updatedAt: now(),
+    };
+    this.save(record);
+    if (!unsupported.length) {
+      const active = {
+        record,
+        engine: undefined as Engine | undefined,
+        childWorkflows,
+        childVersions,
+      };
+      this.active.set(record.id, active);
+      // Defer execution so callers can inspect/cancel immediately and other requests remain serviceable.
+      void this.execute(active, workflow, version);
+    }
+    return this.report(record);
+  }
+  /**
+   * Simulate one case against an unpublished definition without storing
+   * anything; proposal reviews compare the draft with and without an edit.
+   */
+  async simulateDefinition(
+    workflow: Workflow,
+    definition: WorkflowDefinition,
+    suite: TestSuite,
+    testCase: CapturedCase,
+  ) {
+    const { unsupported, childWorkflows, childVersions, prompts } =
+      this.prepare(definition, testCase);
+    const record: Record = {
+      id: randomUUID(),
+      requestHash: '',
+      mode: 'simulation',
+      workflowId: workflow.id,
+      suiteId: suite.id,
+      suiteRevision: suite.revision,
+      caseId: testCase.id,
+      version: 1,
+      definitionHash: definitionHash(definition),
+      caseHash: fingerprint(testCase),
+      capture: { definition, case: testCase, prompts },
+      state: unsupported.length ? 'unsupported' : 'running',
+      substitutions: [],
+      executions: [],
+      checks: evaluateAssertions(testCase.assertions),
+      unsupported: unsupported.map((s) => s.slice(0, 512)),
+      createdAt: now(),
+      updatedAt: now(),
+    };
+    if (unsupported.length || this.stopped) return record;
+    const active = { record, childWorkflows, childVersions, persist: false };
+    this.active.set(record.id, active);
+    await this.execute(
+      active,
+      { ...workflow, latestVersion: 1 },
+      { workflowId: workflow.id, version: 1, definition, createdAt: now() },
+    );
+    return record;
+  }
+  /** Check a definition and case for simulation and collect what the scratch engine needs. */
+  private prepare(definition: WorkflowDefinition, testCase: CapturedCase) {
     const unsupported = definition.nodes.flatMap((node) => {
       if (node.kind === 'exit' && node.continueAsNew)
         return [
@@ -280,43 +368,7 @@ export class Simulations {
           `Fixture ${index}: node or kind does not match the pinned definition`,
         );
     }
-    const record: Record = {
-      id: q.requestId,
-      requestHash,
-      mode: 'simulation',
-      workflowId: workflow.id,
-      suiteId: suite.id,
-      suiteRevision: suite.revision,
-      caseId: testCase.id,
-      version: q.version,
-      definitionHash: definitionHash(definition),
-      caseHash: fingerprint(testCase),
-      capture: {
-        definition,
-        case: testCase,
-        prompts: unsupported.length ? [] : prompts,
-      },
-      state: unsupported.length ? 'unsupported' : 'running',
-      substitutions: [],
-      executions: [],
-      checks: evaluateAssertions(testCase.assertions),
-      unsupported: unsupported.map((s) => s.slice(0, 512)),
-      createdAt: now(),
-      updatedAt: now(),
-    };
-    this.save(record);
-    if (!unsupported.length) {
-      const active = {
-        record,
-        engine: undefined as Engine | undefined,
-        childWorkflows,
-        childVersions,
-      };
-      this.active.set(record.id, active);
-      // Defer execution so callers can inspect/cancel immediately and other requests remain serviceable.
-      void this.execute(active, workflow, version);
-    }
-    return this.report(record);
+    return { unsupported, childWorkflows, childVersions, prompts };
   }
   private async execute(
     active: {
@@ -324,11 +376,15 @@ export class Simulations {
       engine?: Engine;
       childWorkflows?: Workflow[];
       childVersions?: NonNullable<ReturnType<Store['getVersion']>>[];
+      persist?: boolean;
     },
     workflow: Workflow,
     version: NonNullable<ReturnType<Store['getVersion']>>,
   ) {
     const r = active.record;
+    // Proposal simulations stay in memory.
+    const save = (record: Record) =>
+      active.persist !== false && this.save(record);
     let scratch: Store | undefined;
     let runId: string | undefined;
     const used = new Set<number>();
@@ -386,7 +442,7 @@ export class Simulations {
         outcome,
         ...(diagnostics ? { diagnostics } : {}),
       });
-      this.save(r);
+      save(r);
     };
     try {
       await yieldTurn();
@@ -667,17 +723,17 @@ export class Simulations {
       active.engine?.stop();
       scratch?.close();
       this.active.delete(r.id);
-      if (!this.stopped) this.save(r);
+      if (!this.stopped) save(r);
     }
   }
   stop() {
     this.stopped = true;
-    for (const { record, engine } of this.active.values()) {
+    for (const { record, engine, persist } of this.active.values()) {
       if (record.state === 'running') {
         record.state = 'interrupted';
         record.error =
           'Service stopped. Start a new simulation with a new requestId.';
-        this.save(record);
+        if (persist !== false) this.save(record);
       }
       engine?.stop();
     }

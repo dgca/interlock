@@ -15,7 +15,8 @@
     "./workflowSync": "./src/workflowSync.ts",
     "./reportDashboard": "./src/reportDashboard.ts",
     "./traceExport": "./src/traceExport.ts",
-    "./traceExportConfig": "./src/traceExportConfig.ts"
+    "./traceExportConfig": "./src/traceExportConfig.ts",
+    "./workflowProposals": "./src/workflowProposals.ts"
   },
   "dependencies": {
     "@interlock/core": "workspace:*",

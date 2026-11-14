@@ -3,6 +3,9 @@ import { scheduleReadSchema, scheduleManageInputSchema } from '@interlock/core';
 import { scriptOperationSchema } from '@interlock/core';
 import { workResourceRequestSchema } from '@interlock/core';
 import { historyRequestSchema } from '@interlock/core';
+
+import { executorOperationSchema } from '@interlock/core';
+import { z } from 'zod';
 import {
   variableReadSchema,
   variableMutationSchema,
@@ -10,11 +13,6 @@ import {
   boardImportSetupSchema,
   modelAliasReadSchema,
   modelAliasMutationSchema,
-} from '@interlock/core';
-
-import { executorOperationSchema } from '@interlock/core';
-import { z } from 'zod';
-import {
   simulationToolSchema,
   externalInputRequestSchema,
   workflowRequestSchema,
@@ -78,6 +76,7 @@ import { VERSION } from '@interlock/core/version';
 import type { createMcpClient } from '../client.js';
 import { registerBoardTools } from './boards.js';
 import { registerPauseTools } from './pauses.js';
+import { registerProposalTools } from './proposals.js';
 import { workflowBundleSchema } from '@interlock/core/transfer';
 import {
   publishSchemaResources,
@@ -525,6 +524,7 @@ export function createMcpServer(
     (input) => client.workflows.edit(input),
     editResponseSchema,
   );
+  registerProposalTools(tool, client);
   tool(
     'validate_workflow',
     'Preflight stored draft or supplied JSON definition without saving. Returns draftRevision, saveable, publishable and located diagnostics. Save errors cover malformed/unknown fields and ownership. Publication checks graph, contracts, Batch/Parallel scopes, bindings, prompts and versions. Conservative contract warnings report unknown for ambiguous sources or unsupported schemas; runtime checks are authoritative. 2 MiB envelope limit; omit definition to validate a saved draft.',
