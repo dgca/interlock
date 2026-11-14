@@ -134,6 +134,7 @@ export class WorkflowAuthoring {
       layout?: DraftLayout;
     },
   ) {
+    publishObserver(this.store)?.edited();
     return this.store.transaction(() => {
       const w = this.workflow(id);
       if (
@@ -286,6 +287,7 @@ export class WorkflowAuthoring {
     diagnosticsMode: 'all' | 'summary' = 'all',
     layout?: DraftLayout,
   ) {
+    publishObserver(this.store)?.edited();
     return this.store.transaction(() => {
       const w = this.workflow(id);
       const displayedDraft = this.describeWorkflow(w).draft;

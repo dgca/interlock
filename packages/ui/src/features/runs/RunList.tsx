@@ -258,6 +258,7 @@ export function RunList({
           returnTo={returnTo}
           onTabChange={showListTab}
           onClearFilters={filtered ? clearFilters : undefined}
+          syncAlertCount={sync.items.length}
         />
       ) : page.items.length ? (
         <ListTable {...runTable} label="Runs">

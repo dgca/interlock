@@ -57,6 +57,8 @@ const script = (command: string) => {
   });
 };
 
+const tick = () => new Promise((resolve) => setImmediate(resolve));
+
 /** Publish and let the post-commit export run. */
 async function publish(engine: Engine, id: string) {
   engine.publish(id);
@@ -139,10 +141,12 @@ it('refuses a file change that would replace unsynced draft edits', async () => 
   await publish(engine, w.id);
   const path = join(folder, `${w.id}.json`);
   // A rename is a draft edit even though versions do not record names.
-  engine.update(w.id, {
-    name: 'Greeter (renamed)',
-    draftRevision: engine.workflow(w.id).draftRevision,
-  });
+  const rename = (name: string) =>
+    engine.update(w.id, {
+      name,
+      draftRevision: engine.workflow(w.id).draftRevision,
+    });
+  rename('Greeter (renamed)');
   editFile(path, (bundle) => {
     bundle.workflows[0].description = 'From Git';
   });
@@ -155,21 +159,70 @@ it('refuses a file change that would replace unsynced draft edits', async () => 
     name: 'Greeter (renamed)',
     description: '',
   });
+  // Undoing the edit loads the refused file without another file change.
+  rename('Greeter');
+  await tick();
+  expect(engine.workflow(w.id).description).toBe('From Git');
+  expect(sync.status().items).toEqual([]);
+
   engine.update(w.id, {
     draft: script('return "ui";'),
     draftRevision: engine.workflow(w.id).draftRevision,
   });
-
+  editFile(path, (bundle) => {
+    bundle.workflows[0].description = 'From Git again';
+  });
+  expect(sync.scan().items).toHaveLength(1);
   // Publishing keeps the Interlock edits as a version; the file then loads into the draft.
   await publish(engine, w.id);
-  expect(readJson(path).workflows[0].description).toBe('From Git');
+  expect(readJson(path).workflows[0].description).toBe('From Git again');
   expect(
     JSON.stringify(engine.store.getVersion(w.id, 2)!.definition),
   ).toContain('return \\"ui\\";');
-  expect(engine.workflow(w.id).description).toBe('From Git');
-  expect(sync.status().items.map((i) => i.reason)).toEqual([
-    expect.stringContaining('did not overwrite'),
-  ]);
+  expect(engine.workflow(w.id).description).toBe('From Git again');
+  expect(sync.status().items).toEqual([]);
+
+  // Turning sync on over an existing library: a local rename is not overwritten.
+  engine.store.remove('workflowSyncFiles', w.id);
+  rename('Greeter (local)');
+  writeFileSync(path, `${readFileSync(path, 'utf8')} `);
+  expect(sync.scan().items).toHaveLength(1);
+  expect(engine.workflow(w.id).name).toBe('Greeter (local)');
+});
+
+it('keeps a file whose saved prompt was edited when the workflow is published', async () => {
+  const { engine, sync, folder } = setup();
+  const prompt = engine.prompts.create({
+    name: 'Guide',
+    description: '',
+    content: 'Be brief.',
+  });
+  const definition = blankDefinition();
+  for (const node of definition.nodes)
+    if (node.kind === 'agent') node.promptIds = [prompt.id];
+  const w = engine.create('Writer', '', definition);
+  await publish(engine, w.id);
+  const path = join(folder, `${w.id}.json`);
+  editFile(path, (bundle) => {
+    bundle.prompts![0].content = 'Be thorough.';
+  });
+  expect(sync.scan().items[0].reason).toContain('Saved prompt');
+
+  // Any draft edit, then publish: the file's draft matches version 1.
+  engine.update(w.id, {
+    draft: {
+      ...definition,
+      nodes: definition.nodes.map((node) =>
+        node.kind === 'agent' ? { ...node, label: 'Write' } : node,
+      ),
+    },
+    draftRevision: engine.workflow(w.id).draftRevision,
+  });
+  await publish(engine, w.id);
+  expect(readJson(path).prompts![0].content).toBe('Be thorough.');
+  expect(sync.status().items.map((i) => i.reason)).toEqual(
+    expect.arrayContaining([expect.stringContaining('did not overwrite')]),
+  );
 });
 
 it('imports neither file when two files claim one workflow', async () => {

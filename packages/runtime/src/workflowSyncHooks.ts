@@ -1,9 +1,11 @@
 import type { Store } from '@interlock/storage';
 
-/** Observes publication for the optional repository folder sync. */
+/** Observes publication and draft edits for the optional repository folder sync. */
 export interface PublishObserver {
   /** Called before publication; the returned callback runs after it. */
   publishing(): () => void;
+  /** Called before a draft edit; refused files may load once it settles. */
+  edited(): void;
 }
 
 const observers = new WeakMap<Store, PublishObserver>();

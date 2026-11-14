@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import {
-  existsSync,
+  lstatSync,
   readdirSync,
   readFileSync,
   renameSync,
@@ -109,7 +109,23 @@ function draftOnly(value: unknown): unknown {
   };
 }
 
+/** Larger files are reported, not read. */
+const maxFileBytes = 5 * 1024 * 1024;
+
 function readBundle(folder: string, file: string): FileRead {
+  const stats = lstatSync(join(folder, file));
+  if (stats.isSymbolicLink())
+    return {
+      file,
+      hash: '',
+      reason: 'Symbolic links are not followed. Keep the bundle in the folder.',
+    };
+  if (stats.size > maxFileBytes)
+    return {
+      file,
+      hash: '',
+      reason: `The file is larger than ${maxFileBytes / 1024 / 1024} MiB.`,
+    };
   const content = readFileSync(join(folder, file), 'utf8');
   const hash = hashOf(content);
   let parsed: unknown;
@@ -165,7 +181,10 @@ export class WorkflowSync {
   /** Workflow ID to the files that defined it at the last scan. */
   private owners = new Map<string, string[]>();
   private watcher?: FSWatcher;
+  /** Identity of the watched directory, to notice it being replaced. */
+  private watched: string | undefined | null = null;
   private retry?: NodeJS.Timeout;
+  private editScan?: NodeJS.Immediate;
   private debounce?: NodeJS.Timeout;
   private pending = new Map<string, number>();
 
@@ -176,6 +195,7 @@ export class WorkflowSync {
   ) {
     observePublishes(engine.store, {
       publishing: () => this.publishing(),
+      edited: () => this.edited(),
     });
   }
 
@@ -185,8 +205,10 @@ export class WorkflowSync {
 
   /** Scan once, then watch the folder; a missing folder is checked again later. */
   start() {
-    this.scan();
     this.watch();
+    // Recheck regularly: a missing, removed or replaced folder emits nothing reliable.
+    this.retry = setInterval(() => this.watch(), this.options.retryMs ?? 5000);
+    this.retry.unref();
   }
 
   stop() {
@@ -194,6 +216,7 @@ export class WorkflowSync {
     this.watcher = undefined;
     clearInterval(this.retry);
     clearTimeout(this.debounce);
+    if (this.editScan) clearImmediate(this.editScan);
     if (publishObserver(this.store)) observePublishes(this.store);
   }
 
@@ -208,39 +231,51 @@ export class WorkflowSync {
   }
 
   private folderExists() {
+    return this.folderIdentity() !== undefined;
+  }
+
+  private folderIdentity() {
     try {
-      return statSync(this.folder).isDirectory();
+      const stats = statSync(this.folder);
+      return stats.isDirectory() ? `${stats.dev}:${stats.ino}` : undefined;
     } catch {
-      return false;
+      return undefined;
     }
   }
 
+  /** Attach a watcher to the current folder, replacing one on a removed folder. */
   private watch() {
-    if (this.watcher || this.retry) return;
-    if (!this.folderExists()) {
-      this.retry = setInterval(() => {
-        if (!this.folderExists()) return;
-        clearInterval(this.retry);
-        this.retry = undefined;
-        this.safeScan();
-        this.watch();
-      }, this.options.retryMs ?? 5000);
-      this.retry.unref();
-      return;
-    }
-    this.watcher = watch(this.folder, { persistent: false }, () => {
-      clearTimeout(this.debounce);
-      this.debounce = setTimeout(
-        () => this.safeScan(),
-        this.options.debounceMs ?? 200,
-      );
-      this.debounce.unref();
-    });
-    this.watcher.on('error', () => {
-      this.watcher?.close();
+    const identity = this.folderIdentity();
+    if (identity === this.watched && (this.watcher || !identity)) return;
+    this.watcher?.close();
+    this.watcher = undefined;
+    this.watched = identity;
+    this.safeScan();
+    if (!identity) return;
+    try {
+      this.watcher = watch(this.folder, { persistent: false }, () => {
+        clearTimeout(this.debounce);
+        this.debounce = setTimeout(
+          () => this.safeScan(),
+          this.options.debounceMs ?? 200,
+        );
+        this.debounce.unref();
+      });
+      this.watcher.on('error', () => {
+        this.watcher?.close();
+        this.watcher = undefined;
+      });
+    } catch {
       this.watcher = undefined;
+    }
+  }
+
+  /** A draft edit may settle a refused file, so look again once it commits. */
+  private edited() {
+    if (this.editScan || !this.items.length) return;
+    this.editScan = setImmediate(() => {
+      this.editScan = undefined;
       this.safeScan();
-      this.watch();
     });
   }
 
@@ -347,8 +382,17 @@ export class WorkflowSync {
   }
 
   /** Draft edits made in Interlock since the last sync, not yet published. */
-  private unsyncedEdits(workflow: Workflow) {
+  private unsyncedEdits(
+    workflow: Workflow,
+    file: { name: string; description: string },
+  ) {
     const baseline = this.store.get<SyncBaseline>(baselines, workflow.id);
+    // Without a record of the last sync, a different name may be a local rename.
+    if (
+      !baseline &&
+      (file.name !== workflow.name || file.description !== workflow.description)
+    )
+      return true;
     // Renames do not advance the draft revision and versions do not record names.
     if (
       baseline &&
@@ -375,11 +419,11 @@ export class WorkflowSync {
         sameWorkflowContent(existing.draft, entry.draft) &&
         existing.name === entry.name &&
         existing.description === entry.description;
-      if (!same && this.unsyncedEdits(existing))
+      if (!same && this.unsyncedEdits(existing, entry))
         return {
           file: read.file,
           workflowId: entry.id,
-          reason: `"${existing.name}" has draft edits in Interlock that are not in this file, and the file changed too. Publish or discard the draft to load the file, or restore the file.`,
+          reason: `"${existing.name}" has draft edits in Interlock that are not in this file, and the file changed too. Publish the draft or undo its edits to load the file, or restore the file.`,
         };
     }
     try {
@@ -401,8 +445,12 @@ export class WorkflowSync {
         reason: message(error),
       };
     }
-    for (const entry of bundle.workflows)
+    for (const entry of bundle.workflows) {
       this.remember(entry.id, read.file, read.hash);
+      // The file is loaded, so a notice that publishing left it alone is settled.
+      if (this.exportItems.get(entry.id)?.item.file === read.file)
+        this.exportItems.delete(entry.id);
+    }
     return undefined;
   }
 
@@ -462,7 +510,7 @@ export class WorkflowSync {
     const file =
       owners[0] ?? `${id.replace(/[^\w.-]/g, '_').replace(/^\./, '_')}.json`;
     const path = join(this.folder, file);
-    const read = existsSync(path) ? readBundle(this.folder, file) : undefined;
+    let read: FileRead | undefined;
     const skip = (reason: string) => {
       this.exportItems.set(id, {
         item: { file, workflowId: id, reason },
@@ -470,23 +518,27 @@ export class WorkflowSync {
       });
       return false;
     };
+    try {
+      read = readBundle(this.folder, file);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT')
+        return skip(`Publishing could not read this file: ${message(error)}`);
+    }
     if (read) {
-      if (read.bundle && read.bundle.workflows.length > 1)
+      const entries = read.bundle?.workflows ?? [];
+      if (!read.bundle)
+        return skip(`Publishing did not overwrite this file. ${read.reason}`);
+      if (!entries.some((entry) => entry.id === id))
+        return skip(
+          `Publishing did not write this file because it holds another workflow (${entries[0].id}). Rename one of the files.`,
+        );
+      if (entries.length > 1)
         return skip(
           'Publishing did not write this file because it holds other workflows too. Move this workflow to its own file.',
         );
+      // Only content Interlock wrote or fully loaded is replaced; anything else is someone's edit.
       const baseline = this.store.get<SyncBaseline>(baselines, id);
-      const synced = baseline?.file === file && baseline.fileHash === read.hash;
-      const entry = read.bundle?.workflows[0];
-      // A file that holds a retained version has nothing Interlock would lose.
-      const known =
-        entry?.id === id &&
-        entry.name === workflow.name &&
-        entry.description === workflow.description &&
-        this.store
-          .listVersions(id)
-          .some((v) => sameWorkflowContent(entry.draft, v.definition));
-      if (!synced && !known) {
+      if (baseline?.file !== file || baseline.fileHash !== read.hash) {
         // The edits are safe in the new version, so the file may load into the draft.
         this.remember(
           id,
