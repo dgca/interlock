@@ -89,6 +89,16 @@ const BoardSettings = lazy(() =>
     default: m.BoardSettingsRoute,
   })),
 );
+const BoardTypes = lazy(() =>
+  import('../features/boards/BoardTypes').then((m) => ({
+    default: m.BoardTypeLibrary,
+  })),
+);
+const BoardTypeEditor = lazy(() =>
+  import('../features/boards/BoardTypes').then((m) => ({
+    default: m.BoardTypeRoute,
+  })),
+);
 const RequestRoute = lazy(() =>
   import('../features/boards/RequestView').then((m) => ({
     default: m.GlobalRequestRoute,
@@ -737,6 +747,22 @@ export const routes: RouteObject[] = [
           </Suspense>
         ),
       },
+      {
+        path: 'boards/types',
+        element: (
+          <Suspense fallback={<BoardLibrarySkeleton />}>
+            <BoardTypes />
+          </Suspense>
+        ),
+      },
+      ...['boards/types/new', 'boards/types/:typeId'].map((path) => ({
+        path,
+        element: (
+          <Suspense fallback={<RouteLoading />}>
+            <BoardTypeEditor />
+          </Suspense>
+        ),
+      })),
       {
         path: 'boards/:boardId',
         element: (

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { startHoldSchema, startReleaseSchema } from './runStarts.js';
 
 const scope = z.discriminatedUnion('scope', [
   z.object({ scope: z.literal('library') }).strict(),
@@ -35,6 +36,8 @@ export const pauseRequestSchema = z.discriminatedUnion('action', [
   pauseListSchema.extend({ action: z.literal('list') }),
   pauseCreateSchema.extend({ action: z.literal('pause') }),
   pauseResumeSchema.extend({ action: z.literal('resume') }),
+  startHoldSchema.extend({ action: z.literal('hold_start') }),
+  startReleaseSchema.extend({ action: z.literal('release_start') }),
 ]);
 export type PauseCreate = z.input<typeof pauseCreateSchema>;
 export type PauseList = z.input<typeof pauseListSchema>;

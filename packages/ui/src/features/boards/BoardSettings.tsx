@@ -11,6 +11,7 @@ import {
   Loader,
   MultiSelect,
   PageHeader,
+  Select,
   Stack,
   Text,
   TextInput,
@@ -31,6 +32,12 @@ import { useEditorDraft } from '../../lib/useEditorDraft';
 import { useDraftDismissal } from '../../lib/useDraftDismissal';
 import { paths } from '../../routes/paths';
 import classes from './Boards.module.css';
+import {
+  TypedBoardFields,
+  savedScope,
+  typedScope,
+  type TypedScope,
+} from './TypedBoardFields';
 
 type Settings = Awaited<ReturnType<typeof api.boards.settings.query>>;
 type Column = { id?: string; name: string; key: string };
@@ -68,6 +75,13 @@ function BoardSettings({ initial }: { initial?: Settings }) {
   const [name, setName] = useState(baseline?.name ?? '');
   const [columns, setColumns] = useState(() => draftColumns(baseline));
   const [selected, setSelected] = useState(baseline?.workflowIds ?? []);
+  const [typeId, setTypeId] = useState(baseline?.typeId ?? '');
+  const [scope, setScope] = useState<TypedScope>(() => typedScope(baseline));
+  const scopeChanged =
+    JSON.stringify(scope) !== JSON.stringify(typedScope(baseline));
+  const typeList = useQuery(trpc.boardTypes.list.queryOptions());
+  const selectedType = typeList.data?.find((type) => type.id === typeId);
+  const scoped = typeId ? savedScope(scope) : undefined;
   const [error, setError] = useState('');
   const [loadError, setLoadError] = useState('');
   const [unconfirmedCreation, setUnconfirmedCreation] = useState(false);
@@ -82,6 +96,8 @@ function BoardSettings({ initial }: { initial?: Settings }) {
   const originalWorkflows = new Set(baseline?.workflowIds);
   const dirty =
     name !== (baseline?.name ?? '') ||
+    typeId !== (baseline?.typeId ?? '') ||
+    scopeChanged ||
     columns.length !== originalColumns.length ||
     columns.some(
       (column, index) =>
@@ -118,12 +134,15 @@ function BoardSettings({ initial }: { initial?: Settings }) {
     !needsReload &&
     !unconfirmedCreation &&
     name.trim() &&
-    (moves.length === 0 || boards.data);
+    !scoped?.error &&
+    (typeId || moves.length === 0 || boards.data);
   const goBack = () => void navigate(returnTo);
   const applySettings = (settings: Settings) => {
     setName(settings.name);
     setColumns(draftColumns(settings));
     setSelected(settings.workflowIds);
+    setTypeId(settings.typeId ?? '');
+    setScope(typedScope(settings));
     setError('');
   };
 
@@ -243,14 +262,25 @@ function BoardSettings({ initial }: { initial?: Settings }) {
                   expectedBoards.set(id, baseline.id);
             }
             try {
-              const board = await api.boards.save.mutate({
-                id: baseline?.id,
-                expectedRevision: baseline?.revision,
-                name,
-                columns: columns.map(({ id, name }) => ({ id, name })),
-                workflowIds: selected,
-                expectedBoards: Object.fromEntries(expectedBoards),
-              });
+              const board = await api.boards.save.mutate(
+                scoped && !scoped.error
+                  ? {
+                      id: baseline?.id,
+                      expectedRevision: baseline?.revision,
+                      name,
+                      typeId,
+                      scope: scoped.scope,
+                      stageMap: scoped.stageMap,
+                    }
+                  : {
+                      id: baseline?.id,
+                      expectedRevision: baseline?.revision,
+                      name,
+                      columns: columns.map(({ id, name }) => ({ id, name })),
+                      workflowIds: selected,
+                      expectedBoards: Object.fromEntries(expectedBoards),
+                    },
+              );
               // The write omits protected columns. Reopen from a fresh settings read.
               client.removeQueries({
                 ...trpc.boards.settings.queryFilter({ id: board.id }),
@@ -299,112 +329,150 @@ function BoardSettings({ initial }: { initial?: Settings }) {
               disabled={busy}
               onChange={(event) => setName(event.currentTarget.value)}
             />
-            <Stack gap="xs">
-              <h2>Stage columns</h2>
-              <Text size="sm" c="dimmed">
-                Runs move when they reach a step bound to a column.
-              </Text>
-              {columns.map((column, index) => {
-                const referenced =
-                  column.id && protectedColumnIds?.includes(column.id);
-                return (
-                  <div className={classes.columnEdit} key={column.key}>
-                    <TextInput
-                      aria-label={`Column ${index + 1} name`}
-                      maxLength={200}
-                      required
-                      value={column.name}
-                      disabled={busy}
-                      onChange={(event) => {
-                        const name = event.currentTarget.value;
-                        setColumns((current) =>
-                          current.map((item) =>
-                            item.key === column.key ? { ...item, name } : item,
-                          ),
-                        );
-                      }}
-                    />
-                    <Group gap={4}>
-                      <ActionIcon
-                        variant="subtle"
-                        disabled={busy || index === 0}
-                        aria-label={`Move ${column.name || 'column'} up`}
-                        onClick={() => move(index, -1)}
-                      >
-                        <ArrowUp size={15} />
-                      </ActionIcon>
-                      <ActionIcon
-                        variant="subtle"
-                        disabled={busy || index === columns.length - 1}
-                        aria-label={`Move ${column.name || 'column'} down`}
-                        onClick={() => move(index, 1)}
-                      >
-                        <ArrowDown size={15} />
-                      </ActionIcon>
-                      <ActionIcon
-                        variant="subtle"
-                        disabled={busy || Boolean(referenced)}
-                        aria-label={`Remove ${column.name || 'column'}`}
-                        title={
-                          referenced
-                            ? 'Referenced by a workflow or retained run'
-                            : undefined
-                        }
-                        onClick={() =>
-                          setColumns((current) =>
-                            current.filter((item) => item.key !== column.key),
-                          )
-                        }
-                      >
-                        <X size={15} />
-                      </ActionIcon>
-                    </Group>
-                  </div>
-                );
-              })}
-              <Group>
-                <Button
-                  variant="ghost"
-                  disabled={busy || columns.length >= 100}
-                  onClick={() =>
-                    setColumns((current) => [
-                      ...current,
-                      { key: crypto.randomUUID(), name: '' },
-                    ])
-                  }
-                >
-                  <Plus size={16} /> Add column
-                </Button>
-              </Group>
-            </Stack>
-            <Stack gap="xs">
-              <MultiSelect
-                label="Workflows"
-                placeholder="Select workflows"
-                searchable
-                comboboxProps={{ position: 'top-start' }}
-                value={selected}
+            {(!baseline || baseline.typeId) && (
+              <Select
+                label="Layout"
+                description={
+                  baseline
+                    ? undefined
+                    : 'Stage columns place runs by the steps bound to each column. A board type places runs by its lane rules, across any workflows.'
+                }
+                allowDeselect={false}
+                value={typeId}
                 disabled={busy}
-                onChange={setSelected}
-                data={workflows.map((workflow) => ({
-                  value: workflow.id,
-                  label: workflow.name,
-                }))}
+                onChange={(value) => setTypeId(value ?? '')}
+                data={[
+                  ...(baseline ? [] : [{ value: '', label: 'Stage columns' }]),
+                  ...(typeList.data ?? []).map((type) => ({
+                    value: type.id,
+                    label: type.name,
+                  })),
+                ]}
               />
-              <WorkspaceReadWarning reads={[workflowsRead]} inline />
-              {moves.map((workflow) => {
-                const source = boards.data?.find(
-                  (board) => board.id === workflow.boardId,
-                );
-                return (
-                  source && (
-                    <Text key={workflow.id} size="sm">
-                      {workflow.name} will move from {source.name}.
-                    </Text>
-                  )
-                );
-              })}
-            </Stack>
+            )}
+            {typeId ? (
+              <TypedBoardFields
+                type={selectedType}
+                draft={scope}
+                workflows={workflows}
+                disabled={busy}
+                onChange={setScope}
+              />
+            ) : (
+              <>
+                <Stack gap="xs">
+                  <h2>Stage columns</h2>
+                  <Text size="sm" c="dimmed">
+                    Runs move when they reach a step bound to a column.
+                  </Text>
+                  {columns.map((column, index) => {
+                    const referenced =
+                      column.id && protectedColumnIds?.includes(column.id);
+                    return (
+                      <div className={classes.columnEdit} key={column.key}>
+                        <TextInput
+                          aria-label={`Column ${index + 1} name`}
+                          maxLength={200}
+                          required
+                          value={column.name}
+                          disabled={busy}
+                          onChange={(event) => {
+                            const name = event.currentTarget.value;
+                            setColumns((current) =>
+                              current.map((item) =>
+                                item.key === column.key
+                                  ? { ...item, name }
+                                  : item,
+                              ),
+                            );
+                          }}
+                        />
+                        <Group gap={4}>
+                          <ActionIcon
+                            variant="subtle"
+                            disabled={busy || index === 0}
+                            aria-label={`Move ${column.name || 'column'} up`}
+                            onClick={() => move(index, -1)}
+                          >
+                            <ArrowUp size={15} />
+                          </ActionIcon>
+                          <ActionIcon
+                            variant="subtle"
+                            disabled={busy || index === columns.length - 1}
+                            aria-label={`Move ${column.name || 'column'} down`}
+                            onClick={() => move(index, 1)}
+                          >
+                            <ArrowDown size={15} />
+                          </ActionIcon>
+                          <ActionIcon
+                            variant="subtle"
+                            disabled={busy || Boolean(referenced)}
+                            aria-label={`Remove ${column.name || 'column'}`}
+                            title={
+                              referenced
+                                ? 'Referenced by a workflow or retained run'
+                                : undefined
+                            }
+                            onClick={() =>
+                              setColumns((current) =>
+                                current.filter(
+                                  (item) => item.key !== column.key,
+                                ),
+                              )
+                            }
+                          >
+                            <X size={15} />
+                          </ActionIcon>
+                        </Group>
+                      </div>
+                    );
+                  })}
+                  <Group>
+                    <Button
+                      variant="ghost"
+                      disabled={busy || columns.length >= 100}
+                      onClick={() =>
+                        setColumns((current) => [
+                          ...current,
+                          { key: crypto.randomUUID(), name: '' },
+                        ])
+                      }
+                    >
+                      <Plus size={16} /> Add column
+                    </Button>
+                  </Group>
+                </Stack>
+                <Stack gap="xs">
+                  <MultiSelect
+                    label="Workflows"
+                    placeholder="Select workflows"
+                    searchable
+                    comboboxProps={{ position: 'top-start' }}
+                    value={selected}
+                    disabled={busy}
+                    onChange={setSelected}
+                    data={workflows.map((workflow) => ({
+                      value: workflow.id,
+                      label: workflow.name,
+                    }))}
+                  />
+                  <WorkspaceReadWarning reads={[workflowsRead]} inline />
+                  {moves.map((workflow) => {
+                    const source = boards.data?.find(
+                      (board) => board.id === workflow.boardId,
+                    );
+                    return (
+                      source && (
+                        <Text key={workflow.id} size="sm">
+                          {workflow.name} will move from {source.name}.
+                        </Text>
+                      )
+                    );
+                  })}
+                </Stack>
+              </>
+            )}
+            {scoped?.error && <ActionError message={scoped.error} />}
             <ActionError
               message={
                 conflict

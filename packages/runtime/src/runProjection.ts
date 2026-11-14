@@ -57,7 +57,10 @@ export function createRunProjector(
         actor: 'engine',
         waiting: {
           kind: 'admission_queue',
-          since: root.admission?.queuedAt ?? root.createdAt,
+          since:
+            root.admission?.hold?.at ??
+            root.admission?.queuedAt ??
+            root.createdAt,
           detail: {
             runId: root.id,
             nodeId: root.cursor,

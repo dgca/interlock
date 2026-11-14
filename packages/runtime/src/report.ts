@@ -1,6 +1,7 @@
 import {
   reportFilterSchema,
   calculateDistribution,
+  heldMs,
   elapsedExcludingPausesMs,
   formatCurrencyAmount,
   selectedUsageReport,
@@ -231,22 +232,20 @@ export function generateWorkflowReport(
     runDurations.push(duration);
     observe.run?.(run, duration);
 
-    // Admission queue wait
-    if (run.admission?.queuedAt) {
-      const queuedAtMs = Date.parse(run.admission.queuedAt);
-      if (run.admission.admittedAt) {
-        admissionQueueWaits.push(
-          elapsed(run, queuedAtMs, Date.parse(run.admission.admittedAt)),
-        );
-      } else if (run.status === 'queued') {
-        admissionQueueWaits.push(elapsed(run, queuedAtMs, reportNowMs));
-      } else {
-        admissionQueueWaits.push(zeroElapsed());
-      }
-    } else {
-      // Admitted immediately
-      admissionQueueWaits.push(zeroElapsed());
-    }
+    // Admission queue wait, excluding time a person held the start.
+    const admission = run.admission;
+    const queuedAtMs =
+      admission?.queuedAt &&
+      Date.parse(admission.queuedAt) + heldMs(admission, reportNowMs);
+    admissionQueueWaits.push(
+      !queuedAtMs || !(admission.admittedAt || run.status === 'queued')
+        ? zeroElapsed()
+        : elapsed(
+            run,
+            queuedAtMs,
+            Date.parse(admission.admittedAt ?? '') || reportNowMs,
+          ),
+    );
 
     const active = ['running', 'waiting', 'queued'].includes(run.status);
     const waitEndMs = active ? reportNowMs : Date.parse(run.updatedAt);

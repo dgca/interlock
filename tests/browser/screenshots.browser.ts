@@ -30,6 +30,7 @@ const gallerySections = [
   'editors',
   'dialogs',
   'testing',
+  'boards',
   'agent-tools',
 ];
 
