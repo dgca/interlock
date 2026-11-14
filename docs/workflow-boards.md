@@ -1,108 +1,264 @@
-# Use Workflow Boards
+---
+title: Boards
+description: Track runs by stage across workflows, answer requests, and hold queued starts.
+---
+
+# Boards
+
+A board shows runs as cards in lanes, so you can see at a glance what each piece of work is doing and what needs you. Use one to follow work across several workflows, or to find and answer requests from people.
+
+Interlock has three kinds of board:
+
+| Kind                 | Lanes come from                                       | Workflows shown                                     |
+| -------------------- | ----------------------------------------------------- | --------------------------------------------------- |
+| Column board         | Columns you define. Steps bind to a column.           | Its member workflows. A workflow is on one at most. |
+| Typed board          | A [board type](#use-a-board-type) and the run's state | Any workflows, tags or task systems you choose.     |
+| Workflow stage board | The workflow's stages, in graph order                 | That workflow only. No setup.                       |
+
+Cards never move by dragging. They change when run state changes.
 
 ## Set up a board
 
 1. Open **Boards** and choose **New board**.
 2. Name the board and add the stage columns. Edit their names and order in the form.
 3. Select the workflows to include. If a workflow belongs to another board, the form names the board it moves from.
-4. Choose **Create board**. To edit an existing board, use **Save changes** in the settings header. You can also change membership in **Workflow settings → Board**.
+4. Choose **Create board**.
 
-If the board changes elsewhere before you save, the editor keeps your draft. Choose **Load latest** and confirm to replace your edits with the current saved settings. If loading fails, your draft stays available and you can try again.
+To edit a board later, change it and choose **Save changes** in the settings header. You can also change a workflow's board in **Workflow settings → Board**.
 
-If Interlock cannot confirm creation, check **Boards** for the board before starting another draft.
-If Interlock cannot confirm an update, use **Load latest** to check the saved board revision.
+Membership applies to existing and future runs as soon as you save. It does not depend on publication, and reimporting a workflow keeps its board membership.
 
-Membership applies to existing and future runs as soon as you save. It is independent of publication. Reimporting a workflow keeps its board membership. To place runs in a stage, open a node's settings, choose a board column in **Stage**, and publish the workflow. Selecting a column binds its ID. Typing stage text creates a label for run summaries, even if the text matches a column. Renaming or reordering a column preserves its bindings. A draft, retained version, or retained run can prevent column removal.
+### Place steps in a column
+
+1. Open a node's settings.
+2. In **Stage**, choose a board column.
+3. Publish the workflow.
+
+Choosing a column binds the step to that column's ID, so renaming or reordering the column keeps the binding. Typing stage text instead creates a label for run summaries only, even if the text matches a column name.
+
+A column cannot be removed while a draft, a retained version or a retained run uses it.
+
+### If someone else saves first
+
+If the board changed elsewhere before you save, the editor keeps your draft. Choose **Load latest** and confirm to replace your edits with the saved settings. If loading fails, your draft stays and you can try again.
+
+If Interlock cannot confirm a save:
+
+- After a create, check **Boards** for the new board before you start another draft.
+- After an update, use **Load latest** to check the saved revision.
 
 ## Use a board type
 
-A board type is a reusable layout: ordered lanes, the conditions that place a card in each lane, and the fields each card shows. A board built from a type shows runs from any number of workflows and computes every card's lane from run state each time it loads. Nothing is stored per card, so the board never drifts from the runs. Cards never move by dragging.
+A board type is a reusable layout: ordered lanes, the conditions that place a card in each lane, and the fields each card shows. A typed board computes every card's lane from run state each time it loads. Nothing is stored per card, so the board never drifts from the runs.
 
 1. Open **Boards → Board types** and choose **New board type**. Start from **Coding**, **Design**, **Research** or **Blank**.
-2. Edit the lanes. Each lane has conditions on the run's stage, status, actor and waiting reason. A card goes to the first lane whose conditions match; **Add alternative** adds another set of conditions to the same lane. A lane without conditions takes every card an earlier lane did not. Cards that match no lane go to **Unmapped**.
+2. Edit the lanes. Each lane has conditions on **Stages**, **Status**, **Actor** and **Waiting on**. **Add alternative** adds another set of conditions to the same lane.
 3. Add card fields: the task link, workflow, stage, waiting reason, actor, spend, age, tags, or a **Node result** path such as `open_pr.url`, read from that step's latest output.
-4. Open **Boards → New board**, choose the type in **Layout**, and choose which runs it shows: some or all workflows, runs carrying every listed tag, and external task systems.
+4. Open **Boards → New board** and choose the type in **Layout**.
+5. Choose which runs the board shows: some or all workflows, runs carrying every listed tag, and external task systems.
 
-Workflows that use the type's stage names, such as Plan, Build and Review, appear in the matching lanes without setup. Under **Stage mapping**, map another workflow's stage name to one of the type's stages without changing the workflow. A misnamed stage never fails validation; its cards appear in **Unmapped**.
+A card goes to the first lane whose conditions match. A lane without conditions takes every card an earlier lane did not. Cards that match no lane go to **Unmapped**.
 
-Runs that share an external task (system and ID) form one card, as do the runs of a continue-as-new chain. When a card spans several runs, a run waiting on a person places it; otherwise the newest active run does, then the newest run. A typed board shows every active run in scope and the 100 most recently finished runs from the last 24 hours; when more finished, the board says how many it is showing.
+### Match workflow stages to the type
 
-A type in use by a board cannot be deleted. Typed boards do not take workflow membership, so a workflow can appear on any number of them, and column boards keep working as before.
+Workflows whose stages use the type's names, such as Plan, Build and Review, land in the matching lanes without setup. For another workflow, open **Stage mapping** on the board and map its stage names to the type's stages. The workflow itself does not change.
 
-## Act on a card
+A misnamed stage never fails validation. Its cards appear in **Unmapped**.
 
-Cards on typed boards and stage boards change only when run state changes. To act, use the card's menu; each action is an existing run operation and appears only when the run allows it:
+### How cards group runs
 
-- **Open run** opens the run inspector.
-- The review link answers the card's oldest request, as on column boards.
-- **Cancel run** cancels the run tree with a reason, after the same preview as the inspector.
-- **Move to backlog** holds a queued start with a reason. It stays queued, and admission skips it, until someone releases it. Only queued top-level starts can be held: Interlock has no per-run pause, so a run that has started cannot return to the backlog (cancel it, or pause its workflow). Child runs, comparison trials and scheduled starts cannot be held. Held time does not count as admission waiting in reports.
-- **Release** returns a held start to admission. It starts when capacity and its other start conditions allow.
+Runs that share an external task (system and ID) form one card. So do the runs of a continue-as-new chain. When a card spans several runs, one run places it:
 
-Actions apply to the run that places the card. A board type chooses which actions its cards offer. To start a run held, enter a **Hold reason** in the start dialog, pass `hold: { "reason": "..." }` to MCP `start_run` or `POST /api/runs`, or use `interlock start ... --hold REASON`. Hold or release a queued run with `interlock board hold RUN_ID REASON` and `interlock board release RUN_ID`, or MCP `manage_pause` actions `hold_start` and `release_start`. A held start is the only backlog item; there are no work items without a run.
+1. a run waiting on a person, if there is one;
+2. otherwise the newest active run;
+3. otherwise the newest run.
+
+Typed boards do not take workflow membership, so a workflow can appear on any number of them. Column boards keep working as before. A board type in use by a board cannot be deleted.
 
 ## See a workflow's stages
 
-Each workflow also has its own board without setup. Open the workflow's **Runs** and choose **Stages**. It shows one lane per stage in graph order, plus **Needs you**, **Done** and **Failed**, and **Queued**, **Cancelled** or **Unmapped** when they have cards. Runs started by another workflow's step appear on that workflow's cards instead.
+Every workflow has its own stage board. Open the workflow's **Runs** and choose **Stages**.
 
-## Read a board from scripts and agents
+It shows one lane per stage in graph order, plus **Needs you**, **Done** and **Failed**. **Backlog**, **Queued**, **Cancelled** and **Unmapped** appear when they have cards. Runs started by another workflow's step appear on that workflow's cards instead.
 
-The same lanes and cards are available everywhere:
+## Find work and answer a request
 
-- CLI: `interlock board view BOARD_ID`, or `interlock board view --workflow WORKFLOW_ID` for a workflow's stage board. Add `--lane LANE --offset N --limit N` to page one lane. `interlock board types` lists types and `interlock board save-type @type.json` saves one. `interlock board save '{"name":"Delivery","typeId":"coding"}'` creates a typed board; add `scope` to choose its runs.
-- HTTP: `GET /api/boards/view?id=BOARD_ID` or `?workflowId=WORKFLOW_ID`, with optional `lane`, `offset` and `limit`. `GET /api/board-types` lists types and `POST /api/boards` creates a typed board.
-- MCP: `read_workflow_boards` with `request.action: "view"` and an `id` or a `workflowId`; `limit` counts cards per lane and defaults to 10.
+The **Boards** page lists each board's workflows, with a badge when the board has unresolved requests. Search by name; **Clear search** restores the full list. Select a board name to see its runs.
 
-Each lane has an `id`, `name`, `total` and `cards`. A card's `id` is `task:<system>/<id>` or `run:<root run ID>`; `runId` is the run that placed it and `runCount` the number of runs it spans. A view of a column board returns its columns as lanes. Board types are managed in the UI, CLI and shared API; MCP reads them only through board views.
+1. Filter by workflow or **Status**. If no runs match, **Clear filters** returns to all workflows and statuses.
+2. Select a run card to open its inspector, or use the card's review action to open its oldest unresolved request.
+3. Read the question and any captured evidence. **Switch request** opens another request from the same run.
+4. Answer. A response applies to one request.
+5. Review the receipt for acceptance and any remaining requests.
 
-The Coding, Design and Research presets are also built-in types with the IDs `coding`, `design` and `research`. Outside the UI, `interlock board types` and `GET /api/board-types` list them with `builtIn: true` and revision 0. Creating a board from one, or saving one with `board save-type` and `expectedRevision: 0`, stores an editable copy under the same ID, so later changes to the preset never move an existing board's cards. A built-in type cannot be deleted; deleting your saved copy brings the preset back.
+In the request view, **Open run** selects the exact step. Returning to the board restores its filters and loaded column pages.
+
+**Needs attention** counts unresolved requests in the selected workflows. A card can match it while another branch of the run keeps going. To find requests across the library and see automation alerts, use **Runs → Needs attention**.
+
+When an answer does not go through:
+
+- If another interface answered first, the request shows the accepted decision and keeps your unsent text for copying.
+- If an acceptance hold blocks the answer, choose **Release acceptance hold**, then **Accept saved answer**.
+- If a library or workflow pause blocks it, use **Open run** to inspect and release the pause.
+
+## Act on a card
+
+Open the card's menu. Each action is an ordinary run operation, applies to the run that places the card, and appears only when that run allows it. A board type chooses which actions its cards offer.
+
+| Action              | What it does                                                                         |
+| ------------------- | ------------------------------------------------------------------------------------ |
+| **Open run**        | Opens the run inspector.                                                             |
+| Review link         | Answers the card's oldest request, as on column boards.                              |
+| **Cancel run**      | Cancels the run tree with a reason, after the same preview as the inspector.         |
+| **Move to backlog** | Holds a queued start with a reason. It stays queued and admission skips it.          |
+| **Release**         | Returns a held start to admission. It starts when capacity and its conditions allow. |
+
+### Hold a start in the backlog
+
+A held start is the only kind of backlog item. There are no work items without a run.
+
+- Start a run held: enter a **Hold reason** in the start dialog, or run `interlock start WORKFLOW_ID @input.json --hold "Waiting for design"`.
+- Hold a queued run: `interlock board hold RUN_ID REASON`.
+- Release it: `interlock board release RUN_ID`.
+
+Only queued top-level starts can be held. Interlock has no per-run pause, so a run that has started cannot return to the backlog: cancel it, or pause its workflow. Child runs, comparison trials and scheduled starts cannot be held. Held time does not count as admission waiting in reports.
+
+## Find a run by title
+
+Give a run a title when you start it, and boards and **Runs** show it first:
+
+- Browser: **Run title** in the start dialog.
+- CLI: `interlock start WORKFLOW_ID @input.json --title TEXT`.
+- MCP: `title` on `start_run`.
+- Automations: **Run title** in their settings.
+
+Without an explicit title, a card shows the external task title, then the workflow name.
+
+## Add Human input to a workflow
+
+A **Human input** step asks a person a question and waits for the answer, which then shows on the board.
+
+1. Choose **Human input** in the node picker.
+2. Enter a question and choose **Text** or **Single choice**.
+3. For each choice, enter a label and an output value. Turn on **Require comment** for choices that need an explanation.
+4. In **Use input data in the request**, set input paths for the question, context or evidence to show.
+
+For a plan review, bind the plan text and its revision, then use those paths in the evidence fields. Interlock captures the resolved content once per step visit. To approve a specific artifact, supply its content or an immutable revision reference.
+
+A text answer becomes a string output. A choice answer becomes an object with `choice`, the configured output value, and an optional `comment`. To branch on the decision, connect a Branch node and select the `choice` path.
 
 ## Set up a board during import
 
 When an import includes board suggestions, open **Board setup** in the import preview. The preview lists the workflows each choice applies to.
 
 - **Create suggested board** shows the name and column order before import. You can edit the name.
-- **Use existing board** lets you review the local column for each authored stage. Choose **Leave unstaged** for any stage you want to leave unmapped.
+- **Use existing board** lets you review the local column for each authored stage. Choose **Leave unstaged** for a stage you want to leave unmapped.
 - **Skip board setup** keeps existing local membership and stage mappings. Fresh imports start unassigned.
 
-Interlock saves the workflow and selected board setup together. Board setup does not start a run. A workflow can run before its stages are mapped. Older bundles can contain source column IDs without names or board suggestions. If the preview lists unresolved stages, you can assign a board and bind those steps to local columns in the workflow editor.
+Interlock saves the workflow and the board setup together. Board setup does not start a run, and a workflow can run before its stages are mapped.
 
-A stage mapping applies when a step enters the stage. Existing stage entries keep the column they recorded. Moving a workflow to another board clears its previous mappings. To replace mappings without changing the workflow's published definition, reimport the bundle and choose **Use existing board** again.
+Older bundles can contain source column IDs without names or board suggestions. If the preview lists unresolved stages, assign a board and bind those steps to local columns in the workflow editor.
+
+A stage mapping applies when a step enters the stage; existing stage entries keep the column they recorded. Moving a workflow to another board clears its previous mappings. To replace mappings without changing the published definition, reimport the bundle and choose **Use existing board** again.
+
+## Read boards from the CLI, HTTP and MCP
+
+The same lanes and cards are available everywhere.
+
+```sh
+interlock board view BOARD_ID
+interlock board view --workflow WORKFLOW_ID --lane LANE --offset 0 --limit 30
+interlock board types
+interlock board save-type @type.json
+interlock board save '{"name":"Delivery","typeId":"coding"}'
+```
+
+`--workflow` alone reads that workflow's stage board. `board save` creates a typed board; add `scope` to choose its runs.
+
+| Interface | Read a board                                                                         | Board types                                                |
+| --------- | ------------------------------------------------------------------------------------ | ---------------------------------------------------------- |
+| CLI       | `interlock board view`                                                               | `interlock board types`, `interlock board save-type`       |
+| HTTP      | `GET /api/boards/view?id=BOARD_ID` or `?workflowId=`, with `lane`, `offset`, `limit` | `GET /api/board-types`; `POST /api/boards` creates a board |
+| MCP       | `read_workflow_boards` with `request.action: "view"` and `id` or `workflowId`        | Read only through board views                              |
+
+Board types are managed in the UI, the CLI and the shared API. See the [HTTP API](http-api.md) for request details.
 
 ## Manage boards through MCP
 
-Use `read_workflow_boards` with `request.action: "list"` to find board IDs, workflow counts, and attention counts. The response includes `total` and `nextOffset`. Use `action: "settings"` with the board's `id` to read its revision, columns, protected column IDs, and workflow membership.
+These tools manage column boards.
 
-Use `manage_workflow_boards` with `request.action: "save"` to save the board name, ordered columns, and complete list of member workflow IDs.
+- Find boards: `read_workflow_boards` with `request.action: "list"` returns board IDs, workflow counts and attention counts, with `total` and `nextOffset`.
+- Read one: `action: "settings"` with the board's `id` returns its revision, columns, protected column IDs and member workflows.
+- Read its cards: `action: "get"` with the board `id` and a `column` ID. Use `queued` or `unstaged` for the built-in columns, and filter by `workflowId` or `status`. The response has totals for the filtered columns and cards for the requested column.
+- Answer a card's request: pass the card's `request` as the `target` to `workflow_requests` with `action: "get"` to read the captured question and evidence.
 
-- To create a board, omit `id` and `expectedRevision`. If the response is lost, inspect the board list before retrying. Repeating the create can add a duplicate.
-- To update a board, pass its `id` and current `expectedRevision`. Keep the IDs of existing columns and omit the IDs of new columns.
-- Supply `expectedBoards` to guard membership changes. Map each selected workflow ID to its observed board ID or to `null` if it is unassigned. A save moves selected workflows from their previous boards and unassigns current members omitted from the list.
+`manage_workflow_boards` with `request.action: "save"` saves the board name, ordered columns and the complete list of member workflow IDs:
 
-To move or remove one workflow, use `action: "assign"` with `workflowId`, `boardId`, and `expectedBoardId`. Use `null` for either board ID when it represents no board. If a revision or membership check fails, read the current state before saving again. Moving or unassigning a workflow clears its imported stage mappings. To map its stages on another board, reimport the bundle with board setup or select local columns in the workflow draft and publish it.
+- To create a board, omit `id` and `expectedRevision`. If the response is lost, check the board list before retrying; repeating the create can add a duplicate.
+- To update a board, pass its `id` and current `expectedRevision`. Keep the IDs of existing columns and omit IDs for new columns.
+- To guard membership, supply `expectedBoards`, mapping each selected workflow ID to its observed board ID or `null` if unassigned.
+- A save moves selected workflows from their previous boards and unassigns current members left out of the list.
 
-To see run cards, call `read_workflow_boards` with `action: "get"`, the board `id`, and a `column` ID. Use `queued` or `unstaged` for the corresponding built-in columns. Filter by `workflowId` or `status`. The response shows totals for the filtered columns and cards for the requested column. The page defaults to 30 cards and accepts up to 100. Pass a card's `request` as the `target` to `workflow_requests` with `action: "get"` to read the captured question and evidence.
+To move or remove one workflow, use `action: "assign"` with `workflowId`, `boardId` and `expectedBoardId`. Use `null` for either board ID to mean no board.
 
-## Find work and answer a request
+If a revision or membership check fails, read the current state before saving again. Moving or unassigning a workflow clears its imported stage mappings. To map its stages on another board, reimport the bundle with board setup, or select local columns in the workflow draft and publish it.
 
-The **Boards** page lists each board's assigned workflows and shows a badge when it has unresolved requests. Select a board name to see its runs. Search by name and use **Clear search** to restore the full library.
+## Reference
 
-Filter the board by workflow or **Status**. If no runs match, **Clear filters** returns to all workflows and statuses. **Needs attention** counts unresolved requests in the selected workflow scope. A card can match this filter while another branch progresses. Use **Runs → Needs attention** to find requests across the library and review automation alerts.
+### Board view response
 
-Select a run card to open its inspector. Use the separate review action to open the oldest unresolved request, then **Switch request** to open another request from that run. Read the question and any captured evidence before answering. In the request view, **Open run** selects the exact step. Returning to the board restores its filters and loaded column pages.
+Each lane has an `id`, `name`, `total` and `cards`. A view of a column board returns its columns as lanes.
 
-A response applies to one request. Review the receipt for acceptance and any remaining requests. If another interface answers first, the request keeps the accepted decision visible and preserves your unsent text for copying. If an acceptance hold blocks the answer, select **Release acceptance hold**. Then select **Accept saved answer**. For a library or workflow pause, use **Open run** to inspect and release the applicable pause.
+| Card field | Meaning                                     |
+| ---------- | ------------------------------------------- |
+| `id`       | `task:<system>/<id>` or `run:<root run ID>` |
+| `runId`    | The run that places the card                |
+| `runCount` | The number of runs the card spans           |
 
-## Add Human input to a workflow
+### Built-in board types
 
-Choose **Human input** in the node picker. Enter a question and choose **Text** or **Single choice**. For each choice, enter a label and an output value. Enable **Require comment** on choices that need an explanation.
+The **Coding**, **Design** and **Research** presets are built-in types with the IDs `coding`, `design` and `research`.
 
-Use the node's input bindings to bring data from previous steps into the request. In **Use input data in the request**, set an input path for the question, context, or evidence you want to display. For a plan review, bind the plan text and its revision, then use those paths in the evidence fields. Interlock captures the resolved content once per step visit. For approval of a specific artifact, supply its content or an immutable revision reference.
+- `interlock board types` and `GET /api/board-types` list them with `builtIn: true` and revision 0.
+- Creating a board from one, or saving one with `board save-type` and `expectedRevision: 0`, stores an editable copy under the same ID. Later changes to the preset never move an existing board's cards.
+- A built-in type cannot be deleted. Deleting your saved copy brings the preset back.
 
-A text answer becomes a string output. A choice answer becomes an object with `choice` and an optional `comment`. The `choice` field contains the configured output value. To branch on a decision, connect a Branch node and select the `choice` path.
+### Lane conditions
 
-## Find a run by title
+Within one condition set, every condition present must match, and each list matches any of its values.
 
-Enter a **Run title** when starting a run in the browser, or pass `title` to MCP `start_run`. The CLI accepts `--title TEXT`. Automations can set **Run title** in their settings. Boards and Runs display the explicit title first, then the external task title, then the workflow name.
+| Condition | Values                                                                                       |
+| --------- | -------------------------------------------------------------------------------------------- |
+| `stages`  | Stage names, up to 50                                                                        |
+| `status`  | `held`, `queued`, `running`, `waiting`, `completed`, `failed`, `cancelled`                   |
+| `actor`   | `agent`, `person`, `engine`                                                                  |
+| `waiting` | Waiting kinds, as in the [HTTP API](http-api.md#status-fields) `waiting.kind`                |
+| `tags`    | Run tags that must all match. Available in type JSON (`board save-type`), not in the editor. |
 
-Each board card follows one root run and its continue-as-new chain. Waited children, Batch items, and Parallel branches contribute stage entries and requests. Detached runs get separate cards. A card keeps the last matching column it reached. A queued start appears in **Queued**. An admitted run with no matching entry appears in **Unstaged**. Finished runs keep their last placement and an outcome badge. Boards show up to 20 finished runs without unresolved attention per column for 24 hours. The full retained history is in **Runs**.
+A `held` run is a queued start in the backlog.
+
+### Limits
+
+| Item                           | Limit                                                                                                                                     |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Lanes per board type           | 30, with unique IDs; `unmapped` is reserved                                                                                               |
+| Condition sets per lane        | 10                                                                                                                                        |
+| Card fields per board type     | 12, with unique IDs                                                                                                                       |
+| Typed board scope              | Up to 1,000 workflows and 50 task systems                                                                                                 |
+| Finished runs on a typed board | The 100 most recently finished in the last 24 hours, plus every active run in scope. The board says how many it shows when more finished. |
+| Board view page                | 30 cards per lane by default, at most 100. MCP `view` defaults to 10.                                                                     |
+| MCP board list and column page | 30 by default, at most 100                                                                                                                |
+
+### Card placement on column boards
+
+- Each card follows one root run and its continue-as-new chain.
+- Waited children, Batch items and Parallel branches contribute stage entries and requests. Detached runs get their own cards.
+- A card keeps the last matching column it reached.
+- A queued start appears in **Queued**. An admitted run with no matching entry appears in **Unstaged**.
+- Finished runs keep their last placement and an outcome badge.
+- Each column shows up to 20 finished runs without unresolved attention, for 24 hours. The full retained history is in **Runs**.
+
+### Hold and release from MCP and HTTP
+
+- MCP `start_run` and `POST /api/runs` accept `hold: { "reason": "..." }`.
+- MCP `manage_pause` holds or releases a queued start with the actions `hold_start` and `release_start`.

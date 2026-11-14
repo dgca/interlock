@@ -6,19 +6,22 @@ slug: /
 
 # Interlock docs
 
-Interlock is a local workflow editor and engine for AI agents. Turn a recurring procedure into connected steps, then run it with different inputs. A workflow can combine agent assignments, code, HTTP requests, decisions, and waits.
+Interlock is a local workflow editor and engine for AI agents. You turn a recurring procedure into connected steps, then run it with different inputs. A step can be an agent assignment, a script, an HTTP request, a decision or a wait.
 
-The engine tracks progress and keeps each run's inputs and results for inspection. You can work with an existing agent session or let Interlock launch configured agents automatically.
+The engine tracks each run and keeps its inputs and results for inspection. Agents can work from a session you already have open, or Interlock can launch configured agents for you.
 
-Start with [Installation](installation.md), then read [Workflows and runs](quickstart.md) for the basic model.
+## Start here
 
-## Use Interlock
+1. [Install Interlock](installation.md).
+2. Read [Workflows and runs](quickstart.md) for the basic model.
+3. Import a [starter workflow](starter-workflows.md) to see a complete example.
 
-- [Build workflows](build-workflow.md) and [reuse work](reuse-work.md): combine steps, procedures, instructions, and configuration.
-- [Run agents](agents.md): connect through MCP or configure a harness for automatic execution.
-- [Automate workflows](automation-guide.md): start work on a schedule or an event.
-- [Inspect runs](inspect-runs.md) and [reports](reports.md): follow progress, handle interruptions, and understand results.
-- [Test and improve](testing-workflows.md): check routes and compare workflow versions.
-- [Troubleshoot a run](troubleshooting.md): diagnose startup, waiting assignments, and failures.
+Workflows and run history stay on your machine. Keep the Interlock process running while it executes work.
 
-The [CLI reference](cli.md) covers terminal commands. Workflows and run history live on your machine. Keep the Interlock process running while it executes work.
+## Find your way
+
+- **Agents**: [run agents](agents.md), [connect with MCP](connect-mcp.md), or [connect your harness](harness-setup.md) so Interlock launches agents itself.
+- **Build workflows**: [build workflows](build-workflow.md), [reuse work](reuse-work.md), [parallel steps](parallel.md), [tools for agents](agent-tools.md), [workflow memory](memory.md), [permission policy](permission-policy.md) and [automations](automation-guide.md).
+- **Operate**: [inspect and manage runs](inspect-runs.md), [boards](workflow-boards.md), [run budgets](run-budgets.md), [reports](reports.md) and [OpenTelemetry traces](opentelemetry.md).
+- **Test and improve**: [test and improve](testing-workflows.md) workflows, and review [proposed workflow changes](workflow-proposals.md).
+- **Reference**: the [CLI](cli.md), the [HTTP API](http-api.md), [upgrading](upgrading.md) and [troubleshooting](troubleshooting.md).

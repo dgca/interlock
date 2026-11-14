@@ -1,10 +1,17 @@
+---
+title: Run budgets
+description: Limit how many Agent claims, tokens or how much cost a run can use, and warn before expensive starts.
+---
+
 # Run budgets
 
-An optional run budget gates new Agent claims and [stops managed sessions at the limit](#stop-managed-sessions-at-the-limit). It preserves completed results. A claim-count limit is deterministic. Token and cost limits can overshoot by up to one model turn for managed executors, and further for connected workers that report late or continue work already in flight. They are not provider billing caps.
+A run budget limits how much Agent work a run can use: claims, tokens or reported cost. When a limit is reached, new Agent claims wait and managed sessions stop. Completed results are kept.
 
-## Configure a budget
+Use a budget to bound an agent loop or an experiment. It is a local dispatch limit, not a provider billing cap.
 
-Pass `budget` to `runs.start`, `runs.startSummary`, or MCP `start_run` to configure the gate atomically with startup. For an existing run, use `runs.setBudget` or MCP `set_run_budget`. Workflow definitions and published versions are unchanged.
+## Set a budget when you start a run
+
+Save the policy in `budget.json`:
 
 ```json
 {
@@ -22,65 +29,52 @@ Pass `budget` to `runs.start`, `runs.startSummary`, or MCP `start_run` to config
 }
 ```
 
-Choose at least one limit. Each maximum and warning threshold is a nonnegative safe integer. A warning threshold cannot exceed its maximum. Reaching a maximum blocks the next claim; zero blocks before the first claim. Warnings are advisory and appear in budget inspection. Cost values are millionths of the stated three-letter uppercase currency, so the example cost maximum is USD 5. A reported cost counts as reported. Tokens reported without a cost count at the price [derived from the run's captured price table](usage-reporting.md#derived-cost). A model with no price contributes nothing: the cost check then has `partial` coverage and its `pricing` field names the unpriced models. Budgets never guess a price and never convert currencies.
+Then start the run with it:
 
-`scope` is required:
+```sh
+interlock start WORKFLOW_ID '{}' --budget @budget.json --summary
+```
 
-| Scope       | Assignments counted and gated                                                                                       |
-| ----------- | ------------------------------------------------------------------------------------------------------------------- |
-| `run`       | This run and its continue-as-new chain members                                                                      |
-| `lifecycle` | Chain members and ordinary descendants, including Batch items and Parallel branches; stop at detached relationships |
-| `tree`      | Chain members and all descendants, including detached runs and their descendants                                    |
+This run may make 20 Agent claims, use 500,000 input and 100,000 output tokens, and spend USD 5. Cost values are millionths of the currency, so `5000000` is USD 5. Warnings appear in budget inspection at the `warnAt` values.
 
-For [continue-as-new chains](continue-as-new.md), every scope includes the complete chain containing its anchor run. Policies installed on later members count earlier retained claims too. Successors never receive a fresh allowance.
+MCP `start_run` accepts the same `budget` and installs it together with the start. Workflow definitions and published versions do not change. The HTTP API does not accept budgets.
 
-Every applicable ancestor, chain-member and local budget must permit a claim. Disabling a child budget cannot bypass an ancestor's gate. A tree budget continues to govern detached work after the parent ends. Scope does not change cancellation: cancelling a parent still preserves detached runs. Cancel an independent run explicitly when needed.
+## Choose a scope
 
-All successful claims count, including failed work, lease expiries, claims released by external holds, and explicit retries. Counters include retained history from before the policy was installed. Changing limits or scope re-evaluates that history; it never starts a fresh allowance. Failed claim requests consume nothing.
+`scope` is required and decides which runs share the allowance:
 
-## Stop managed sessions at the limit
+| Scope       | Assignments counted and gated                                                                                |
+| ----------- | ------------------------------------------------------------------------------------------------------------ |
+| `run`       | This run and its continue-as-new chain members                                                               |
+| `lifecycle` | Chain members and ordinary descendants, including Batch items and Parallel branches. Stops at detached runs. |
+| `tree`      | Chain members and all descendants, including detached runs and their descendants                             |
 
-[Managed executors](managed-executors.md) stream usage while an attempt runs. When those figures, with the rest of the budget scope, reach a token or cost maximum, Interlock stops the session and releases the claim:
+Every scope includes the complete [continue-as-new chain](https://github.com/dgca/interlock/blob/main/docs/continue-as-new.md) of its run. A budget installed on a later chain member counts earlier retained claims too, so a successor never gets a fresh allowance.
 
-- The attempt keeps the usage streamed so far. It ends as `held` (the executor inspect view shows **Stopped at budget**), does not spend the Agent's failure allowance, and appears in the assignment's hold history with actor `managed-budget`.
-- The run waits with `waiting.kind:"budget"`, and its message states which limit was reached and the run that holds the budget, with its title when it has one. Costs show up to four decimal places. The assignment stays budget-blocked until every governing budget permits a claim.
-- Raising the limit, or disabling the budget, makes the assignment available again. The managed executor claims it and resumes the stopped native session, so completed steps and the session's work are kept.
-- If the harness returns its result before it stops, the result is kept and the run continues. The next Agent claim is then blocked by the budget.
+Every applicable ancestor, chain-member and local budget must permit a claim. Disabling a child's budget cannot bypass an ancestor's.
 
-Every budget-blocked assignment, whether stopped mid-attempt or refused at its claim, appears in **Runs → Needs attention** and in `workflow_requests` as **Run budget reached** (or **Run budget needs final usage** when only incomplete usage blocks it). The request names the governing run. It clears when the budget allows the claim or the run is cancelled.
+A `tree` budget keeps governing detached work after the parent ends. Scope does not change cancellation: cancelling a parent still leaves detached runs running. Cancel an independent run explicitly when needed.
 
-A budget stop releases only managed attempts whose own run is in the budget scope. Claim-count limits never stop running work. Other in-flight attempts in the scope stop at their next usage update.
+## What happens at the limit
 
-| Harness                                  | When it stops                                                                                             |
-| ---------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| Claude Code                              | Mid-turn, after the model response that crossed the limit. Its process is stopped.                        |
-| Codex                                    | Mid-turn, after the token usage update that crossed the limit. The turn is interrupted.                   |
-| Pi                                       | Mid-turn, after the assistant message that crossed the limit. Its process is stopped.                     |
-| Custom command profiles                  | At the end of the attempt. They report usage only with their result, so the budget blocks the next claim. |
-| Connected executors and custom launchers | At the next claim. Interlock does not own their sessions; usage they report counts immediately.           |
+- **Before a claim**: the next Agent claim waits. A maximum of zero blocks before the first claim.
+- **During a managed session**: Interlock stops the session when its streamed usage, with the rest of the scope, reaches a token or cost maximum. See [Stop managed sessions at the limit](#stop-managed-sessions-at-the-limit).
+- **Claim-count limits** never stop running work. They block the next claim only.
 
-While an attempt runs, its streamed figures count in budget checks but are not stored. The final result's usage replaces them. If an attempt ends without final usage while a budget governs its run, the streamed figures are stored as its non-final report. Streamed Claude Code figures are attributed to the `anthropic` provider until that final report. A stopped attempt's usage stays non-final, because the interrupted model call is never reported. With `unknownUsage:"block"`, the budget therefore also reports `usage_incomplete`, and raising the limit alone does not resume the assignment. The waiting reason says so: report final figures for the stopped attempt as an observer, or set `unknownUsage` to `allow`. The resumed attempt's own final report is differenced against the stopped attempt's streamed figures, so it is stored as final and nothing is counted twice. Claude Code streams no cost, so that report's cost is derived from the price table rather than taken from Claude Code's session total.
+A blocked assignment appears in **Runs → Needs attention** and in MCP `workflow_requests` as **Run budget reached**, or **Run budget needs final usage** when only incomplete usage blocks it. The request names the run that holds the budget. It clears when the budget allows the claim or the run is cancelled.
 
-## Handle incomplete reports
+The run's status does not change: a waiting run stays waiting, with `waiting.kind: "budget"`. Scripts, Fetch requests, waits and child runs continue normally. Budgets gate only Agent claims and managed Agent sessions.
 
-`unknownUsage` is optional and defaults to `allow`:
+## Inspect and raise a budget
 
-- `allow` admits claims below the reported thresholds and exposes incomplete telemetry as a warning. A claim-count limit can bound reservations when telemetry is unavailable.
-- `block` stops further claims while any scoped attempt or run-level observer stream lacks final figures for a configured reported metric. A final report with an omitted metric still leaves that metric unknown. A scope with no attempts or run streams has zero consumption, so its first claim can proceed if its maxima permit it. To leave a `usage_incomplete` block, report final figures for the incomplete attempt (as an observer once it has ended), or change the budget to `unknownUsage:"allow"`.
+```sh
+interlock budget RUN_ID
+interlock set-budget @adjustment.json
+```
 
-Partial sums reaching a maximum block under either policy. Aggregate overflow blocks instead of rounding down. Cost in a different currency remains unavailable for the configured currency. Within one source, a final cumulative report can clear an incomplete-usage block automatically, but cannot lower consumption below a reached maximum. Executors or observers must report actual measurements using [usage reporting](usage-reporting.md).
+MCP has the same pair: `get_run_budget` and `set_run_budget`. Reads and adjustments never call model providers.
 
-Totals and budget checks select the observer snapshot when present, otherwise the executor snapshot, once per attempt. In addition, run-level observer streams outside claim attempts (such as session overhead) are included in scoped token and cost consumption under the same rules. Source snapshots are never added or merged per attempt, but run-level streams add their measured out-of-attempt overhead to scoped totals. An observer can report an attempt only after it ends, or report against a run while active and within a 1-hour grace window after ending; late reports can raise or lower selected consumption and change admission. See [source selection and run-level reporting](usage-reporting.md).
-
-A strict reported-usage policy can serialize claims until each worker supplies final usage. If an interrupted worker cannot report, inspect the remaining uncertainty and explicitly adjust the policy within the user's authorized budget.
-
-## Inspect, adjust, and resume
-
-Use `runs.budget`, MCP `get_run_budget`, or `interlock budget RUN_ID`. The response contains the local `revision` and `budget`, plus `governing` policies with scope counts, attempt/in-flight counts, and checks. Each check includes its metric, maximum, optional warning threshold, reported value, coverage, overflow, blocking `reasons`, and `warnings`. State is `ready`, `warning`, or `blocked`. Reasons are `limit_reached` or `usage_incomplete`; warnings are `warning_threshold` or `usage_incomplete`.
-
-Inspection includes only this run's policy and applicable ancestors, not every policy in its descendants. Run briefings identify blocked descendant assignments and their governing budget run IDs. Budget inspection returns no prompts, results, or claim credentials. Its record count is bounded by the engine's ancestry depth; aggregation still scans scoped history.
-
-To adjust, supply the current local revision, initially zero, and a complete replacement policy:
+To change a budget, send the current local revision (initially 0) and a complete replacement policy:
 
 ```json
 {
@@ -94,36 +88,61 @@ To adjust, supply the current local revision, initially zero, and a complete rep
 }
 ```
 
-A stale revision fails without changing the policy. Every accepted update advances the revision. To disable the local policy, supply `budget:null` with the current revision. Retained consumption and the revision remain intact. Raising a limit, changing the unknown-usage policy, or disabling a policy resumes claims only when every governing budget permits them. Do not raise or disable a budget merely to keep an agent running; follow the user's spending and execution constraints.
+- A stale revision fails and changes nothing. Every accepted update advances the revision.
+- `"budget": null` disables the local policy. Retained consumption and the revision stay.
+- Raising a limit, changing `unknownUsage`, or disabling the policy resumes claims only when every governing budget permits them.
+- Changing limits or scope re-evaluates retained history. It never starts a fresh allowance.
 
-Budget blocking is separate from run status. A waiting run remains waiting. Discovery and continuation next-work lists omit blocked assignments. Briefings expose `budgetBlocked` and `budget_blocked` blockers; mutation summaries include bounded `budgetBlocked` references when needed and use `next:adjust_budget`. MCP suggests a read-only briefing for that next action. Full inspection retains the assignment with its `budgetBlocked` marker. The manual-completion panel explains the block and hides its claim button.
+Do not raise or disable a budget just to keep an agent running. Follow the user's spending and execution limits.
 
-Unclaimed Agent timeouts pause while budget-blocked, preserving their remaining duration across restart. They resume when all gates clear. Claimed leases of connected workers keep running. Scripts, Fetch requests, waits, and child creation continue normally; budgets gate Agent reservations and managed Agent sessions only. Existing `cancel_run` and `interlock cancel` retain their normal behavior.
+## Stop managed sessions at the limit
 
-## CLI
+[Managed executors](https://github.com/dgca/interlock/blob/main/docs/managed-executors.md) stream usage while an attempt runs. When that usage crosses a token or cost maximum, Interlock stops the session and releases the claim.
 
-Save the policy in `budget.json` and an adjustment payload in `adjustment.json`:
+| Harness                                  | When it stops                                                                                             |
+| ---------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| Claude Code                              | Mid-turn, after the model response that crossed the limit. Its process is stopped.                        |
+| Codex                                    | Mid-turn, after the token usage update that crossed the limit. The turn is interrupted.                   |
+| Pi                                       | Mid-turn, after the assistant message that crossed the limit. Its process is stopped.                     |
+| Custom command profiles                  | At the end of the attempt. They report usage only with their result, so the budget blocks the next claim. |
+| Connected executors and custom launchers | At the next claim. Interlock does not own their sessions; usage they report counts immediately.           |
 
-```sh
-interlock start WORKFLOW_ID '{}' --budget @budget.json --summary
-interlock budget RUN_ID
-interlock set-budget @adjustment.json
-interlock cancel RUN_ID
-```
+After a stop:
 
-`--budget` accepts JSON or `@file`; omitting it keeps existing startup behavior. `set-budget` accepts the same payload as MCP. Budget reads and adjustments do not call model providers.
+1. The attempt keeps the usage streamed so far and ends as `held`. The executor view shows **Stopped at budget**.
+2. The stop does not use up the Agent's failure allowance. It appears in the assignment's hold history with actor `managed-budget`.
+3. The run waits. Its message names the limit reached and the run that holds the budget, with its title if it has one. Costs show up to four decimal places.
+4. When you raise the limit or disable the budget, the managed executor claims the assignment again and resumes the stopped native session. Completed steps and the session's work are kept.
 
-## Storage and compatibility
+If the harness returns its result before it stops, the result is kept and the run continues. The next Agent claim is then blocked.
 
-Policies use the additive `runBudgets` document collection; blocked assignments use an optional `budgetBlocked` field. A run records its local `budgetRevision` so policy changes advance continuation cursors. No database schema migration is needed. Old runs without policies retain their behavior. Legacy attempts count toward claim limits, while unavailable historical usage stays unknown. Policies and consumption survive restart and retry; deleting their run history removes the policies too. Portable workflow bundles exclude run budgets.
+A budget stop releases only managed attempts whose own run is in the budget's scope. Other in-flight attempts in the scope stop at their next usage update.
 
-Reported usage that changes admission updates assignment markers and continuation cursors. Usage-only updates without an admission change retain the existing cursor behavior. Budget adjustments also wake continuation readers. Budget records describe local dispatch policy, not an authorization boundary or account balance.
+## Handle incomplete usage
 
-[External holds](work-holds.md) are separate from budget gates. Resume never resets usage or changes a governing policy. Held attempts may still report usage with their retained attempt token, without restoring claim authority.
+`unknownUsage` decides what happens when usage reports are missing. It is optional and defaults to `allow`.
+
+| Value   | Behavior                                                                                                                                      |
+| ------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `allow` | Claims proceed while reported totals are below the maximums. Incomplete telemetry shows as a warning. A claim limit can still bound the work. |
+| `block` | Claims stop while any attempt or run-level observer stream in scope lacks final figures for a limited metric.                                 |
+
+With `block`, a final report that omits a metric still leaves that metric unknown. A scope with no attempts or run streams has zero consumption, so its first claim can proceed.
+
+To clear a `usage_incomplete` block, either:
+
+- report final figures for the incomplete attempt, as an observer once it has ended; or
+- change the budget to `"unknownUsage": "allow"`.
+
+A strict policy can serialize claims until each worker supplies final usage. If an interrupted worker cannot report, inspect the remaining uncertainty and adjust the policy within the user's authorized budget.
+
+### Usage after a managed stop
+
+A stopped attempt's usage stays non-final, because the interrupted model call is never reported. With `unknownUsage: "block"`, the budget therefore also reports `usage_incomplete`, and raising the limit alone does not resume the assignment. The waiting reason says so: report final figures for the stopped attempt as an observer, or set `unknownUsage` to `allow`.
 
 ## Warn before large runs
 
-Set a library threshold to be warned before starting a workflow whose recent runs were expensive:
+A start warning asks before starting a workflow whose recent runs were expensive. Set a library threshold, here USD 2:
 
 ```sh
 interlock prices start-warning '{"threshold":{"currency":"USD","amountMicros":2000000}}'
@@ -131,18 +150,108 @@ interlock prices start-warning
 interlock prices start-warning '{"threshold":null}'
 ```
 
-The shared API operations are `prices.startWarning`, `prices.setStartWarning` and `prices.startCost`. Without a threshold nothing is computed and no caller sees a prompt or a new field.
+The second command reads the setting; the third turns it off. Without a threshold nothing is computed, and no caller sees a prompt or a new field.
 
-The projection is the median cost of the workflow's 20 most recent completed top-level runs, each with its ordinary descendants (the `lifecycle` scope), in the threshold's currency. Costs include [derived costs](usage-reporting.md#derived-cost). A run counts only when its cost is completely known: runs with unreported or unpriced usage are left out rather than counted as zero. With fewer than three such runs there is no projection. `sampleSize` states how many runs the median uses.
+| Caller                                    | Behavior                                                                                                                                        |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| UI **Start run**                          | When the median is above the threshold, the dialog states the median, the sample size and the threshold, and the button reads **Start anyway**. |
+| CLI `start`, MCP `start_run`, HTTP `/api` | The start response includes `costProjection`. The start is never refused.                                                                       |
+| Schedules and event triggers              | They start without asking. Above the threshold, the run records a `run.cost_warning` event saying it started without confirmation.              |
 
-| Caller                                    | Behavior                                                                                                                                              |
-| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| UI **Start run**                          | When the median exceeds the threshold, the dialog states the median, the sample size and the threshold, and the button reads **Start anyway**.        |
-| CLI `start`, MCP `start_run`, HTTP `/api` | The start response includes `costProjection` with `medianMicros`, `sampleSize`, `thresholdMicros` and `exceedsThreshold`. The start is never refused. |
-| Schedules and event triggers              | They start without asking. When the median exceeds the threshold, the run records a `run.cost_warning` event saying it started without confirmation.  |
-
-The warning is advisory. To limit spending, set a [run budget](#configure-a-budget).
+The warning is advisory. To limit spending, set a [run budget](#set-a-budget-when-you-start-a-run).
 
 ## Budget comparison work separately
 
-Comparison roots are independent runs, so they do not inherit the workflow budget of an agent that starts the comparison. Optional comparison `sampleBudget` installs a tree policy on every root before its work becomes eligible. Each root has its own allowance, shared with all descendants. Multiply it by the maximum root count when allocating an experiment budget, and account for proposal, coordination and grading separately. See [comparison budgets](workflow-testbench.md#budget-independent-samples) and the [bounded improvement starter](workflow-improvement.md).
+Comparison roots are independent runs, so they do not inherit the budget of an agent that starts the comparison. Use the comparison's `sampleBudget` instead: it installs a `tree` budget on every root before its work becomes eligible.
+
+Each root has its own allowance, shared with its descendants. Multiply it by the maximum root count when planning an experiment, and budget proposal, coordination and grading separately. See [comparison budgets](https://github.com/dgca/interlock/blob/main/docs/workflow-testbench.md#budget-independent-samples) and the [bounded improvement starter](https://github.com/dgca/interlock/blob/main/docs/workflow-improvement.md).
+
+## Reference
+
+### Limits and values
+
+- Choose at least one limit: `claims`, `inputTokens`, `outputTokens` or `cost`.
+- Each maximum and warning threshold is a nonnegative safe integer. A warning threshold cannot exceed its maximum.
+- Reaching a maximum blocks the next claim. Warnings are advisory.
+- `cost.currency` is a three-letter uppercase code. Budgets never convert currencies; cost in another currency stays unavailable for the configured one.
+- Token and cost limits can overshoot by up to one model turn for managed executors, and further for connected workers that report late or continue work already in flight. Claim-count limits are exact.
+
+### What counts
+
+- Every successful claim counts: failed work, lease expiries, claims released by external holds, and explicit retries. Failed claim requests consume nothing.
+- Counters include retained history from before the policy was installed.
+- A reported cost counts as reported. Tokens reported without a cost count at the price [derived from the run's captured price table](https://github.com/dgca/interlock/blob/main/docs/usage-reporting.md#derived-cost).
+- A model with no price contributes nothing. The cost check then has `partial` coverage, and its `pricing` field names the unpriced models. Budgets never guess a price.
+- Partial sums that reach a maximum block under either `unknownUsage` policy. A total that overflows blocks instead of rounding down.
+- Within one source, a final cumulative report can clear an incomplete-usage block automatically. It cannot lower consumption below a reached maximum.
+- Executors and observers must report actual measurements with [usage reporting](https://github.com/dgca/interlock/blob/main/docs/usage-reporting.md).
+
+### Which usage report is used
+
+- Per attempt, totals and budget checks use the observer snapshot when present, otherwise the executor snapshot. Snapshots from the two sources are never added or merged.
+- Run-level observer streams outside claim attempts, such as session overhead, add to scoped token and cost totals under the same rules.
+- An observer can report an attempt only after it ends. It can report against a run while the run is active and for 1 hour after it ends. Late reports can raise or lower consumption and change admission.
+- See [source selection and run-level reporting](https://github.com/dgca/interlock/blob/main/docs/usage-reporting.md).
+
+### Streamed usage from managed sessions
+
+- While an attempt runs, its streamed figures count in budget checks but are not stored. The final result's usage replaces them.
+- If an attempt ends without final usage while a budget governs its run, the streamed figures are stored as its non-final report.
+- Streamed Claude Code figures are attributed to the `anthropic` provider until the final report.
+- A resumed attempt's final report is differenced against the stopped attempt's streamed figures, so it is stored as final and nothing is counted twice.
+- Claude Code streams no cost, so that report's cost is derived from the price table, not taken from Claude Code's session total.
+
+### Budget inspection
+
+The response of `interlock budget` and `get_run_budget` contains:
+
+- the local `revision` and `budget`;
+- `governing` policies, with scope counts, attempt and in-flight counts, and checks.
+
+Each check has its metric, maximum, optional warning threshold, reported value, coverage, overflow, blocking `reasons` and `warnings`.
+
+| Field      | Values                                  |
+| ---------- | --------------------------------------- |
+| State      | `ready`, `warning`, `blocked`           |
+| `reasons`  | `limit_reached`, `usage_incomplete`     |
+| `warnings` | `warning_threshold`, `usage_incomplete` |
+
+Inspection covers only this run's policy and its applicable ancestors, not policies on its descendants. Run briefings identify blocked descendant assignments and the runs that hold their budgets. Inspection returns no prompts, results or claim credentials. Its record count is bounded by the engine's ancestry depth, but aggregation still scans scoped history.
+
+### How blocked work appears to callers
+
+- Discovery and continuation next-work lists leave out blocked assignments. Full inspection keeps the assignment with a `budgetBlocked` marker.
+- Briefings expose `budgetBlocked` and `budget_blocked` blockers. Mutation summaries include bounded `budgetBlocked` references when needed and use `next: adjust_budget`. MCP suggests a read-only briefing for that next action.
+- The manual-completion panel explains the block and hides its claim button.
+- Unclaimed Agent timeouts pause while budget-blocked, keeping their remaining time across restarts, and resume when all gates clear. Claimed leases of connected workers keep running.
+- `cancel_run` and `interlock cancel` behave as usual.
+- Reported usage that changes admission updates assignment markers and continuation cursors. Usage-only updates without an admission change keep the existing cursor behavior. Budget adjustments also wake continuation readers.
+
+### Start warning projection
+
+- The projection is the median cost of the workflow's 20 most recent completed top-level runs, each with its ordinary descendants (the `lifecycle` scope), in the threshold's currency.
+- Costs include [derived costs](https://github.com/dgca/interlock/blob/main/docs/usage-reporting.md#derived-cost).
+- A run with no Agent attempts or usage reports counts as zero. A run with some usage whose cost is not completely known, because usage was unreported or unpriced, is left out.
+- With fewer than three usable runs there is no projection.
+- `costProjection` has `currency`, `medianMicros`, `sampleSize` (how many runs the median uses), `thresholdMicros` and `exceedsThreshold`.
+
+### Interfaces
+
+| Task                | CLI                              | MCP                  | Shared API                                                          |
+| ------------------- | -------------------------------- | -------------------- | ------------------------------------------------------------------- |
+| Start with a budget | `interlock start ... --budget`   | `start_run` `budget` | `runs.start`, `runs.startSummary`                                   |
+| Inspect             | `interlock budget RUN_ID`        | `get_run_budget`     | `runs.budget`                                                       |
+| Adjust or disable   | `interlock set-budget`           | `set_run_budget`     | `runs.setBudget`                                                    |
+| Start warning       | `interlock prices start-warning` |                      | `prices.startWarning`, `prices.setStartWarning`, `prices.startCost` |
+
+`--budget` accepts JSON or `@file`; omitting it keeps the usual start behavior. `set-budget` accepts the same payload as MCP.
+
+### Storage and compatibility
+
+- Budgets need no database migration. Old runs without a policy behave as before.
+- Legacy attempts count toward claim limits; unavailable historical usage stays unknown.
+- Policies and consumption survive restart and retry. Deleting a run's history removes its policies too.
+- Portable workflow bundles do not include run budgets.
+- A run records its local budget revision, so policy changes advance continuation cursors.
+- Budgets describe local dispatch policy, not an authorization boundary or an account balance.
+- [External holds](https://github.com/dgca/interlock/blob/main/docs/work-holds.md) are separate from budget gates. Resuming never resets usage or changes a governing policy. Held attempts can still report usage with their retained attempt token, without regaining claim authority.
