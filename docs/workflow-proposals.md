@@ -76,7 +76,7 @@ Interlock never applies a proposal against a different draft without that explic
 
 ## Simulation result
 
-When the workflow has a saved [test suite](workflow-simulation.md), Interlock runs each saved case as a fixture simulation against the current draft and against the draft with the proposal applied, when the proposal is created or re-applied, or first opened if that did not finish. Simulations run in memory: no model calls, no network effects, nothing stored except the summary on the proposal. The summary lists pass or fail per case for both drafts and the number of routes the cases cover before and after. At most 20 cases run.
+When the workflow has a saved [test suite](testing-workflows.md), Interlock runs each saved case as a fixture simulation against the current draft and against the draft with the proposal applied, when the proposal is created or re-applied, or first opened if that did not finish. Simulations run in memory: no model calls, no network effects, nothing stored except the summary on the proposal. The summary lists pass or fail per case for both drafts and the number of routes the cases cover before and after. At most 20 cases run.
 
 Without a suite, or when the cases cannot be simulated, the result says so. A missing or failing simulation never blocks a proposal.
 
