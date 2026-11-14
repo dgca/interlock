@@ -80,6 +80,8 @@ import {
   hasTimeoutRoute,
   hasFailureRoute,
   parallelBranchPort,
+  decideJoin,
+  type JoinCancel as Why,
   type FailureCategory,
   blankDefinition,
   InterlockError,
@@ -143,6 +145,7 @@ import { ContextContinuityGroups } from './contextContinuity.js';
 import { claimTokenHash, leaseCounts, expiredClaimMessage } from './leases.js';
 
 class ExpiredClaimError extends InterlockError {}
+type Cb = (() => void)[];
 const now = () => new Date().toISOString();
 const terminal = (s: string) =>
   ['completed', 'failed', 'cancelled'].includes(s);
@@ -2097,15 +2100,21 @@ export class Engine {
     starting: boolean,
   ) {
     const children = execution.childRunIds.map((id) => this.run(id));
-    const failed = children.find(
-      (child) =>
-        (child.status === 'failed' || child.status === 'cancelled') &&
-        !execution.retryChildRunIds?.includes(child.id),
-    );
-    if (failed)
-      throw new InterlockError(
-        `Parallel branch "${failed.parallelBranch?.key}" ${failed.status}: ${failed.error ?? failed.id}`,
-      ); // The ordinary failure path cancels unfinished waited descendants.
+    const join = decideJoin(node, children, execution.retryChildRunIds);
+    // The ordinary failure path cancels unfinished waited descendants.
+    if (join.kind === 'fail') throw new InterlockError(join.error);
+    if (join.kind === 'complete') {
+      try {
+        this.finish(run, execution, node, join.output, 'complete');
+      } catch (error) {
+        join.cancel = { reason: `${node.label} failed: ${message(error)}` };
+        throw error;
+      } finally {
+        for (const id of execution.childRunIds)
+          this.cancelTree(id, undefined, join.cancel);
+      }
+      return true;
+    }
     let changed = starting;
     let active = children.filter((child) => !terminal(child.status)).length;
     while (execution.retryChildRunIds?.length && active < node.concurrency) {
@@ -2147,19 +2156,6 @@ export class Engine {
       Object.assign(execution, next);
       active++;
       changed = true;
-    }
-    // Any child resumed or dispatched above needs a chance to advance first.
-    if (
-      active === 0 &&
-      !execution.retryChildRunIds?.length &&
-      children.length === node.branches.length &&
-      children.every((child) => child.status === 'completed')
-    ) {
-      const output: Json = Object.fromEntries(
-        children.map((child) => [child.parallelBranch!.key, child.output!]),
-      );
-      this.finish(run, execution, node, output, 'complete');
-      return true;
     }
     if (changed || execution.status !== 'waiting' || run.status !== 'waiting') {
       execution.status = 'waiting';
@@ -3184,17 +3180,19 @@ export class Engine {
   } {
     return this.scriptControl.manageScript(request);
   }
-  private cancelTree(id: string, afterCommit?: (() => void)[]) {
+  /** Records why on each run and unfinished step; joins cancel in their transaction. */
+  private cancelTree(id: string, afterCommit?: Cb, why?: Why) {
     const run = this.run(id);
     if (terminal(run.status)) return;
     for (const child of this.store.runScopes.attachedChildIds(id))
-      this.cancelTree(child, afterCommit);
-    this.cancelOne(run, afterCommit);
+      this.cancelTree(child, afterCommit, why);
+    this.cancelOne(run, afterCommit, why?.reason, why);
   }
-  private cancelOne(run: Run, afterCommit?: (() => void)[], reason?: string) {
+  private cancelOne(run: Run, afterCommit?: Cb, reason?: string, why?: Why) {
     const id = run.id;
     run.status = 'cancelled';
     if (reason) run.cancellationReason = reason;
+    if (why?.join) run.cancellationKind = 'join';
     const execution = run.executions.at(-1);
     if (execution?.resourceActive)
       this.resources.endExecution(run.id, execution, true);
@@ -3224,8 +3222,10 @@ export class Engine {
     // requesting external stops. A rolled-back start leaves the old job alone.
     if (afterCommit) afterCommit.push(stop);
     else stop();
-    if (execution && !terminal(execution.status))
+    if (execution && !terminal(execution.status)) {
       execution.status = 'cancelled';
+      if (why) execution.error = why.reason;
+    }
     for (const work of this.store
       .work(undefined, id)
       .filter((w) => ['available', 'claimed', 'held'].includes(w.status))) {

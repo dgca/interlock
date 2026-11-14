@@ -4,12 +4,14 @@ import { Store } from '@interlock/storage';
 import { Engine } from '@interlock/runtime';
 import {
   definitionSchema,
+  nodeSchema,
   type Json,
   type SimulationFixture,
 } from '@interlock/core';
 import { importWorkflows } from '../packages/runtime/src/transfer';
 import allNodes from '../workflows/all-nodes.json';
 import evaluate from '../workflows/evaluate.json';
+import { parallelDefinition } from './fixtures/parallel';
 
 // Kept apart from simulation.test.ts, which is at its size ceiling. These
 // simulate bundled workflows that use Batch and Parallel end to end.
@@ -58,7 +60,7 @@ async function simulate(
       id: requestId,
       limit: 100,
     }) as unknown as Report;
-    if (r.state !== 'running') return r;
+    if (r.state !== 'running') return { ...r, requestId };
     await tick();
   }
   throw new Error('Simulation did not settle');
@@ -326,4 +328,41 @@ it('accepts item-by-item and step-by-step fixture order for Batch items', async 
     const r = await simulate(e, id, { items: [1, 2] }, [...fixtures]);
     expect(r.state, r.error ?? r.unsupported.items.join()).toBe('passed');
   }
+});
+
+it('simulates a first 1 of 3 join in branch order with the other branches cancelled', async () => {
+  const e = engine();
+  const d = parallelDefinition({
+    keys: ['spec', 'code', 'lint'],
+    concurrency: 3,
+    join: { joinAfter: 1 },
+  });
+  // A Script branch would finish on its own if it started.
+  d.nodes[d.nodes.findIndex((n) => n.id === 'r1')] = nodeSchema.parse(
+    script('r1', { parallelId: 'parallel', parallelBranchId: 'r1' }),
+  );
+  const w = e.create('First of three', '', d);
+  e.publish(w.id);
+  const report = await simulate(e, w.id, {}, [
+    { nodeId: 'r0', kind: 'agent', output: 'first' },
+  ]);
+  expect(report.state, report.error).toBe('passed');
+  const capture = e.simulations.request({
+    action: 'capture',
+    id: report.requestId,
+  }) as { result?: Json };
+  expect(capture.result).toEqual({
+    results: { spec: 'first' },
+    branches: { spec: 'completed', code: 'cancelled', lint: 'cancelled' },
+  });
+  // Branches run in branch order whatever their kind, so the later two never start.
+  expect(
+    report.executions.items.filter((x) => x.branch).map((x) => x.branch),
+  ).toEqual(['spec']);
+  expect(report.coverage!.untested.map((u) => u.edgeId)).toEqual([
+    'start-r1',
+    'join-r1',
+    'start-r2',
+    'join-r2',
+  ]);
 });
