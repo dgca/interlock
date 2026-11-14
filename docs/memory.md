@@ -93,11 +93,11 @@ A write over a limit fails with a message saying which limit applies. Interlock 
 
 ## CLI and API
 
-| Command                                 | Purpose                                                                                                                                                                |
-| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `interlock memory read <json\|@file>`   | `list` with `workflowId` returns settings and notes; `history` with `noteId`, `offset`, `limit`; `reviews` with optional `workflowId` counts notes waiting for review. |
-| `interlock memory manage <json\|@file>` | `configure`, `add`, `edit`, `approve`, `reject`, `revert`, `delete`. Every action on a note except `add` passes the note's current `revision`.                         |
-| `interlock memory work <json\|@file>`   | The agent `read` and `write` actions during a claim.                                                                                                                   |
+| Command                                 | Purpose                                                                                                                                                                                              |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `interlock memory read <json\|@file>`   | `list` with `workflowId` returns settings and notes; `history` with `noteId`, `offset`, `limit`; `reviews` with optional `workflowId` counts notes waiting for review.                               |
+| `interlock memory manage <json\|@file>` | `configure`, `add`, `edit`, `approve`, `reject`, `revert`, `delete`. Every action on a note except `add` passes `noteId` and the note's current `revision`; a `workflowId` there must be the note's. |
+| `interlock memory work <json\|@file>`   | The agent `read` and `write` actions during a claim.                                                                                                                                                 |
 
 The UI and CLI share the server API operations `memory.read`, `memory.manage` and `memory.work`.
 

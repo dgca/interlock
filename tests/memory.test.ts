@@ -134,12 +134,17 @@ it('keeps agent notes out of prompts until approved and pins each run to its sta
     author: 'agent',
     source: { runId: first.id, executionId: claim.executionId },
   });
-  engine.memory.manage({
-    action: 'approve',
-    noteId: note.id,
-    revision: note.revision,
-    content: 'Run `pnpm test --changed`; the full suite times out.',
-  });
+  const approve = (workflow: string) =>
+    engine.memory.manage({
+      action: 'approve',
+      noteId: note.id,
+      revision: note.revision,
+      workflowId: workflow,
+      content: 'Run `pnpm test --changed`; the full suite times out.',
+    });
+  // A workflowId copied from configure is accepted only when it is the note's.
+  expect(() => approve('other')).toThrow('another workflow');
+  approve(workflowId);
   // The first run started before approval: its next step keeps that capture.
   engine.submit(claim.id, claim.token, null);
   expect(claimNext(engine, first.id).prompt).not.toContain('--changed');

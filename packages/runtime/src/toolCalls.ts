@@ -69,10 +69,11 @@ export interface ToolCallResult {
   outputBytes?: number;
   error?: string;
   blockedBy?: 'pause' | 'resource' | 'approval';
+  /** Calls made so far in this claim attempt and this execution, with their limits. */
   calls: {
-    attempt: number;
+    inAttempt: number;
     maxPerAttempt: number;
-    execution: number;
+    inExecution: number;
     maxPerExecution: number;
   };
 }
@@ -271,10 +272,10 @@ export class ToolCalls {
       executionId: step?.id ?? null,
       status: run.status,
       calls: {
-        attempt: calls.filter((r) => r.toolCall!.attempt === work.attempt)
+        inAttempt: calls.filter((r) => r.toolCall!.attempt === work.attempt)
           .length,
         maxPerAttempt: tool.maxCallsPerAttempt,
-        execution: calls.length,
+        inExecution: calls.length,
         maxPerExecution: tool.maxCallsPerExecution,
       },
     };

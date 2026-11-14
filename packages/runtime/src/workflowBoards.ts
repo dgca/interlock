@@ -12,7 +12,7 @@ import {
 import type { Store } from '@interlock/storage';
 import type { Requests } from './requests.js';
 import { boardCollection as collection } from './boardImport.js';
-import { BoardTypes, boardTypeCollection } from './boardTypes.js';
+import { BoardTypes } from './boardTypes.js';
 import { RunAdmission } from './runAdmission.js';
 import { BoardViews, type BoardEngine } from './boardView.js';
 
@@ -194,8 +194,7 @@ export class WorkflowBoards {
   }
 
   private saveTyped(input: SaveBoard, current?: WorkflowBoard) {
-    if (!this.store.get(boardTypeCollection, input.typeId!))
-      throw new InterlockError('Board type not found');
+    this.types.use(input.typeId!);
     const workflows = new Set(this.store.workflows().map(({ id }) => id));
     if (input.scope?.workflowIds?.some((id) => !workflows.has(id)))
       throw new InterlockError('A selected workflow no longer exists');

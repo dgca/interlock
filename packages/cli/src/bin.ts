@@ -18,6 +18,7 @@ import {
   parseReportArgs,
   formatWorkflowReport,
 } from './commands.js';
+import { commandHelp } from './usage.js';
 
 async function main() {
   const argv = process.argv.slice(2);
@@ -53,12 +54,12 @@ Workflow triggers: triggers (schedules is an alias) <read|manage> <json|@file>
 Kinds: schedule, event. Event triggers match run transitions with optional quiescence.
 Stall monitoring: stalls
 Named pause holds: pause, pause-holds, resume
-Boards: board <view|types|save-type|hold|release>
+Boards: board <view|types|save-type|save|hold|release>
 Workflow change proposals: proposals <list|get|create|approve|reject|reapply|settings>
 Workflow performance and cost report: report [--workflow <id>] [--since <ISO datetime>] [--until <ISO datetime>] [--limit <n>] [--tag KEY=VALUE ...] [--json]
 Report dates must be valid ISO datetimes whose rounded UTC bounds stay within years 0000 through 9999.
 System readiness check: doctor [--live] [--json]
-Run 'interlock commands' for argument syntax.
+Run 'interlock commands' for argument syntax, or 'interlock <command> --help' for one command.
 
 Environment: INTERLOCK_DB, INTERLOCK_WORKDIR, INTERLOCK_URL, INTERLOCK_SECRET_KEY_FILE,
              INTERLOCK_MCP_PROFILE, INTERLOCK_REQUIRE_TOKEN, INTERLOCK_LOG_LEVEL,
@@ -145,6 +146,16 @@ Commands and the mcp bridge read the token from the api-token file beside the ke
     ];
     if (!known.includes(argv[0]))
       throw new Error(`Unknown command: ${argv[0]}. Run interlock --help.`);
+    const options = argv.slice(1);
+    const end = options.indexOf('--');
+    if (
+      (end < 0 ? options : options.slice(0, end)).some(
+        (arg) => arg === '--help' || arg === '-h',
+      )
+    ) {
+      console.log(commandHelp(argv[0]));
+      return;
+    }
     if (argv[0] === 'report') {
       const { filter, json } = parseReportArgs(argv.slice(1));
       const report = await runReportCommand(filter);

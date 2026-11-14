@@ -189,6 +189,28 @@ it('saves incomplete drafts while rejecting branch crossings, cycles, bad keys a
     ],
     [
       (d: typeof valid) => {
+        d.nodes.find((n) => n.kind === 'parallel')!.joinAfter = 1;
+        d.nodes.push(
+          nodeSchema.parse({
+            id: 'after',
+            kind: 'agent',
+            label: 'Summarize',
+            prompt: 'Summarize.',
+            inputBindings: { spec: { source: 'input', path: 'spec' } },
+          }),
+        );
+        d.edges.find((e) => e.id === 'out')!.target = 'after';
+        d.edges.push({
+          id: 'after-exit',
+          source: 'after',
+          port: 'default',
+          target: 'exit',
+        });
+      },
+      /Summarize: binding reads "spec" from .*results\.<branch>/,
+    ],
+    [
+      (d: typeof valid) => {
         d.nodes.find((n) => n.id === 'r0')!.inputBindings = {
           other: { source: 'node', nodeId: 'r1', path: '' },
         };

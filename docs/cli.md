@@ -21,12 +21,13 @@ The defaults are port `4310`, your current directory for script execution, and `
 INTERLOCK_URL=http://127.0.0.1:4400 interlock workflows
 ```
 
-| Command               | Purpose                                |
-| --------------------- | -------------------------------------- |
-| `interlock --help`    | Server options and command groups      |
-| `interlock commands`  | Complete argument syntax               |
-| `interlock --version` | Installed version                      |
-| `interlock mcp`       | Stdio MCP bridge to the running engine |
+| Command                    | Purpose                                |
+| -------------------------- | -------------------------------------- |
+| `interlock --help`         | Server options and command groups      |
+| `interlock commands`       | Complete argument syntax               |
+| `interlock COMMAND --help` | One command's argument syntax          |
+| `interlock --version`      | Installed version                      |
+| `interlock mcp`            | Stdio MCP bridge to the running engine |
 
 ## Workflows
 
@@ -53,7 +54,7 @@ interlock import-starter sdlc --board-setup @setup.json
 
 Review [proposed workflow changes](workflow-proposals.md) with `interlock proposals list --workflow WORKFLOW_ID`, `proposals get`, `proposals approve`, `proposals reject` and `proposals reapply`. `interlock proposals settings WORKFLOW_ID` reads whether agents may propose; pass JSON to change it.
 
-Read a board's lanes and cards with `interlock board view BOARD_ID` or `interlock board view --workflow WORKFLOW_ID`. Add `--lane LANE --offset N --limit N` to page one lane.
+Read a board's lanes and cards with `interlock board view BOARD_ID` or `interlock board view --workflow WORKFLOW_ID`. Add `--lane LANE --offset N --limit N` to page one lane. `interlock board types` lists the built-in `coding`, `design` and `research` types and your own; `interlock board save '{"name":"Delivery","typeId":"coding"}'` creates a board from one.
 
 Keep the setup's `requestId` and arguments when retrying. For starter imports, the CLI uses that key if you omit `--request-id`. Use `--copy` to apply board setup when the starter already has a local copy. See [board setup choices](reuse-work.md#set-up-a-board-during-import).
 
@@ -77,7 +78,7 @@ When a start warning threshold is set with `interlock prices start-warning`, the
 | `interlock work RUN_ID --summary`                  | Inspect available Agent assignments   |
 | `interlock usage RUN_ID`                           | Inspect reported token usage and cost |
 
-Above 64 KiB, `interlock run` omits fields over 1 KiB and lists their sizes; add `--full` for the complete response. Agents read one step with MCP `get_run_result`.
+Above 64 KiB, `interlock run` omits fields over 1 KiB and lists their sizes; add `--full` for the complete response. The limit applies to the compact JSON, so the indented output the command prints can be larger than 64 KiB. Agents read one step with MCP `get_run_result`.
 
 Use IDs returned by commands. Starting a connected-agent run makes assignments available without launching an agent. See [Run agents](agents.md).
 

@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import {
   InterlockError,
   boardTypeContentSchema,
+  boardTypePresets,
   type BoardType,
   type SaveBoardType,
   type WorkflowBoard,
@@ -9,8 +10,20 @@ import {
 import type { Store } from '@interlock/storage';
 import { boardCollection } from './boardImport.js';
 
-export const boardTypeCollection = 'boardTypes';
+const boardTypeCollection = 'boardTypes';
 const boardTypeRevisionConflict = 'Board type changed. Refresh and try again.';
+/**
+ * The presets under their IDs (`coding`, `design`, `research`), at revision 0
+ * until a board uses one or someone saves it, which stores an editable copy.
+ */
+const builtIn = (id: string): BoardType | undefined =>
+  Object.hasOwn(boardTypePresets, id)
+    ? {
+        ...boardTypePresets[id as keyof typeof boardTypePresets],
+        id,
+        revision: 0,
+      }
+    : undefined;
 
 /** Reusable board templates. Boards reference a type by ID and read its current revision. */
 export class BoardTypes {
@@ -19,20 +32,39 @@ export class BoardTypes {
     private changed: () => void,
   ) {}
 
-  list() {
+  /** Saved types; with `builtIn`, also the presets not saved yet, marked `builtIn: true`. */
+  list(options: { builtIn?: boolean } = {}) {
     const used = new Map<string, number>();
     for (const board of this.store.list<WorkflowBoard>(boardCollection))
       if (board.typeId)
         used.set(board.typeId, (used.get(board.typeId) ?? 0) + 1);
-    return this.store
-      .list<BoardType>(boardTypeCollection)
-      .map((type) => ({ ...type, boardCount: used.get(type.id) ?? 0 }));
+    const saved = this.store.list<BoardType>(boardTypeCollection);
+    const ids = new Set(saved.map((type) => type.id));
+    const presets = options.builtIn
+      ? Object.keys(boardTypePresets)
+          .filter((id) => !ids.has(id))
+          .map((id) => ({ ...builtIn(id)!, builtIn: true as const }))
+      : [];
+    return [...presets, ...saved].map((type) => ({
+      ...type,
+      boardCount: used.get(type.id) ?? 0,
+    }));
   }
 
   get(id: string) {
-    const type = this.store.get<BoardType>(boardTypeCollection, id);
+    const type =
+      this.store.get<BoardType>(boardTypeCollection, id) ?? builtIn(id);
     if (!type) throw new InterlockError('Board type not found');
     return type;
+  }
+
+  /** The saved type, storing a copy of a preset the first time a board uses it. Call inside a transaction. */
+  use(id: string) {
+    const type = this.get(id);
+    if (type.revision) return type;
+    const copy = { ...type, revision: 1 };
+    this.store.put(boardTypeCollection, copy);
+    return copy;
   }
 
   save(input: SaveBoardType) {
@@ -57,7 +89,8 @@ export class BoardTypes {
 
   delete(id: string) {
     this.store.transaction(() => {
-      this.get(id);
+      if (!this.get(id).revision)
+        throw new InterlockError('Built-in board types cannot be deleted');
       if (
         this.store
           .list<WorkflowBoard>(boardCollection)

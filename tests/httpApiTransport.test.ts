@@ -127,3 +127,58 @@ it('starts, polls, reads, retries and cancels runs over the plain HTTP API', asy
     store.close();
   }
 });
+
+it('lists the built-in board types and creates a board from one by ID over HTTP', async () => {
+  const store = new Store(':memory:');
+  const engine = new Engine(store, process.cwd());
+  const app = createApp(engine);
+  const call = async (method: string, path: string, body?: unknown) => {
+    const response = await app.request(`http://127.0.0.1:4310/api${path}`, {
+      method,
+      headers: { 'content-type': 'application/json' },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    });
+    return {
+      status: response.status,
+      body: (await response.json()) as {
+        id: string;
+        items: { id: string; revision: number; builtIn?: true }[];
+        lanes: { id: string }[];
+      },
+    };
+  };
+  try {
+    const types = async () =>
+      (await call('GET', '/board-types')).body.items.map((t) => [
+        t.id,
+        t.revision,
+        t.builtIn ?? false,
+      ]);
+    expect(await types()).toEqual([
+      ['coding', 0, true],
+      ['design', 0, true],
+      ['research', 0, true],
+    ]);
+    expect(engine.boards.types.list()).toEqual([]);
+    const created = await call('POST', '/boards', {
+      name: 'Delivery',
+      typeId: 'coding',
+    });
+    expect(created.status).toBe(201);
+    // The board keeps its own copy, so later preset changes never move its cards.
+    expect(await types()).toEqual([
+      ['design', 0, true],
+      ['research', 0, true],
+      ['coding', 1, false],
+    ]);
+    const view = await call('GET', `/boards/view?id=${created.body.id}`);
+    expect(view.body.lanes.map((lane) => lane.id)).toContain('ready');
+    expect(
+      (await call('POST', '/boards', { name: 'X', typeId: 'missing' })).status,
+    ).toBe(400);
+    expect(() => engine.boards.types.delete('design')).toThrow('Built-in');
+  } finally {
+    engine.stop();
+    store.close();
+  }
+});

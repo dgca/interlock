@@ -49,11 +49,13 @@ Each workflow also has its own board without setup. Open the workflow's **Runs**
 
 The same lanes and cards are available everywhere:
 
-- CLI: `interlock board view BOARD_ID`, or `interlock board view --workflow WORKFLOW_ID` for a workflow's stage board. Add `--lane LANE --offset N --limit N` to page one lane. `interlock board types` lists types and `interlock board save-type @type.json` saves one.
-- HTTP: `GET /api/boards/view?id=BOARD_ID` or `?workflowId=WORKFLOW_ID`, with optional `lane`, `offset` and `limit`.
+- CLI: `interlock board view BOARD_ID`, or `interlock board view --workflow WORKFLOW_ID` for a workflow's stage board. Add `--lane LANE --offset N --limit N` to page one lane. `interlock board types` lists types and `interlock board save-type @type.json` saves one. `interlock board save '{"name":"Delivery","typeId":"coding"}'` creates a typed board; add `scope` to choose its runs.
+- HTTP: `GET /api/boards/view?id=BOARD_ID` or `?workflowId=WORKFLOW_ID`, with optional `lane`, `offset` and `limit`. `GET /api/board-types` lists types and `POST /api/boards` creates a typed board.
 - MCP: `read_workflow_boards` with `request.action: "view"` and an `id` or a `workflowId`; `limit` counts cards per lane and defaults to 10.
 
 Each lane has an `id`, `name`, `total` and `cards`. A card's `id` is `task:<system>/<id>` or `run:<root run ID>`; `runId` is the run that placed it and `runCount` the number of runs it spans. A view of a column board returns its columns as lanes. Board types are managed in the UI, CLI and shared API; MCP reads them only through board views.
+
+The Coding, Design and Research presets are also built-in types with the IDs `coding`, `design` and `research`. Outside the UI, `interlock board types` and `GET /api/board-types` list them with `builtIn: true` and revision 0. Creating a board from one, or saving one with `board save-type` and `expectedRevision: 0`, stores an editable copy under the same ID, so later changes to the preset never move an existing board's cards. A built-in type cannot be deleted; deleting your saved copy brings the preset back.
 
 ## Set up a board during import
 

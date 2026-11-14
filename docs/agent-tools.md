@@ -57,7 +57,7 @@ Connected agents call MCP `call_work_tool` (shared API `work.callTool`) with the
 }
 ```
 
-Only the current claim on that Agent execution can call its tools. Another worker's token, an expired claim, or the name of a tool on a different node is rejected. The response has `callId`, `runId`, `executionId`, `status`, the step's `output` (or `outputBytes` when it is larger than 64 KiB; read it with `get_run_result`), `error`, `blockedBy` (`pause`, `resource` or `approval`) and the call counts so far.
+Only the current claim on that Agent execution can call its tools. Another worker's token, an expired claim, or the name of a tool on a different node is rejected. The response has `callId`, `runId`, `executionId`, `status`, the step's `output` (or `outputBytes` when it is larger than 64 KiB; read it with `get_run_result`), `error`, `blockedBy` (`pause`, `resource` or `approval`) and `calls`: the number of calls so far in this claim attempt (`inAttempt`) and this Agent execution (`inExecution`), with their limits (`maxPerAttempt`, `maxPerExecution`).
 
 The call waits up to `waitMs` (default 50 seconds, at most 10 minutes), and never longer than the claim's remaining lease minus 5 seconds, so the agent can renew in time. Waiting does not renew the claim. If `status` is still `running` or `waiting`, call again with the returned `callId` to keep waiting for the same call. A repeated `callId` never starts a second call.
 

@@ -131,6 +131,8 @@ export interface MemoryReviews {
 }
 
 const revision = z.number().int().positive();
+/** Accepted for symmetry with configure and add; the note already names its workflow. */
+const noteWorkflow = { workflowId: id.optional() };
 export const memoryManageSchema = z.discriminatedUnion('action', [
   z
     .object({
@@ -155,7 +157,13 @@ export const memoryManageSchema = z.discriminatedUnion('action', [
     })
     .strict(),
   z
-    .object({ action: z.literal('edit'), noteId: id, revision, content })
+    .object({
+      action: z.literal('edit'),
+      noteId: id,
+      revision,
+      content,
+      ...noteWorkflow,
+    })
     .strict(),
   z
     .object({
@@ -163,18 +171,34 @@ export const memoryManageSchema = z.discriminatedUnion('action', [
       noteId: id,
       revision,
       content: content.optional(),
+      ...noteWorkflow,
     })
     .strict(),
-  z.object({ action: z.literal('reject'), noteId: id, revision }).strict(),
+  z
+    .object({
+      action: z.literal('reject'),
+      noteId: id,
+      revision,
+      ...noteWorkflow,
+    })
+    .strict(),
   z
     .object({
       action: z.literal('revert'),
       noteId: id,
       revision,
       to: revision,
+      ...noteWorkflow,
     })
     .strict(),
-  z.object({ action: z.literal('delete'), noteId: id, revision }).strict(),
+  z
+    .object({
+      action: z.literal('delete'),
+      noteId: id,
+      revision,
+      ...noteWorkflow,
+    })
+    .strict(),
 ]);
 
 const claim = { workId: z.string().min(1), token: z.string().min(1) };

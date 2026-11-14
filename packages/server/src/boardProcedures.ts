@@ -7,6 +7,7 @@ import {
   startHoldSchema,
   startReleaseSchema,
 } from '@interlock/core';
+import { z } from 'zod';
 import { id, p, t } from './trpc.js';
 
 /** Boards, board types and the board view shared by the UI, CLI, MCP and HTTP API. */
@@ -37,7 +38,9 @@ export const boardsRouter = t.router({
     .mutation(({ ctx, input }) => ctx.engine.boards.release(input)),
 });
 export const boardTypesRouter = t.router({
-  list: p.query(({ ctx }) => ctx.engine.boards.types.list()),
+  list: p
+    .input(z.object({ builtIn: z.boolean().optional() }).strict().optional())
+    .query(({ ctx, input }) => ctx.engine.boards.types.list(input)),
   get: p
     .input(id)
     .query(({ ctx, input }) => ctx.engine.boards.types.get(input.id)),
