@@ -71,6 +71,7 @@ function withToolSteps(db: DatabaseSync, runs: Run[]) {
 export function countReportRuns(db: DatabaseSync, filter: ReportFilter) {
   const conditions = [
     "json_extract(value, '$.cancellationKind') IS NOT 'join'",
+    "json_extract(value, '$.toolCall') IS NULL",
   ];
   const params: string[] = [];
   for (const [key, value] of Object.entries(filter.tags ?? {})) {

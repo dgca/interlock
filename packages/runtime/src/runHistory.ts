@@ -177,7 +177,7 @@ export class RunHistory {
         status: root.status,
         createdAt: root.createdAt,
         updatedAt,
-        runCount: members.length,
+        runCount: members.filter((run) => !run.toolCall).length,
         collections: inventory.collections,
         documentBytes: inventory.documentBytes,
         canDelete: blockers.length === 0,

@@ -143,6 +143,9 @@ it('runs a tool call as a linked child run without charging route steps', async 
   const report = e.report({ workflowId });
   expect(report.summary.totalRuns).toBe(1);
   expect(report.nodes.map((n) => n.nodeId)).toContain('checks');
+  expect(e.store.countReportRuns({ workflowId }).runs).toBe(1);
+  const [tree] = e.history.preview({ workflowId }).items;
+  expect(tree).toMatchObject({ rootRunId: runId, runCount: 1 });
 });
 
 it('authorises calls by the current claim and enforces per-edge limits', async () => {
