@@ -104,6 +104,14 @@ export const paths = {
       ? `/automations/${encodeURIComponent(triggerId)}?from=${encodeURIComponent(new URLSearchParams({ workflow: id }).toString())}`
       : `/automations?workflow=${encodeURIComponent(id)}`,
   workflow: (id: string) => `/workflows/${encodeURIComponent(id)}`,
+  workflowTests: (id: string) =>
+    `/workflows/${encodeURIComponent(id)}?view=tests`,
+  testSuiteNew: (id: string) =>
+    `/workflows/${encodeURIComponent(id)}/tests/new`,
+  testSuite: (id: string, suiteId: string) =>
+    `/workflows/${encodeURIComponent(id)}/tests/${encodeURIComponent(suiteId)}`,
+  testSuiteEdit: (id: string, suiteId: string) =>
+    `/workflows/${encodeURIComponent(id)}/tests/${encodeURIComponent(suiteId)}/edit`,
   runs: (
     tab: RunTab = 'active',
     offset = 0,

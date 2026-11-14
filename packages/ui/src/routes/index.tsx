@@ -37,10 +37,18 @@ import { HarnessLibrarySkeleton } from '../features/executors/HarnessListSkeleto
 import { AutomationListSkeleton } from '../features/automations/AutomationListSkeleton';
 import { ReportPageSkeleton } from '../features/report/ReportSkeleton';
 import { DiagnosticsPageSkeleton } from '../features/diagnostics/DiagnosticsSkeleton';
+import { workflowSection } from '../features/workflows/workflowListConfig';
+import { TestsViewSkeleton } from '../features/testing/TestsViewSkeleton';
+import { testRoutes } from '../features/testing/testRoutes';
 
 const Automations = lazy(() =>
   import('../features/automations/Automations').then((m) => ({
     default: m.Automations,
+  })),
+);
+const TestsView = lazy(() =>
+  import('../features/testing/TestsView').then((m) => ({
+    default: m.TestsView,
   })),
 );
 const WorkflowLibrary = lazy(() =>
@@ -361,15 +369,18 @@ function WorkflowRoute() {
   const workflowRead = workspaceRead('workflow', read);
   const view = search.get('view');
   const redirectToSchedules = view === 'schedules';
+  const viewSection = workflowSection(view);
   const section =
-    view === 'runs'
-      ? 'runs'
-      : view === 'children' && !workflow?.ownerWorkflowId
-        ? 'children'
-        : 'editor';
+    viewSection === 'children' && workflow?.ownerWorkflowId
+      ? 'editor'
+      : viewSection;
   const catalog = useQuery(
     trpc.workflows.catalog.queryOptions(undefined, {
-      enabled: Boolean(workflow) && !redirectToSchedules && section !== 'runs',
+      enabled:
+        Boolean(workflow) &&
+        !redirectToSchedules &&
+        section !== 'runs' &&
+        section !== 'tests',
     }),
   );
   const ownerId = workflow?.ownerWorkflowId ?? undefined;
@@ -445,15 +456,21 @@ function WorkflowRoute() {
             return next;
           });
         }}
-        runsView={
-          <Suspense fallback={<RunListSkeleton embedded />}>
-            <RunList
-              {...page}
-              act={context.act}
-              workflowId={workflow.id}
-              workflowName={workflow.name}
-            />
-          </Suspense>
+        sectionView={
+          section === 'tests' ? (
+            <Suspense fallback={<TestsViewSkeleton />}>
+              <TestsView workflow={workflow} />
+            </Suspense>
+          ) : (
+            <Suspense fallback={<RunListSkeleton embedded />}>
+              <RunList
+                {...page}
+                act={context.act}
+                workflowId={workflow.id}
+                workflowName={workflow.name}
+              />
+            </Suspense>
+          )
         }
       />
     </Suspense>
@@ -687,6 +704,7 @@ export const routes: RouteObject[] = [
       { path: 'prompts/:promptId', Component: PromptRoute },
       { path: 'workflows/:workflowId', Component: WorkflowRoute },
       { path: 'workflows/:workflowId/report', Component: ReportRoute },
+      ...testRoutes,
       { path: 'runs', Component: RunsRoute },
       {
         path: 'runs/request',

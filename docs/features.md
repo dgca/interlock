@@ -102,6 +102,7 @@ What Interlock implements today, grouped by area. See [current limits](v1.md) fo
 
 ## Testing and improvement
 
+- A workflow **Tests** tab to [create, edit and run saved suites](testing-workflows.md) as fixture simulations, with per-case and per-check results and route coverage.
 - MCP/shared API [workflow testbench](workflow-testbench.md) with revisioned cases, confirmed paired live comparisons, bounded execution, per-side captured prompt revisions and configuration identities, requested executor/environment metadata with attribution gaps, structural checks, separate rubric-based quality judgments, bounded timing/cost/coverage measurements and comparison context in existing Runs views.
 
 ## Local security
