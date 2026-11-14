@@ -43,7 +43,8 @@
               "decisions": [],
               "summary": "plan",
               "question": "q",
-              "context": "c"
+              "context": "c",
+              "checkCommands": ["pnpm test"]
             }
           },
           {
@@ -59,7 +60,10 @@
                   "result": "passed",
                   "details": "ok"
                 }
-              ]
+              ],
+              "status": "done",
+              "questions": [],
+              "resolutions": []
             }
           },
           {
@@ -104,7 +108,9 @@
               "question": "q",
               "context": "c",
               "evidence": "e",
-              "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+              "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "kind": "rounds",
+              "resume": "build"
             }
           },
           {
@@ -204,7 +210,8 @@
               "decisions": [],
               "summary": "plan",
               "question": "q",
-              "context": "c"
+              "context": "c",
+              "checkCommands": ["pnpm test"]
             }
           },
           {
@@ -259,7 +266,8 @@
               "decisions": [],
               "summary": "plan",
               "question": "q",
-              "context": "c"
+              "context": "c",
+              "checkCommands": ["pnpm test"]
             }
           },
           {
@@ -301,7 +309,10 @@
                   "result": "passed",
                   "details": "ok"
                 }
-              ]
+              ],
+              "status": "done",
+              "questions": [],
+              "resolutions": []
             }
           },
           {
@@ -354,7 +365,9 @@
               "question": "q",
               "context": "c",
               "evidence": "e",
-              "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+              "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "kind": "rounds",
+              "resume": "build"
             }
           },
           {
@@ -370,7 +383,10 @@
                   "result": "passed",
                   "details": "ok"
                 }
-              ]
+              ],
+              "status": "done",
+              "questions": [],
+              "resolutions": []
             }
           },
           {
@@ -415,7 +431,9 @@
               "question": "q",
               "context": "c",
               "evidence": "e",
-              "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+              "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "kind": "rounds",
+              "resume": "build"
             }
           },
           {
@@ -518,7 +536,8 @@
               "decisions": [],
               "summary": "plan",
               "question": "q",
-              "context": "c"
+              "context": "c",
+              "checkCommands": ["pnpm test"]
             }
           },
           {
@@ -534,7 +553,10 @@
                   "result": "passed",
                   "details": "ok"
                 }
-              ]
+              ],
+              "status": "done",
+              "questions": [],
+              "resolutions": []
             }
           },
           {
@@ -587,7 +609,9 @@
               "question": "q",
               "context": "c",
               "evidence": "e",
-              "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+              "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "kind": "rounds",
+              "resume": "plan"
             }
           },
           {
@@ -608,7 +632,8 @@
               "decisions": [],
               "summary": "plan",
               "question": "q",
-              "context": "c"
+              "context": "c",
+              "checkCommands": ["pnpm test"]
             }
           },
           {
@@ -624,7 +649,10 @@
                   "result": "passed",
                   "details": "ok"
                 }
-              ]
+              ],
+              "status": "done",
+              "questions": [],
+              "resolutions": []
             }
           },
           {
@@ -669,7 +697,9 @@
               "question": "q",
               "context": "c",
               "evidence": "e",
-              "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+              "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "kind": "rounds",
+              "resume": "build"
             }
           },
           {
@@ -763,7 +793,8 @@
               "decisions": [],
               "summary": "plan",
               "question": "q",
-              "context": "c"
+              "context": "c",
+              "checkCommands": ["pnpm test"]
             }
           },
           {
@@ -779,7 +810,10 @@
                   "result": "passed",
                   "details": "ok"
                 }
-              ]
+              ],
+              "status": "done",
+              "questions": [],
+              "resolutions": []
             },
             "expectRejection": true
           },
@@ -796,7 +830,10 @@
                   "result": "passed",
                   "details": "ok"
                 }
-              ]
+              ],
+              "status": "done",
+              "questions": [],
+              "resolutions": []
             }
           },
           {
@@ -841,7 +878,9 @@
               "question": "q",
               "context": "c",
               "evidence": "e",
-              "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+              "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "kind": "rounds",
+              "resume": "build"
             }
           },
           {
@@ -919,7 +958,8 @@
               "decisions": [],
               "summary": "plan",
               "question": "q",
-              "context": "c"
+              "context": "c",
+              "checkCommands": ["pnpm test"]
             }
           },
           {
@@ -970,7 +1010,8 @@
               "decisions": [],
               "summary": "plan",
               "question": "q",
-              "context": "c"
+              "context": "c",
+              "checkCommands": ["pnpm test"]
             }
           },
           {
@@ -1015,7 +1056,10 @@
                   "result": "passed",
                   "details": "ok"
                 }
-              ]
+              ],
+              "status": "done",
+              "questions": [],
+              "resolutions": []
             }
           },
           {
@@ -1060,7 +1104,9 @@
               "question": "q",
               "context": "c",
               "evidence": "e",
-              "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+              "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "kind": "rounds",
+              "resume": "build"
             }
           },
           {
@@ -1159,7 +1205,8 @@
               "decisions": [],
               "summary": "plan",
               "question": "q",
-              "context": "c"
+              "context": "c",
+              "checkCommands": ["pnpm test"]
             }
           },
           {
@@ -1288,7 +1335,8 @@
               "decisions": [],
               "summary": "plan",
               "question": "q",
-              "context": "c"
+              "context": "c",
+              "checkCommands": ["pnpm test"]
             }
           },
           {
@@ -1304,7 +1352,10 @@
                   "result": "passed",
                   "details": "ok"
                 }
-              ]
+              ],
+              "status": "done",
+              "questions": [],
+              "resolutions": []
             }
           },
           {
@@ -1357,22 +1408,39 @@
               "question": "q",
               "context": "c",
               "evidence": "e",
+              "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "kind": "rounds",
+              "resume": "build"
+            }
+          },
+          {
+            "nodeId": "limitAsk",
+            "kind": "script",
+            "output": {
+              "kind": "rounds",
+              "resume": "build",
+              "round": 3,
+              "feedback": "fb",
+              "question": "q",
+              "context": "c",
+              "evidence": "e",
               "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
             }
           },
           {
-            "nodeId": "repairHuman",
+            "nodeId": "limitHuman",
             "kind": "input",
             "output": {
               "choice": "continue"
             }
           },
           {
-            "nodeId": "repairGrant",
+            "nodeId": "limitGrant",
             "kind": "script",
             "output": {
-              "route": "fix",
-              "until": 6,
+              "route": "build",
+              "kind": "rounds",
+              "reviewUntil": 6,
               "feedback": "fb",
               "humanResponse": "{}",
               "summary": "s"
@@ -1391,7 +1459,10 @@
                   "result": "passed",
                   "details": "ok"
                 }
-              ]
+              ],
+              "status": "done",
+              "questions": [],
+              "resolutions": []
             }
           },
           {
@@ -1444,22 +1515,39 @@
               "question": "q",
               "context": "c",
               "evidence": "e",
+              "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "kind": "rounds",
+              "resume": "plan"
+            }
+          },
+          {
+            "nodeId": "limitAsk",
+            "kind": "script",
+            "output": {
+              "kind": "rounds",
+              "resume": "plan",
+              "round": 3,
+              "feedback": "fb",
+              "question": "q",
+              "context": "c",
+              "evidence": "e",
               "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
             }
           },
           {
-            "nodeId": "repairHuman",
+            "nodeId": "limitHuman",
             "kind": "input",
             "output": {
               "choice": "continue"
             }
           },
           {
-            "nodeId": "repairGrant",
+            "nodeId": "limitGrant",
             "kind": "script",
             "output": {
-              "route": "replan",
-              "until": 6,
+              "route": "plan",
+              "kind": "rounds",
+              "reviewUntil": 6,
               "feedback": "fb",
               "humanResponse": "{}",
               "summary": "s"
@@ -1483,7 +1571,8 @@
               "decisions": [],
               "summary": "plan",
               "question": "q",
-              "context": "c"
+              "context": "c",
+              "checkCommands": ["pnpm test"]
             }
           },
           {
@@ -1499,7 +1588,10 @@
                   "result": "passed",
                   "details": "ok"
                 }
-              ]
+              ],
+              "status": "done",
+              "questions": [],
+              "resolutions": []
             }
           },
           {
@@ -1552,22 +1644,39 @@
               "question": "q",
               "context": "c",
               "evidence": "e",
+              "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "kind": "rounds",
+              "resume": "build"
+            }
+          },
+          {
+            "nodeId": "limitAsk",
+            "kind": "script",
+            "output": {
+              "kind": "rounds",
+              "resume": "stop",
+              "round": 3,
+              "feedback": "fb",
+              "question": "q",
+              "context": "c",
+              "evidence": "e",
               "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
             }
           },
           {
-            "nodeId": "repairHuman",
+            "nodeId": "limitHuman",
             "kind": "input",
             "output": {
               "choice": "stop"
             }
           },
           {
-            "nodeId": "repairGrant",
+            "nodeId": "limitGrant",
             "kind": "script",
             "output": {
               "route": "stop",
-              "until": 6,
+              "kind": "rounds",
+              "reviewUntil": 6,
               "feedback": "fb",
               "humanResponse": "{}",
               "summary": "s"
@@ -1600,6 +1709,280 @@
             "path": "outcome",
             "operator": "equals",
             "expected": "stopped"
+          }
+        ]
+      },
+      {
+        "id": "build-questions",
+        "name": "The build asks questions, a person answers, then the limit asks",
+        "input": {
+          "request": "Fix it",
+          "repoPath": "/tmp"
+        },
+        "fixtures": [
+          {
+            "nodeId": "setup",
+            "kind": "script",
+            "output": {
+              "repoPath": "/tmp",
+              "request": "Fix it",
+              "taskDir": ".tasks/fix-it",
+              "size": "small",
+              "issue": null,
+              "baseCommit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "reviewPolicy": "auto",
+              "createPr": false,
+              "commitArtifacts": false
+            }
+          },
+          {
+            "nodeId": "plan",
+            "kind": "agent",
+            "output": {
+              "artifactPath": ".tasks/fix-it/plan.md",
+              "summary": "plan",
+              "checkCommands": ["pnpm test"],
+              "decisions": []
+            }
+          },
+          {
+            "nodeId": "planGate",
+            "kind": "script",
+            "output": {
+              "route": "build",
+              "decisions": [],
+              "summary": "plan",
+              "question": "q",
+              "context": "c",
+              "checkCommands": ["pnpm test"]
+            }
+          },
+          {
+            "nodeId": "build",
+            "kind": "agent",
+            "output": {
+              "summary": "built",
+              "branch": "task/fix-it",
+              "headCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "checks": [
+                {
+                  "name": "pnpm test",
+                  "result": "passed",
+                  "details": "ok"
+                }
+              ],
+              "status": "question",
+              "questions": [
+                {
+                  "question": "Keep the flag?",
+                  "whyItMatters": "API",
+                  "recommendation": "Yes"
+                }
+              ],
+              "resolutions": []
+            }
+          },
+          {
+            "nodeId": "questionGate",
+            "kind": "script",
+            "output": {
+              "route": "ask",
+              "kind": "questions",
+              "resume": "build",
+              "round": 1,
+              "feedback": "",
+              "question": "q",
+              "context": "c",
+              "evidence": "e",
+              "revision": "1"
+            }
+          },
+          {
+            "nodeId": "questionHuman",
+            "kind": "input",
+            "output": "Keep it"
+          },
+          {
+            "nodeId": "build",
+            "kind": "agent",
+            "output": {
+              "summary": "built",
+              "branch": "task/fix-it",
+              "headCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "checks": [
+                {
+                  "name": "pnpm test",
+                  "result": "passed",
+                  "details": "ok"
+                }
+              ],
+              "status": "question",
+              "questions": [
+                {
+                  "question": "Keep the flag?",
+                  "whyItMatters": "API",
+                  "recommendation": "Yes"
+                }
+              ],
+              "resolutions": []
+            }
+          },
+          {
+            "nodeId": "questionGate",
+            "kind": "script",
+            "output": {
+              "route": "limit",
+              "kind": "questions",
+              "resume": "build",
+              "round": 1,
+              "feedback": "",
+              "question": "q",
+              "context": "c",
+              "evidence": "e",
+              "revision": "1"
+            }
+          },
+          {
+            "nodeId": "limitAsk",
+            "kind": "script",
+            "output": {
+              "kind": "questions",
+              "resume": "build",
+              "round": 0,
+              "feedback": "",
+              "question": "q",
+              "context": "c",
+              "evidence": "e",
+              "revision": "3"
+            }
+          },
+          {
+            "nodeId": "limitHuman",
+            "kind": "input",
+            "output": {
+              "choice": "continue"
+            }
+          },
+          {
+            "nodeId": "limitGrant",
+            "kind": "script",
+            "output": {
+              "route": "build",
+              "kind": "questions",
+              "reviewUntil": null,
+              "feedback": "fb",
+              "humanResponse": "{}",
+              "summary": "s"
+            }
+          },
+          {
+            "nodeId": "build",
+            "kind": "agent",
+            "output": {
+              "summary": "built",
+              "branch": "task/fix-it",
+              "headCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "checks": [
+                {
+                  "name": "pnpm test",
+                  "result": "passed",
+                  "details": "ok"
+                }
+              ],
+              "status": "done",
+              "questions": [],
+              "resolutions": []
+            }
+          },
+          {
+            "nodeId": "changeReview",
+            "kind": "workflow",
+            "output": {
+              "verdict": "pass",
+              "summary": "review",
+              "reviewedCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "reviewScope": "full",
+              "criteria": [
+                {
+                  "id": "AC1",
+                  "status": "verified",
+                  "evidence": "e"
+                }
+              ],
+              "findings": [],
+              "resolutions": [],
+              "limitations": [],
+              "baseCommit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "headCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "checksPassed": true,
+              "checks": [
+                {
+                  "command": "pnpm test",
+                  "exitCode": 0,
+                  "status": "passed"
+                }
+              ]
+            }
+          },
+          {
+            "nodeId": "reviewRoute",
+            "kind": "script",
+            "output": {
+              "route": "deliver",
+              "repair": "fix",
+              "count": 1,
+              "summary": "s",
+              "feedback": "fb",
+              "question": "q",
+              "context": "c",
+              "evidence": "e",
+              "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "kind": "rounds",
+              "resume": "build"
+            }
+          },
+          {
+            "nodeId": "deliverCheck",
+            "kind": "script",
+            "output": {
+              "route": "local",
+              "branch": "task/fix-it",
+              "reviewedCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+          },
+          {
+            "nodeId": "result",
+            "kind": "script",
+            "output": {
+              "outcome": "local_complete",
+              "verification": "passed",
+              "taskDir": ".tasks/fix-it",
+              "branch": "task/fix-it",
+              "reviewedCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "prUrl": null,
+              "summary": "done",
+              "limitations": []
+            }
+          }
+        ],
+        "assertions": [
+          {
+            "kind": "route",
+            "nodeId": "build",
+            "visit": 1,
+            "port": "question"
+          },
+          {
+            "kind": "route",
+            "nodeId": "questionGate",
+            "visit": 2,
+            "port": "limit"
+          },
+          {
+            "kind": "output",
+            "path": "outcome",
+            "operator": "equals",
+            "expected": "local_complete"
           }
         ]
       }

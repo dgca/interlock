@@ -16,7 +16,7 @@
         "agentPermissions": "standard",
         "inputSchema": {
           "type": "object",
-          "required": ["request", "repoPath"],
+          "required": ["request"],
           "additionalProperties": false,
           "properties": {
             "request": {
@@ -29,7 +29,7 @@
               "type": "string",
               "minLength": 1,
               "title": "Repository path",
-              "description": "Absolute path of the Git checkout to work in. Use a dedicated checkout or worktree per run."
+              "description": "Absolute path of the Git checkout to work in. Required unless the workflow gives each run its own Git worktree, which then takes precedence."
             },
             "size": {
               "type": "string",
@@ -74,6 +74,16 @@
               "default": false,
               "title": "Commit planning artifacts",
               "description": "Commit the spec and plan with the change. Leave off for repositories that keep task artifacts untracked."
+            },
+            "checkCommands": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "maxItems": 6,
+              "title": "Check commands",
+              "description": "Commands Interlock runs before every review, such as the repository's test, build and lint commands. Omit to let the plan propose them; they then run without anyone seeing them first unless reviewPolicy is always."
             }
           }
         },
@@ -151,7 +161,7 @@
             "stage": "Planning",
             "stageId": "planning",
             "language": "javascript",
-            "command": "const fs = await import('node:fs/promises');\nconst path = await import('node:path');\nconst { execFileSync } = await import('node:child_process');\nconst { createHash } = await import('node:crypto');\nconst i = input.run;\nconst git = (cwd, ...args) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();\nconst repoPath = await fs.realpath(path.resolve(i.repoPath));\nconst top = await fs.realpath(git(repoPath, 'rev-parse', '--show-toplevel'));\nif (top !== repoPath) throw new Error('repoPath must be the root of a Git checkout. Its root is ' + top);\nconst baseCommit = git(repoPath, 'rev-parse', '--verify', (i.baseRef || 'HEAD') + '^{commit}');\nconst words = ((i.issue ? String(i.issue).split('/').pop() + ' ' : '') + i.request).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+/, '').slice(0, 40).replace(/-+$/, '') || 'change';\nconst taskDir = i.taskDir || path.join('.tasks', words + '-' + createHash('sha256').update(i.request).digest('hex').slice(0, 6));\nif (path.isAbsolute(taskDir)) throw new Error('taskDir must be relative to repoPath');\nawait fs.mkdir(path.resolve(repoPath, taskDir), { recursive: true });\nconst taskPath = await fs.realpath(path.resolve(repoPath, taskDir));\nconst rel = path.relative(repoPath, taskPath);\nif (!rel || rel.startsWith('..') || path.isAbsolute(rel)) throw new Error('taskDir must stay inside the repository');\nreturn { repoPath, request: i.request, taskDir: rel, size: i.size ?? 'small', issue: i.issue ?? null, baseCommit,\n  reviewPolicy: i.reviewPolicy ?? 'auto', createPr: i.createPr ?? false, commitArtifacts: i.commitArtifacts ?? false };\n",
+            "command": "const fs = await import('node:fs/promises');\nconst path = await import('node:path');\nconst { execFileSync } = await import('node:child_process');\nconst { createHash } = await import('node:crypto');\nconst i = input.run;\nconst git = (cwd, ...args) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();\n// The Script runs in the run's worktree when it has one, otherwise in repoPath (the workflow's cwd).\nconst repoPath = await fs.realpath(path.resolve(process.cwd()));\nconst top = await fs.realpath(git(repoPath, 'rev-parse', '--show-toplevel'));\nif (top !== repoPath) throw new Error('repoPath must be the root of a Git checkout. Its root is ' + top);\nconst baseCommit = git(repoPath, 'rev-parse', '--verify', (i.baseRef || 'HEAD') + '^{commit}');\nconst words = ((i.issue ? String(i.issue).split('/').pop() + ' ' : '') + i.request).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+/, '').slice(0, 40).replace(/-+$/, '') || 'change';\nconst taskDir = i.taskDir || path.join('.tasks', words + '-' + createHash('sha256').update(i.request).digest('hex').slice(0, 6));\nif (path.isAbsolute(taskDir)) throw new Error('taskDir must be relative to repoPath');\nawait fs.mkdir(path.resolve(repoPath, taskDir), { recursive: true });\nconst taskPath = await fs.realpath(path.resolve(repoPath, taskDir));\nconst rel = path.relative(repoPath, taskPath);\nif (!rel || rel.startsWith('..') || path.isAbsolute(rel)) throw new Error('taskDir must stay inside the repository');\nconst branch = git(repoPath, 'rev-parse', '--abbrev-ref', 'HEAD');\n// A managed worktree's branch name always contains the run ID.\nconst dedicatedBranch = !!process.env.INTERLOCK_ROOT_RUN_ID && branch.includes(process.env.INTERLOCK_ROOT_RUN_ID);\n// Without its own worktree, a run must start from a clean checkout so checks test what was committed.\nif (!dedicatedBranch && git(repoPath, 'status', '--porcelain', '--untracked-files=no') !== '') throw new Error(\n  'The checkout has uncommitted changes to tracked files. Commit or stash them, or turn on the workflow\\'s Git worktree setting so each run gets its own checkout.');\nreturn { repoPath, branch, dedicatedBranch, checkCommands: i.checkCommands ?? null, request: i.request, taskDir: rel, size: i.size ?? 'small', issue: i.issue ?? null, baseCommit,\n  reviewPolicy: i.reviewPolicy ?? 'auto', createPr: i.createPr ?? false, commitArtifacts: i.commitArtifacts ?? false };\n",
             "timeoutMs": 10000,
             "inputBindings": {
               "run": {
@@ -224,7 +234,7 @@
             "prompt": "Write or revise root.taskDir/spec.md for root.request. It is the single definition of what this change must do.\n\nInclude, briefly:\n- Problem and outcome: what is wrong or missing today and what will be true afterwards. Quote or link the source request.\n- Scope: what is included, and what is explicitly not.\n- Behavior: the observable behavior required, including failure and edge cases the change affects.\n- Acceptance criteria with stable ids (AC1, AC2, ...). Each must be checkable by a test or an observation. Never renumber existing ids on revision.\n- For a change a person will see: a UI proposal. Name the existing screens, components and patterns it reuses, then describe the flow, layout and action placement, the loading, empty, error and success states it affects, keyboard and focus behavior, and narrow-width behavior. A short sketch in text is enough. Do not introduce a new visual pattern where an existing one fits.\n- Open decisions, each with the options and the one you recommend.\n\nLeave implementation steps and verification methods to plan.md. On revision (previous.feedback is present), change the affected passages and keep settled decisions. Do not narrate the revision history.\n\nReturn artifactPath (relative to root.repoPath), summary, and decisions: the open decisions only a person can settle, each with question, whyItMatters and recommendation. Return an empty decisions list when there are none.",
             "context": {
               "mode": "current",
-              "instructions": "Inputs: root is this run's resolved setup (repoPath, request, taskDir, size, issue, baseCommit, reviewPolicy, createPr, commitArtifacts). previous is the result of the step that routed here.\nWork only inside root.repoPath. Read the repository's own instructions (for example AGENTS.md, CLAUDE.md, README and contributing or design docs) and follow them; where they conflict with this workflow's defaults, they win.\nPreserve unrelated files and changes. Settle routine technical questions yourself from the repository and record the assumption. Raise a decision for a person only when it changes scope, public behavior, compatibility, consequential architecture or authorization and nothing already settles it.\nPlanning artifacts live in root.taskDir. Do not commit them unless root.commitArtifacts is true or the repository's instructions require it. Put durable facts and decisions in the artifacts; keep workflow details such as root, previous and route values out of them.\nReport a real blocker with fail_work. Never invent a result.",
+              "instructions": "Inputs: root is this run's resolved setup (repoPath, request, taskDir, size, issue, baseCommit, reviewPolicy, createPr, commitArtifacts). previous is the result of the step that routed here.\nWork only inside root.repoPath. Read the repository's own instructions (for example AGENTS.md, CLAUDE.md, README and contributing or design docs) and follow them; where they conflict with this workflow's defaults, they win.\nPreserve unrelated files and changes. Settle routine technical questions yourself from the repository and record the assumption. Raise a decision for a person only when it changes scope, public behavior, compatibility, consequential architecture or authorization and nothing already settles it.\nPlanning artifacts live in root.taskDir. Do not commit them unless root.commitArtifacts is true or the repository's instructions require it. Put durable facts and decisions in the artifacts; keep workflow details such as root, previous and route values out of them.\nReport a real blocker with fail_work. Never invent a result.\nRun plain commands from the repository root: no heredocs, no $ variables or command substitution, no cd, no bash -c, no background jobs, and no files outside the repository such as /tmp; put notes and scratch files in the task folder. Use your file tools to read and edit files when you have them; from the shell, read with cat, head, tail, rg or git show rather than sed or awk. The workflow's permission policy can allow commands written this way without asking a person.",
               "tools": [],
               "skills": [],
               "tier": "max",
@@ -307,7 +317,7 @@
             "prompt": "Write or revise root.taskDir/plan.md for root.request.\n\nWhen root.size is small there is no spec: plan.md also states the problem and outcome in a few sentences and owns the acceptance criteria, with stable ids (AC1, AC2, ...) that are each checkable by a test or an observation. When root.size is standard, read root.taskDir/spec.md and reference its criteria by id instead of copying them.\n\nRead the code the change touches before planning it. Then include:\n- Approach: the change in a few sentences, the code areas involved, and why this approach over the obvious alternative.\n- Steps: a short checklist with stable task ids, each mapped to the criteria it serves.\n- Verification: how each criterion will be demonstrated, and for the two or three riskiest failure cases, a direct check with its expected result.\n- For a change a person will see: the existing components and patterns to reuse, and one short user journey through the changed behavior that the build must exercise through the real controls and capture as a screenshot or recorded check.\n- Open decisions, each with the options and the one you recommend.\n\nKeep it proportionate: a small fix needs a short plan. Distinguish facts you verified in the repository from assumptions.\n\nOn revision (previous.feedback is present), apply the feedback to the affected passages, keep criterion and task ids stable, and keep settled decisions. If the feedback shows a criterion itself was wrong, correct it and say why in the plan.\n\nReturn:\n- artifactPath, relative to root.repoPath.\n- summary.\n- checkCommands: up to six shell commands, taken from the repository's own instructions or scripts, that must exit 0 for this change to be acceptable (typically tests, type check or build, and formatting or lint). Interlock runs these itself before review, after the build, so a command may name a script this change adds. Return an empty list only if the repository defines none.\n- decisions: open decisions only a person can settle, each with question, whyItMatters and recommendation. Empty when there are none.",
             "context": {
               "mode": "current",
-              "instructions": "Inputs: root is this run's resolved setup (repoPath, request, taskDir, size, issue, baseCommit, reviewPolicy, createPr, commitArtifacts). previous is the result of the step that routed here.\nWork only inside root.repoPath. Read the repository's own instructions (for example AGENTS.md, CLAUDE.md, README and contributing or design docs) and follow them; where they conflict with this workflow's defaults, they win.\nPreserve unrelated files and changes. Settle routine technical questions yourself from the repository and record the assumption. Raise a decision for a person only when it changes scope, public behavior, compatibility, consequential architecture or authorization and nothing already settles it.\nPlanning artifacts live in root.taskDir. Do not commit them unless root.commitArtifacts is true or the repository's instructions require it. Put durable facts and decisions in the artifacts; keep workflow details such as root, previous and route values out of them.\nReport a real blocker with fail_work. Never invent a result.",
+              "instructions": "Inputs: root is this run's resolved setup (repoPath, request, taskDir, size, issue, baseCommit, reviewPolicy, createPr, commitArtifacts). previous is the result of the step that routed here.\nWork only inside root.repoPath. Read the repository's own instructions (for example AGENTS.md, CLAUDE.md, README and contributing or design docs) and follow them; where they conflict with this workflow's defaults, they win.\nPreserve unrelated files and changes. Settle routine technical questions yourself from the repository and record the assumption. Raise a decision for a person only when it changes scope, public behavior, compatibility, consequential architecture or authorization and nothing already settles it.\nPlanning artifacts live in root.taskDir. Do not commit them unless root.commitArtifacts is true or the repository's instructions require it. Put durable facts and decisions in the artifacts; keep workflow details such as root, previous and route values out of them.\nReport a real blocker with fail_work. Never invent a result.\nRun plain commands from the repository root: no heredocs, no $ variables or command substitution, no cd, no bash -c, no background jobs, and no files outside the repository such as /tmp; put notes and scratch files in the task folder. Use your file tools to read and edit files when you have them; from the shell, read with cat, head, tail, rg or git show rather than sed or awk. The workflow's permission policy can allow commands written this way without asking a person.",
               "tools": [],
               "skills": [],
               "tier": "max",
@@ -339,7 +349,7 @@
             "stage": "Planning",
             "stageId": "planning",
             "language": "javascript",
-            "command": "const plan = input.plan;\nconst root = input.root;\nconst open = [...(input.planCount === 1 ? input.spec?.decisions ?? [] : []), ...(plan.decisions ?? [])];\nconst route = open.length ? 'ask' : root.size === 'standard' ? 'review' : root.reviewPolicy === 'always' ? 'ask' : 'build';\nconst list = open.map((d, n) => (n + 1) + '. ' + d.question + '\\n   Why it matters: ' + d.whyItMatters + '\\n   Recommended: ' + d.recommendation).join('\\n\\n');\nreturn { route, decisions: open, summary: plan.summary,\n  question: open.length ? ('The plan has decisions only you can settle. Approving accepts each recommendation.\\n\\n' + list).slice(0, 4000) : 'Approve this plan before any code is written?',\n  context: plan.summary };\n",
+            "command": "const plan = input.plan;\nconst root = input.root;\nconst open = [...(input.planCount === 1 ? input.spec?.decisions ?? [] : []), ...(plan.decisions ?? [])];\nconst route = open.length ? 'ask' : root.size === 'standard' ? 'review' : root.reviewPolicy === 'always' ? 'ask' : 'build';\nconst list = open.map((d, n) => (n + 1) + '. ' + d.question + '\\n   Why it matters: ' + d.whyItMatters + '\\n   Recommended: ' + d.recommendation).join('\\n\\n');\n// Commands pinned in the run input win over the plan's.\nconst checkCommands = root.checkCommands ?? plan.checkCommands ?? [];\nreturn { route, checkCommands, decisions: open, summary: plan.summary,\n  question: open.length ? ('The plan has decisions only you can settle. Approving accepts each recommendation.\\n\\n' + list).slice(0, 4000) : 'Approve this plan before any code is written?',\n  context: plan.summary + '\\n\\nCheck commands Interlock will run before each review:\\n' + (checkCommands.join('\\n') || '(none)') };\n",
             "timeoutMs": 10000,
             "inputBindings": {
               "root": {
@@ -596,6 +606,10 @@
             "outputSchema": {
               "type": "object",
               "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": ["done", "question"]
+                },
                 "summary": {
                   "type": "string",
                   "minLength": 1
@@ -649,17 +663,46 @@
                     "required": ["id", "status", "details"],
                     "additionalProperties": false
                   }
+                },
+                "questions": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "question": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "whyItMatters": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "recommendation": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "required": ["question", "whyItMatters", "recommendation"],
+                    "additionalProperties": false
+                  }
                 }
               },
-              "required": ["summary", "branch", "headCommit", "checks"],
+              "required": [
+                "status",
+                "summary",
+                "branch",
+                "headCommit",
+                "checks",
+                "questions"
+              ],
               "additionalProperties": false
             },
             "stage": "Implementation",
             "stageId": "implementation",
-            "prompt": "Implement the change described in root.taskDir/plan.md (and spec.md when root.size is standard), then verify it.\n\nInputs: plan is the planner's latest result. review is the latest independent review of this change, or null before the first review. previous is the step that routed here; when it carries humanResponse, a person approved the plan (without it, the plan was accepted automatically under root.reviewPolicy), and any open decision in it is settled in favor of the plan's recommended option unless their comment says otherwise.\n\nFirst build (review is null):\n- Create or reuse a task branch that starts from root.baseCommit, following repository conventions. Never commit to the branch root.baseCommit came from.\n- Implement the plan's steps. Stay inside the authorized scope; if the plan turns out to be wrong, say so in your result rather than silently building something else.\n- Follow the repository's structure and conventions. Reuse existing helpers, components and patterns before adding new ones. Add or update tests that would fail without the change. Update documentation the repository requires to stay current.\n- For a change a person will see: use the existing design system and tokens, exercise the plan's user journey through the real controls, and save a screenshot or recorded check under root.taskDir as evidence.\n\nRepair (review.verdict is revise):\n- Address every unresolved finding owned by implementation, by id. Read the diff since review.reviewedCommit first.\n- Findings owned by environment are not yours to fix. A finding with id rule-checks means a check command failed: fix it if the change caused it; if it did not, leave the code alone and say so in resolutions.\n- Return resolutions: one entry per implementation finding with its id, status fixed or not_fixed, and details (what changed, or why it cannot be fixed within the authorized scope).\n- Do not weaken a test or a criterion to make a finding go away.\n\nAlways:\n- Run plan.checkCommands and fix what fails. Do not report a check you did not run as passed.\n- Commit the intended code, tests and docs to the task branch, following repository practice. Commit planning artifacts only as the standing instructions allow. The working tree must have no uncommitted changes to tracked files when you finish.\n- Do not push, merge or deploy.\n\nReturn summary, branch, headCommit (the full object id of the commit that contains everything you want reviewed), and checks: each command you ran with result passed, failed or not_run and a short details string.",
+            "prompt": "Implement the change described in root.taskDir/plan.md (and spec.md when root.size is standard), then verify it.\n\nInputs: plan is the planner's latest result. review is the latest independent review of this change, or null before the first review. previous is the step that routed here; when it carries humanResponse, a person approved the plan (without it, the plan was accepted automatically under root.reviewPolicy), and any open decision in it is settled in favor of the plan's recommended option unless their comment says otherwise.\n\nFirst build (review is null):\n- If root.dedicatedBranch is true, commit on the current branch root.branch. Otherwise create or reuse a task branch that starts from root.baseCommit, following repository conventions. Never commit to the branch root.baseCommit came from.\n- Implement the plan's steps. Stay inside the authorized scope; if the plan turns out to be wrong, say so in your result rather than silently building something else.\n- Follow the repository's structure and conventions. Reuse existing helpers, components and patterns before adding new ones. Add or update tests that would fail without the change. Update documentation the repository requires to stay current.\n- For a change a person will see: use the existing design system and tokens, exercise the plan's user journey through the real controls, and save a screenshot or recorded check under root.taskDir as evidence.\n\nRepair (review.verdict is revise):\n- Address every unresolved finding owned by implementation, by id. Read the diff since review.reviewedCommit first.\n- Findings owned by environment are not yours to fix. A finding with id rule-checks means a check command failed: fix it if the change caused it; if it did not, leave the code alone and say so in resolutions.\n- Return resolutions: one entry per implementation finding with its id, status fixed or not_fixed, and details (what changed, or why it cannot be fixed within the authorized scope).\n- Do not weaken a test or a criterion to make a finding go away.\n\nAlways:\n- Interlock runs plan.checkCommands at your commit before the review, so do not run the full list yourself; run only the focused tests you need. Report in checks only what you ran.\n- Commit the intended code, tests and docs to the task branch, following repository practice. Commit planning artifacts only as the standing instructions allow. The working tree must have no uncommitted changes to tracked files when you finish.\n- Do not push, merge or deploy.\n\nQuestions: if you cannot continue without a person's decision on scope, public behavior, compatibility or authorization, return status question with questions (question, whyItMatters, recommendation), keep the work so far committed and set headCommit to the current HEAD. previous is then a person's answer (a string) when you resume, or a limit decision whose feedback asks you to continue with your recommendations.\n\nReturn status done, questions (empty), summary, branch, headCommit (the full object id of the commit that contains everything you want reviewed), and checks: each command you ran with result passed, failed or not_run and a short details string.",
             "context": {
               "mode": "current",
-              "instructions": "Inputs: root is this run's resolved setup (repoPath, request, taskDir, size, issue, baseCommit, reviewPolicy, createPr, commitArtifacts). previous is the result of the step that routed here.\nWork only inside root.repoPath. Read the repository's own instructions (for example AGENTS.md, CLAUDE.md, README and contributing or design docs) and follow them; where they conflict with this workflow's defaults, they win.\nPreserve unrelated files and changes. Settle routine technical questions yourself from the repository and record the assumption. Raise a decision for a person only when it changes scope, public behavior, compatibility, consequential architecture or authorization and nothing already settles it.\nPlanning artifacts live in root.taskDir. Do not commit them unless root.commitArtifacts is true or the repository's instructions require it. Put durable facts and decisions in the artifacts; keep workflow details such as root, previous and route values out of them.\nReport a real blocker with fail_work. Never invent a result.",
+              "instructions": "Inputs: root is this run's resolved setup (repoPath, request, taskDir, size, issue, baseCommit, reviewPolicy, createPr, commitArtifacts). previous is the result of the step that routed here.\nWork only inside root.repoPath. Read the repository's own instructions (for example AGENTS.md, CLAUDE.md, README and contributing or design docs) and follow them; where they conflict with this workflow's defaults, they win.\nPreserve unrelated files and changes. Settle routine technical questions yourself from the repository and record the assumption. Raise a decision for a person only when it changes scope, public behavior, compatibility, consequential architecture or authorization and nothing already settles it.\nPlanning artifacts live in root.taskDir. Do not commit them unless root.commitArtifacts is true or the repository's instructions require it. Put durable facts and decisions in the artifacts; keep workflow details such as root, previous and route values out of them.\nReport a real blocker with fail_work. Never invent a result.\nRun plain commands from the repository root: no heredocs, no $ variables or command substitution, no cd, no bash -c, no background jobs, and no files outside the repository such as /tmp; put notes and scratch files in the task folder. Use your file tools to read and edit files when you have them; from the shell, read with cat, head, tail, rg or git show rather than sed or awk. The workflow's permission policy can allow commands written this way without asking a person.",
               "tools": [],
               "skills": [],
               "tier": "balanced",
@@ -690,6 +733,81 @@
             },
             "position": {
               "x": 3040,
+              "y": 160
+            },
+            "routing": {
+              "path": "status",
+              "cases": [
+                {
+                  "port": "done",
+                  "equals": "done"
+                },
+                {
+                  "port": "question",
+                  "equals": "question"
+                }
+              ]
+            }
+          },
+          {
+            "id": "questionGate",
+            "kind": "script",
+            "label": "Count the build's question rounds",
+            "inputSchema": {},
+            "outputSchema": {},
+            "stage": "Implementation",
+            "stageId": "implementation",
+            "language": "javascript",
+            "command": "// Bounded question rounds: three, then the limit checkpoint. A limit decision starts a new count.\nconst { build, prior } = input;\nconst round = (prior && prior.route !== 'limit' ? prior.round : 0) + 1;\nconst list = build.questions.map((q, n) => (n + 1) + '. ' + q.question + '\\n   Why it matters: ' + q.whyItMatters + '\\n   Recommended: ' + q.recommendation).join('\\n\\n');\nconst over = round > 3;\nreturn { route: over ? 'limit' : 'ask', kind: 'questions', resume: 'build', round, feedback: '',\n  question: (over ? 'The build has asked three rounds of questions. Let it continue with its recommendations, or stop?' : 'The build needs a decision:\\n\\n' + list).slice(0, 4000),\n  context: build.summary.slice(0, 32000), evidence: list || '(none)', revision: String(round) };\n",
+            "timeoutMs": 10000,
+            "inputBindings": {
+              "build": {
+                "source": "input",
+                "path": ""
+              },
+              "prior": {
+                "source": "node",
+                "nodeId": "questionGate",
+                "path": "",
+                "sourceDefault": null
+              }
+            },
+            "routing": {
+              "path": "route",
+              "cases": [
+                {
+                  "port": "ask",
+                  "equals": "ask"
+                },
+                {
+                  "port": "limit",
+                  "equals": "limit"
+                }
+              ]
+            },
+            "position": {
+              "x": 3340,
+              "y": 160
+            }
+          },
+          {
+            "id": "questionHuman",
+            "kind": "input",
+            "label": "Answer the build's questions",
+            "inputSchema": {},
+            "outputSchema": {},
+            "stage": "Implementation",
+            "stageId": "implementation",
+            "humanInput": {
+              "question": "Answer the build's questions",
+              "questionPath": "question",
+              "contextPath": "context",
+              "answer": {
+                "kind": "text"
+              }
+            },
+            "position": {
+              "x": 3640,
               "y": 160
             }
           },
@@ -727,7 +845,7 @@
               },
               "checkCommands": {
                 "source": "node",
-                "nodeId": "plan",
+                "nodeId": "planGate",
                 "path": "checkCommands"
               },
               "priorReview": {
@@ -739,7 +857,7 @@
             },
             "position": {
               "x": 3340,
-              "y": 160
+              "y": 380
             }
           },
           {
@@ -751,7 +869,7 @@
             "stage": "Review",
             "stageId": "review",
             "language": "javascript",
-            "command": "const r = input.review;\nconst until = input.grant?.until ?? 3;\nconst planOwned = r.findings.filter((f) => f.owner === 'plan' && f.severity !== 'minor');\nconst repair = planOwned.length ? 'replan' : 'fix';\nlet route;\nif (r.verdict === 'pass') route = 'deliver';\nelse if (r.verdict === 'blocked' || input.count >= until) route = 'ask';\nelse route = repair;\nconst list = r.findings.map((f) => '[' + f.id + ' ' + f.severity + ', ' + f.owner + '] ' + f.location + ': ' + f.details).join('\\n');\nreturn { route, repair, count: input.count, summary: r.summary,\n  feedback: planOwned.length ? 'Independent review of the built change found problems that belong to the plan, not the code. Correct the plan, keeping ids stable:\\n' + planOwned.map((f) => '[' + f.id + '] ' + f.location + ': ' + f.details).join('\\n') : '',\n  question: (r.verdict === 'blocked' ? 'The review could not be completed. ' + r.limitations.join(' ') : 'The change still has findings after ' + input.count + ' reviews.') + ' Allow up to three more review rounds, or stop and keep the work as it is?',\n  context: 'Continuing keeps the original requirements and the outstanding findings. It does not accept defects or authorize new scope.',\n  evidence: (r.summary + '\\n\\n' + list).slice(0, 32000), revision: r.reviewedCommit };\n",
+            "command": "const r = input.review;\nconst until = input.grant?.reviewUntil ?? 3;\nconst planOwned = r.findings.filter((f) => f.owner === 'plan' && f.severity !== 'minor');\nconst repair = planOwned.length ? 'replan' : 'fix';\nlet route;\nif (r.verdict === 'pass') route = 'deliver';\nelse if (r.verdict === 'blocked' || input.count >= until) route = 'ask';\nelse route = repair;\nconst list = r.findings.map((f) => '[' + f.id + ' ' + f.severity + ', ' + f.owner + '] ' + f.location + ': ' + f.details).join('\\n');\nreturn { route, repair, kind: 'rounds', resume: repair === 'replan' ? 'plan' : 'build', count: input.count, summary: r.summary,\n  feedback: planOwned.length ? 'Independent review of the built change found problems that belong to the plan, not the code. Correct the plan, keeping ids stable:\\n' + planOwned.map((f) => '[' + f.id + '] ' + f.location + ': ' + f.details).join('\\n') : '',\n  question: (r.verdict === 'blocked' ? 'The review could not be completed. ' + r.limitations.join(' ') : 'The change still has findings after ' + input.count + ' reviews.') + ' Allow up to three more review rounds, or stop and keep the work as it is?',\n  context: 'Continuing keeps the original requirements and the outstanding findings. It does not accept defects or authorize new scope.',\n  evidence: (r.summary + '\\n\\n' + list).slice(0, 32000), revision: r.reviewedCommit };\n",
             "timeoutMs": 10000,
             "inputBindings": {
               "review": {
@@ -765,7 +883,7 @@
               },
               "grant": {
                 "source": "node",
-                "nodeId": "repairGrant",
+                "nodeId": "limitGrant",
                 "path": "",
                 "sourceDefault": null
               }
@@ -793,23 +911,45 @@
             },
             "position": {
               "x": 3640,
+              "y": 380
+            }
+          },
+          {
+            "id": "limitAsk",
+            "kind": "script",
+            "label": "Explain the limit reached",
+            "inputSchema": {},
+            "outputSchema": {},
+            "stage": "Review",
+            "stageId": "review",
+            "language": "javascript",
+            "command": "// One checkpoint for every loop limit: review rounds and build question rounds.\nconst a = input.ask;\nreturn { kind: a.kind, resume: a.resume, round: a.count ?? a.round ?? 0, feedback: a.feedback ?? '', question: a.question,\n  context: a.context || 'A limit was reached.', evidence: a.evidence || '(none)', revision: String(a.revision || a.kind) };\n",
+            "timeoutMs": 10000,
+            "inputBindings": {
+              "ask": {
+                "source": "input",
+                "path": ""
+              }
+            },
+            "position": {
+              "x": 3940,
               "y": 160
             }
           },
           {
-            "id": "repairHuman",
+            "id": "limitHuman",
             "kind": "input",
-            "label": "Allow further repair?",
+            "label": "Continue past the limit?",
             "inputSchema": {},
             "outputSchema": {},
             "stage": "Review",
             "stageId": "review",
             "humanInput": {
-              "question": "Allow further repair?",
+              "question": "Continue past the limit?",
               "questionPath": "question",
               "contextPath": "context",
               "evidence": {
-                "title": "Latest review",
+                "title": "Latest state",
                 "contentPath": "evidence",
                 "revisionPath": "revision"
               },
@@ -817,7 +957,7 @@
                 "kind": "choice",
                 "choices": [
                   {
-                    "label": "Allow three more review rounds",
+                    "label": "Continue",
                     "value": "continue"
                   },
                   {
@@ -828,42 +968,48 @@
               }
             },
             "position": {
-              "x": 3940,
+              "x": 4240,
               "y": 160
             }
           },
           {
-            "id": "repairGrant",
+            "id": "limitGrant",
             "kind": "script",
-            "label": "Record the repair decision",
+            "label": "Record the limit decision",
             "inputSchema": {},
             "outputSchema": {},
             "stage": "Review",
             "stageId": "review",
             "language": "javascript",
-            "command": "const d = input.decision;\nconst go = input.answer.choice === 'continue';\nreturn { route: go ? d.repair : 'stop', until: d.count + 3, feedback: d.feedback, humanResponse: JSON.stringify(input.answer),\n  summary: go ? 'A person allowed further repair.' : 'A person stopped the change during review.' };\n",
+            "command": "const { asked, answer, prior } = input;\nconst go = answer.choice === 'continue';\n// A review-round extension survives later question-limit decisions.\nconst reviewUntil = asked.kind === 'rounds' ? asked.round + 3 : prior?.reviewUntil ?? null;\nreturn { route: go ? asked.resume : 'stop', kind: asked.kind, reviewUntil, humanResponse: JSON.stringify(answer),\n  feedback: (asked.kind === 'questions' ? 'A person asked you to continue without further questions, using your recommended options.' : asked.feedback)\n    + (answer.comment ? '\\nTheir words: ' + answer.comment : ''),\n  summary: go ? 'A person allowed the workflow to continue past a limit (' + asked.kind + ').' : 'A person stopped the change at a limit (' + asked.kind + ').' };\n",
             "timeoutMs": 10000,
             "inputBindings": {
+              "asked": {
+                "source": "node",
+                "nodeId": "limitAsk",
+                "path": ""
+              },
               "answer": {
                 "source": "input",
                 "path": ""
               },
-              "decision": {
+              "prior": {
                 "source": "node",
-                "nodeId": "reviewRoute",
-                "path": ""
+                "nodeId": "limitGrant",
+                "path": "",
+                "sourceDefault": null
               }
             },
             "routing": {
               "path": "route",
               "cases": [
                 {
-                  "port": "fix",
-                  "equals": "fix"
+                  "port": "build",
+                  "equals": "build"
                 },
                 {
-                  "port": "replan",
-                  "equals": "replan"
+                  "port": "plan",
+                  "equals": "plan"
                 },
                 {
                   "port": "stop",
@@ -872,7 +1018,7 @@
               ]
             },
             "position": {
-              "x": 4240,
+              "x": 4540,
               "y": 160
             }
           },
@@ -941,7 +1087,7 @@
             "prompt": "Open or update a pull request for the reviewed change. root.createPr is true and the change passed independent review at review.reviewedCommit on branch deliver.branch.\n\nPush that branch and create the pull request with the repository's own tooling and template, following its instructions. Base it on the branch root.baseCommit came from unless the repository says otherwise. In the description: what changed and why, the acceptance criteria and how each was verified, the checks that ran, any minor findings from review.findings left open, anything review.limitations marks \"For delivery:\", and a link to root.issue when present. Keep to the template's own sections: put findings and notes where the template has room for them and do not add sections it lacks. Attach or link UI evidence saved under root.taskDir when the change is visible.\n\nDo not change the reviewed code. If the branch must change to open the pull request, stop and report it. If no remote or credentials are available, do not invent a URL: return prUrl null and say what blocked delivery. Do not merge.\n\nReturn prUrl and summary.",
             "context": {
               "mode": "current",
-              "instructions": "Inputs: root is this run's resolved setup (repoPath, request, taskDir, size, issue, baseCommit, reviewPolicy, createPr, commitArtifacts). previous is the result of the step that routed here.\nWork only inside root.repoPath. Read the repository's own instructions (for example AGENTS.md, CLAUDE.md, README and contributing or design docs) and follow them; where they conflict with this workflow's defaults, they win.\nPreserve unrelated files and changes. Settle routine technical questions yourself from the repository and record the assumption. Raise a decision for a person only when it changes scope, public behavior, compatibility, consequential architecture or authorization and nothing already settles it.\nPlanning artifacts live in root.taskDir. Do not commit them unless root.commitArtifacts is true or the repository's instructions require it. Put durable facts and decisions in the artifacts; keep workflow details such as root, previous and route values out of them.\nReport a real blocker with fail_work. Never invent a result.",
+              "instructions": "Inputs: root is this run's resolved setup (repoPath, request, taskDir, size, issue, baseCommit, reviewPolicy, createPr, commitArtifacts). previous is the result of the step that routed here.\nWork only inside root.repoPath. Read the repository's own instructions (for example AGENTS.md, CLAUDE.md, README and contributing or design docs) and follow them; where they conflict with this workflow's defaults, they win.\nPreserve unrelated files and changes. Settle routine technical questions yourself from the repository and record the assumption. Raise a decision for a person only when it changes scope, public behavior, compatibility, consequential architecture or authorization and nothing already settles it.\nPlanning artifacts live in root.taskDir. Do not commit them unless root.commitArtifacts is true or the repository's instructions require it. Put durable facts and decisions in the artifacts; keep workflow details such as root, previous and route values out of them.\nReport a real blocker with fail_work. Never invent a result.\nRun plain commands from the repository root: no heredocs, no $ variables or command substitution, no cd, no bash -c, no background jobs, and no files outside the repository such as /tmp; put notes and scratch files in the task folder. Use your file tools to read and edit files when you have them; from the shell, read with cat, head, tail, rg or git show rather than sed or awk. The workflow's permission policy can allow commands written this way without asking a person.",
               "tools": [],
               "skills": [],
               "tier": "fast"
@@ -1026,7 +1172,7 @@
             "stage": "Delivery",
             "stageId": "delivery",
             "language": "javascript",
-            "command": "const { root, review, deliver, pr } = input;\nconst minor = review.findings.map((f) => 'Minor finding left open: [' + f.id + '] ' + f.location + ': ' + f.details);\nconst unchecked = review.checksPassed === null ? ['No check commands were run by Interlock for the final review.'] : [];\nconst blocked = root.createPr && !pr?.prUrl;\nreturn { outcome: blocked ? 'delivery_blocked' : pr?.prUrl ? 'pr_created' : 'local_complete', verification: 'passed',\n  taskDir: root.taskDir, branch: deliver.branch, reviewedCommit: deliver.reviewedCommit, prUrl: pr?.prUrl ?? null,\n  summary: (pr?.summary ?? review.summary),\n  limitations: [...(blocked ? ['A pull request was requested but not opened. ' + (pr?.summary ?? '')] : []), ...unchecked, ...minor,\n    ...(pr?.prUrl ? [\"The pull request's own CI had not finished when this workflow ended.\"] : []),\n    ...review.limitations.map((l) => 'Review note, written before delivery: ' + l)] };\n",
+            "command": "const { root, review, deliver, pr } = input;\nconst minor = review.findings.map((f) => 'Minor finding left open: [' + f.id + '] ' + f.location + ': ' + f.details);\nconst unchecked = review.checksPassed === null ? ['No check commands were run by Interlock for the final review.'] : [];\nconst blocked = root.createPr && !pr?.prUrl;\nreturn { outcome: blocked ? 'delivery_blocked' : pr?.prUrl ? 'pr_created' : 'local_complete', verification: review.checks.some((c) => c.status === 'not_run') ? 'incomplete' : 'passed',\n  taskDir: root.taskDir, branch: deliver.branch, reviewedCommit: deliver.reviewedCommit, prUrl: pr?.prUrl ?? null,\n  summary: (pr?.summary ?? review.summary),\n  limitations: [...(blocked ? ['A pull request was requested but not opened. ' + (pr?.summary ?? '')] : []), ...unchecked, ...minor,\n    ...(pr?.prUrl ? [\"The pull request's own CI had not finished when this workflow ended.\"] : []),\n    ...review.limitations.map((l) => 'Review note, written before delivery: ' + l)] };\n",
             "timeoutMs": 10000,
             "inputBindings": {
               "root": {
@@ -1053,7 +1199,7 @@
             },
             "position": {
               "x": 4540,
-              "y": 160
+              "y": 380
             }
           },
           {
@@ -1138,8 +1284,8 @@
               }
             },
             "position": {
-              "x": 4540,
-              "y": 380
+              "x": 4840,
+              "y": 160
             }
           },
           {
@@ -1250,7 +1396,7 @@
             "stageId": "delivery",
             "position": {
               "x": 4840,
-              "y": 160
+              "y": 380
             }
           },
           {
@@ -1358,8 +1504,8 @@
               "additionalProperties": false
             },
             "position": {
-              "x": 4840,
-              "y": 380
+              "x": 5140,
+              "y": 160
             }
           }
         ],
@@ -1467,10 +1613,10 @@
             "port": "stop"
           },
           {
-            "id": "build-default-changeReview",
+            "id": "build-done-changeReview",
             "source": "build",
             "target": "changeReview",
-            "port": "default"
+            "port": "done"
           },
           {
             "id": "changeReview-default-reviewRoute",
@@ -1495,36 +1641,6 @@
             "source": "reviewRoute",
             "target": "plan",
             "port": "replan"
-          },
-          {
-            "id": "reviewRoute-ask-repairHuman",
-            "source": "reviewRoute",
-            "target": "repairHuman",
-            "port": "ask"
-          },
-          {
-            "id": "repairHuman-default-repairGrant",
-            "source": "repairHuman",
-            "target": "repairGrant",
-            "port": "default"
-          },
-          {
-            "id": "repairGrant-fix-build",
-            "source": "repairGrant",
-            "target": "build",
-            "port": "fix"
-          },
-          {
-            "id": "repairGrant-replan-plan",
-            "source": "repairGrant",
-            "target": "plan",
-            "port": "replan"
-          },
-          {
-            "id": "repairGrant-stop-stopOutput",
-            "source": "repairGrant",
-            "target": "stopOutput",
-            "port": "stop"
           },
           {
             "id": "deliverCheck-local-result",
@@ -1555,8 +1671,174 @@
             "source": "stopOutput",
             "target": "stopped",
             "port": "default"
+          },
+          {
+            "id": "build-question-questionGate",
+            "source": "build",
+            "target": "questionGate",
+            "port": "question"
+          },
+          {
+            "id": "questionGate-ask-questionHuman",
+            "source": "questionGate",
+            "target": "questionHuman",
+            "port": "ask"
+          },
+          {
+            "id": "questionGate-limit-limitAsk",
+            "source": "questionGate",
+            "target": "limitAsk",
+            "port": "limit"
+          },
+          {
+            "id": "questionHuman-default-build",
+            "source": "questionHuman",
+            "target": "build",
+            "port": "default"
+          },
+          {
+            "id": "reviewRoute-ask-limitAsk",
+            "source": "reviewRoute",
+            "target": "limitAsk",
+            "port": "ask"
+          },
+          {
+            "id": "limitAsk-default-limitHuman",
+            "source": "limitAsk",
+            "target": "limitHuman",
+            "port": "default"
+          },
+          {
+            "id": "limitHuman-default-limitGrant",
+            "source": "limitHuman",
+            "target": "limitGrant",
+            "port": "default"
+          },
+          {
+            "id": "limitGrant-build-build",
+            "source": "limitGrant",
+            "target": "build",
+            "port": "build"
+          },
+          {
+            "id": "limitGrant-plan-plan",
+            "source": "limitGrant",
+            "target": "plan",
+            "port": "plan"
+          },
+          {
+            "id": "limitGrant-stop-stopOutput",
+            "source": "limitGrant",
+            "target": "stopOutput",
+            "port": "stop"
           }
-        ]
+        ],
+        "permissionPolicy": {
+          "allow": [
+            {
+              "kind": "read"
+            },
+            {
+              "kind": "edit"
+            },
+            {
+              "kind": "command",
+              "pattern": "git status"
+            },
+            {
+              "kind": "command",
+              "pattern": "git status *"
+            },
+            {
+              "kind": "command",
+              "pattern": "git diff"
+            },
+            {
+              "kind": "command",
+              "pattern": "git diff *"
+            },
+            {
+              "kind": "command",
+              "pattern": "git log"
+            },
+            {
+              "kind": "command",
+              "pattern": "git log *"
+            },
+            {
+              "kind": "command",
+              "pattern": "git show *"
+            },
+            {
+              "kind": "command",
+              "pattern": "git blame *"
+            },
+            {
+              "kind": "command",
+              "pattern": "git rev-parse *"
+            },
+            {
+              "kind": "command",
+              "pattern": "git ls-files *"
+            },
+            {
+              "kind": "command",
+              "pattern": "git merge-base *"
+            },
+            {
+              "kind": "command",
+              "pattern": "git branch --show-current"
+            },
+            {
+              "kind": "command",
+              "pattern": "git add *"
+            },
+            {
+              "kind": "command",
+              "pattern": "git commit *"
+            },
+            {
+              "kind": "command",
+              "pattern": "ls"
+            },
+            {
+              "kind": "command",
+              "pattern": "ls *"
+            },
+            {
+              "kind": "command",
+              "pattern": "pwd"
+            },
+            {
+              "kind": "command",
+              "pattern": "cat *"
+            },
+            {
+              "kind": "command",
+              "pattern": "head *"
+            },
+            {
+              "kind": "command",
+              "pattern": "tail *"
+            },
+            {
+              "kind": "command",
+              "pattern": "wc *"
+            },
+            {
+              "kind": "command",
+              "pattern": "rg *"
+            },
+            {
+              "kind": "command",
+              "pattern": "grep *"
+            },
+            {
+              "kind": "command",
+              "pattern": "find *"
+            }
+          ]
+        }
       },
       "draftRevision": 1,
       "versions": []
@@ -1784,7 +2066,7 @@
             "prompt": "Review a plan or proposal before anyone builds it. This is a report. It is not approval and it does not authorize implementation.\n\nWork read-only in input.repoPath: do not modify code, documents, workflow definitions or Git state.\n\n1. Locate the proposal. Use input.proposalPath (relative to input.repoPath, and it must resolve inside it) or input.proposalText. If neither is usable, return verdict blocked and say why in limitations.\n2. Read the repository's own instructions and the source files the proposal names or depends on.\n3. Before judging anything, write two short paraphrases from the proposal and those sources alone: proposalSummary (what will change) and systemSummary (how the affected part of the system works today). If you cannot write either with confidence, that gap is itself a finding: the proposal does not give an implementer enough context.\n4. Check the proposal against input.sourceRequest when present: does it solve what was asked, without adding scope nobody requested?\n5. Inspect, in this order: assumptions about the existing code that the code contradicts; acceptance criteria that cannot be observed or tested; failure, recovery and compatibility behavior; user-facing flow, including UI states and reuse of existing components and patterns when the proposal touches UI; whether the verification steps would actually catch the main risks; whether an implementer could start without asking a question.\n6. Use input.focus as additional questions when present.\n\nFindings must be concrete and located. Give each a stable id (F1, F2, ...), a severity, the place in the proposal or code it refers to, what is wrong, and a recommendation the author can act on.\n- blocker: building this as written would produce the wrong thing or break something that works.\n- major: a gap or error the author must resolve before implementation.\n- minor: an improvement that should not hold up implementation.\nDistinguish a defect in the proposal from evidence you could not obtain; put the latter in limitations. Do not invent requirements, restate the proposal, or pad the list. Zero findings is a valid result.\n\nVerdict: ready when no blocker or major finding remains; revise when one does; blocked when you could not inspect evidence the review depends on. List every file and source you actually read in reviewedSources.",
             "context": {
               "mode": "fresh",
-              "instructions": "Run in a new session or an isolated subagent with no inherited conversation. If that is unavailable, report the blocker; never claim fresh context from inside an existing conversation.",
+              "instructions": "Run in a new session or an isolated subagent with no inherited conversation. If that is unavailable, report the blocker; never claim fresh context from inside an existing conversation.\nRun plain commands from the repository root: no heredocs, no $ variables or command substitution, no cd, no bash -c, no background jobs, and no files outside the repository such as /tmp; put notes and scratch files in the task folder. Use your file tools to read and edit files when you have them; from the shell, read with cat, head, tail, rg or git show rather than sed or awk. The workflow's permission policy can allow commands written this way without asking a person.",
               "tools": [],
               "skills": [],
               "tier": "max"
@@ -2302,7 +2584,7 @@
                 "prompt": "Review a plan or proposal before anyone builds it. This is a report. It is not approval and it does not authorize implementation.\n\nWork read-only in input.repoPath: do not modify code, documents, workflow definitions or Git state.\n\n1. Locate the proposal. Use input.proposalPath (relative to input.repoPath, and it must resolve inside it) or input.proposalText. If neither is usable, return verdict blocked and say why in limitations.\n2. Read the repository's own instructions and the source files the proposal names or depends on.\n3. Before judging anything, write two short paraphrases from the proposal and those sources alone: proposalSummary (what will change) and systemSummary (how the affected part of the system works today). If you cannot write either with confidence, that gap is itself a finding: the proposal does not give an implementer enough context.\n4. Check the proposal against input.sourceRequest when present: does it solve what was asked, without adding scope nobody requested?\n5. Inspect, in this order: assumptions about the existing code that the code contradicts; acceptance criteria that cannot be observed or tested; failure, recovery and compatibility behavior; user-facing flow, including UI states and reuse of existing components and patterns when the proposal touches UI; whether the verification steps would actually catch the main risks; whether an implementer could start without asking a question.\n6. Use input.focus as additional questions when present.\n\nFindings must be concrete and located. Give each a stable id (F1, F2, ...), a severity, the place in the proposal or code it refers to, what is wrong, and a recommendation the author can act on.\n- blocker: building this as written would produce the wrong thing or break something that works.\n- major: a gap or error the author must resolve before implementation.\n- minor: an improvement that should not hold up implementation.\nDistinguish a defect in the proposal from evidence you could not obtain; put the latter in limitations. Do not invent requirements, restate the proposal, or pad the list. Zero findings is a valid result.\n\nVerdict: ready when no blocker or major finding remains; revise when one does; blocked when you could not inspect evidence the review depends on. List every file and source you actually read in reviewedSources.",
                 "context": {
                   "mode": "fresh",
-                  "instructions": "Run in a new session or an isolated subagent with no inherited conversation. If that is unavailable, report the blocker; never claim fresh context from inside an existing conversation.",
+                  "instructions": "Run in a new session or an isolated subagent with no inherited conversation. If that is unavailable, report the blocker; never claim fresh context from inside an existing conversation.\nRun plain commands from the repository root: no heredocs, no $ variables or command substitution, no cd, no bash -c, no background jobs, and no files outside the repository such as /tmp; put notes and scratch files in the task folder. Use your file tools to read and edit files when you have them; from the shell, read with cat, head, tail, rg or git show rather than sed or awk. The workflow's permission policy can allow commands written this way without asking a person.",
                   "tools": [],
                   "skills": [],
                   "tier": "max"
@@ -2976,7 +3258,7 @@
             "prompt": "Review a finished change independently. You did not write it. Do not modify the implementation, and do not approve or merge anything.\n\nThe change is the diff from input.baseCommit to input.headCommit in input.repoPath. Interlock already ran the supplied check commands at that commit: input.checks holds each command, its exit code and the tail of its output, and input.checksPassed is the overall result (null means none ran; input.checksNote says why). Treat those as facts. Interlock reruns a failed command once: a check with attempts 2 that passed is flaky, so name it in limitations and do not raise a finding for it. Do not rerun a command that already passed unless you have a concrete reason to doubt it.\n\nAcceptance criteria come from input.criteria or the file at input.criteriaPath, which may sit beside a spec in the same directory. If neither yields criteria you can check, return blocked.\n\nSet reviewedCommit to input.headCommit. Preserve any unrelated working-tree changes.\n\nFirst review (input.priorReview is null): reviewScope full.\n1. Read the repository's own instructions, then the complete diff.\n2. For every acceptance criterion, find observable evidence that it holds: a test that asserts it, a check you ran, or behavior you exercised. A passing test count or the author's summary is not evidence on its own. Report each criterion by its stable id as verified, unverified (no evidence either way) or gap (evidence that it fails).\n3. Exercise one boundary case the author's tests do not cover, chosen from the riskiest part of the change.\n4. Make one standards pass: regressions in neighbouring behavior, security, error handling, documentation the repository requires to stay current, and adherence to the repository's conventions for structure and naming.\n5. If the change touches UI: compare it with the repository's design guidance and with the existing screens it resembles. Check that it reuses existing components and tokens, covers loading, empty and error states it affects, and that the author attached rendered evidence (screenshots or a recorded check). Missing rendered evidence for a visible change is a finding.\n\nLater review (input.priorReview is set): inspect the complete diff from priorReview.reviewedCommit to input.headCommit, including tests and unexpected edits. Give every earlier finding a resolutions entry under its original id. Use reviewScope focused when the fixes are local, and recheck only the affected criteria and nearby behavior; carry earlier verified criteria forward and say so in their evidence. Use full when the fixes touch shared behavior or you cannot trust the earlier baseline. Unresolved findings stay in findings with the same id. New findings get new ids.\n\nFindings must be located and actionable. Give each an owner:\n- implementation: the code, tests or docs are wrong and the plan is right.\n- plan: the plan or its acceptance criteria are wrong, incomplete or contradicted by the code, so fixing the code alone cannot resolve it.\n- environment: a check command failed for a reason this change did not cause and its author cannot fix within scope. Use it only with proof in details: the same command fails the same way on input.baseCommit, or the failure is in code the diff does not touch and does not reproduce when you rerun it. Give one environment finding per such command and put the exact command in location. These never hold the change.\nDo not raise a finding about the pull request description or anything else that can only exist after delivery. Put such notes in limitations, starting with \"For delivery:\".\nAnd a severity: blocker (wrong or harmful behavior), major (must be fixed before this ships), minor (worth fixing, should not hold the change).\n\nVerdict: pass when every criterion is verified, no check failed for a reason the change owns, earlier findings are resolved and no blocker or major finding remains; minor findings may accompany a pass. revise otherwise. blocked only when you could not inspect what the review depends on; name it in limitations. Use input.focus as additional questions when present.",
             "context": {
               "mode": "fresh",
-              "instructions": "Run in a new session or an isolated subagent with no inherited implementation history. If that is unavailable, report the blocker; never claim fresh context from inside the conversation that wrote the change.",
+              "instructions": "Run in a new session or an isolated subagent with no inherited implementation history. If that is unavailable, report the blocker; never claim fresh context from inside the conversation that wrote the change.\nRun plain commands from the repository root: no heredocs, no $ variables or command substitution, no cd, no bash -c, no background jobs, and no files outside the repository such as /tmp; put notes and scratch files in the task folder. Use your file tools to read and edit files when you have them; from the shell, read with cat, head, tail, rg or git show rather than sed or awk. The workflow's permission policy can allow commands written this way without asking a person.",
               "tools": [],
               "skills": [],
               "tier": "max"
@@ -3148,7 +3430,7 @@
             "stage": "Review",
             "stageId": "review",
             "language": "javascript",
-            "command": "const pre = input.pre;\nconst r = { ...input.review };\nr.findings = [...(r.findings ?? [])];\nconst add = (id, details) => r.findings.push({ id, owner: 'implementation', severity: 'major', location: 'review rules', details });\nif (r.verdict !== 'blocked') {\n  if (r.reviewedCommit !== pre.headCommit) add('rule-commit', 'The review names commit ' + r.reviewedCommit + ' but the commit under review is ' + pre.headCommit + '.');\n  r.findings = r.findings.map((f) => (f.owner === 'environment' ? { ...f, severity: 'minor' } : f));\n  if (pre.checksPassed === false) {\n    const excused = r.findings.filter((f) => f.owner === 'environment').map((f) => f.location + ' ' + f.details).join('\\n');\n    const failed = pre.checks.filter((c) => c.status === 'failed' && !excused.includes(c.command)).map((c) => c.command);\n    if (failed.length && !r.findings.some((f) => f.severity !== 'minor')) add('rule-checks', 'Required check commands failed: ' + failed.join('; '));\n  }\n  const open = (r.criteria ?? []).filter((c) => c.status !== 'verified').map((c) => c.id);\n  if (r.verdict === 'pass' && open.length) add('rule-criteria', 'Criteria not verified: ' + open.join(', '));\n  if (r.verdict === 'pass' && (r.resolutions ?? []).some((x) => x.status === 'unresolved')) add('rule-resolutions', 'Earlier findings remain unresolved.');\n  const material = r.findings.some((f) => f.severity === 'blocker' || f.severity === 'major');\n  r.verdict = material ? 'revise' : 'pass';\n}\nr.reviewedCommit = pre.headCommit;\nreturn { ...r, baseCommit: pre.baseCommit, headCommit: pre.headCommit, checksPassed: pre.checksPassed,\n  checks: pre.checks.map((c) => ({ command: c.command, exitCode: c.exitCode, status: c.status })) };\n",
+            "command": "const pre = input.pre;\nconst r = { ...input.review };\nr.findings = [...(r.findings ?? [])];\nconst add = (id, details) => r.findings.push({ id, owner: 'implementation', severity: 'major', location: 'review rules', details });\nif (r.verdict !== 'blocked') {\n  if (r.reviewedCommit !== pre.headCommit) add('rule-commit', 'The review names commit ' + r.reviewedCommit + ' but the commit under review is ' + pre.headCommit + '.');\n  r.findings = r.findings.map((f) => (f.owner === 'environment' ? { ...f, severity: 'minor' } : f));\n  // Commands that were given but skipped prove nothing; the round cannot pass.\n  if (pre.checks.some((c) => c.status === 'not_run')) add('rule-checks', 'Check commands were not run: ' + (pre.checksNote ?? 'no reason given') + ' Commit every change and leave the checkout at the commit to review.');\n  if (pre.checksPassed === false) {\n    const excused = r.findings.filter((f) => f.owner === 'environment').map((f) => f.location + ' ' + f.details).join('\\n');\n    const failed = pre.checks.filter((c) => c.status === 'failed' && !excused.includes(c.command)).map((c) => c.command);\n    if (failed.length && !r.findings.some((f) => f.severity !== 'minor')) add('rule-checks', 'Required check commands failed: ' + failed.join('; '));\n  }\n  const open = (r.criteria ?? []).filter((c) => c.status !== 'verified').map((c) => c.id);\n  if (r.verdict === 'pass' && open.length) add('rule-criteria', 'Criteria not verified: ' + open.join(', '));\n  if (r.verdict === 'pass' && (r.resolutions ?? []).some((x) => x.status === 'unresolved')) add('rule-resolutions', 'Earlier findings remain unresolved.');\n  const material = r.findings.some((f) => f.severity === 'blocker' || f.severity === 'major');\n  r.verdict = material ? 'revise' : 'pass';\n}\nr.reviewedCommit = pre.headCommit;\nreturn { ...r, baseCommit: pre.baseCommit, headCommit: pre.headCommit, checksPassed: pre.checksPassed,\n  checks: pre.checks.map((c) => ({ command: c.command, exitCode: c.exitCode, status: c.status })) };\n",
             "timeoutMs": 10000,
             "inputBindings": {
               "pre": {
@@ -3509,7 +3791,102 @@
             "target": "done",
             "port": "default"
           }
-        ]
+        ],
+        "permissionPolicy": {
+          "allow": [
+            {
+              "kind": "read"
+            },
+            {
+              "kind": "command",
+              "pattern": "git status"
+            },
+            {
+              "kind": "command",
+              "pattern": "git status *"
+            },
+            {
+              "kind": "command",
+              "pattern": "git diff"
+            },
+            {
+              "kind": "command",
+              "pattern": "git diff *"
+            },
+            {
+              "kind": "command",
+              "pattern": "git log"
+            },
+            {
+              "kind": "command",
+              "pattern": "git log *"
+            },
+            {
+              "kind": "command",
+              "pattern": "git show *"
+            },
+            {
+              "kind": "command",
+              "pattern": "git blame *"
+            },
+            {
+              "kind": "command",
+              "pattern": "git rev-parse *"
+            },
+            {
+              "kind": "command",
+              "pattern": "git ls-files *"
+            },
+            {
+              "kind": "command",
+              "pattern": "git merge-base *"
+            },
+            {
+              "kind": "command",
+              "pattern": "git branch --show-current"
+            },
+            {
+              "kind": "command",
+              "pattern": "ls"
+            },
+            {
+              "kind": "command",
+              "pattern": "ls *"
+            },
+            {
+              "kind": "command",
+              "pattern": "pwd"
+            },
+            {
+              "kind": "command",
+              "pattern": "cat *"
+            },
+            {
+              "kind": "command",
+              "pattern": "head *"
+            },
+            {
+              "kind": "command",
+              "pattern": "tail *"
+            },
+            {
+              "kind": "command",
+              "pattern": "wc *"
+            },
+            {
+              "kind": "command",
+              "pattern": "rg *"
+            },
+            {
+              "kind": "command",
+              "pattern": "grep *"
+            },
+            {
+              "kind": "command",
+              "pattern": "find *"
+            }
+          ]
+        }
       },
       "draftRevision": 1,
       "versions": [
@@ -3891,7 +4268,7 @@
                 "prompt": "Review a finished change independently. You did not write it. Do not modify the implementation, and do not approve or merge anything.\n\nThe change is the diff from input.baseCommit to input.headCommit in input.repoPath. Interlock already ran the supplied check commands at that commit: input.checks holds each command, its exit code and the tail of its output, and input.checksPassed is the overall result (null means none ran; input.checksNote says why). Treat those as facts. Interlock reruns a failed command once: a check with attempts 2 that passed is flaky, so name it in limitations and do not raise a finding for it. Do not rerun a command that already passed unless you have a concrete reason to doubt it.\n\nAcceptance criteria come from input.criteria or the file at input.criteriaPath, which may sit beside a spec in the same directory. If neither yields criteria you can check, return blocked.\n\nSet reviewedCommit to input.headCommit. Preserve any unrelated working-tree changes.\n\nFirst review (input.priorReview is null): reviewScope full.\n1. Read the repository's own instructions, then the complete diff.\n2. For every acceptance criterion, find observable evidence that it holds: a test that asserts it, a check you ran, or behavior you exercised. A passing test count or the author's summary is not evidence on its own. Report each criterion by its stable id as verified, unverified (no evidence either way) or gap (evidence that it fails).\n3. Exercise one boundary case the author's tests do not cover, chosen from the riskiest part of the change.\n4. Make one standards pass: regressions in neighbouring behavior, security, error handling, documentation the repository requires to stay current, and adherence to the repository's conventions for structure and naming.\n5. If the change touches UI: compare it with the repository's design guidance and with the existing screens it resembles. Check that it reuses existing components and tokens, covers loading, empty and error states it affects, and that the author attached rendered evidence (screenshots or a recorded check). Missing rendered evidence for a visible change is a finding.\n\nLater review (input.priorReview is set): inspect the complete diff from priorReview.reviewedCommit to input.headCommit, including tests and unexpected edits. Give every earlier finding a resolutions entry under its original id. Use reviewScope focused when the fixes are local, and recheck only the affected criteria and nearby behavior; carry earlier verified criteria forward and say so in their evidence. Use full when the fixes touch shared behavior or you cannot trust the earlier baseline. Unresolved findings stay in findings with the same id. New findings get new ids.\n\nFindings must be located and actionable. Give each an owner:\n- implementation: the code, tests or docs are wrong and the plan is right.\n- plan: the plan or its acceptance criteria are wrong, incomplete or contradicted by the code, so fixing the code alone cannot resolve it.\n- environment: a check command failed for a reason this change did not cause and its author cannot fix within scope. Use it only with proof in details: the same command fails the same way on input.baseCommit, or the failure is in code the diff does not touch and does not reproduce when you rerun it. Give one environment finding per such command and put the exact command in location. These never hold the change.\nDo not raise a finding about the pull request description or anything else that can only exist after delivery. Put such notes in limitations, starting with \"For delivery:\".\nAnd a severity: blocker (wrong or harmful behavior), major (must be fixed before this ships), minor (worth fixing, should not hold the change).\n\nVerdict: pass when every criterion is verified, no check failed for a reason the change owns, earlier findings are resolved and no blocker or major finding remains; minor findings may accompany a pass. revise otherwise. blocked only when you could not inspect what the review depends on; name it in limitations. Use input.focus as additional questions when present.",
                 "context": {
                   "mode": "fresh",
-                  "instructions": "Run in a new session or an isolated subagent with no inherited implementation history. If that is unavailable, report the blocker; never claim fresh context from inside the conversation that wrote the change.",
+                  "instructions": "Run in a new session or an isolated subagent with no inherited implementation history. If that is unavailable, report the blocker; never claim fresh context from inside the conversation that wrote the change.\nRun plain commands from the repository root: no heredocs, no $ variables or command substitution, no cd, no bash -c, no background jobs, and no files outside the repository such as /tmp; put notes and scratch files in the task folder. Use your file tools to read and edit files when you have them; from the shell, read with cat, head, tail, rg or git show rather than sed or awk. The workflow's permission policy can allow commands written this way without asking a person.",
                   "tools": [],
                   "skills": [],
                   "tier": "max"
@@ -4063,7 +4440,7 @@
                 "stage": "Review",
                 "stageId": "review",
                 "language": "javascript",
-                "command": "const pre = input.pre;\nconst r = { ...input.review };\nr.findings = [...(r.findings ?? [])];\nconst add = (id, details) => r.findings.push({ id, owner: 'implementation', severity: 'major', location: 'review rules', details });\nif (r.verdict !== 'blocked') {\n  if (r.reviewedCommit !== pre.headCommit) add('rule-commit', 'The review names commit ' + r.reviewedCommit + ' but the commit under review is ' + pre.headCommit + '.');\n  r.findings = r.findings.map((f) => (f.owner === 'environment' ? { ...f, severity: 'minor' } : f));\n  if (pre.checksPassed === false) {\n    const excused = r.findings.filter((f) => f.owner === 'environment').map((f) => f.location + ' ' + f.details).join('\\n');\n    const failed = pre.checks.filter((c) => c.status === 'failed' && !excused.includes(c.command)).map((c) => c.command);\n    if (failed.length && !r.findings.some((f) => f.severity !== 'minor')) add('rule-checks', 'Required check commands failed: ' + failed.join('; '));\n  }\n  const open = (r.criteria ?? []).filter((c) => c.status !== 'verified').map((c) => c.id);\n  if (r.verdict === 'pass' && open.length) add('rule-criteria', 'Criteria not verified: ' + open.join(', '));\n  if (r.verdict === 'pass' && (r.resolutions ?? []).some((x) => x.status === 'unresolved')) add('rule-resolutions', 'Earlier findings remain unresolved.');\n  const material = r.findings.some((f) => f.severity === 'blocker' || f.severity === 'major');\n  r.verdict = material ? 'revise' : 'pass';\n}\nr.reviewedCommit = pre.headCommit;\nreturn { ...r, baseCommit: pre.baseCommit, headCommit: pre.headCommit, checksPassed: pre.checksPassed,\n  checks: pre.checks.map((c) => ({ command: c.command, exitCode: c.exitCode, status: c.status })) };\n",
+                "command": "const pre = input.pre;\nconst r = { ...input.review };\nr.findings = [...(r.findings ?? [])];\nconst add = (id, details) => r.findings.push({ id, owner: 'implementation', severity: 'major', location: 'review rules', details });\nif (r.verdict !== 'blocked') {\n  if (r.reviewedCommit !== pre.headCommit) add('rule-commit', 'The review names commit ' + r.reviewedCommit + ' but the commit under review is ' + pre.headCommit + '.');\n  r.findings = r.findings.map((f) => (f.owner === 'environment' ? { ...f, severity: 'minor' } : f));\n  // Commands that were given but skipped prove nothing; the round cannot pass.\n  if (pre.checks.some((c) => c.status === 'not_run')) add('rule-checks', 'Check commands were not run: ' + (pre.checksNote ?? 'no reason given') + ' Commit every change and leave the checkout at the commit to review.');\n  if (pre.checksPassed === false) {\n    const excused = r.findings.filter((f) => f.owner === 'environment').map((f) => f.location + ' ' + f.details).join('\\n');\n    const failed = pre.checks.filter((c) => c.status === 'failed' && !excused.includes(c.command)).map((c) => c.command);\n    if (failed.length && !r.findings.some((f) => f.severity !== 'minor')) add('rule-checks', 'Required check commands failed: ' + failed.join('; '));\n  }\n  const open = (r.criteria ?? []).filter((c) => c.status !== 'verified').map((c) => c.id);\n  if (r.verdict === 'pass' && open.length) add('rule-criteria', 'Criteria not verified: ' + open.join(', '));\n  if (r.verdict === 'pass' && (r.resolutions ?? []).some((x) => x.status === 'unresolved')) add('rule-resolutions', 'Earlier findings remain unresolved.');\n  const material = r.findings.some((f) => f.severity === 'blocker' || f.severity === 'major');\n  r.verdict = material ? 'revise' : 'pass';\n}\nr.reviewedCommit = pre.headCommit;\nreturn { ...r, baseCommit: pre.baseCommit, headCommit: pre.headCommit, checksPassed: pre.checksPassed,\n  checks: pre.checks.map((c) => ({ command: c.command, exitCode: c.exitCode, status: c.status })) };\n",
                 "timeoutMs": 10000,
                 "inputBindings": {
                   "pre": {
@@ -4424,7 +4801,102 @@
                 "target": "done",
                 "port": "default"
               }
-            ]
+            ],
+            "permissionPolicy": {
+              "allow": [
+                {
+                  "kind": "read"
+                },
+                {
+                  "kind": "command",
+                  "pattern": "git status"
+                },
+                {
+                  "kind": "command",
+                  "pattern": "git status *"
+                },
+                {
+                  "kind": "command",
+                  "pattern": "git diff"
+                },
+                {
+                  "kind": "command",
+                  "pattern": "git diff *"
+                },
+                {
+                  "kind": "command",
+                  "pattern": "git log"
+                },
+                {
+                  "kind": "command",
+                  "pattern": "git log *"
+                },
+                {
+                  "kind": "command",
+                  "pattern": "git show *"
+                },
+                {
+                  "kind": "command",
+                  "pattern": "git blame *"
+                },
+                {
+                  "kind": "command",
+                  "pattern": "git rev-parse *"
+                },
+                {
+                  "kind": "command",
+                  "pattern": "git ls-files *"
+                },
+                {
+                  "kind": "command",
+                  "pattern": "git merge-base *"
+                },
+                {
+                  "kind": "command",
+                  "pattern": "git branch --show-current"
+                },
+                {
+                  "kind": "command",
+                  "pattern": "ls"
+                },
+                {
+                  "kind": "command",
+                  "pattern": "ls *"
+                },
+                {
+                  "kind": "command",
+                  "pattern": "pwd"
+                },
+                {
+                  "kind": "command",
+                  "pattern": "cat *"
+                },
+                {
+                  "kind": "command",
+                  "pattern": "head *"
+                },
+                {
+                  "kind": "command",
+                  "pattern": "tail *"
+                },
+                {
+                  "kind": "command",
+                  "pattern": "wc *"
+                },
+                {
+                  "kind": "command",
+                  "pattern": "rg *"
+                },
+                {
+                  "kind": "command",
+                  "pattern": "grep *"
+                },
+                {
+                  "kind": "command",
+                  "pattern": "find *"
+                }
+              ]
+            }
           }
         }
       ]
