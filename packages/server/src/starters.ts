@@ -6,6 +6,7 @@ import {
   type BoardImportSetup,
   type BoardImportResult,
   type BoardSuggestion,
+  type VariableRequirement,
 } from '@interlock/core';
 import type { Engine } from '@interlock/runtime';
 import { fingerprint } from '@interlock/runtime/versionIdentity';
@@ -16,6 +17,9 @@ import {
 import sdlc from '../../../workflows/sdlc.json';
 import sdlcV2 from '../../../workflows/sdlc-v2.json';
 import evaluate from '../../../workflows/evaluate.json';
+import issueIntake from '../../../workflows/github-issue-intake.json';
+import runNotifications from '../../../workflows/run-notifications.json';
+import { provisionStarterVariables } from './starterVariables.js';
 
 const sdlcColumns = [
   { id: 'planning', name: 'Planning' },
@@ -32,6 +36,7 @@ const sdlcBoard: BoardSuggestion = {
 /** A portable bundle: a root workflow and the helpers it owns and calls. */
 interface StarterBundle {
   rootId: string;
+  variables?: VariableRequirement[];
   workflows: {
     id: string;
     name: string;
@@ -49,6 +54,8 @@ const bundleRoot = (bundle: StarterBundle) => {
   };
 };
 const sdlcV2Bundle = sdlcV2 as StarterBundle;
+const intakeBundle = issueIntake as StarterBundle;
+const notificationsBundle = runNotifications as StarterBundle;
 const catalog = [
   {
     id: 'sdlc',
@@ -76,6 +83,26 @@ const catalog = [
     summary: 'Evaluate retained comparison results against a fixed rubric.',
     requirements:
       'Needs a completed workflow comparison. Review mode requires a fresh reviewer.',
+  },
+  {
+    id: 'github-issue-intake',
+    template: bundleRoot(intakeBundle),
+    bundle: intakeBundle,
+    boardSuggestion: undefined,
+    summary:
+      'Start one run of your workflow per open GitHub issue with your label, on a schedule you create.',
+    requirements:
+      'On each issue it starts, removes your label and adds a picked-up label. Set the github_token Secret.',
+  },
+  {
+    id: 'run-notifications',
+    template: bundleRoot(notificationsBundle),
+    bundle: notificationsBundle,
+    boardSuggestion: undefined,
+    summary:
+      'Post a short message to a webhook when a run completes, fails or needs attention.',
+    requirements:
+      'One JSON POST per event to the URL in the notify_webhook_url Secret. Start it from an event automation.',
   },
 ] as const;
 type Starter = (typeof catalog)[number];
@@ -336,6 +363,7 @@ export function importStarter(
       throw new InterlockError(
         'Choose another copy to set up a board for this starter.',
       );
+    if (!found) provisionStarterVariables(engine, bundleOf(starter)?.variables);
     const workflow =
       found ??
       engine.create(

@@ -36,6 +36,8 @@ it('lists bundled choices without installing, publishing or starting anything', 
     'sdlc',
     'sdlc-v2',
     'evaluate-comparison',
+    'github-issue-intake',
+    'run-notifications',
   ]);
   expect(e.store.workflows()).toEqual([]);
   expect(e.store.list('starterCopies')).toEqual([]);
@@ -65,6 +67,8 @@ it.each(['draft', 'version'])(
       'sdlc',
       'sdlc-v2',
       'evaluate-comparison',
+      'github-issue-intake',
+      'run-notifications',
     ]);
     expect(listStarters(e).every((s) => !s.existing)).toBe(true);
     expect(add(e)).toMatchObject({ created: true });
@@ -130,6 +134,39 @@ it('adds SDLC v2 as its own copy and leaves an existing v1 copy untouched', () =
   expect(
     e.scriptApprovals.pendingPolicy(v2.workflow.id, definition),
   ).toBeFalsy();
+});
+it('provisions a starter credential without a value, beside a variable of the same name, once for every copy', () => {
+  const e = setup();
+  e.variables.mutate({
+    action: 'create',
+    name: 'GitHub_Token',
+    kind: 'config',
+    value: 'x',
+  });
+  const first = importStarter(e, {
+    starterId: 'github-issue-intake',
+    requestId: 'a',
+  });
+  const second = importStarter(e, {
+    starterId: 'github-issue-intake',
+    requestId: 'b',
+    copy: true,
+  });
+  expect(first.workflow.latestVersion).toBe(1);
+  expect(second.workflow.id).not.toBe(first.workflow.id);
+  const token = e.variables.get('interlock-github-token');
+  expect(token).toMatchObject({ name: 'github_token_2', kind: 'secret' });
+  expect(e.variables.status(token)).toBe('unset');
+  expect(e.store.list('variables')).toHaveLength(2);
+  const input = {
+    owner: 'o',
+    repo: 'r',
+    label: 'ready',
+    pickedUpLabel: 'started',
+    targetWorkflowId: 'w',
+  };
+  expect(() => e.start(first.workflow.id, input)).toThrow(/no value/);
+  expect(e.store.runs()).toEqual([]);
 });
 it('gives each SDLC v2 copy its own published Plan review and Change review', () => {
   const e = setup();

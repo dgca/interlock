@@ -93,8 +93,11 @@ it.each(['http', 'stdio'])(
         'sdlc',
         'sdlc-v2',
         'evaluate-comparison',
+        'github-issue-intake',
+        'run-notifications',
       ]);
-      expect(JSON.stringify(choices).length).toBeLessThan(2000);
+      // About 300 bytes per starter without a board suggestion.
+      expect(JSON.stringify(choices).length).toBeLessThan(3500);
       expect(e.store.workflows()).toEqual([]);
       expect(choices[0].boardSetup?.suggestions[0]).toMatchObject({
         id: 'sdlc-board',

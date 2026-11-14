@@ -1,0 +1,449 @@
+{
+  "format": "interlock-workflows",
+  "formatVersion": 4,
+  "variables": [
+    {
+      "id": "interlock-github-token",
+      "name": "github_token",
+      "kind": "secret"
+    }
+  ],
+  "rootId": "interlock-github-issue-intake",
+  "workflows": [
+    {
+      "id": "interlock-github-issue-intake",
+      "name": "GitHub issue intake",
+      "description": "Run on a schedule. Lists open issues with a label, starts one run of a target workflow per issue with a request key, then replaces the label with a picked-up label.",
+      "ownerWorkflowId": null,
+      "draftRevision": 1,
+      "versions": [],
+      "draft": {
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "owner": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 39
+            },
+            "repo": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "label": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 50
+            },
+            "pickedUpLabel": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 50
+            },
+            "targetWorkflowId": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "owner",
+            "repo",
+            "label",
+            "pickedUpLabel",
+            "targetWorkflowId"
+          ],
+          "additionalProperties": false
+        },
+        "outputSchema": {},
+        "maxSteps": 20,
+        "nodes": [
+          {
+            "id": "entry",
+            "kind": "entry",
+            "label": "Repository and target",
+            "position": {
+              "x": 0,
+              "y": 100
+            }
+          },
+          {
+            "id": "list",
+            "kind": "fetch",
+            "label": "List labeled issues",
+            "position": {
+              "x": 300,
+              "y": 100
+            },
+            "url": "https://api.github.com/repos/{{input.owner}}/{{input.repo}}/issues",
+            "method": "GET",
+            "query": [
+              {
+                "name": "state",
+                "value": {
+                  "kind": "fixed",
+                  "value": "open"
+                }
+              },
+              {
+                "name": "labels",
+                "value": {
+                  "kind": "input",
+                  "path": "label"
+                }
+              },
+              {
+                "name": "sort",
+                "value": {
+                  "kind": "fixed",
+                  "value": "created"
+                }
+              },
+              {
+                "name": "direction",
+                "value": {
+                  "kind": "fixed",
+                  "value": "asc"
+                }
+              },
+              {
+                "name": "per_page",
+                "value": {
+                  "kind": "fixed",
+                  "value": "20"
+                }
+              }
+            ],
+            "headers": [
+              {
+                "name": "Accept",
+                "value": {
+                  "kind": "fixed",
+                  "value": "application/vnd.github+json"
+                }
+              },
+              {
+                "name": "X-GitHub-Api-Version",
+                "value": {
+                  "kind": "fixed",
+                  "value": "2022-11-28"
+                }
+              },
+              {
+                "name": "User-Agent",
+                "value": {
+                  "kind": "fixed",
+                  "value": "interlock-issue-intake"
+                }
+              },
+              {
+                "name": "Authorization",
+                "value": {
+                  "kind": "variable",
+                  "variableId": "interlock-github-token",
+                  "prefix": "Bearer "
+                }
+              }
+            ],
+            "body": {
+              "kind": "none"
+            },
+            "timeoutMs": 15000
+          },
+          {
+            "id": "select",
+            "kind": "script",
+            "label": "Choose new issues",
+            "position": {
+              "x": 600,
+              "y": 100
+            },
+            "language": "javascript",
+            "inputBindings": {
+              "config": {
+                "source": "runInput"
+              },
+              "issues": {
+                "source": "input",
+                "path": "body"
+              }
+            },
+            "command": "// Issue text is untrusted. It reaches the target workflow only as data.\nconst { config, issues } = input;\nconst repository = `${config.owner}/${config.repo}`;\nconst items = [];\nfor (const issue of issues) {\n  const labels = issue.labels.map((label) => label.name ?? label);\n  // The issues API also lists pull requests; skip them and picked-up issues.\n  if (issue.pull_request || labels.includes(config.pickedUpLabel)) continue;\n  // One request key per issue: Interlock never starts the same key twice.\n  let requestId = `github:${repository}#${issue.number}`;\n  if (requestId.length > 120) {\n    const { createHash } = await import('node:crypto');\n    const digest = createHash('sha256').update(repository).digest('hex');\n    requestId = `github:${digest.slice(0, 40)}#${issue.number}`;\n  }\n  items.push({\n    owner: config.owner,\n    repo: config.repo,\n    number: issue.number,\n    labels: [\n      ...labels.filter((label) => label !== config.label),\n      config.pickedUpLabel,\n    ],\n    start: {\n      workflowId: config.targetWorkflowId,\n      requestId,\n      title: `${repository}#${issue.number}`.slice(0, 200),\n      tags: { source: 'github-issue', issue: String(issue.number) },\n      input: {\n        issue: {\n          repository,\n          number: issue.number,\n          url: issue.html_url,\n          author: issue.user?.login ?? null,\n          labels,\n        },\n        untrustedIssueText: {\n          title: issue.title,\n          body: (issue.body ?? '').slice(0, 20000),\n        },\n      },\n    },\n  });\n}\nreturn { items };",
+            "timeoutMs": 10000
+          },
+          {
+            "id": "each",
+            "kind": "batch",
+            "label": "Each new issue",
+            "position": {
+              "x": 900,
+              "y": 60
+            },
+            "itemsPath": "items",
+            "concurrency": 1,
+            "maxItems": 20,
+            "failurePolicy": "collect"
+          },
+          {
+            "id": "start",
+            "kind": "fetch",
+            "label": "Start target run",
+            "batchId": "each",
+            "position": {
+              "x": 40,
+              "y": 120
+            },
+            "url": "http://127.0.0.1:4310/api/runs",
+            "method": "POST",
+            "query": [],
+            "headers": [],
+            "body": {
+              "kind": "fields",
+              "fields": [
+                {
+                  "name": "workflowId",
+                  "value": {
+                    "kind": "input",
+                    "path": "start.workflowId"
+                  }
+                },
+                {
+                  "name": "input",
+                  "value": {
+                    "kind": "input",
+                    "path": "start.input"
+                  }
+                },
+                {
+                  "name": "requestId",
+                  "value": {
+                    "kind": "input",
+                    "path": "start.requestId"
+                  }
+                },
+                {
+                  "name": "title",
+                  "value": {
+                    "kind": "input",
+                    "path": "start.title"
+                  }
+                },
+                {
+                  "name": "tags",
+                  "value": {
+                    "kind": "input",
+                    "path": "start.tags"
+                  }
+                }
+              ]
+            },
+            "timeoutMs": 15000,
+            "failOnHttpError": false
+          },
+          {
+            "id": "started",
+            "kind": "switch",
+            "label": "Started or already started?",
+            "batchId": "each",
+            "position": {
+              "x": 340,
+              "y": 120
+            },
+            "path": "status",
+            "cases": [
+              {
+                "port": "started",
+                "equals": 202
+              },
+              {
+                "port": "already",
+                "equals": 409
+              }
+            ]
+          },
+          {
+            "id": "mark",
+            "kind": "fetch",
+            "label": "Swap labels",
+            "batchId": "each",
+            "position": {
+              "x": 640,
+              "y": 120
+            },
+            "inputBindings": {
+              "owner": {
+                "source": "itemInput",
+                "path": "owner"
+              },
+              "repo": {
+                "source": "itemInput",
+                "path": "repo"
+              },
+              "number": {
+                "source": "itemInput",
+                "path": "number"
+              },
+              "labels": {
+                "source": "itemInput",
+                "path": "labels"
+              }
+            },
+            "outputBindings": {
+              "number": {
+                "source": "input",
+                "path": "body.number"
+              },
+              "runId": {
+                "source": "node",
+                "nodeId": "start",
+                "path": "body.runId",
+                "default": null
+              }
+            },
+            "url": "https://api.github.com/repos/{{input.owner}}/{{input.repo}}/issues/{{input.number}}",
+            "method": "PATCH",
+            "query": [],
+            "headers": [
+              {
+                "name": "Accept",
+                "value": {
+                  "kind": "fixed",
+                  "value": "application/vnd.github+json"
+                }
+              },
+              {
+                "name": "X-GitHub-Api-Version",
+                "value": {
+                  "kind": "fixed",
+                  "value": "2022-11-28"
+                }
+              },
+              {
+                "name": "User-Agent",
+                "value": {
+                  "kind": "fixed",
+                  "value": "interlock-issue-intake"
+                }
+              },
+              {
+                "name": "Authorization",
+                "value": {
+                  "kind": "variable",
+                  "variableId": "interlock-github-token",
+                  "prefix": "Bearer "
+                }
+              }
+            ],
+            "body": {
+              "kind": "fields",
+              "fields": [
+                {
+                  "name": "labels",
+                  "value": {
+                    "kind": "input",
+                    "path": "labels"
+                  }
+                }
+              ]
+            },
+            "timeoutMs": 15000
+          },
+          {
+            "id": "summary",
+            "kind": "script",
+            "label": "Report picked-up issues",
+            "position": {
+              "x": 1900,
+              "y": 100
+            },
+            "language": "javascript",
+            "inputBindings": {
+              "results": {
+                "source": "input"
+              },
+              "items": {
+                "source": "node",
+                "nodeId": "select",
+                "path": "items"
+              }
+            },
+            "command": "// Fail the poll visibly when any issue could not be started or marked.\nconst started = [];\nconst failed = [];\ninput.results.forEach((result, i) => {\n  const number = input.items[i].number;\n  if (result.status === 'completed') started.push(result.output);\n  else failed.push(`#${number}: ${result.error}`);\n});\nif (failed.length)\n  throw new Error(`${failed.length} issue(s) not picked up: ${failed.join('; ')}`);\nreturn { started };",
+            "timeoutMs": 10000
+          },
+          {
+            "id": "exit",
+            "kind": "exit",
+            "label": "Picked-up issues",
+            "position": {
+              "x": 2200,
+              "y": 100
+            }
+          }
+        ],
+        "edges": [
+          {
+            "id": "entry-list",
+            "source": "entry",
+            "target": "list",
+            "port": "default"
+          },
+          {
+            "id": "list-select",
+            "source": "list",
+            "target": "select",
+            "port": "default"
+          },
+          {
+            "id": "select-each",
+            "source": "select",
+            "target": "each",
+            "port": "default"
+          },
+          {
+            "id": "each-start",
+            "source": "each",
+            "target": "start",
+            "port": "item"
+          },
+          {
+            "id": "start-started",
+            "source": "start",
+            "target": "started",
+            "port": "default"
+          },
+          {
+            "id": "started-mark",
+            "source": "started",
+            "target": "mark",
+            "port": "started"
+          },
+          {
+            "id": "already-mark",
+            "source": "started",
+            "target": "mark",
+            "port": "already"
+          },
+          {
+            "id": "mark-each",
+            "source": "mark",
+            "target": "each",
+            "port": "default",
+            "targetHandle": "end"
+          },
+          {
+            "id": "each-summary",
+            "source": "each",
+            "target": "summary",
+            "port": "complete"
+          },
+          {
+            "id": "summary-exit",
+            "source": "summary",
+            "target": "exit",
+            "port": "default"
+          }
+        ]
+      }
+    }
+  ]
+}
