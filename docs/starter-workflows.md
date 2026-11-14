@@ -56,22 +56,7 @@ A starter you already added shows **Open workflow**. To create another copy on p
 
 ## Import from other sources
 
-The same **Import** dialog has three more sources:
-
-- **GitHub folder**: discovery pins the source revision. Select workflows from the results. Included dependencies are listed under a disclosure.
-- **Local file**: shows a preview before importing.
-- **Paste JSON**: shows a preview before importing.
-
-What an import creates:
-
-- A standalone workflow file creates a new draft.
-- A portable bundle keeps its IDs and included versions.
-- One imported workflow opens that workflow. Several return to the library with the new workflows highlighted.
-- No import starts a run.
-
-The dialog never forces a replacement or restores deleted versions. A conflict rejects the whole selection. Switching sources keeps the choices you already entered.
-
-If the result of an import is uncertain, for example the connection dropped, check the library before you retry. A standalone file creates a new ID each time, so a blind retry can add a duplicate.
+The same **Import** dialog also takes a GitHub folder, a local file or pasted JSON. See [Import workflows](reuse-work.md#import-workflows).
 
 ## CLI and MCP
 

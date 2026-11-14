@@ -33,7 +33,7 @@ Explicit flags take precedence over environment variables.
   INTERLOCK_URL=http://127.0.0.1:4400 interlock workflows
   ```
 
-- When the engine runs with `INTERLOCK_REQUIRE_TOKEN=1`, commands and the MCP bridge read the API token from the `api-token` file beside the key folder.
+- When the engine runs with `INTERLOCK_REQUIRE_TOKEN=1`, commands and the MCP bridge read the API token from the `api-token` file in the key folder.
 
 | Command                    | Purpose                           |
 | -------------------------- | --------------------------------- |
@@ -214,7 +214,7 @@ Connected agents usually use MCP. These commands do the same from a shell.
 | `interlock assignment-size JSON`                                                 | Measure an assignment by `workId`, or `workflowId` and `nodeId` with a sample; optional `warningBytes` |
 | `interlock report-usage JSON`                                                    | Report cumulative token usage for an attempt or run                                                    |
 
-- `claim` options: `leaseSeconds` (default 1800), `freshContext`, `tools`, `skills`. `--fresh` attests an isolated context and `--lease` sets the lease; flags override the options JSON. Grouped work also needs `session: {executorId, sessionId}`. An optional `modelSelection: {tier, provider, model}` declares a selection, not usage.
+- `claim` options: `leaseSeconds` (default: the Agent's `leaseSeconds`, otherwise 300), `freshContext`, `tools`, `skills`. `--fresh` attests an isolated context and `--lease` sets the lease; flags override the options JSON. Grouped work also needs `session: {executorId, sessionId}`. An optional `modelSelection: {tier, provider, model}` declares a selection, not usage.
 - `report-usage` with the executor source (the default) needs the claim `token`. `source: "observer"` omits the token and needs an ended attempt; with `runId` it reports run-level usage. Observer figures take precedence in totals and budgets. Values are cumulative per source and stream; missing values stay unknown.
 
 ## Boards

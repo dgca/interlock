@@ -27,6 +27,19 @@ A JavaScript Script reads `input` and returns the next JSON value. Bash reads JS
 
 **Contracts** describe the inputs and results a workflow or step accepts. Define the fields later steps depend on. Interlock validates actual data during execution; publishing alone does not prove that every connected contract is compatible.
 
+## Add Human input to a workflow
+
+A **Human input** step asks a person a question and waits for the answer. People answer from a [board](workflow-boards.md#find-work-and-answer-a-request) or **Runs → Needs attention**.
+
+1. Choose **Human input** in the node picker.
+2. Enter a question and choose **Text** or **Single choice**.
+3. For each choice, enter a label and an output value. Turn on **Require comment** for choices that need an explanation.
+4. In **Use input data in the request**, set input paths for the question, context or evidence to show.
+
+For a plan review, bind the plan text and its revision, then use those paths in the evidence fields. Interlock captures the resolved content once per step visit. To approve a specific artifact, supply its content or an immutable revision reference.
+
+A text answer becomes a string output. A choice answer becomes an object with `choice` (the configured output value) and an optional `comment`. To branch on the decision, connect a Branch node and select the `choice` path.
+
 ## Repeat steps for a list
 
 A **Batch** runs the same item path once for each value in a list, then returns the results in input order.

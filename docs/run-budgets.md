@@ -65,6 +65,14 @@ A blocked assignment appears in **Runs → Needs attention** and in MCP `workflo
 
 The run's status does not change: a waiting run stays waiting, with `waiting.kind: "budget"`. Scripts, Fetch requests, waits and child runs continue normally. Budgets gate only Agent claims and managed Agent sessions.
 
+While an assignment is blocked:
+
+- Its unclaimed timeout pauses, keeping the remaining time across restarts, and resumes when every gate clears. Claimed leases of connected workers keep running.
+- The manual-completion panel explains the block and hides its claim button.
+- `cancel_run` and `interlock cancel` work as usual.
+
+Agents see blocked work in briefings and continuation responses; see [manage run budgets](https://github.com/dgca/interlock/blob/main/docs/agent-workflows.md#manage-run-budgets).
+
 ## Inspect and raise a budget
 
 ```sh
@@ -186,20 +194,9 @@ Each root has its own allowance, shared with its descendants. Multiply it by the
 - Within one source, a final cumulative report can clear an incomplete-usage block automatically. It cannot lower consumption below a reached maximum.
 - Executors and observers must report actual measurements with [usage reporting](https://github.com/dgca/interlock/blob/main/docs/usage-reporting.md).
 
-### Which usage report is used
+### Which usage counts
 
-- Per attempt, totals and budget checks use the observer snapshot when present, otherwise the executor snapshot. Snapshots from the two sources are never added or merged.
-- Run-level observer streams outside claim attempts, such as session overhead, add to scoped token and cost totals under the same rules.
-- An observer can report an attempt only after it ends. It can report against a run while the run is active and for 1 hour after it ends. Late reports can raise or lower consumption and change admission.
-- See [source selection and run-level reporting](https://github.com/dgca/interlock/blob/main/docs/usage-reporting.md).
-
-### Streamed usage from managed sessions
-
-- While an attempt runs, its streamed figures count in budget checks but are not stored. The final result's usage replaces them.
-- If an attempt ends without final usage while a budget governs its run, the streamed figures are stored as its non-final report.
-- Streamed Claude Code figures are attributed to the `anthropic` provider until the final report.
-- A resumed attempt's final report is differenced against the stopped attempt's streamed figures, so it is stored as final and nothing is counted twice.
-- Claude Code streams no cost, so that report's cost is derived from the price table, not taken from Claude Code's session total.
+Budgets count usage the same way as usage totals: an observer report takes precedence over the executor's for an attempt, and run-level observer streams add to the scope. While a managed attempt runs, its streamed usage counts in budget checks. See [source selection and run-level reporting](https://github.com/dgca/interlock/blob/main/docs/usage-reporting.md#report-measured-usage-as-an-observer) and [streamed usage from managed sessions](https://github.com/dgca/interlock/blob/main/docs/usage-reporting.md#streamed-usage-from-managed-sessions).
 
 ### Budget inspection
 
@@ -217,15 +214,6 @@ Each check has its metric, maximum, optional warning threshold, reported value, 
 | `warnings` | `warning_threshold`, `usage_incomplete` |
 
 Inspection covers only this run's policy and its applicable ancestors, not policies on its descendants. Run briefings identify blocked descendant assignments and the runs that hold their budgets. Inspection returns no prompts, results or claim credentials. Its record count is bounded by the engine's ancestry depth, but aggregation still scans scoped history.
-
-### How blocked work appears to callers
-
-- Discovery and continuation next-work lists leave out blocked assignments. Full inspection keeps the assignment with a `budgetBlocked` marker.
-- Briefings expose `budgetBlocked` and `budget_blocked` blockers. Mutation summaries include bounded `budgetBlocked` references when needed and use `next: adjust_budget`. MCP suggests a read-only briefing for that next action.
-- The manual-completion panel explains the block and hides its claim button.
-- Unclaimed Agent timeouts pause while budget-blocked, keeping their remaining time across restarts, and resume when all gates clear. Claimed leases of connected workers keep running.
-- `cancel_run` and `interlock cancel` behave as usual.
-- Reported usage that changes admission updates assignment markers and continuation cursors. Usage-only updates without an admission change keep the existing cursor behavior. Budget adjustments also wake continuation readers.
 
 ### Start warning projection
 
@@ -246,12 +234,10 @@ Inspection covers only this run's policy and its applicable ancestors, not polic
 
 `--budget` accepts JSON or `@file`; omitting it keeps the usual start behavior. `set-budget` accepts the same payload as MCP.
 
-### Storage and compatibility
+### Persistence
 
-- Budgets need no database migration. Old runs without a policy behave as before.
-- Legacy attempts count toward claim limits; unavailable historical usage stays unknown.
 - Policies and consumption survive restart and retry. Deleting a run's history removes its policies too.
 - Portable workflow bundles do not include run budgets.
-- A run records its local budget revision, so policy changes advance continuation cursors.
+- Runs started before budgets existed behave as before. Their attempts count toward claim limits, and their unavailable usage stays unknown.
 - Budgets describe local dispatch policy, not an authorization boundary or an account balance.
 - [External holds](https://github.com/dgca/interlock/blob/main/docs/work-holds.md) are separate from budget gates. Resuming never resets usage or changes a governing policy. Held attempts can still report usage with their retained attempt token, without regaining claim authority.

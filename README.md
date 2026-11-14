@@ -42,16 +42,6 @@ Next, [connect an agent](https://dgca.github.io/interlock/docs/agents/) or impor
 - **Carry lessons forward**: workflow memory gives later runs reviewed notes, and agents can propose workflow changes for you to approve. [Workflow memory](https://dgca.github.io/interlock/docs/memory/), [Proposed changes](https://dgca.github.io/interlock/docs/workflow-proposals/)
 - **Drive it from code** with the CLI, the HTTP API or MCP. [CLI](https://dgca.github.io/interlock/docs/cli/), [HTTP API](https://dgca.github.io/interlock/docs/http-api/)
 
-## Security
-
-Interlock is a trusted local tool for one person. Workflows run Scripts, Fetch requests and agents with your user account's access, so treat a workflow like code you run.
-
-- The server listens only on `127.0.0.1`. Do not expose its port through a tunnel, proxy, port forward or container mapping.
-- Scripts are not sandboxed. Imported Scripts need one-time approval before their first run.
-- A per-install API token is sent automatically by the UI, CLI and MCP bridge. Set `INTERLOCK_REQUIRE_TOKEN=1` to reject requests without it.
-
-Read the [full security notes](https://github.com/dgca/interlock/blob/main/docs/security.md) for Script environments and the token.
-
 ## Documentation
 
 - [Documentation site](https://dgca.github.io/interlock/docs/): installation, guides and reference.
@@ -61,6 +51,16 @@ Read the [full security notes](https://github.com/dgca/interlock/blob/main/docs/
 - [Feature index](https://github.com/dgca/interlock/blob/main/docs/features.md): what is implemented, by area.
 - [Current limits](https://github.com/dgca/interlock/blob/main/docs/v1.md): what is not.
 - [Architecture and execution semantics](https://github.com/dgca/interlock/blob/main/docs/architecture.md) and [domain language](https://github.com/dgca/interlock/blob/main/CONTEXT.md).
+
+## Security
+
+Interlock is a trusted local tool for one person. Workflows run Scripts, Fetch requests and agents with your user account's access, so treat a workflow like code you run.
+
+- The server listens only on `127.0.0.1`. Do not expose its port through a tunnel, proxy, port forward or container mapping.
+- Scripts are not sandboxed. Imported Scripts need one-time approval before their first run.
+- A per-install API token is sent automatically by the UI, CLI and MCP bridge. Set `INTERLOCK_REQUIRE_TOKEN=1` to reject requests without it.
+
+Read the [full security notes](https://github.com/dgca/interlock/blob/main/docs/security.md) for Script environments and the token.
 
 ## Develop locally
 

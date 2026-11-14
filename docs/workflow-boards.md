@@ -17,7 +17,11 @@ Interlock has three kinds of board:
 
 Cards never move by dragging. They change when run state changes.
 
-## Set up a board
+## Column boards
+
+A column board has columns you define, and each workflow belongs to at most one. Steps place runs in a column through their **Stage** setting.
+
+### Set up a board
 
 1. Open **Boards** and choose **New board**.
 2. Name the board and add the stage columns. Edit their names and order in the form.
@@ -28,7 +32,7 @@ To edit a board later, change it and choose **Save changes** in the settings hea
 
 Membership applies to existing and future runs as soon as you save. It does not depend on publication, and reimporting a workflow keeps its board membership.
 
-### Place steps in a column
+#### Place steps in a column
 
 1. Open a node's settings.
 2. In **Stage**, choose a board column.
@@ -38,7 +42,7 @@ Choosing a column binds the step to that column's ID, so renaming or reordering 
 
 A column cannot be removed while a draft, a retained version or a retained run uses it.
 
-### If someone else saves first
+#### If someone else saves first
 
 If the board changed elsewhere before you save, the editor keeps your draft. Choose **Load latest** and confirm to replace your edits with the saved settings. If loading fails, your draft stays and you can try again.
 
@@ -47,7 +51,27 @@ If Interlock cannot confirm a save:
 - After a create, check **Boards** for the new board before you start another draft.
 - After an update, use **Load latest** to check the saved revision.
 
-## Use a board type
+### Set up a board during import
+
+When an import includes board suggestions, open **Board setup** in the import preview. The preview lists the workflows each choice applies to.
+
+- **Create suggested board** shows the name and column order before import. You can edit the name.
+- **Use existing board** lets you review the local column for each authored stage. Choose **Leave unstaged** for a stage you want to leave unmapped.
+- **Skip board setup** keeps existing local membership and stage mappings. Fresh imports start unassigned.
+
+Interlock saves the workflow and the board setup together. Board setup does not start a run, and a workflow can run before its stages are mapped.
+
+Older bundles can contain source column IDs without names or board suggestions. If the preview lists unresolved stages, assign a board and bind those steps to local columns in the workflow editor.
+
+A stage mapping applies when a step enters the stage; existing stage entries keep the column they recorded. Moving a workflow to another board clears its previous mappings. To replace mappings without changing the published definition, reimport the bundle and choose **Use existing board** again.
+
+To set up a board from the CLI with a JSON setup file, see [Set up a board during import](reuse-work.md#set-up-a-board-during-import).
+
+## Typed boards
+
+A typed board takes its lanes from a board type and can show runs from any workflow.
+
+### Use a board type
 
 A board type is a reusable layout: ordered lanes, the conditions that place a card in each lane, and the fields each card shows. A typed board computes every card's lane from run state each time it loads. Nothing is stored per card, so the board never drifts from the runs.
 
@@ -59,13 +83,13 @@ A board type is a reusable layout: ordered lanes, the conditions that place a ca
 
 A card goes to the first lane whose conditions match. A lane without conditions takes every card an earlier lane did not. Cards that match no lane go to **Unmapped**.
 
-### Match workflow stages to the type
+#### Match workflow stages to the type
 
 Workflows whose stages use the type's names, such as Plan, Build and Review, land in the matching lanes without setup. For another workflow, open **Stage mapping** on the board and map its stage names to the type's stages. The workflow itself does not change.
 
 A misnamed stage never fails validation. Its cards appear in **Unmapped**.
 
-### How cards group runs
+#### How cards group runs
 
 Runs that share an external task (system and ID) form one card. So do the runs of a continue-as-new chain. When a card spans several runs, one run places it:
 
@@ -81,7 +105,11 @@ Every workflow has its own stage board. Open the workflow's **Runs** and choose 
 
 It shows one lane per stage in graph order, plus **Needs you**, **Done** and **Failed**. **Backlog**, **Queued**, **Cancelled** and **Unmapped** appear when they have cards. Runs started by another workflow's step appear on that workflow's cards instead.
 
-## Find work and answer a request
+## Work with cards
+
+These tasks work the same on every kind of board.
+
+### Find work and answer a request
 
 The **Boards** page lists each board's workflows, with a badge when the board has unresolved requests. Search by name; **Clear search** restores the full list. Select a board name to see its runs.
 
@@ -101,7 +129,7 @@ When an answer does not go through:
 - If an acceptance hold blocks the answer, choose **Release acceptance hold**, then **Accept saved answer**.
 - If a library or workflow pause blocks it, use **Open run** to inspect and release the pause.
 
-## Act on a card
+### Act on a card
 
 Open the card's menu. Each action is an ordinary run operation, applies to the run that places the card, and appears only when that run allows it. A board type chooses which actions its cards offer.
 
@@ -113,7 +141,7 @@ Open the card's menu. Each action is an ordinary run operation, applies to the r
 | **Move to backlog** | Holds a queued start with a reason. It stays queued and admission skips it.          |
 | **Release**         | Returns a held start to admission. It starts when capacity and its conditions allow. |
 
-### Hold a start in the backlog
+#### Hold a start in the backlog
 
 A held start is the only kind of backlog item. There are no work items without a run.
 
@@ -123,7 +151,7 @@ A held start is the only kind of backlog item. There are no work items without a
 
 Only queued top-level starts can be held. Interlock has no per-run pause, so a run that has started cannot return to the backlog: cancel it, or pause its workflow. Child runs, comparison trials and scheduled starts cannot be held. Held time does not count as admission waiting in reports.
 
-## Find a run by title
+### Find a run by title
 
 Give a run a title when you start it, and boards and **Runs** show it first:
 
@@ -134,32 +162,7 @@ Give a run a title when you start it, and boards and **Runs** show it first:
 
 Without an explicit title, a card shows the external task title, then the workflow name.
 
-## Add Human input to a workflow
-
-A **Human input** step asks a person a question and waits for the answer, which then shows on the board.
-
-1. Choose **Human input** in the node picker.
-2. Enter a question and choose **Text** or **Single choice**.
-3. For each choice, enter a label and an output value. Turn on **Require comment** for choices that need an explanation.
-4. In **Use input data in the request**, set input paths for the question, context or evidence to show.
-
-For a plan review, bind the plan text and its revision, then use those paths in the evidence fields. Interlock captures the resolved content once per step visit. To approve a specific artifact, supply its content or an immutable revision reference.
-
-A text answer becomes a string output. A choice answer becomes an object with `choice`, the configured output value, and an optional `comment`. To branch on the decision, connect a Branch node and select the `choice` path.
-
-## Set up a board during import
-
-When an import includes board suggestions, open **Board setup** in the import preview. The preview lists the workflows each choice applies to.
-
-- **Create suggested board** shows the name and column order before import. You can edit the name.
-- **Use existing board** lets you review the local column for each authored stage. Choose **Leave unstaged** for a stage you want to leave unmapped.
-- **Skip board setup** keeps existing local membership and stage mappings. Fresh imports start unassigned.
-
-Interlock saves the workflow and the board setup together. Board setup does not start a run, and a workflow can run before its stages are mapped.
-
-Older bundles can contain source column IDs without names or board suggestions. If the preview lists unresolved stages, assign a board and bind those steps to local columns in the workflow editor.
-
-A stage mapping applies when a step enters the stage; existing stage entries keep the column they recorded. Moving a workflow to another board clears its previous mappings. To replace mappings without changing the published definition, reimport the bundle and choose **Use existing board** again.
+A **Human input** step puts a question for a person on the board. See [Add Human input to a workflow](build-workflow.md#add-human-input-to-a-workflow).
 
 ## Read boards from the CLI, HTTP and MCP
 
@@ -183,7 +186,9 @@ interlock board save '{"name":"Delivery","typeId":"coding"}'
 
 Board types are managed in the UI, the CLI and the shared API. See the [HTTP API](http-api.md) for request details.
 
-## Manage boards through MCP
+## Reference
+
+### Manage boards through MCP
 
 These tools manage column boards.
 
@@ -202,8 +207,6 @@ These tools manage column boards.
 To move or remove one workflow, use `action: "assign"` with `workflowId`, `boardId` and `expectedBoardId`. Use `null` for either board ID to mean no board.
 
 If a revision or membership check fails, read the current state before saving again. Moving or unassigning a workflow clears its imported stage mappings. To map its stages on another board, reimport the bundle with board setup, or select local columns in the workflow draft and publish it.
-
-## Reference
 
 ### Board view response
 

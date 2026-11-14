@@ -57,10 +57,12 @@ To preview and apply a whole bundle from a repository, use `interlock import bun
 Open **Workflows → Import**. The dialog opens on bundled **Starters** and also accepts a public GitHub folder, a local file, or pasted JSON. Every source shows a preview first, and importing never starts a run.
 
 1. Choose **GitHub folder**, paste an HTTPS `github.com/OWNER/REPO/tree/REF/FOLDER` link and choose **Find workflows**. Branch names with slashes and commit links work.
-2. Review each workflow's description, source file and dependencies.
+2. Review each workflow's description, source file and dependencies. Included dependencies are listed under a disclosure.
 3. Select the workflows and choose **Import workflow**, or **Import N workflows** for several.
 
 For **Paste JSON**, paste a legacy workflow or portable bundle and choose **Preview workflow**. Invalid JSON and validation errors keep your text so you can correct it. **Local file** uses the same import rules unless the host disables it.
+
+Importing one workflow opens it. Importing several returns to the library with the new workflows highlighted.
 
 ### What import keeps and rejects
 
@@ -96,7 +98,7 @@ Approval covers that exact code in that workflow. Later runs, and edits you make
 
 ### Choose which Scripts need approval
 
-Open **Settings → AI → Execution settings → Script approval**, or run `interlock script-approval` to read the setting and `interlock script-approval MODE` to change it.
+Open **AI Settings → Execution settings → Script approval**, or run `interlock script-approval` to read the setting and `interlock script-approval MODE` to change it.
 
 | Option                         | CLI mode             | Which Scripts wait                                                                            |
 | ------------------------------ | -------------------- | --------------------------------------------------------------------------------------------- |
@@ -166,11 +168,7 @@ When sync is first turned on, a name or description that differs from the file c
 
 ## Set up a board during import
 
-When an import includes board suggestions, open **Board setup** in the preview and choose one:
-
-- **Create suggested board**: review the proposed columns and create the board.
-- **Use existing board**: choose a destination column for each stage.
-- **Skip board setup**: keep any existing local board membership and stage mappings.
+An import can suggest a board for its workflows. In the browser, use **Board setup** in the import preview; see [Boards](workflow-boards.md#set-up-a-board-during-import) for the choices.
 
 From the CLI, preview suggestions with `interlock import @workflow.json --dry-run` (or `interlock starters`), then pass a setup file with `--board-setup`. See the [workflow commands](cli.md#workflows).
 

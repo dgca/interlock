@@ -250,18 +250,25 @@ Pull launcher clients use `POST /api/launchers/{profileId}/poll` and the `comple
 
 ### Routes
 
-| Route                                       | Purpose                                                                                      |
-| ------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `GET /api/workflows`                        | List published workflows with their IDs and input contracts.                                 |
-| `POST /api/runs`                            | Start a run of a published workflow.                                                         |
-| `GET /api/runs/{id}`                        | Read a run's compact status.                                                                 |
-| `GET /api/runs/{id}/result`                 | Read a completed run's output.                                                               |
-| `POST /api/runs/{id}/cancel`                | Cancel a queued or active run and its ordinary active children.                              |
-| `GET /api/boards/view`                      | Read a board's lanes and cards: `id` or `workflowId`, optional `lane`, `offset`, `limit`.    |
-| `GET /api/board-types`                      | List board types: the built-in `coding`, `design` and `research` until saved, then your own. |
-| `POST /api/boards`                          | Create a typed board. Answers `201` with the board.                                          |
-| `GET /api/comparisons/{id}/evaluation-plan` | Select the samples an evaluation run grades.                                                 |
-| `POST /api/comparisons/{id}/judgments`      | Record a Batch item's accepted grade once.                                                   |
+| Route                                                               | Purpose                                                                                      |
+| ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `GET /api/workflows`                                                | List published workflows with their IDs and input contracts.                                 |
+| `POST /api/runs`                                                    | Start a run of a published workflow.                                                         |
+| `GET /api/runs/{id}`                                                | Read a run's compact status.                                                                 |
+| `GET /api/runs/{id}/result`                                         | Read a completed run's output.                                                               |
+| `POST /api/runs/{id}/cancel`                                        | Cancel a queued or active run and its ordinary active children.                              |
+| `GET /api/boards/view`                                              | Read a board's lanes and cards: `id` or `workflowId`, optional `lane`, `offset`, `limit`.    |
+| `GET /api/board-types`                                              | List board types: the built-in `coding`, `design` and `research` until saved, then your own. |
+| `POST /api/boards`                                                  | Create a typed board. Answers `201` with the board.                                          |
+| `GET /api/comparisons/{id}/evaluation-plan`                         | Select the samples an evaluation run grades.                                                 |
+| `POST /api/comparisons/{id}/judgments`                              | Record a Batch item's accepted grade once.                                                   |
+| `GET /api/workflows/{id}/proposals`                                 | List a workflow's proposed changes.                                                          |
+| `GET /api/proposals/{id}`                                           | Read one proposed change.                                                                    |
+| `POST /api/proposals`                                               | Create a proposed change.                                                                    |
+| `POST /api/proposals/{id}/decision`                                 | Approve or reject a proposed change as a person.                                             |
+| `POST /api/launchers/{profileId}/poll`                              | A pull launcher client waits for queued operations.                                          |
+| `POST /api/launchers/{profileId}/operations/{operationId}/complete` | Report a launcher operation's result.                                                        |
+| `POST /api/launchers/{profileId}/operations/{operationId}/fail`     | Report a failed launcher operation.                                                          |
 
 ### Start body
 
@@ -311,6 +318,18 @@ Errors are JSON with an `error` message and, from `/api` routes, a `code`. The `
 | 409    | `run_not_completed` | A result was requested before the run completed.                                                                       |
 | 413    | none                | The body exceeds 2 MiB.                                                                                                |
 
+Launcher routes add their own codes:
+
+| Status | Code                           | When                                                                            |
+| ------ | ------------------------------ | ------------------------------------------------------------------------------- |
+| 401    | `launcher_credential_missing`  | The `X-Interlock-Launcher-Credential` header is missing.                        |
+| 403    | `launcher_credential_invalid`  | The credential is not valid for this profile, or was replaced.                  |
+| 404    | `launcher_operation_not_found` | The operation does not exist. It may have completed, been cancelled or expired. |
+| 409    | `launcher_client_conflict`     | Another client is active for this profile.                                      |
+| 409    | `launcher_lease_invalid`       | The operation's lease expired and it was delivered again.                       |
+| 409    | `launcher_profile_disabled`    | The launcher profile is disabled.                                               |
+| 429    | `launcher_poll_busy`           | Two polls for this profile are already waiting.                                 |
+
 Other rejections from the engine, such as an unpublished or archived workflow or a deleted version, return `400` with the engine's message.
 
 Input that breaks the workflow's contract names the fields, as in the UI and MCP:
@@ -343,7 +362,12 @@ A missing run (`GET /api/runs/missing`):
 
 ### Compatibility
 
-Interlock is pre-1.0. The supported HTTP API is the routes in the table above and the four proposal routes, the request fields listed for `POST /api/runs` and `POST /api/boards`, the response fields shown on this page, the status codes and the error `code` values.
+Interlock is pre-1.0. The supported HTTP API covers:
+
+- every route in the [Routes](#routes) table, including the proposal and launcher routes;
+- the request fields listed for `POST /api/runs` and `POST /api/boards`, and the launcher request bodies in [pull transport for launchers](https://github.com/dgca/interlock/blob/main/docs/managed-executors.md#pull-transport-for-launchers-interlock-cannot-call);
+- the response fields shown on this page and in that section;
+- the status codes and error `code` values.
 
 - Patch releases can add routes, optional request fields, response fields, `waiting.kind` values and error codes. Ignore fields you do not know.
 - Removing or renaming a supported field or route, or changing a status code, is a breaking change. It follows the [release rules](https://github.com/dgca/interlock/blob/main/docs/releases.md): it is flagged before the release bump is chosen and described in the changelog.
