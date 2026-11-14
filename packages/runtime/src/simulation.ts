@@ -267,6 +267,7 @@ export class Simulations {
           'switch',
           'workflow',
           'wait',
+          'input',
         ].includes(node.kind)
       )
         return [`Node ${node.id}: ${node.kind} is unsupported`];
@@ -582,6 +583,38 @@ export class Simulations {
                 throw e;
             }
           }
+        }
+        // A waiting Human input takes the next fixture as the person's answer.
+        const asked = claim
+          ? undefined
+          : scratch
+              .activeRuns()
+              .map((ar) => ({ ar, step: ar.executions.at(-1) }))
+              .find(
+                ({ ar, step }) =>
+                  ar.status === 'waiting' &&
+                  step?.kind === 'input' &&
+                  step.status === 'waiting',
+              );
+        if (asked?.step && engine.available(runId).length === 0) {
+          const f = take(asked.step.nodeId, 'input');
+          receipt(asked.step.nodeId, 'input', asked.step.id, 'substituted');
+          engine.externalInputs.answer(
+            {
+              action: 'answer',
+              target: {
+                kind: 'human',
+                runId: asked.ar.id,
+                executionId: asked.step.id,
+              },
+              value: f.output!,
+              expectedRevision: 0,
+              submissionId: `simulation-${cursor}`,
+            },
+            'mcp',
+          );
+          await yieldTurn();
+          continue;
         }
         if (!claim && engine.available(runId).length === 0) {
           const activeRuns = scratch.activeRuns();

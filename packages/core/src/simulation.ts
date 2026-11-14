@@ -5,7 +5,7 @@ const id = z.string().min(1).max(120);
 export const simulationFixtureSchema = z
   .object({
     nodeId: id,
-    kind: z.enum(['agent', 'script', 'fetch', 'workflow', 'wait']),
+    kind: z.enum(['agent', 'script', 'fetch', 'workflow', 'wait', 'input']),
     output: z.lazy(() => jsonSchema).optional(),
     error: z.string().min(1).max(512).optional(),
     expectRejection: z.boolean().optional(),
@@ -31,6 +31,11 @@ export const simulationFixtureSchema = z
         });
       return;
     }
+    if (fixture.kind === 'input' && fixture.error !== undefined)
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Human input fixtures provide the answer as output',
+      });
     if ((fixture.output === undefined) === (fixture.error === undefined))
       ctx.addIssue({
         code: 'custom',

@@ -37,6 +37,7 @@ try {
   );
   assert(packed.files.some((file) => file.path === 'dist/cli.js'));
   assert(packed.files.some((file) => file.path === 'workflows/sdlc.json'));
+  assert(packed.files.some((file) => file.path === 'workflows/sdlc-v2.json'));
   assert(packed.files.some((file) => file.path === 'workflows/evaluate.json'));
   for (const path of [
     'interlock-migrate-workflows/SKILL.md',
@@ -307,7 +308,7 @@ try {
   const choices = await call('list_workflows', { source: 'starters' });
   assert.deepEqual(
     choices.map((s) => s.id),
-    ['sdlc', 'evaluate-comparison'],
+    ['sdlc', 'sdlc-v2', 'evaluate-comparison'],
   );
   const cliStarters = JSON.parse(
     execFileSync(bin, ['starters'], {

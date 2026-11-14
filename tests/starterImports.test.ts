@@ -34,6 +34,7 @@ it('lists bundled choices without installing, publishing or starting anything', 
   const e = setup();
   expect(listStarters(e).map((s) => s.id)).toEqual([
     'sdlc',
+    'sdlc-v2',
     'evaluate-comparison',
   ]);
   expect(e.store.workflows()).toEqual([]);
@@ -62,6 +63,7 @@ it.each(['draft', 'version'])(
 
     expect(listStarters(e).map((s) => s.id)).toEqual([
       'sdlc',
+      'sdlc-v2',
       'evaluate-comparison',
     ]);
     expect(listStarters(e).every((s) => !s.existing)).toBe(true);
@@ -104,6 +106,65 @@ it('explicitly adds a published copy, recovers retries and offers the existing c
   expect(e.store.workflows()).toHaveLength(1);
   expect(listStarters(e)[0].existing?.id).toBe(a.workflow.id);
   expect(e.store.runs()).toEqual([]);
+});
+it('adds SDLC v2 as its own copy and leaves an existing v1 copy untouched', () => {
+  const e = setup(),
+    v1 = add(e).workflow.id,
+    before = e.workflow(v1),
+    versions = e.store.listVersions(v1);
+  const v2 = importStarter(e, { starterId: 'sdlc-v2', requestId: 'two' });
+  expect(v2).toMatchObject({ created: true });
+  expect(v2.workflow.id).not.toBe(v1);
+  expect(e.workflow(v1)).toEqual(before);
+  expect(e.store.listVersions(v1)).toEqual(versions);
+  const listed = new Map(listStarters(e).map((s) => [s.id, s.existing?.id]));
+  expect(listed.get('sdlc')).toBe(v1);
+  expect(listed.get('sdlc-v2')).toBe(v2.workflow.id);
+  expect(add(e, 'again')).toMatchObject({
+    created: false,
+    workflow: { id: v1 },
+  });
+});
+it('gives each SDLC v2 copy its own published Plan review and Change review', () => {
+  const e = setup();
+  const helpers = (rootId: string) => {
+    const root = e.store.getVersion(rootId, 1)!.definition;
+    return root.nodes.flatMap((n) =>
+      n.kind === 'workflow' ? [[n.workflowId, n.version]] : [],
+    );
+  };
+  const first = importStarter(e, { starterId: 'sdlc-v2', requestId: 'a' });
+  const second = importStarter(e, {
+    starterId: 'sdlc-v2',
+    requestId: 'b',
+    copy: true,
+  });
+  for (const { workflow } of [first, second]) {
+    const calls = helpers(workflow.id);
+    expect(calls).toHaveLength(2);
+    for (const [id, version] of calls) {
+      expect(version).toBe(1);
+      expect(e.workflow(id as string)).toMatchObject({
+        ownerWorkflowId: workflow.id,
+        latestVersion: 1,
+      });
+    }
+  }
+  expect(helpers(first.workflow.id)).not.toEqual(helpers(second.workflow.id));
+  expect(e.store.workflows()).toHaveLength(6);
+  expect(
+    e.store
+      .list<{ starterId: string }>('starterCopies')
+      .map((c) => c.starterId)
+      .sort(),
+  ).toEqual([
+    'sdlc-v2',
+    'sdlc-v2',
+    'sdlc-v2/interlock-sdlc-v2-change-review',
+    'sdlc-v2/interlock-sdlc-v2-change-review',
+    'sdlc-v2/interlock-sdlc-v2-plan-review',
+    'sdlc-v2/interlock-sdlc-v2-plan-review',
+  ]);
 });
 it('recognizes renamed legacy drafts and retained originals without changing them', () => {
   const e = setup(),
