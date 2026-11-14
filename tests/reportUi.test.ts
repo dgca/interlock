@@ -13,6 +13,8 @@ import {
 import { routes } from '../packages/ui/src/routes';
 
 const query = vi.hoisted(() => vi.fn());
+const summaries = vi.hoisted(() => vi.fn());
+let dashboardOverrides: Record<string, unknown> = {};
 vi.mock('../packages/ui/src/lib/engineEvents', () => ({
   subscribeToEngineEvents: () => () => {},
 }));
@@ -36,14 +38,48 @@ vi.mock('../packages/ui/src/lib/api', async () => {
       requests: { list: { query: async () => ({ items: [], total: 0 }) } },
       triggers: { attention: { query: async () => ({ items: [], total: 0 }) } },
       pauses: { list: { query: async () => ({ items: [], total: 0 }) } },
-      report: { summary: { query } },
+      runs: {
+        summaries: { query: summaries },
+      },
+      // The dashboard wraps the same report; tests drive that report.
+      report: {
+        dashboard: {
+          query: async (input: unknown) => {
+            const report = (await query(input)) as WorkflowReport;
+            const { totalRuns, completedRuns, failedRuns, cancelledRuns } =
+              report.terminalOutcomes;
+            return {
+              report,
+              previous: null,
+              trend: [],
+              spendByStage: [],
+              counts: {
+                current: {
+                  runs: totalRuns,
+                  completed: completedRuns,
+                  failed: failedRuns,
+                  cancelled: cancelledRuns,
+                },
+                previous: null,
+              },
+              limited: false,
+              ...dashboardOverrides,
+            };
+          },
+        },
+      },
     }),
     errorMessage: (error: Error) => error.message,
   };
 });
 vi.mock('../packages/ui/src/features/workflows/WorkflowEditor', () => ({
-  WorkflowEditor: ({ onReport }: { onReport: () => void }) =>
-    h('button', { onClick: onReport }, 'Open workflow report'),
+  WorkflowEditor: ({
+    section,
+    sectionView,
+  }: {
+    section: string;
+    sectionView: unknown;
+  }) => (section === 'report' ? sectionView : h('p', null, 'Workflow editor')),
 }));
 vi.mock('../packages/ui/src/features/runs/RunList', () => ({
   RunList: () => h('div', null, 'Runs route'),
@@ -114,6 +150,36 @@ function report(totalRuns = 4): WorkflowReport {
   };
 }
 
+let activeRuns: object[] = [];
+let attentionRuns: object[] = [];
+const activeRun = (
+  title: string,
+  hoursWaiting: number,
+  projection: Record<string, unknown>,
+) => {
+  const since = new Date(Date.now() - hoursWaiting * 3_600_000).toISOString();
+  return {
+    id: title,
+    workflowId: 'w1',
+    workflowName: 'Tagged work',
+    title,
+    version: 1,
+    status: 'waiting',
+    createdAt: since,
+    updatedAt: since,
+    executionCount: 1,
+    stage: null,
+    actor: 'agent',
+    waiting: null,
+    ...projection,
+  };
+};
+const wait = (kind: string, hoursWaiting: number) => ({
+  kind,
+  detail: { runId: 'r', nodeId: 'n' },
+  since: new Date(Date.now() - hoursWaiting * 3_600_000).toISOString(),
+});
+
 let root: Root;
 let container: HTMLDivElement;
 let router: ReturnType<typeof createMemoryRouter>;
@@ -143,6 +209,24 @@ beforeEach(() => {
       }
     },
   );
+  summaries.mockReset().mockImplementation(({ tab }) => {
+    const items =
+      tab === 'active' ? activeRuns : tab === 'attention' ? attentionRuns : [];
+    return Promise.resolve({
+      items,
+      counts: {
+        active: activeRuns.length,
+        attention: attentionRuns.length,
+        history: 0,
+      },
+      total: items.length,
+      offset: 0,
+      nextOffset: null,
+    });
+  });
+  attentionRuns = [];
+  activeRuns = [];
+  dashboardOverrides = {};
   query
     .mockReset()
     .mockImplementation(async ({ tags }) => report(tags ? 1 : 4));
@@ -190,9 +274,13 @@ async function input(label: string, value: string) {
 async function openTags() {
   await click('Filter by tags');
 }
+const runCountLabel = () =>
+  [...container.querySelectorAll('p')].find(
+    (element) => element.textContent === 'Runs',
+  );
 const runCount = () =>
   [...container.querySelectorAll('p')].find(
-    (element) => element.textContent === 'Total Runs',
+    (element) => element.textContent === 'Runs',
   )!.parentElement!.parentElement!.textContent;
 
 it('navigates the actual App from Runs to global and workflow Reports without changing hook order', async () => {
@@ -212,7 +300,7 @@ it('navigates the actual App from Runs to global and workflow Reports without ch
     await act(async () => {
       await router.navigate('/workflows/w1/report');
     });
-    expect(container.textContent).toContain('Performance & cost report');
+    expect(router.state.location.search).toBe('?view=report');
     expect(query).toHaveBeenLastCalledWith(
       expect.objectContaining({ workflowId: 'w1' }),
     );
@@ -316,7 +404,7 @@ function pendingReport() {
   return { promise, resolve, reject };
 }
 function expectNoMetrics() {
-  expect(container.textContent).not.toContain('Total Runs');
+  expect(runCountLabel()).toBeUndefined();
   expect(container.textContent).not.toContain('Attributed Spend');
   expect(container.textContent).not.toMatch(/[14]\.0000 USD/);
 }
@@ -462,20 +550,17 @@ it('does not invent a currency total when measured usage omitted cost', async ()
   expect(spend()).toContain('Unmeasured');
   expect(spend()).not.toContain('USD');
 });
-it('keeps scoped reports attached to their workflow and provides a return action', async () => {
-  await mount('/workflows/w1');
-  await click('Open workflow report');
-  expect(router.state.location.pathname).toBe('/workflows/w1/report');
+it('opens earlier workflow report links in the workflow Report tab, scoped to that workflow', async () => {
+  await mount('/workflows/w1/report');
+  expect(router.state.location.pathname).toBe('/workflows/w1');
+  expect(router.state.location.search).toBe('?view=report');
   expect(
     container.querySelector('input[aria-label="Filter by workflow"]'),
   ).toBeNull();
-  expect(container.textContent).toContain('Tagged work');
+  expect(runCount()).toContain('4');
   expect(query).toHaveBeenLastCalledWith(
     expect.objectContaining({ workflowId: 'w1' }),
   );
-  await click('Back to workflow');
-  expect(router.state.location.pathname).toBe('/workflows/w1');
-  expect(container.textContent).toContain('Open workflow report');
 });
 
 it('labels mixed provider costs without presenting an invalid currency total', async () => {
@@ -512,4 +597,104 @@ it('returns to the cached report without a skeleton and retains it when backgrou
   expect(container.textContent).toContain('Background report unavailable');
   expect(runCount()).toContain('4');
   expect(spend()).toContain('4.0000 USD');
+});
+
+it('lists attention requests, held and queued runs, longest wait first, and leaves other waits out', async () => {
+  const approval = activeRun('Needs approval', 3, {
+    actor: 'person',
+    waiting: wait('human_request', 3),
+    attention: {
+      runId: 'Needs approval',
+      reasons: ['approval'],
+      target: { runId: 'Needs approval', executionId: 'e1' },
+    },
+  });
+  attentionRuns = [approval];
+  activeRuns = [
+    activeRun('Agent working', 9, { status: 'running' }),
+    activeRun('At input node', 5, {
+      actor: 'person',
+      waiting: wait('input_node', 5),
+    }),
+    approval,
+    activeRun('On hold', 26, { waiting: wait('hold', 26) }),
+    activeRun('In queue', 1, {
+      status: 'queued',
+      waiting: wait('admission_queue', 1),
+    }),
+  ];
+  await mount();
+  const panel = container.querySelector('[aria-labelledby="attention-title"]')!;
+  expect(panel.textContent).toContain('1 need attention · 1 held · 1 queued');
+  expect(
+    [...panel.querySelectorAll('li a')].map((link) => link.textContent),
+  ).toEqual(['On hold', 'Needs approval', 'In queue']);
+  expect(panel.textContent).toContain('Approval requested');
+  expect(panel.textContent).toContain('1 d');
+  expect(panel.textContent).toContain('3 h');
+});
+
+const card = (label: string) =>
+  [...container.querySelectorAll('section')].find(
+    (section) => section.querySelector('p')?.textContent === label,
+  )!.textContent;
+it('states changes from the previous period, and hides sampled changes when a period is limited', async () => {
+  const previous = report(2);
+  previous.usage.coverage.measuredPercentage = 100;
+  const counts = (runs: number) => ({
+    runs,
+    completed: runs,
+    failed: 0,
+    cancelled: 0,
+  });
+  const trend = [1, 3].map((runs, index) => ({
+    start: `2026-11-0${index + 1}T00:00:00.000Z`,
+    end: `2026-11-0${index + 2}T00:00:00.000Z`,
+    runs,
+    completed: runs,
+    failed: 0,
+    cancelled: 0,
+    durationMs: calculateDistribution([60_000]),
+  }));
+  dashboardOverrides = {
+    previous,
+    trend,
+    counts: { current: counts(4), previous: counts(2) },
+  };
+  await mount();
+  expect(card('Runs')).toContain('↑ 100% vs previous 7 days');
+  expect(card('Attributed spend')).toContain('↑ 100% vs previous 7 days');
+  expect(container.textContent).toContain('Runs over time');
+
+  dashboardOverrides = {
+    previous,
+    trend,
+    counts: { current: counts(4000), previous: counts(2) },
+    limited: true,
+  };
+  await click('Refresh');
+  expect(card('Runs')).toContain('4000');
+  expect(card('Runs')).toContain('vs previous 7 days');
+  expect(card('Attributed spend')).not.toContain('vs previous');
+  expect(container.textContent).toContain(
+    'This period has more runs than the report reads',
+  );
+  expect(container.textContent).toContain('1,000 read');
+  expect(container.textContent).not.toContain('Runs over time');
+  expect(container.querySelector('svg[role="img"]')).toBeNull();
+
+  dashboardOverrides = {
+    previous: {
+      ...previous,
+      usage: {
+        ...previous.usage,
+        coverage: { ...previous.usage.coverage, measuredPercentage: 10 },
+      },
+    },
+    counts: { current: counts(4), previous: { ...counts(0) } },
+  };
+  await click('Refresh');
+  expect(card('Runs')).toContain('↑ from 0');
+  expect(card('Attributed spend')).not.toContain('vs previous');
+  expect(card('Attributed spend')).toContain('10% in the previous 7 days');
 });

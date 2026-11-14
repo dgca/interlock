@@ -13,8 +13,8 @@ export function ReportLoadingContent() {
   return (
     <LoadingSkeleton label="Loading report…">
       <Stack gap="lg">
-        <SimpleGrid cols={{ base: 1, xs: 2, lg: 3 }} spacing="md">
-          {Array.from({ length: 6 }, (_, index) => (
+        <SimpleGrid cols={{ base: 1, xs: 2, lg: 4 }} spacing="md">
+          {Array.from({ length: 7 }, (_, index) => (
             <Stack key={index} gap="sm" className={workspacePage.card}>
               <Placeholder h={14} w="65%" />
               <Placeholder h={26} w="50%" />

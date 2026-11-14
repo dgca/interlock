@@ -9,7 +9,7 @@ import { runLauncherCommand } from './launcher.js';
 import { parseSummaryArgs } from './args.js';
 import { runBoardCommand } from './boards.js';
 import { runStartCommand } from './start.js';
-import { parseTags, runsCommand } from './runsCommand.js';
+import { parseTags, runQuery, runsCommand } from './runsCommand.js';
 import {
   externalInputRequestSchema,
   boardImportSetupSchema,
@@ -287,7 +287,7 @@ export async function runCommand(argv: string[]) {
       }
     }
     case 'run':
-      return client.runs.get.query({ id: args[0] });
+      return client.runs.get.query(runQuery(args));
     case 'context-group':
       if (args.length < 2 || args.length > 3)
         throw new Error(

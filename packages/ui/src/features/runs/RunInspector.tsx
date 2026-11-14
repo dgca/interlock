@@ -163,7 +163,7 @@ export function RunInspector({
   const [cancellationDialog, setCancellationDialog] = useState(false);
   const [returnMenuFocus, setReturnMenuFocus] = useState(true);
   const client = useQueryClient();
-  const detailOptions = trpc.runs.get.queryOptions({ id });
+  const detailOptions = trpc.runs.get.queryOptions({ id, full: true });
   const workOptions = trpc.work.list.queryOptions({ runId: id });
   const cancellationOptions = trpc.runs.previewCancellation.queryOptions({
     id,

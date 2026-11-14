@@ -266,11 +266,6 @@
       "symbol": "SuiteContent"
     },
     {
-      "file": "packages/core/src/index.ts",
-      "type": "types",
-      "symbol": "TestAssertion"
-    },
-    {
       "file": "packages/core/src/modelAliases.ts",
       "type": "exports",
       "symbol": "modelAliasCandidateSchema"
