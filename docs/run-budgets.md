@@ -1,6 +1,6 @@
 # Run budgets
 
-An optional run budget gates new Agent claims. It preserves completed results and lets already claimed work renew, report usage, and finish. A claim-count limit is deterministic. Reported token and cost limits can overshoot because workers report late or continue work already in flight. They are not provider billing caps.
+An optional run budget gates new Agent claims and [stops managed sessions at the limit](#stop-managed-sessions-at-the-limit). It preserves completed results. A claim-count limit is deterministic. Token and cost limits can overshoot by up to one model turn for managed executors, and further for connected workers that report late or continue work already in flight. They are not provider billing caps.
 
 ## Configure a budget
 
@@ -22,7 +22,7 @@ Pass `budget` to `runs.start`, `runs.startSummary`, or MCP `start_run` to config
 }
 ```
 
-Choose at least one limit. Each maximum and warning threshold is a nonnegative safe integer. A warning threshold cannot exceed its maximum. Reaching a maximum blocks the next claim; zero blocks before the first claim. Warnings are advisory and appear in budget inspection. Cost values are millionths of the stated three-letter uppercase currency, so the example cost maximum is USD 5. Budgets count reported costs only, not costs [derived from the price table](usage-reporting.md#derived-cost), and never convert currencies.
+Choose at least one limit. Each maximum and warning threshold is a nonnegative safe integer. A warning threshold cannot exceed its maximum. Reaching a maximum blocks the next claim; zero blocks before the first claim. Warnings are advisory and appear in budget inspection. Cost values are millionths of the stated three-letter uppercase currency, so the example cost maximum is USD 5. A reported cost counts as reported. Tokens reported without a cost count at the price [derived from the run's captured price table](usage-reporting.md#derived-cost). A model with no price contributes nothing: the cost check then has `partial` coverage and its `pricing` field names the unpriced models. Budgets never guess a price and never convert currencies.
 
 `scope` is required:
 
@@ -37,6 +37,27 @@ For [continue-as-new chains](continue-as-new.md), every scope includes the compl
 Every applicable ancestor, chain-member and local budget must permit a claim. Disabling a child budget cannot bypass an ancestor's gate. A tree budget continues to govern detached work after the parent ends. Scope does not change cancellation: cancelling a parent still preserves detached runs. Cancel an independent run explicitly when needed.
 
 All successful claims count, including failed work, lease expiries, claims released by external holds, and explicit retries. Counters include retained history from before the policy was installed. Changing limits or scope re-evaluates that history; it never starts a fresh allowance. Failed claim requests consume nothing.
+
+## Stop managed sessions at the limit
+
+[Managed executors](managed-executors.md) stream usage while an attempt runs. When those figures, with the rest of the budget scope, reach a token or cost maximum, Interlock stops the session and releases the claim:
+
+- The attempt keeps the usage streamed so far. It ends as `held`, does not spend the Agent's failure allowance, and appears in the assignment's hold history with actor `managed-budget`.
+- The run waits with `waiting.kind:"budget"`, and its message states which limit was reached. The assignment stays budget-blocked until every governing budget permits a claim.
+- Raising the limit, or disabling the budget, makes the assignment available again. The managed executor claims it and resumes the stopped native session, so completed steps and the session's work are kept.
+- If the harness returns its result before it stops, the result is kept and the run continues. The next Agent claim is then blocked by the budget.
+
+A budget stop releases only managed attempts whose own run is in the budget scope. Claim-count limits never stop running work. Other in-flight attempts in the scope stop at their next usage update.
+
+| Harness                                  | When it stops                                                                                             |
+| ---------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| Claude Code                              | Mid-turn, after the model response that crossed the limit. Its process is stopped.                        |
+| Codex                                    | Mid-turn, after the token usage update that crossed the limit. The turn is interrupted.                   |
+| Pi                                       | Mid-turn, after the assistant message that crossed the limit. Its process is stopped.                     |
+| Custom command profiles                  | At the end of the attempt. They report usage only with their result, so the budget blocks the next claim. |
+| Connected executors and custom launchers | At the next claim. Interlock does not own their sessions; usage they report counts immediately.           |
+
+While an attempt runs, its streamed figures count in budget checks but are not stored. The final result's usage replaces them. If an attempt ends without final usage while a budget governs its run, the streamed figures are stored as its non-final report. Streamed Claude Code figures are attributed to the `anthropic` provider until that final report. A stopped attempt's usage stays non-final, because the interrupted model call is never reported. With `unknownUsage:"block"`, the budget therefore also reports `usage_incomplete`; an observer can submit final figures for the attempt, or the policy can switch to `allow`.
 
 ## Handle incomplete reports
 
@@ -75,7 +96,7 @@ A stale revision fails without changing the policy. Every accepted update advanc
 
 Budget blocking is separate from run status. A waiting run remains waiting. Discovery and continuation next-work lists omit blocked assignments. Briefings expose `budgetBlocked` and `budget_blocked` blockers; mutation summaries include bounded `budgetBlocked` references when needed and use `next:adjust_budget`. MCP suggests a read-only briefing for that next action. Full inspection retains the assignment with its `budgetBlocked` marker. The manual-completion panel explains the block and hides its claim button.
 
-Unclaimed Agent timeouts pause while budget-blocked, preserving their remaining duration across restart. They resume when all gates clear. Claimed leases keep running. Scripts, Fetch requests, waits, and child creation continue normally; this feature gates Agent reservations only. Existing `cancel_run` and `interlock cancel` retain their normal behavior.
+Unclaimed Agent timeouts pause while budget-blocked, preserving their remaining duration across restart. They resume when all gates clear. Claimed leases of connected workers keep running. Scripts, Fetch requests, waits, and child creation continue normally; budgets gate Agent reservations and managed Agent sessions only. Existing `cancel_run` and `interlock cancel` retain their normal behavior.
 
 ## CLI
 

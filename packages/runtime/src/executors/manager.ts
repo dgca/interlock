@@ -5,7 +5,6 @@ import {
   executorOperationSchema,
   resolveProvider,
   type ExecutorModels,
-  tokenFields,
   type ExecutorProfile,
   type ExecutorProfileUpdate,
   type ManagedExecution,
@@ -34,6 +33,7 @@ import {
 } from './launcher.js';
 import { OperatorChannel } from './operator.js';
 import { RecoveryPolicies } from './recovery.js';
+import { BudgetStops, usageDelta } from './budgetStops.js';
 import {
   active,
   attemptsCollection,
@@ -70,6 +70,7 @@ export class ExecutorManager {
   private launcher: LauncherSupervisor;
   private operator: OperatorChannel;
   private recovery: RecoveryPolicies;
+  readonly budgetStops: BudgetStops;
   private adapters = new Map<string, HarnessAdapter>();
   private jobs = new Map<string, Job>();
   private claimTickets = new Map<string, ClaimTicket>();
@@ -136,6 +137,10 @@ export class ExecutorManager {
     );
     this.recovery = new RecoveryPolicies(engine, {
       stopped: () => this.stopped,
+    });
+    this.budgetStops = new BudgetStops(engine, {
+      write: (record) => this.write(record),
+      interrupt: (job, reason) => this.interruptJob(job, reason),
     });
     this.config = new ExecutorConfiguration(engine, defaultCwd, {
       adapters: () => this.adapters,
@@ -774,7 +779,7 @@ export class ExecutorManager {
         const logicalSession = binding?.session?.sessionId ?? randomUUID();
         const sessionKey = group
           ? JSON.stringify([offered.runId, group, logicalSession])
-          : randomUUID();
+          : (this.budgetStops.resumeKey(offered) ?? randomUUID());
         if ([...this.jobs.values()].some((j) => j.sessionKey === sessionKey))
           continue;
         const priorSession = this.engine.store.get<Session>(
@@ -1150,6 +1155,7 @@ export class ExecutorManager {
     this.transcripts.register(r);
     const { continueOnMissingResult, transientRetry } =
       this.recovery.resolveRecoveryPolicies(job.work, r.profile);
+    const budget = this.budgetStops.attempt(job, session);
 
     try {
       while (!this.stopped && !job.abort.signal.aborted) {
@@ -1180,7 +1186,8 @@ export class ExecutorManager {
                 sessionId: session.nativeId,
                 sessionName,
                 work: currentWork,
-                signal: job.abort.signal,
+                signal: budget.turn(),
+                onUsage: budget.observe,
                 onTranscript: (event) => {
                   if (!job.abort.signal.aborted && !this.stopped)
                     this.transcripts.capture(r, event, [job.work.token ?? '']);
@@ -1266,6 +1273,7 @@ export class ExecutorManager {
               break;
             } catch (turnError) {
               if (this.stopped || job.abort.signal.aborted) return;
+              if (budget.stopped) throw turnError; // Never start another turn.
               const classification = classifyHarnessError(turnError);
               if (classification.errorClass === 'missing_result') {
                 if (continuationTurns < continueOnMissingResult.maxTurns) {
@@ -1316,13 +1324,7 @@ export class ExecutorManager {
               session.usageUncertain = false;
               this.engine.store.put(sessionsCollection, session);
             }
-            if (usage?.length)
-              this.engine.usage.report({
-                workId: job.work.id,
-                attempt: job.work.attempt,
-                token: job.work.token,
-                snapshot: { sequence: 1, final: true, models: usage },
-              });
+            budget.complete(usage);
             // Validation and duplicate handling stay in the ordinary submission path.
             this.engine.submit(job.work.id, job.work.token!, turnResult.output);
             r.state = 'completed';
@@ -1332,6 +1334,8 @@ export class ExecutorManager {
           }
         } catch (error) {
           if (this.stopped || job.abort.signal.aborted) return;
+          if (budget.stopped)
+            return this.budgetStops.release(job, session, budget);
           const classification = classifyHarnessError(error);
           if (error instanceof HarnessCleanupError) {
             this.interruptJob(
@@ -1460,6 +1464,7 @@ export class ExecutorManager {
         }
       }
     } finally {
+      budget.complete();
       job.sendMessage = undefined;
       for (const answer of job.answers.values())
         answer.reject(new Error('Execution ended'));
@@ -1794,37 +1799,4 @@ export class ExecutorManager {
       [...this.config.modelRequests.values()].map((r) => r.done),
     );
   }
-}
-/** Unknown resumed history stays unknown rather than charging an old session twice. */
-export function usageDelta(
-  current: ModelUsage[],
-  before: ModelUsage[] | null,
-): ModelUsage[] | undefined {
-  if (!before) return;
-  return current.map((value) => {
-    const prior = before.find(
-      (v) => v.provider === value.provider && v.model === value.model,
-    );
-    const result: ModelUsage = { provider: value.provider, model: value.model };
-    for (const field of tokenFields)
-      if (
-        value[field] !== undefined &&
-        (!prior || prior[field] !== undefined) &&
-        value[field]! >= (prior?.[field] ?? 0)
-      )
-        result[field] = value[field]! - (prior?.[field] ?? 0);
-    if (
-      value.cost &&
-      (!prior ||
-        (prior.cost?.source === value.cost.source &&
-          prior.cost.currency === value.cost.currency)) &&
-      value.cost.amountMicros >= (prior?.cost?.amountMicros ?? 0)
-    )
-      result.cost = {
-        ...value.cost,
-        amountMicros:
-          value.cost.amountMicros - (prior?.cost?.amountMicros ?? 0),
-      };
-    return result;
-  });
 }

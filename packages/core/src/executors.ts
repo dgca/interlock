@@ -399,6 +399,8 @@ export interface ManagedExecution {
     replacementModel?: string;
   };
   recoveryEvents?: RecoveryEvent[];
+  /** Stopped at a run budget limit; the next claim resumes this session. */
+  budgetStop?: { sessionKey: string };
   requests: ExecutorRequest[];
   logs: { at: string; message: string }[];
   logCount: number;

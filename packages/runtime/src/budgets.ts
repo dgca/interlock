@@ -66,14 +66,16 @@ export class Budgets {
     const runs = this.store.runTrees(new Set(family.map((run) => run.id)));
     return records.map((record) => {
       const scope = this.scope(record.id, record.budget!, runs);
+      // Tokens without a reported cost count at the run's captured prices, and
+      // active managed attempts count their streamed figures.
+      const { attempts, runReports } = this.usage.prices.price(
+        this.usage.withStreamed(this.usage.attemptsForRuns(scope)),
+        this.usage.runReportsForRuns(scope),
+      );
       return {
         record,
         scope,
-        result: evaluateBudget(
-          record.budget!,
-          this.usage.attemptsForRuns(scope),
-          this.usage.runReportsForRuns(scope),
-        ),
+        result: evaluateBudget(record.budget!, attempts, runReports),
       };
     });
   }
@@ -157,6 +159,7 @@ export class Budgets {
       const work = this.store.get<WorkRequest>('work', state.id)!;
       if (runIds.length) {
         work.budgetBlocked = {
+          ...work.budgetBlocked,
           runIds,
           since: work.budgetBlocked?.since ?? new Date().toISOString(),
           remainingMs:

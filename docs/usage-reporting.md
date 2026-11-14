@@ -1,6 +1,6 @@
 # Usage reporting
 
-Interlock records usage supplied by external executors or measuring observers. It does not read provider accounts, parse session logs, or infer token counts from prompts. When tokens arrive without a cost, it [derives the cost from a local price table](#derived-cost). Optional [run budgets](run-budgets.md) can gate new Agent claims using these reports. Reporting is optional. Missing figures appear as unknown, including for completed runs.
+Interlock records usage supplied by external executors or measuring observers. It does not read provider accounts, parse session logs, or infer token counts from prompts. When tokens arrive without a cost, it [derives the cost from a local price table](#derived-cost). Optional [run budgets](run-budgets.md) can gate new Agent claims and stop managed sessions using these reports and derived costs. Reporting is optional. Missing figures appear as unknown, including for completed runs.
 
 ## Report a claim attempt
 
@@ -162,7 +162,7 @@ When a model's usage has tokens but no `cost`, Interlock prices it from a local 
 - Each derived model in a `snapshot` carries `derivedCost` with the price table (`id`, `version`, `custom`) and the per-million-token rates used. Its `cost.source` reads `Interlock price table VERSION`. Reported costs have no `derivedCost`.
 - `totals.pricing` (and `usage.pricing` in reports) lists the tables and prices assumed, and the models with no price. A reason accompanies each gap: `no_price` (model not in the table), `incomplete_tokens` (input or output count unknown), or `no_table` (a run that finished before this feature, which stays unpriced). Lists are capped at 20 entries with `truncated`.
 
-Failed, expired, cancelled and held attempts are priced like completed ones whenever they reported tokens. Managed executors that fail before returning a result still record no usage for that attempt.
+Failed, expired, cancelled and held attempts are priced like completed ones whenever they reported tokens. Managed executors that fail before returning a result still record no usage for that attempt, unless a [run budget](run-budgets.md#stop-managed-sessions-at-the-limit) governs it; then the usage streamed so far is kept as a non-final report.
 
 Pricing uses integer arithmetic: rates are millionths of the table currency per million tokens, every token class is multiplied exactly, and the sum is rounded half up to millionths once per model report. Totals add those integers, so they do not drift.
 
@@ -176,7 +176,7 @@ Token classes:
 
 ### Price table
 
-A run captures the current price table when it starts and keeps it for all its usage. Continue-as-new successors, Batch items and Parallel branches inherit their source run's table, as they do variable captures; invoked child workflows capture the table current when they start. Editing the table therefore changes derived cost for runs started afterwards only. Runs started before this feature have no capture: they capture the current table at their next report of tokens without cost. Tables are stored by content, so a captured table never changes.
+A run captures the current price table when it starts and keeps it for all its usage. One table prices a run tree: continue-as-new successors, Batch items, Parallel branches and invoked child workflows, waited or detached, inherit their source run's table. A budget that spans the tree therefore uses one set of prices. Editing the table therefore changes derived cost for runs started afterwards only. Runs started before this feature have no capture: they capture the current table at their next report of tokens without cost. Tables are stored by content, so a captured table never changes.
 
 Interlock ships a table of public list prices for Claude (`anthropic`) and OpenAI (`openai`) models, with its version, source URLs and retrieval dates. List prices change between releases. Unknown models get no price rather than an estimate. Models served through other providers, such as Bedrock or Vertex, are not in the shipped table.
 

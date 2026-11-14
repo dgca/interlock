@@ -179,7 +179,9 @@ export function createRunProjector(
         wait(
           'budget',
           'person',
-          'Claim blocked by run budget',
+          work.budgetBlocked.stopped?.attempt === work.attempt
+            ? work.budgetBlocked.stopped.reason
+            : 'Claim blocked by run budget',
           work.budgetBlocked.since,
         );
       else if (work?.resourceBlocked)
