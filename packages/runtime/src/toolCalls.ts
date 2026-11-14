@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import {
   agentTools,
   assertContract,
@@ -8,7 +8,9 @@ import {
   type NodeExecution,
   type Run,
   type ToolCallLink,
+  type ToolCallInput,
   type ToolCallRequest,
+  toolCallRequestSchema,
   type WorkflowDefinition,
   type WorkRequest,
 } from '@interlock/core';
@@ -21,17 +23,38 @@ const LEASE_MARGIN_MS = 5_000;
 const terminal = (status: string) =>
   ['completed', 'failed', 'cancelled'].includes(status);
 
+/**
+ * A tool-only credential for one claim attempt. Only tool calls accept it; it
+ * cannot submit, fail, renew or hold work, and it changes with every claim.
+ */
+export const toolCallToken = (claimToken: string) =>
+  createHash('sha256')
+    .update(`interlock-tool-call:${claimToken}`)
+    .digest('base64url');
+
+/** Environment for managed sessions; the stdio MCP bridge fills these in. */
+export function toolCallEnvironment(work: WorkRequest): Record<string, string> {
+  return work.tools?.length && work.token
+    ? {
+        INTERLOCK_WORK_ID: work.id,
+        INTERLOCK_TOOL_TOKEN: toolCallToken(work.token),
+      }
+    : {};
+}
+
 interface ToolCallHost {
   /** Public engine reads and change notifications. */
   engine: {
     run(id: string): Run;
     subscribe(listener: () => void): () => void;
     nowMs(): number;
+    pump(): void;
   };
   definition(run: Pick<Run, 'workflowId' | 'version'>): WorkflowDefinition;
   save(run: Run): void;
   event(run: Run, type: string, text: string): void;
   fail(run: Run, execution: NodeExecution, error: string): void;
+  withClaim<T>(id: string, token: string, action: (work: WorkRequest) => T): T;
   cancel(run: Run, reason: string): void;
   paused(run: Run): boolean;
 }
@@ -64,6 +87,28 @@ export class ToolCalls {
     private store: Store,
     private host: ToolCallHost,
   ) {}
+
+  /** Run one call under the caller's active claim and wait for its result. */
+  async call(input: ToolCallInput, signal?: AbortSignal) {
+    const q = toolCallRequestSchema.parse(input);
+    const { workId, token } = this.claim(q.workId, q.token);
+    const runId = this.host.withClaim(workId, token, (work) =>
+      this.begin(work, q),
+    );
+    return this.wait(runId, workId, q.waitMs, signal);
+  }
+
+  /** The claim a tool call acts under: its claim token or tool-only credential. */
+  private claim(workId?: string, token?: string) {
+    if (!workId || !token)
+      throw new InterlockError('call_work_tool needs workId and token');
+    const work = this.store.get<WorkRequest>('work', workId);
+    return {
+      workId,
+      token:
+        work?.token && token === toolCallToken(work.token) ? work.token : token,
+    };
+  }
 
   /** The calling execution and tools available to an active claim. */
   private context(work: WorkRequest) {
@@ -183,6 +228,7 @@ export class ToolCalls {
     waitMs: number,
     signal?: AbortSignal,
   ): Promise<ToolCallResult> {
+    this.host.engine.pump();
     const work = this.store.get<WorkRequest>('work', workId)!;
     const leaseMs = work.leaseUntil
       ? Date.parse(work.leaseUntil) - this.host.engine.nowMs() - LEASE_MARGIN_MS
@@ -246,10 +292,20 @@ export class ToolCalls {
     return result;
   }
 
+  /** Cancel the attempt's unfinished calls, so none outlives the Agent's result. */
+  settle(work: WorkRequest, reason: string) {
+    const parent = this.host.engine.run(work.runId);
+    const execution = parent.executions.find((e) => e.id === work.executionId);
+    for (const id of execution?.childRunIds ?? []) {
+      const run = this.host.engine.run(id);
+      if (run.toolCall && !terminal(run.status)) this.host.cancel(run, reason);
+    }
+  }
+
   /**
-   * Settle calls nobody can receive. A call that has not started its operation
-   * when its claim attempt ends is cancelled; a started one finishes and is
-   * recorded. A call blocked by a resource its own Agent holds fails.
+   * Settle calls nobody can receive: when a claim attempt ends (failure,
+   * expiry, hold or cancellation), its unfinished calls are cancelled. A call
+   * blocked by a resource its own Agent holds fails.
    */
   tick() {
     for (const { run: state } of this.store.activeRunState()) {
@@ -260,8 +316,8 @@ export class ToolCalls {
       const work = this.store.get<WorkRequest>('work', link.workId);
       const claimed =
         work?.status === 'claimed' && work.attempt === link.attempt;
-      if (!claimed && !step?.operationStartedAt && !step?.resourceActive) {
-        this.host.cancel(run, 'calling claim ended before the tool started');
+      if (!claimed) {
+        this.host.cancel(run, 'calling claim attempt ended');
         continue;
       }
       const own = step?.resourceBlocked?.owners.find(

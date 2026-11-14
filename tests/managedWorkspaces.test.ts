@@ -209,6 +209,48 @@ it('shares the workspace with Batch items and removes it after the tree is cance
   expect(f.worktrees()).toEqual([realpathSync(f.repository)]);
 });
 
+it("runs tool calls in the calling Agent's checkout without another worktree", async () => {
+  const f = setup();
+  const engine = f.open();
+  const id = publish(engine, {
+    workspace: { repository: f.repository },
+    nodes: [
+      { id: 'entry', kind: 'entry', label: 'In' },
+      { id: 'agent', kind: 'agent', label: 'Agent', prompt: 'Work.' },
+      {
+        id: 'checks',
+        kind: 'script',
+        label: 'Run checks',
+        language: 'javascript',
+        command:
+          "const fs = await import('node:fs'); return { cwd: process.cwd(), seen: fs.readFileSync('agent.txt', 'utf8') };",
+      },
+      { id: 'exit', kind: 'exit', label: 'Out' },
+    ],
+    edges: [
+      { id: 'in', source: 'entry', target: 'agent' },
+      { id: 'out', source: 'agent', target: 'exit' },
+      { id: 'tool', source: 'agent', target: 'checks', kind: 'tool' },
+    ],
+  });
+  const runId = engine.start(id, {}).run.id;
+  const [work] = await until(engine, () => {
+    const items = engine.available();
+    return items.length === 1 && items;
+  });
+  const path = engine.workspaces.get(runId)!.path;
+  const { token } = engine.claim(work.id, { ...worker, session: undefined });
+  writeFileSync(join(path, 'agent.txt'), 'in progress');
+  const result = await engine.callTool({
+    workId: work.id,
+    token: token!,
+    name: 'run_checks',
+  });
+  expect(result.output).toEqual({ cwd: path, seen: 'in progress' });
+  expect(engine.workspaces.get(result.runId)).toBeUndefined();
+  expect(f.worktrees()).toEqual([realpathSync(f.repository), path]);
+});
+
 it('reconciles after a restart without touching directories Interlock did not create', async () => {
   const f = setup();
   const first = f.open();

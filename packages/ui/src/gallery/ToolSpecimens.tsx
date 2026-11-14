@@ -20,6 +20,12 @@ definition.nodes.push(
     command: 'return input;',
   }),
   nodeSchema.parse({
+    id: 'lint',
+    kind: 'script',
+    label: 'Lint changed files',
+    command: 'return input;',
+  }),
+  nodeSchema.parse({
     id: 'issue',
     kind: 'fetch',
     label: 'Read issue',

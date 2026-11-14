@@ -1,7 +1,8 @@
 import { createContext, useContext } from 'react';
-import { Button, Stack, TextInput } from '../../design-system';
+import { Button, NativeSelect, Stack, TextInput } from '../../design-system';
 import {
   agentTools,
+  sameExecutionScope,
   type WorkflowDefinition,
   type WorkflowEdge,
   type WorkflowNode,
@@ -26,6 +27,17 @@ export function AgentToolsEditor({
   const onEdgesChange = useContext(ToolEdgesContext);
   if (node.kind !== 'agent' || !definition || !onEdgesChange) return null;
   const tools = agentTools(definition, node.id);
+  // Steps that can become tools: Script or Fetch in the Agent's scope, not routed.
+  const candidates = definition.nodes.filter(
+    (step) =>
+      (step.kind === 'script' || step.kind === 'fetch') &&
+      sameExecutionScope(step, node) &&
+      !tools.some((tool) => tool.nodeId === step.id) &&
+      !definition.edges.some(
+        (e) =>
+          e.kind !== 'tool' && (e.source === step.id || e.target === step.id),
+      ),
+  );
   const update = (id: string, patch: Partial<WorkflowEdge> | null) =>
     onEdgesChange(
       definition.edges.flatMap((edge) =>
@@ -39,7 +51,7 @@ export function AgentToolsEditor({
         <p className="hint">
           {tools.length
             ? 'The agent can call these steps during its turn. Leave a limit blank for the default.'
-            : "Connect this Agent's Tools handle to a Script or Fetch step to let the agent call it during its turn."}
+            : "Choose a Script or Fetch step below, or connect this Agent's Tools handle to one on the canvas, to let the agent call it during its turn."}
         </p>
       </div>
       {tools.map((tool) => {
@@ -88,6 +100,32 @@ export function AgentToolsEditor({
           </div>
         );
       })}
+      {candidates.length > 0 && (
+        <NativeSelect
+          label="Add a tool"
+          value=""
+          data={[
+            { value: '', label: 'Choose a Script or Fetch step' },
+            ...candidates.map((step) => ({
+              value: step.id,
+              label: step.label,
+            })),
+          ]}
+          onChange={(event) => {
+            if (!event.target.value) return;
+            onEdgesChange([
+              ...definition.edges,
+              {
+                id: crypto.randomUUID(),
+                source: node.id,
+                target: event.target.value,
+                port: 'default',
+                kind: 'tool',
+              },
+            ]);
+          }}
+        />
+      )}
     </Stack>
   );
 }

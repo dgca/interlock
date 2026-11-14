@@ -7,7 +7,11 @@ import {
 import { readRuns } from './runExecutions.js';
 
 export function runsForReport(db: DatabaseSync, filter: ReportFilter): Run[] {
-  const conditions = ["collection = 'runs'"];
+  // Tool calls are not runs of the workflow; their steps count under the caller.
+  const conditions = [
+    "collection = 'runs'",
+    "json_extract(value, '$.toolCall') IS NULL",
+  ];
   const params: (string | number)[] = [];
 
   for (const [key, value] of Object.entries(filter.tags ?? {})) {
@@ -40,7 +44,27 @@ export function runsForReport(db: DatabaseSync, filter: ReportFilter): Run[] {
     LIMIT ?
   `;
 
-  return readRuns<Run>(db, db.prepare(sql).all(...params));
+  return withToolSteps(db, readRuns<Run>(db, db.prepare(sql).all(...params)));
+}
+
+/** Append each run's tool call steps to its executions, so node stats include them. */
+function withToolSteps(db: DatabaseSync, runs: Run[]) {
+  if (!runs.length) return runs;
+  const calls = readRuns<Run>(
+    db,
+    db
+      .prepare(
+        `SELECT d.value FROM run_metadata r
+        CROSS JOIN documents d ON d.collection = 'runs' AND d.id = r.id
+        WHERE r.parent_id IN (SELECT value FROM json_each(?))
+        AND json_extract(r.value, '$.toolCall') IS NOT NULL ORDER BY r.position`,
+      )
+      .all(JSON.stringify(runs.map((run) => run.id))),
+  );
+  const byId = new Map(runs.map((run) => [run.id, run]));
+  for (const call of calls)
+    byId.get(call.parentRunId!)?.executions.push(...call.executions);
+  return runs;
 }
 
 /** Exact run counts for a report window from the indexed run metadata, without the run limit. */

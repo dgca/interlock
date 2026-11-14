@@ -2,6 +2,7 @@ import { expect, it } from 'vitest';
 import type { WorkRequest } from '@interlock/core';
 import { assignmentPrompt } from '../packages/runtime/src/executors/contracts';
 import { freshContextInstructions } from '../packages/runtime/src/agentInstructions';
+import { toolCallToken } from '../packages/runtime/src/toolCalls';
 
 it('executes fresh managed work in its existing isolated session while retaining resource rules', () => {
   const work = {
@@ -37,7 +38,7 @@ it('executes fresh managed work in its existing isolated session while retaining
   expect(prompt).toContain('Use the supplied command only.');
 });
 
-it('gives managed sessions the tool listing and claim for call_work_tool', () => {
+it('gives managed sessions the tool listing and a tool-only credential', () => {
   const prompt = assignmentPrompt({
     id: 'work',
     runId: 'run',
@@ -56,8 +57,10 @@ it('gives managed sessions the tool listing and claim for call_work_tool', () =>
       },
     ],
   } as unknown as WorkRequest);
+  // The prompt carries only the tool-only credential, never the claim token.
   expect(prompt).toContain(
-    'call_work_tool using workId work, token claim-token',
+    `workId work, token ${toolCallToken('claim-token')}`,
   );
+  expect(prompt).not.toContain('claim-token');
   expect(prompt).toContain('"name":"run_checks"');
 });

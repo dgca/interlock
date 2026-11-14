@@ -44,6 +44,10 @@ export type WorkTool = Pick<
 >;
 /** Bounds the tool listing in each assignment. */
 const MAX_TOOLS_PER_AGENT = 20;
+const MAX_TOOL_SCHEMA_BYTES = 8_192;
+const MAX_TOOL_LIST_BYTES = 32_768;
+const jsonBytes = (value: unknown) =>
+  new TextEncoder().encode(JSON.stringify(value)).length;
 export interface ToolEdgeProblem {
   code: string;
   message: string;
@@ -210,6 +214,12 @@ export function toolEdgeProblems(
         `${target.label}: shares resource ${shared[0]} with ${source.label}, which holds it during the call.`,
         target.id,
       );
+    if (jsonBytes(target.inputSchema) > MAX_TOOL_SCHEMA_BYTES)
+      add(
+        'tool_schema_size',
+        `${target.label}: the input contract of a tool must be at most ${MAX_TOOL_SCHEMA_BYTES} bytes of JSON.`,
+        target.id,
+      );
     const name = toolName(target);
     if (!validToolName(name))
       add(
@@ -233,6 +243,17 @@ export function toolEdgeProblems(
         source.id,
       );
   }
+  for (const agent of definition.nodes)
+    if (
+      agent.kind === 'agent' &&
+      jsonBytes(workTools(definition, agent.id).tools ?? []) >
+        MAX_TOOL_LIST_BYTES
+    )
+      problems.push({
+        code: 'tool_list_size',
+        message: `${agent.label}: its tool list must be at most ${MAX_TOOL_LIST_BYTES} bytes of JSON. Remove tools or shrink their input contracts.`,
+        nodeId: agent.id,
+      });
   return problems;
 }
 
@@ -247,8 +268,8 @@ export interface ToolCallLink {
 }
 
 export const toolCallRequestSchema = z.object({
-  workId: z.string(),
-  token: z.string(),
+  workId: z.string().optional(),
+  token: z.string().optional(),
   name: z.string(),
   arguments: z.record(z.unknown()).default({}),
   callId: z.string().optional(),
