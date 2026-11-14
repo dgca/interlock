@@ -27,6 +27,8 @@ const names = [
   'INTERLOCK_BATCH_OWNER_RUN_ID',
   'INTERLOCK_BATCH_ITEM_INDEX',
   'INTERLOCK_POLL_CHECK_NUMBER',
+  'INTERLOCK_URL',
+  'INTERLOCK_API_TOKEN',
 ];
 const readEnvironment = `Object.fromEntries(${JSON.stringify(names)}.map(name => [name, process.env[name]]))`;
 const readJavaScript = `return { input, env: ${readEnvironment} };`;
@@ -99,7 +101,10 @@ it.each(['javascript', 'bash'] as const)(
     vi.stubEnv('INTERLOCK_RUN_ID', 'inherited-run');
     vi.stubEnv('INTERLOCK_BATCH_ITEM_INDEX', 'inherited-item');
     vi.stubEnv('INTERLOCK_POLL_CHECK_NUMBER', 'inherited-check');
+    vi.stubEnv('INTERLOCK_API_TOKEN', 'inherited-token');
     const engine = setup();
+    // The server's address; no token because the server does not require one.
+    engine.executors.mcpUrl = 'http://127.0.0.1:4999/mcp/execute';
     const workflow = publish(
       engine,
       script(language === 'bash' ? readBash : readJavaScript, language),
@@ -108,7 +113,15 @@ it.each(['javascript', 'bash'] as const)(
     const second = engine.start(workflow, 'same').run;
     for (const id of [first.id, second.id]) {
       const run = await waitForRun(engine, id);
-      expect(run.output).toEqual({ input: 'same', env: expectedIdentity(run) });
+      expect(run.output).toEqual({
+        input: 'same',
+        env: {
+          ...expectedIdentity(run),
+          ...(language === 'javascript'
+            ? { INTERLOCK_URL: 'http://127.0.0.1:4999' }
+            : {}),
+        },
+      });
     }
     expect(process.env.INTERLOCK_RUN_ID).toBe('inherited-run');
   },

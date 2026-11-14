@@ -8,7 +8,7 @@ Open **Automations → New automation → Interlock event**. Choose the source w
 
 **Enable when created** defaults off. Creation opens the saved automation directly. CLI and MCP create requests also default to disabled; optional create-only `enabled:true` validates enablement and saves atomically. A failed enablement creates nothing. Imports always disable triggers.
 
-To send an HTTP notification, use an event-triggered workflow with a Fetch node. The handler can map the event into the destination service's request format.
+To send an HTTP notification, use an event-triggered workflow with a Fetch node. The handler can map the event into the destination service's request format. The [Run notifications starter](integration-starters.md#run-notifications) is a ready handler for Slack-compatible webhooks.
 
 ```json
 {

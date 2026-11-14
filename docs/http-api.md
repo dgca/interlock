@@ -243,7 +243,7 @@ export async function onIssueEvent(event, deliveryId) {
 }
 ```
 
-Retry on network errors and `5xx` with the same key. Do not retry `400`, `404` or `409` unchanged. Keep the receiver on the same machine as Interlock; the API is not for public exposure. For starts on a timer or after another run, see [schedules](schedules.md) and [lifecycle event triggers](events.md).
+Retry on network errors and `5xx` with the same key. Do not retry `400`, `404` or `409` unchanged. Keep the receiver on the same machine as Interlock; the API is not for public exposure. For starts on a timer or after another run, see [schedules](schedules.md) and [lifecycle event triggers](events.md). The [GitHub issue intake starter](integration-starters.md#github-issue-intake) polls instead of receiving webhooks and calls this route from a Fetch step.
 
 ## Compatibility
 

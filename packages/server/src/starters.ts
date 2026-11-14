@@ -6,6 +6,7 @@ import {
   type BoardImportSetup,
   type BoardImportResult,
   type BoardSuggestion,
+  type VariableRequirement,
 } from '@interlock/core';
 import type { Engine } from '@interlock/runtime';
 import { fingerprint } from '@interlock/runtime/versionIdentity';
@@ -17,6 +18,11 @@ import sdlc from '../../../workflows/sdlc.json';
 import sdlcV2 from '../../../workflows/sdlc-v2.json';
 import prWatcher from '../../../workflows/pr-watcher.json';
 import evaluate from '../../../workflows/evaluate.json';
+import issueIntake from '../../../workflows/github-issue-intake.json';
+import runNotifications from '../../../workflows/run-notifications.json';
+import { provisionStarterVariables } from './starterVariables.js';
+import { z } from 'zod';
+import { p } from './trpc.js';
 
 const sdlcColumns = [
   { id: 'planning', name: 'Planning' },
@@ -33,6 +39,7 @@ const sdlcBoard: BoardSuggestion = {
 /** A portable bundle: a root workflow and the helpers it owns and calls. */
 interface StarterBundle {
   rootId: string;
+  variables?: VariableRequirement[];
   workflows: {
     id: string;
     name: string;
@@ -51,6 +58,8 @@ const bundleRoot = (bundle: StarterBundle) => {
 };
 const sdlcV2Bundle = sdlcV2 as StarterBundle;
 const prWatcherBundle = prWatcher as StarterBundle;
+const intakeBundle = issueIntake as StarterBundle;
+const notificationsBundle = runNotifications as StarterBundle;
 const catalog = [
   {
     id: 'sdlc',
@@ -88,6 +97,26 @@ const catalog = [
     summary: 'Evaluate retained comparison results against a fixed rubric.',
     requirements:
       'Needs a completed workflow comparison. Review mode requires a fresh reviewer.',
+  },
+  {
+    id: 'github-issue-intake',
+    template: bundleRoot(intakeBundle),
+    bundle: intakeBundle,
+    boardSuggestion: undefined,
+    summary:
+      'Experimental, not yet run against live GitHub. Start one run of your workflow per open GitHub issue with your label, on a schedule you create.',
+    requirements:
+      'On each issue it starts, removes your label and adds a picked-up label. Set the github_token Secret.',
+  },
+  {
+    id: 'run-notifications',
+    template: bundleRoot(notificationsBundle),
+    bundle: notificationsBundle,
+    boardSuggestion: undefined,
+    summary:
+      'Experimental, not yet run against a live webhook. Post a short message to a webhook when a run fails or needs attention.',
+    requirements:
+      'One JSON POST per event to the URL in the notify_webhook_url Secret. Start it from an event automation.',
   },
 ] as const;
 type Starter = (typeof catalog)[number];
@@ -257,8 +286,20 @@ function addHelpers(
   });
 }
 
-export function listStarters(engine: Engine) {
-  return catalog.map((s) => {
+/**
+ * Compact choices name their suggested board; `boardSetup: true` or one
+ * `starterId` adds the full board setup preview.
+ */
+export function listStarters(
+  engine: Engine,
+  q: { starterId?: string; boardSetup?: boolean } = {},
+) {
+  const detail = q.boardSetup || q.starterId !== undefined;
+  const chosen = catalog.filter(
+    (s) => q.starterId === undefined || s.id === q.starterId,
+  );
+  if (!chosen.length) throw new InterlockError('Starter not found');
+  return chosen.map((s) => {
     const definition = definitionSchema.parse(s.template.definition),
       copy = existing(
         engine,
@@ -268,6 +309,7 @@ export function listStarters(engine: Engine) {
         bundleOf(s)?.rootId,
       );
     const boardSetup =
+      detail &&
       s.boardSuggestion &&
       starterBoardPreview(engine, {
         id: s.id,
@@ -281,6 +323,7 @@ export function listStarters(engine: Engine) {
       description: s.summary,
       requirements: s.requirements,
       nodeCount: definition.nodes.length,
+      ...(s.boardSuggestion ? { board: s.boardSuggestion.id } : {}),
       ...(boardSetup ? { boardSetup } : {}),
       ...(copy ? { existing: reference(copy) } : {}),
     };
@@ -348,6 +391,7 @@ export function importStarter(
       throw new InterlockError(
         'Choose another copy to set up a board for this starter.',
       );
+    if (!found) provisionStarterVariables(engine, bundleOf(starter)?.variables);
     const workflow =
       found ??
       engine.create(
@@ -398,3 +442,15 @@ export function importStarter(
     };
   });
 }
+/** `workflows.starters`: compact choices, or full board setup on request. */
+export const startersQuery = p
+  .input(
+    z
+      .object({
+        starterId: z.string().min(1).max(64).optional(),
+        boardSetup: z.boolean().optional(),
+      })
+      .strict()
+      .optional(),
+  )
+  .query(({ ctx, input }) => listStarters(ctx.engine, input));

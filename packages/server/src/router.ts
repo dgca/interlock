@@ -16,7 +16,7 @@ import {
   pauseResumeSchema,
 } from '@interlock/core';
 import { scriptOperationSchema } from '@interlock/core';
-import { listStarters, importStarter } from './starters.js';
+import { startersQuery, importStarter } from './starters.js';
 import { parseImportDocument } from '@interlock/core/importDocument';
 import { workResourceRequestSchema } from '@interlock/core';
 import {
@@ -371,7 +371,7 @@ export const appRouter = t.router({
       ),
   }),
   workflows: t.router({
-    starters: p.query(({ ctx }) => listStarters(ctx.engine)),
+    starters: startersQuery,
     importStarter: p
       .input(
         z

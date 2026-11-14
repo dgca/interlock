@@ -2810,7 +2810,7 @@
       "count": 1
     },
     "@typescript-eslint/no-unsafe-member-access": {
-      "count": 21
+      "count": 20
     },
     "@typescript-eslint/no-unsafe-return": {
       "count": 2

@@ -68,6 +68,11 @@ export class LocalOperations {
     private readonly variables: Variables,
     private readonly backgroundScripts: BackgroundScripts,
     private readonly isStopped: () => boolean,
+    /** The server's MCP address and, only when required, its API token. */
+    private readonly server: () => {
+      mcpUrl?: string;
+      apiToken?: string;
+    } = () => ({}),
   ) {}
   private get stopped() {
     return this.isStopped();
@@ -126,7 +131,14 @@ export class LocalOperations {
           )
         : (operation.environment ?? []).map((e) => e.variableId);
     const resolved = this.variables.resolve(run, ids);
-    let redact = secretRedaction(resolved.secrets);
+    const { mcpUrl, apiToken } =
+      operation.kind === 'script' ? this.server() : {};
+    const server = { url: mcpUrl && new URL(mcpUrl).origin, apiToken };
+    // The API token is redacted like a Secret wherever the Script's text lands.
+    const scriptSecrets = server.apiToken
+      ? [...resolved.secrets, server.apiToken]
+      : resolved.secrets;
+    let redact = secretRedaction(scriptSecrets);
     try {
       const variableName = (id: string) =>
         run.variableCaptures?.find((c) => c.referenceId === id)?.name ?? id;
@@ -233,6 +245,9 @@ export class LocalOperations {
             {
               ...inherited,
               ...this.scriptContextEnvironment(run, execution),
+              // Progress snapshots redact only saved Secrets: no API token here.
+              INTERLOCK_URL: server.url,
+              INTERLOCK_API_TOKEN: undefined,
               INTERLOCK_EXECUTION_PROVENANCE_FILE: provenanceFile,
               ...bindings,
             },
@@ -279,13 +294,15 @@ export class LocalOperations {
           signal,
           operation.language,
           env,
-          resolved.secrets.length ? redact.text : undefined,
+          scriptSecrets.length ? redact.text : undefined,
         );
       let output: Json;
       try {
         output = await launch({
           ...inherited,
           ...this.scriptContextEnvironment(run, execution),
+          INTERLOCK_URL: server.url,
+          INTERLOCK_API_TOKEN: server.apiToken,
           INTERLOCK_EXECUTION_PROVENANCE_FILE: provenanceFile,
           ...bindings,
         }).catch((error: unknown) => {
