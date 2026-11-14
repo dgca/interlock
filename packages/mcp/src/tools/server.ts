@@ -667,7 +667,7 @@ export function createMcpServer(
   );
   tool(
     'get_run',
-    'Inspect a run and descendants with definitions, execution versions, events, prompt captures, variable refs and token-free work. Prefer briefing for continuation and get_run_result for selected payloads; above 64 KiB, large payloads are omitted unless full:true. Removed versions report definitionAvailable:false and require restoration before retry. Follow chain.nextRunId for rollover. Detached runs are independent. Use manage_run_version for moves, manage_work_hold for older holds, and manage_script for Script progress.',
+    'Inspect a run and descendants with definitions, execution versions, events, prompt captures, variable refs and token-free work. Prefer briefing for continuation and get_run_result for selected payloads; above 64 KiB the response is compacted unless full:true. Removed versions report definitionAvailable:false and require restoration before retry. Follow chain.nextRunId for rollover. Detached runs are independent. Use manage_run_version for moves, manage_work_hold for older holds, and manage_script for Script progress.',
     { id: z.string(), full: z.boolean().optional() },
     (input) => client.runs.get(input),
   );

@@ -283,7 +283,14 @@ Omit `executionId` for run data. `field` is `input` or `output`, defaulting to `
 
 ### Inspect a run
 
-`get_run` (shared API `runs.get`, CLI `interlock run RUN_ID`) returns full inspection, including execution errors and resolved Fetch requests, when its JSON is at most 64 KiB (65536 bytes). Above that, the response keeps the same structure but omits the workflow `definition` and every field over 1 KiB on the run, its descendants, their executions and assignments. Each object that lost a field gets `omittedBytes`, mapping the field name to its JSON size, and the response gets `compacted: {limitBytes, fullBytes, read}`. Read one step's payload with `get_run_result`, passing the run that owns the execution, or pass `full: true` (CLI `--full`) for the complete response. A run with many descendants or events can still exceed 64 KiB after compaction. The UI requests the full response.
+`get_run` (shared API `runs.get`, CLI `interlock run RUN_ID`) returns full inspection, including execution errors and resolved Fetch requests, when its JSON is at most 64 KiB (65536 bytes). Above that, the response is compacted and gets `compacted: {limitBytes, fullBytes, read}`:
+
+- The workflow `definition` and other fields over 1 KiB on the run, its descendants, their executions and assignments are dropped. IDs (including `childRunIds`), status, stage, waiting, port, labels and timestamps always stay.
+- An `error` over 1 KiB is truncated and states its full size.
+- `children` lists only `{id, status}`; `descendants` carries the details.
+- If the response is still over 64 KiB, only the most recent items of `events`, `descendants`, `children`, `work`, `descendantWork` and each run's `executions` are kept.
+
+Each object that lost something gets `omitted`, mapping the field to `{bytes, via}` or `{count, via}`. `via: "get_run_result"` means read it with `get_run_result`, passing the run that owns the execution and `field` `input`, `output` or `result`. `via: "full"` means pass `full: true` (CLI `--full`) for the complete response. A compacted response is never larger than the full one, but a run with very large ID lists can still exceed 64 KiB. The UI requests the full response.
 
 ## Wait for a scoped change
 
