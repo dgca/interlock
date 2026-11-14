@@ -31,12 +31,12 @@ function ImportedScripts({
           : 'Git worktree settings to review'}
       </summary>
       {workspaces.map((workspace, index) => (
-        <p key={`workspace-${index}`}>
-          Git worktree · {workspace.workflowName} · repository{' '}
-          <code>{workspace.repository}</code> from{' '}
-          <code>{workspace.baseRef}</code> on branch{' '}
-          <code>{workspace.branch}</code>
-        </p>
+        <div key={`workspace-${index}`}>
+          <p>Git worktree · {workspace.workflowName}</p>
+          <pre tabIndex={0} aria-label="Git worktree setting">
+            {`repository: ${workspace.repository}\nstart from: ${workspace.baseRef}\nbranch: ${workspace.branch}`}
+          </pre>
+        </div>
       ))}
       {scripts.map((script, index) => (
         <div key={index}>
