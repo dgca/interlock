@@ -120,6 +120,7 @@ export function Testing() {
             answerCheck.assertion,
             { ...routeCheck.assertion, port: '' },
           ]}
+          keys={['check-1', 'check-2']}
           onChange={() => {}}
           targets={[
             { id: 'review', label: 'Review', ports: ['true', 'false'] },

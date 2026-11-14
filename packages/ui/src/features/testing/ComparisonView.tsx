@@ -11,7 +11,6 @@ import {
 } from '../../design-system';
 import { Fragment, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
-import { CircleHelp, CircleX } from 'lucide-react';
 import type { Workflow } from '@interlock/core';
 import { ListTable, ListTableRow } from '../../components/ListTable/ListTable';
 import { StatusBadge } from '../../components/StatusBadge/StatusBadge';
@@ -31,7 +30,7 @@ import {
   formatMs,
   type ComparisonReport,
 } from './comparisonText';
-import { describeCheck } from './suiteDraft';
+import { SampleChecks } from './SampleChecks';
 import styles from './Testing.module.css';
 
 const sampleLimit = 10;
@@ -267,13 +266,15 @@ export function ComparisonView({
                   Samples
                 </h2>
                 <ListTable {...sampleTable} label="Samples">
-                  {report.samples.map((s) => {
+                  {report.samples.map((s, index) => {
                     const observation = s.observation;
-                    const open = observation?.checks.filter(
-                      (c) => c.status !== 'pass',
-                    );
                     const detail =
-                      Boolean(open?.length) || Boolean(observation?.error);
+                      Boolean(observation?.error) ||
+                      Boolean(
+                        observation &&
+                        observation.checkCounts.fail +
+                          observation.checkCounts.unknown,
+                      );
                     return (
                       <Fragment key={s.id}>
                         <ListTableRow
@@ -327,36 +328,13 @@ export function ComparisonView({
                                   {observation.error}
                                 </p>
                               )}
-                              {!!open?.length && (
-                                <ul
-                                  className={styles.checkResults}
-                                  aria-label={`Checks not passed for ${sampleNames.get(s.id)}`}
-                                >
-                                  {open.map((c) => (
-                                    <li key={c.index} data-status={c.status}>
-                                      {c.status === 'fail' ? (
-                                        <CircleX size={16} aria-hidden="true" />
-                                      ) : (
-                                        <CircleHelp
-                                          size={16}
-                                          aria-hidden="true"
-                                        />
-                                      )}
-                                      <span>
-                                        <span className={styles.checkText}>
-                                          {c.status === 'fail'
-                                            ? 'Failed: '
-                                            : 'Unknown: '}
-                                          {describeCheck(
-                                            c.assertion,
-                                            c.expectedOmitted,
-                                          )}
-                                        </span>
-                                        <small>{c.reason}</small>
-                                      </span>
-                                    </li>
-                                  ))}
-                                </ul>
+                              {observation && (
+                                <SampleChecks
+                                  comparisonId={report.id}
+                                  sampleOffset={offset + index}
+                                  observation={observation}
+                                  label={`Checks not passed for ${sampleNames.get(s.id)}`}
+                                />
                               )}
                             </div>
                           </ListTableRow>

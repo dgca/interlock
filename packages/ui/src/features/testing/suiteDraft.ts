@@ -17,6 +17,10 @@ export type CaseDraft = {
   /** Undefined means the case has no fixtures; simulation then reports missing ones. */
   fixtures?: Json;
   assertions: TestAssertion[];
+  /** Stable key per check; never saved. */
+  checkKeys: string[];
+  /** The run this case's input was copied from, while that input is unchanged. */
+  captured?: { runId: string; input: Json };
   qualityGuidance: string;
 };
 export type SuiteDraft = {
@@ -27,7 +31,8 @@ export type SuiteDraft = {
 type CaseContent = (typeof suiteContentSchema._input)['cases'][number];
 
 let nextKey = 0;
-const key = () => `case-${++nextKey}`;
+export const draftKey = () => `draft-${++nextKey}`;
+const key = draftKey;
 
 export function emptyCase(existing: CaseDraft[]): CaseDraft {
   let n = existing.length + 1;
@@ -40,6 +45,7 @@ export function emptyCase(existing: CaseDraft[]): CaseDraft {
     input: {},
     sourceRunId: '',
     assertions: [],
+    checkKeys: [],
     qualityGuidance: '',
   };
 }
@@ -48,7 +54,7 @@ export function emptySuite(): SuiteDraft {
   return { name: '', description: '', cases: [emptyCase([])] };
 }
 
-/** Saved cases always carry captured input; source metadata is informational and not saved back. */
+/** Saved cases carry captured input; `captured` keeps the source run while that input is unchanged. */
 export function suiteDraft(suite: TestSuite): SuiteDraft {
   return {
     name: suite.name,
@@ -62,12 +68,34 @@ export function suiteDraft(suite: TestSuite): SuiteDraft {
       sourceRunId: '',
       ...(c.fixtures ? { fixtures: c.fixtures } : {}),
       assertions: c.assertions,
+      checkKeys: c.assertions.map(() => key()),
+      ...(c.source
+        ? { captured: { runId: c.source.runId, input: c.input } }
+        : {}),
       qualityGuidance: c.qualityGuidance,
     })),
   };
 }
 
-export function suiteContent(draft: SuiteDraft) {
+/** JSON text with sorted object keys, so key order alone is not an edit. */
+function canonical(value: Json): string {
+  return JSON.stringify(value, (_key, v: unknown) =>
+    v && typeof v === 'object' && !Array.isArray(v)
+      ? Object.fromEntries(
+          Object.keys(v)
+            .sort()
+            .map((k) => [k, (v as Record<string, unknown>)[k]]),
+        )
+      : v,
+  );
+}
+
+/**
+ * The saved shape. An unchanged input copied from a run is saved by its
+ * source run ID, so the server keeps its provenance. Pass `keepSources:
+ * false` to save every input as entered (for a source run that was deleted).
+ */
+export function suiteContent(draft: SuiteDraft, keepSources = true) {
   return {
     name: draft.name.trim(),
     description: draft.description,
@@ -78,7 +106,11 @@ export function suiteContent(draft: SuiteDraft) {
         name: c.name.trim(),
         ...(c.source === 'run'
           ? { sourceRunId: c.sourceRunId.trim() }
-          : { input: c.input }),
+          : keepSources &&
+              c.captured &&
+              canonical(c.captured.input) === canonical(c.input)
+            ? { sourceRunId: c.captured.runId }
+            : { input: c.input }),
         ...(fixtures === undefined ? {} : { fixtures }),
         assertions: c.assertions,
         qualityGuidance: c.qualityGuidance,

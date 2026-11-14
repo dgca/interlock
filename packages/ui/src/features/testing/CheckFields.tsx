@@ -10,7 +10,7 @@ import {
 import { useId } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import type { Json, TestAssertion } from '@interlock/core';
-import type { checkTargets } from './suiteDraft';
+import { draftKey, type checkTargets } from './suiteDraft';
 import styles from './Testing.module.css';
 
 type Target = ReturnType<typeof checkTargets>[number];
@@ -42,6 +42,7 @@ function changeOperator(
 /** Checks for one case. Problems are keyed by `<prefix>.<index>[.<field>]`. */
 export function CheckFields({
   checks,
+  keys,
   onChange,
   targets,
   problems,
@@ -50,7 +51,9 @@ export function CheckFields({
   onValidityChange,
 }: {
   checks: TestAssertion[];
-  onChange: (checks: TestAssertion[]) => void;
+  /** Stable key per check, parallel to `checks`, for JSON validity and focus. */
+  keys: string[];
+  onChange: (checks: TestAssertion[], keys: string[]) => void;
   targets: Target[];
   problems: Map<string, string>;
   prefix: string;
@@ -59,10 +62,13 @@ export function CheckFields({
 }) {
   const id = useId();
   const update = (index: number, check: TestAssertion) =>
-    onChange(checks.map((c, i) => (i === index ? check : c)));
+    onChange(
+      checks.map((c, i) => (i === index ? check : c)),
+      keys,
+    );
   // Replacing or removing an Expected JSON field discards its unsaved text.
   const replace = (index: number, check: TestAssertion) => {
-    onValidityChange(`${validityPrefix}.${index}`, true);
+    onValidityChange(`${validityPrefix}.${keys[index]}`, true);
     update(index, check);
   };
   const steps = targets.map((t) => ({
@@ -79,7 +85,7 @@ export function CheckFields({
           targets.find((t) => t.id === check.nodeId)?.ports ?? undefined;
         return (
           <div
-            key={index}
+            key={keys[index]}
             role="group"
             aria-labelledby={`${id}-${index}`}
             className={styles.check}
@@ -90,8 +96,11 @@ export function CheckFields({
                 variant="subtle"
                 aria-label={`Remove check ${number}`}
                 onClick={() => {
-                  onValidityChange(validityPrefix, true);
-                  onChange(checks.filter((_, i) => i !== index));
+                  onValidityChange(`${validityPrefix}.${keys[index]}`, true);
+                  onChange(
+                    checks.filter((_, i) => i !== index),
+                    keys.filter((_, i) => i !== index),
+                  );
                 }}
               >
                 <Trash2 size={16} aria-hidden="true" />
@@ -214,7 +223,10 @@ export function CheckFields({
                         rows={2}
                         value={check.expected ?? null}
                         onValidityChange={(valid) =>
-                          onValidityChange(`${validityPrefix}.${index}`, valid)
+                          onValidityChange(
+                            `${validityPrefix}.${keys[index]}`,
+                            valid,
+                          )
                         }
                         onChange={(expected: Json) =>
                           update(index, { ...check, expected })
@@ -236,10 +248,13 @@ export function CheckFields({
           variant="ghost"
           disabled={checks.length >= 50}
           onClick={() =>
-            onChange([
-              ...checks,
-              { kind: 'output', path: '', visit: 1, operator: 'exists' },
-            ])
+            onChange(
+              [
+                ...checks,
+                { kind: 'output', path: '', visit: 1, operator: 'exists' },
+              ],
+              [...keys, draftKey()],
+            )
           }
         >
           <Plus size={14} aria-hidden="true" /> Add check
