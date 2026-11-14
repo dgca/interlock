@@ -11,6 +11,8 @@ export type HistoryRun = Pick<
   chainNextRunId: string | null;
   chainRootRunId: string | null;
   comparisonId: string | null;
+  /** 1 for a tool call, which belongs to its caller's tree but is not a run of its own. */
+  toolCall: number;
 };
 
 export function historyRuns(db: DatabaseSync): HistoryRun[] {
@@ -26,7 +28,8 @@ export function historyRuns(db: DatabaseSync): HistoryRun[] {
     json_extract(value, '$.parentMode') AS parentMode,
     json_extract(value, '$.chain.nextRunId') AS chainNextRunId,
     json_extract(value, '$.chain.rootRunId') AS chainRootRunId,
-    json_extract(value, '$.comparison.comparisonId') AS comparisonId
+    json_extract(value, '$.comparison.comparisonId') AS comparisonId,
+    json_extract(value, '$.toolCall') IS NOT NULL AS toolCall
     FROM documents WHERE collection = 'runs' ORDER BY rowid`,
     )
     .all() as HistoryRun[];

@@ -36,6 +36,7 @@ export function runSummaries(
     filters.push('r.status = ?');
     parameters.push(query.status);
   }
+  filters.push("json_extract(r.value, '$.toolCall') IS NULL");
   if (query.tab)
     filters.push(
       query.workflowId === undefined

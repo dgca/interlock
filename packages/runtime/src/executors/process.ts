@@ -172,11 +172,9 @@ export class JsonLinesProcess {
     args: string[],
     cwd: string,
     private protocol: 'json-rpc' | 'pi' = 'json-rpc',
+    env: NodeJS.ProcessEnv = process.env,
   ) {
-    this.process = spawnManagedProcess(command, args, {
-      cwd,
-      env: process.env,
-    });
+    this.process = spawnManagedProcess(command, args, { cwd, env });
     this.child = this.process.child;
     let buffer = '';
     this.child.stdout.setEncoding('utf8');

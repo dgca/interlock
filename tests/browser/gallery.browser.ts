@@ -17,6 +17,7 @@ const sections = [
   'Test suites',
   'Workflow proposals',
   'Boards',
+  'Agent tools',
 ];
 
 let browser: Browser;

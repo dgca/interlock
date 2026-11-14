@@ -127,7 +127,15 @@ export function runProgress(
   const scopeCache = new Map<string, Run[]>();
   const parallelExecution = (nodeId: string) =>
     parallelVisit?.nodeId === nodeId ? parallelVisit : latest(run, nodeId);
+  const toolTargets = new Set(
+    definition?.edges.flatMap((e) => (e.kind === 'tool' ? [e.target] : [])),
+  );
   const scopes = (node: WorkflowNode): Run[] => {
+    // A tool step runs once per call, each in its own child run of this run.
+    if (toolTargets.has(node.id))
+      return [...runs.values()].filter(
+        (r) => r.toolCall && r.parentRunId === run.id && r.cursor === node.id,
+      );
     if (node.parallelId) {
       const matches = (candidate: Run) =>
         candidate.parallelBranch?.nodeId === node.parallelId &&
@@ -171,7 +179,10 @@ export function runProgress(
     });
     const states = items.map((item) => item.state);
     const state = aggregate(states);
-    let label = node.batchId ? counts(states) || 'Not started' : labels[state];
+    let label =
+      node.batchId || toolTargets.has(node.id)
+        ? counts(states) || 'Not started'
+        : labels[state];
     let total: number | undefined, finished: number | undefined;
     if (node.kind === 'agent' && !node.batchId && state === 'running')
       label = 'Agent working';

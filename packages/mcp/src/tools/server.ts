@@ -1,9 +1,7 @@
-import { stallRequestSchema } from '@interlock/core';
+import { stallRequestSchema, scriptOperationSchema } from '@interlock/core';
 import { scheduleReadSchema, scheduleManageInputSchema } from '@interlock/core';
-import { scriptOperationSchema } from '@interlock/core';
 import { workResourceRequestSchema } from '@interlock/core';
 import { historyRequestSchema } from '@interlock/core';
-
 import { executorOperationSchema } from '@interlock/core';
 import { z } from 'zod';
 import {
@@ -71,6 +69,7 @@ import {
   claimResponseSchema,
 } from './responses.js';
 import { createProfileServer } from './register.js';
+import { registerAssignmentTools } from './assignmentTools.js';
 import { parseMcpProfile } from './profiles.js';
 import { VERSION } from '@interlock/core/version';
 import type { createMcpClient } from '../client.js';
@@ -775,6 +774,7 @@ export function createMcpServer(
     },
     (input) => client.work.renew(input),
   );
+  registerAssignmentTools(tool, client);
   tool(
     'fail_work',
     'Report a failed assignment attempt. Use manage_work_hold for recoverable blockers. Consumes failureCount against maxAttempts budget. Executors must stop using resources and stop subprocesses before reporting failure. If retry attempts remain, work becomes available with a fresh timeout interval; otherwise exhausted attempts fail the run.',

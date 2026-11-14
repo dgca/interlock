@@ -668,7 +668,7 @@ export class Store {
         `SELECT id FROM run_metadata WHERE workflow_id = ?
       AND status IN ('running', 'waiting')
       AND json_extract(value, '$.batchNodeId') IS NULL
-      AND json_extract(value, '$.parallelBranch') IS NULL`,
+      AND json_extract(value, '$.parallelBranch') IS NULL AND json_extract(value, '$.toolCall') IS NULL`,
       )
       .all(workflowId)
       .map((row) => row.id as string);

@@ -19,14 +19,19 @@ export type Trace = {
 };
 type Step = { execution: NodeExecution; run: Run };
 
-// Batch items and Parallel branches are child runs of the same graph. Visit
-// them depth first, right after the group step that started them.
+// Batch items, Parallel branches and Agent tool calls are child runs of the
+// same graph. Visit them depth first, right after the step that started them.
 function steps(run: Run, read: (id: string) => Run): Step[] {
   return run.executions.flatMap((execution) => [
     { execution, run },
     ...(execution.kind === 'batch' || execution.kind === 'parallel'
       ? execution.childRunIds.flatMap((id) => steps(read(id), read))
-      : []),
+      : execution.kind === 'agent'
+        ? execution.childRunIds.flatMap((id) => {
+            const call = read(id);
+            return call.toolCall ? steps(call, read) : [];
+          })
+        : []),
   ]);
 }
 
@@ -71,16 +76,31 @@ export function computeCoverage(
   }
   const covered = (e: WorkflowDefinition['edges'][number]) =>
     taken.has(`${e.source}\0${e.port ?? 'default'}`);
-  const totalEdges = definition.edges.length;
-  const coveredEdges = definition.edges.filter(covered).length;
+  // Tool edges are never routes, so route coverage leaves them out.
+  const routes = definition.edges.filter((e) => e.kind !== 'tool');
+  const totalEdges = routes.length;
+  const coveredEdges = routes.filter(covered).length;
+  const tools = definition.edges.filter((e) => e.kind === 'tool');
+  const called = new Set(
+    steps(run, read).flatMap(({ run: owner }) => owner.toolCall?.edgeId ?? []),
+  );
   return {
+    ...(tools.length
+      ? {
+          tools: {
+            total: tools.length,
+            called: tools.filter((e) => called.has(e.id)).length,
+            uncalled: tools.filter((e) => !called.has(e.id)).map((e) => e.id),
+          },
+        }
+      : {}),
     totalEdges,
     coveredEdges,
     percentage:
       totalEdges > 0
         ? Math.round((coveredEdges / totalEdges) * 1000) / 10
         : 100,
-    untested: definition.edges
+    untested: routes
       .filter((e) => !covered(e))
       .map((e) => ({
         edgeId: e.id,

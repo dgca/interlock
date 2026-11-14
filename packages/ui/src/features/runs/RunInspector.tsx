@@ -64,6 +64,7 @@ import { RunVersionDialog } from './RunVersionDialog';
 import { RunCancellationDialog } from './RunCancellationDialog';
 import { runDisplayStatus, runProjectionLabels } from './runProjectionText';
 import { RunTags } from './RunTags';
+import { ChildRunLinks, ToolCallLinks } from './LinkedRuns';
 import { nodeTypeLabel } from '../workflows/nodePresentation';
 import { requestActionLabel } from './runAttention';
 const stallLabels = {
@@ -1024,34 +1025,22 @@ export function RunInspector({
                 </div>
               </section>
             )}
-            {execution?.kind === 'workflow' &&
-              execution.childRunIds.map((childId) => {
-                const child = runIndex.get(childId);
-                return child ? (
-                  <section key={child.id}>
-                    <h3>
-                      {child.parentMode === 'detached'
-                        ? 'Started run'
-                        : 'Child run'}
-                    </h3>
-                    <div className={styles.linkedRuns}>
-                      <button
-                        className={styles.child}
-                        onClick={() => openWorkflow(child)}
-                      >
-                        <span>
-                          {child.workflowName}
-                          <small>{child.id.slice(0, 8)}</small>
-                        </span>
-                        <StatusBadge
-                          status={progress.runStates[child.id] ?? child.status}
-                        />
-                        <ArrowUpRight size={14} />
-                      </button>
-                    </div>
-                  </section>
-                ) : null;
-              })}
+            {execution?.kind === 'workflow' && (
+              <ChildRunLinks
+                execution={execution}
+                runIndex={runIndex}
+                states={progress.runStates}
+                onOpen={(child) => openWorkflow(child)}
+              />
+            )}
+            {execution?.kind === 'agent' && (
+              <ToolCallLinks
+                execution={execution}
+                runIndex={runIndex}
+                states={progress.runStates}
+                onSelect={(step, call) => selectExecution(step, call, true)}
+              />
+            )}
             {owner?.batchNodeId && owner.id !== run.id && (
               <Button onClick={() => onOpen(owner.id, execution?.id)}>
                 Open item run

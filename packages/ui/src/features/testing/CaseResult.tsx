@@ -79,6 +79,15 @@ export function CaseResult({
               <dd>{routeSummary(simulation.coverage)}</dd>
             </div>
           )}
+          {simulation.coverage?.tools && (
+            <div>
+              <dt>Tools called</dt>
+              <dd>
+                {simulation.coverage.tools.called} of{' '}
+                {simulation.coverage.tools.total}
+              </dd>
+            </div>
+          )}
         </dl>
       )}
       {simulation?.error && (
