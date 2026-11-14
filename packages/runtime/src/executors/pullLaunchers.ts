@@ -84,6 +84,43 @@ const digest = (value: string) => createHash('sha256').update(value).digest();
 const text = (value: unknown) =>
   typeof value === 'string' && value ? value : undefined;
 
+/** A waiting poll refreshes `lastPolledAt` at least every five seconds. */
+function polled(store: Engine['store'], profile: ExecutorProfile) {
+  const last = store.get<ClientRecord>(
+    clientsCollection,
+    profile.id,
+  )?.lastPolledAt;
+  const timeout = profile.clientTimeoutSeconds ?? defaultClientTimeoutSeconds;
+  return !!last && Date.now() - Date.parse(last) <= timeout * 1000;
+}
+
+/** Unlaunched assignments of enabled pull profiles whose client is offline. */
+export function offlineLauncherWork(store: Engine['store']) {
+  const offline = new Set(
+    store
+      .list<unknown>('executorProfiles')
+      .map(parseProfileSnapshot)
+      .filter((p) => p.transport === 'pull' && p.enabled && !polled(store, p))
+      .map((p) => p.id),
+  );
+  if (!offline.size) return [];
+  return store
+    .availableManagedWorkIds()
+    .map((id) => store.get<WorkRequest>('work', id))
+    .filter(
+      (work): work is WorkRequest =>
+        !!work?.executor &&
+        offline.has(work.executor) &&
+        !work.managedExecution?.executionId,
+    )
+    .map((work) => ({
+      runId: work.runId,
+      executionId: work.executionId,
+      workId: work.id,
+      since: work.availableSince ?? work.createdAt,
+    }));
+}
+
 /**
  * The pull transport: Interlock queues launcher operations per profile and one
  * client that can only make outbound requests leases and completes them.
@@ -136,13 +173,7 @@ export class PullLaunchers {
     return this.store.get<ClientRecord>(clientsCollection, profileId);
   }
   online(profile: ExecutorProfile) {
-    if (this.pollers.get(profile.id)?.size) return true;
-    const last = this.client(profile.id)?.lastPolledAt;
-    return (
-      !!last &&
-      Date.now() - Date.parse(last) <=
-        (profile.clientTimeoutSeconds ?? defaultClientTimeoutSeconds) * 1000
-    );
+    return !!this.pollers.get(profile.id)?.size || polled(this.store, profile);
   }
   /** Whether a launch may be queued now; other transports are always ready. */
   ready(profile: ExecutorProfile) {

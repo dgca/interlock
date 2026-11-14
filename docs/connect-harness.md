@@ -313,7 +313,7 @@ Groups are local to the assignment's run, including when work is discovered from
 
 ## Custom harness launchers and claim tickets
 
-When an assignment is dispatched through a managed custom harness in Delegated Launcher mode (`mode: "launcher"`), Interlock executes the configured launch command or HTTP endpoint and generates an ephemeral `claimTicket`. The launched external agent session must present this one-time ticket in `claimTicket` when calling `claim_work(workId, claimTicket, ...)`. Any claimant without the ticket is rejected, preventing race conditions or unauthorized external workers from taking the delegated assignment. See [custom harnesses](managed-executors.md#custom-harnesses).
+When an assignment is dispatched through a managed custom harness in Delegated Launcher mode (`mode: "launcher"`), Interlock executes the configured launch command or HTTP endpoint, or queues the launch for a [pull client](managed-executors.md#pull-transport-for-launchers-interlock-cannot-call), and generates an ephemeral `claimTicket`. The launched external agent session must present this one-time ticket in `claimTicket` when calling `claim_work(workId, claimTicket, ...)`. Any claimant without the ticket is rejected, preventing race conditions or unauthorized external workers from taking the delegated assignment. See [custom harnesses](managed-executors.md#custom-harnesses).
 
 Agent executors can [check candidate results before submission](result-preflight.md) without renewing claims or advancing runs. Submission rechecks live state and returns bounded correction diagnostics when a result is rejected.
 
