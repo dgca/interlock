@@ -9,6 +9,7 @@
     "./apiToken": "./src/apiToken.ts",
     "./continuation": "./src/continuation.ts",
     "./importDocument": "./src/importDocument.ts",
+    "./launcherClient": "./src/launcherClient.ts",
     "./transfer": "./src/transfer.ts",
     "./version": "./src/version.ts"
   },

@@ -67,7 +67,7 @@ export class ExecutorManager {
   ]);
   private transcripts: ManagedTranscripts;
   private config: ExecutorConfiguration;
-  private launcher: LauncherSupervisor;
+  readonly launcher: LauncherSupervisor;
   private operator: OperatorChannel;
   private recovery: RecoveryPolicies;
   private adapters = new Map<string, HarnessAdapter>();
@@ -164,7 +164,7 @@ export class ExecutorManager {
     return this.config.saveProfile(input);
   }
   listProfiles(refresh = false) {
-    return this.config.listProfiles(refresh);
+    return this.launcher.pull.annotate(this.config.listProfiles(refresh));
   }
   models(input: unknown): Promise<ExecutorModels> {
     return this.config.models(input);
@@ -356,9 +356,9 @@ export class ExecutorManager {
     if (!work.executor || work.status !== 'available') return;
     const profile = this.profiles().find((p) => p.id === work.executor);
     const detection =
-      profile &&
+      this.launcher.pull.detection(profile) ??
       this.config.detections.get(
-        `${profile.id}:${profile.revision}:${profile.command ?? ''}`,
+        `${profile?.id}:${profile?.revision}:${profile?.command ?? ''}`,
       )?.result;
     const binding = work.context.continuityGroup
       ? this.engine.contextGroups.describe(
@@ -697,7 +697,11 @@ export class ExecutorManager {
         if (!adapter) continue;
 
         if (configured.harness === 'custom' && configured.mode === 'launcher') {
-          if (this.launchedWork.has(offered.id)) continue;
+          if (
+            this.launchedWork.has(offered.id) ||
+            !this.launcher.pull.ready(configured)
+          )
+            continue;
           const candidateCwd =
             offered.trialEnvironment?.workspace ??
             offered.resolvedCwd ??
@@ -1012,11 +1016,7 @@ export class ExecutorManager {
         'runs',
         session.runId,
       );
-      if (
-        !session.cleanupFailed &&
-        (session.profile.statusCommand || session.profile.statusUrl) &&
-        Date.now() - session.lastStatusAt > 2000
-      ) {
+      if (!session.cleanupFailed && this.launcher.pull.statusDue(session)) {
         session.lastStatusAt = Date.now();
         void this.pollLauncherStatus(session).catch(failed('launcher status'));
       }
