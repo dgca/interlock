@@ -113,6 +113,15 @@ it.each<[string, PermissionAction]>([
     'find . -delete',
     'rg --pre=sh x',
     'cp f .GIT/config',
+    'cp -vt.. f',
+    'mv -ft.. f',
+    'sort -uo.. f',
+    'tar -xvC.. -f a.tar',
+    'tar -cvIid -f f .',
+    'tar -xIid -f a.tar',
+    'git -C evil status',
+    'git --git-dir=evil status',
+    'git --work-tree=.. status',
   ].map((text): [string, PermissionAction] => [text, command(text)]),
   ['git status from outside', command('git status', scratch)],
   ['git status through a link', command('git status', join(root, 'outside'))],
@@ -130,6 +139,16 @@ it.each<[string, PermissionAction]>([
   ['read without a read rule', { kind: 'read', paths: ['src/a.ts'] }],
 ])('asks for %s', (_name, action) => {
   expect(allows(action)).toBeUndefined();
+});
+
+it('asks for Git in a directory that looks like another repository', () => {
+  // An edit rule can write a bare repository whose config runs a program.
+  const nested = join(root, 'evil');
+  mkdirSync(join(nested, 'sub'), { recursive: true });
+  writeFileSync(join(nested, 'HEAD'), 'ref: refs/heads/main\n');
+  for (const cwd of [nested, join(nested, 'sub')])
+    expect(allows(command('git status', cwd)), cwd).toBeUndefined();
+  expect(allows(command('git status', join(root, 'src')))).toBeDefined();
 });
 
 it('asks for named tools on Codex', () => {

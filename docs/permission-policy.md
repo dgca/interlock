@@ -39,6 +39,13 @@ Command patterns are plain words. A final `*` allows further arguments; without 
 
 A wildcard rule trusts the program with any arguments that stay in the workspace. Wide rules such as `git *`, `sed *`, `awk *`, `node *` or `npm run *` can run anything: `sed` has an `e` command that runs its text, `awk` has `system()`, and `git config` can name programs that later Git commands run. `pnpm test *` runs whatever the repository's test script does, and `node *` runs any code. Interlock checks paths named in the command; it does not check files a program reaches on its own, such as a directory walk that follows links.
 
+- A command asks when any directory between its working directory and the worktree root looks like a repository (a `HEAD` file or a `.git` entry), so Git and tools that call it only find the worktree's own repository. `git -C`, `--git-dir`, `--work-tree` and `--namespace` ask.
+- Clustered short options are checked letter by letter: `cp -vt.. f` and `tar -xvIprog` ask.
+
+### Limits
+
+Command rules are a convenience for a workflow you trust, not a sandbox. A rule for a tool that runs other programs or reads configuration from the tree, such as Git, package managers, test runners and build tools, lets code in the workspace run with your permissions. With an `edit` rule, an Agent can write that code first. Keep such rules to workflows and repositories you would run yourself.
+
 ## How each harness applies it
 
 | Harness     | Read      | Edit                        | Command      | Tool                          |

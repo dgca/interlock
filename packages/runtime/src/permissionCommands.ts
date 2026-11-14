@@ -25,7 +25,17 @@ const unsafeArguments: Record<string, string[]> = {
     '-fls',
   ],
   rg: ['--pre', '--pre-glob'],
-  git: ['-c', '--config-env', '--exec-path', '--upload-pack', '--ext-diff'],
+  git: [
+    '-c',
+    '-C',
+    '--config-env',
+    '--exec-path',
+    '--upload-pack',
+    '--ext-diff',
+    '--git-dir',
+    '--work-tree',
+    '--namespace',
+  ],
   tar: ['--to-command', '--use-compress-program', '-I', '--checkpoint-action'],
 };
 const shells = new Set(['sh', 'bash', 'zsh']);
@@ -243,19 +253,35 @@ function argumentAllowed(word: Word, cwd: string, root: string) {
   if (!word.text) return true;
   if (!word.text.startsWith('-')) return writablePath(word.text, cwd, root);
   const equals = word.text.indexOf('=');
-  const values = [
-    equals > 0 ? word.text.slice(equals + 1) : '',
-    // A short option with its value attached, such as -C.. or -tout.
-    word.text.startsWith('--') ? '' : word.text.slice(2).replace(/^=/, ''),
-  ];
+  const values = [equals > 0 ? word.text.slice(equals + 1) : ''];
+  // Clustered short options can end in an attached value at any letter, as
+  // in -vt.. or -uoout, so every suffix after the first letter is a path.
+  if (!word.text.startsWith('--'))
+    for (let k = 2; k < word.text.length; k++)
+      values.push(word.text.slice(k).replace(/^=/, ''));
   return values.every((value) => !value || writablePath(value, cwd, root));
 }
 
-/** A denied option, matched by prefix when it is a single-letter option. */
+/** A denied option; a single-letter one matches anywhere in a short cluster. */
 const deniedWord = (text: string, denied: string) =>
   text === denied ||
   text.startsWith(`${denied}=`) ||
-  (/^-[A-Za-z]$/.test(denied) && text.startsWith(denied));
+  (/^-[A-Za-z]$/.test(denied) &&
+    /^-[^-]/.test(text) &&
+    text.slice(1).includes(denied[1]));
+
+/**
+ * Whether a command may run here: Git and the tools that call it find a
+ * repository by walking up from the working directory. Between the cwd and
+ * the workspace root (root excluded), no directory may look like a repository
+ * (a HEAD file or a .git entry), so discovery always reaches the worktree's own.
+ */
+function onlyWorktreeRepository(cwd: string, root: string) {
+  for (let dir = cwd; dir !== root && within(dir, root); dir = dirname(dir))
+    if (existsSync(join(dir, 'HEAD')) || existsSync(join(dir, '.git')))
+      return false;
+  return true;
+}
 
 /** The pattern a simple command matches, or undefined. */
 function segmentPattern(
@@ -303,6 +329,7 @@ export function commandAllowed(
   patterns: string[],
 ) {
   if (!patterns.length || !pathInside(cwd, sep, root)) return undefined;
+  if (!onlyWorktreeRepository(physicalPath(cwd, sep), root)) return undefined;
   const segments = parseScript(unwrapShell(command));
   const split = patterns.map((p) => p.trim().split(/\s+/));
   const matched = segments?.map((segment) =>
