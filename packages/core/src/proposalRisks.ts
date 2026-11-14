@@ -1,6 +1,6 @@
 import { structuralEqual } from './jsonEquality.js';
 import { nodeVariableReferences } from './variables.js';
-import type { WorkflowDefinition, WorkflowNode } from './index.js';
+import type { WorkflowDefinition } from './index.js';
 
 /** One change that lets the workflow do more than before. */
 export type WideningChange = {
@@ -85,7 +85,7 @@ export function wideningChanges(
       );
   const old = new Map(before.nodes.map((n) => [n.id, n]));
   for (const node of after.nodes) {
-    const previous = old.get(node.id) as WorkflowNode | undefined;
+    const previous = old.get(node.id);
     const subject = `${node.label} (${node.id})`;
     for (const [key, reason] of Object.entries(nodeFields[node.kind] ?? {}))
       if (!structuralEqual(field(previous, key), field(node, key)))

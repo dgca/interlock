@@ -222,11 +222,6 @@
     },
     {
       "file": "packages/core/src/index.ts",
-      "type": "exports",
-      "symbol": "workflowEditSchema"
-    },
-    {
-      "file": "packages/core/src/index.ts",
       "type": "types",
       "symbol": "BackgroundScript"
     },
@@ -524,11 +519,6 @@
       "file": "packages/core/src/workflowDiff.ts",
       "type": "types",
       "symbol": "ChangeKind"
-    },
-    {
-      "file": "packages/core/src/workflowEdits.ts",
-      "type": "exports",
-      "symbol": "workflowEditSchema"
     },
     {
       "file": "packages/core/src/workflowTriggers.ts",
