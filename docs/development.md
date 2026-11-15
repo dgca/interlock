@@ -60,6 +60,15 @@ Each job installs its own dependencies. The browser and package jobs build separ
 
 See [Release Interlock](releases.md) for versioning and publication.
 
+### File size budgets
+
+`pnpm lint` limits each TypeScript source file to 800 lines of code. Blank lines and comments do not count. Files that were already larger have their own ceiling in `eslint-size-budgets.json`; a ceiling must be above 800, and a file at or under 800 loses its entry.
+
+- Never remove blank lines or comments, shorten strings, or join statements to fit a size limit. They are not counted, and squeezing code makes it worse.
+- When a file outgrows its budget, prefer extracting a coherent module.
+- A pull request may raise a file's ceiling when the change belongs in that file and it has no natural module boundary. Give a one-line reason in the PR description for the reviewer to judge.
+- A ceiling may sit above the file's count; do not lower it for small reductions. Lower it to the current count, or delete the entry, once the file is more than 50 lines or 5% below it, whichever is larger.
+
 ## Add a database migration
 
 The schema version is independent of the npm package version. `packages/storage/src/migrations.ts` owns the ordered migration list, and the `migrations` table records completed versions.

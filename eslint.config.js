@@ -3,6 +3,8 @@
 // Layout:
 //   1. Type-aware base rules for every TypeScript source file.
 //   2. File-size budgets (`max-lines`) read from eslint-size-budgets.json.
+//      They count lines of code: blank lines and comments are skipped, so
+//      formatting never helps a file pass. See docs/development.md.
 //   3. Scoped rule blocks: add one entry to `scopedRuleBlocks` per area with
 //      its own conventions (for example `packages/ui/src/**`).
 //
@@ -32,16 +34,21 @@ for (const [file, ceiling] of Object.entries(sizeBudgets.ceilings)) {
   }
 }
 
+const maxLines = (max) => [
+  'error',
+  { max, skipBlankLines: true, skipComments: true },
+];
+
 const sizeBudgetBlocks = [
   {
     name: 'interlock/size-budget',
     files: sourceFiles,
-    rules: { 'max-lines': ['error', { max: sizeBudgets.maxLines }] },
+    rules: { 'max-lines': maxLines(sizeBudgets.maxLines) },
   },
   ...Object.entries(sizeBudgets.ceilings).map(([file, ceiling]) => ({
     name: `interlock/size-ceiling/${file}`,
     files: [file],
-    rules: { 'max-lines': ['error', { max: ceiling }] },
+    rules: { 'max-lines': maxLines(ceiling) },
   })),
 ];
 
