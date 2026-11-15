@@ -15,6 +15,7 @@ import { Store } from '@interlock/storage';
 import type { Json, TestSuite } from '@interlock/core';
 import { importStarter } from '../packages/server/src/starters';
 import bundle from '../workflows/sdlc-v2.json';
+import prWatcher from '../workflows/pr-watcher.json';
 import suites from './fixtures/sdlc-v2-suites.json';
 
 const engines: Engine[] = [],
@@ -59,6 +60,30 @@ async function simulate(e: Engine, suite: TestSuite, caseId: string) {
     ),
   );
 }
+
+// Builders inherit the shared default so one Full access choice covers them;
+// reviewers stay read-only whatever that default is.
+it('ships builders without a permission level and reviewers read-only', () => {
+  const levels = (b: { workflows: unknown[] }) =>
+    (
+      b.workflows as {
+        name: string;
+        draft: { agentPermissions?: string };
+        versions: { definition: { agentPermissions?: string } }[];
+      }[]
+    ).map((w) => [
+      w.name,
+      [w.draft, ...w.versions.map((v) => v.definition)].map(
+        (d) => d.agentPermissions ?? null,
+      ),
+    ]);
+  expect(levels(bundle)).toEqual([
+    ['SDLC workflow', [null]],
+    ['Plan review', ['read-only', 'read-only']],
+    ['Change review', [null, null]],
+  ]);
+  expect(levels(prWatcher).flatMap(([, l]) => l)).not.toContain('standard');
+});
 
 // The saved suites drive SDLC v2 and both helpers through the built-in
 // fixture simulator, as a user would after editing a copy. Every edge of each

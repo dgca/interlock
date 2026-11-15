@@ -1525,7 +1525,7 @@
       "count": 1
     },
     "@typescript-eslint/require-await": {
-      "count": 90
+      "count": 87
     }
   },
   "tests/executorProcesses.test.ts": {
@@ -1756,7 +1756,7 @@
       "count": 1
     },
     "@typescript-eslint/require-await": {
-      "count": 34
+      "count": 33
     },
     "prefer-const": {
       "count": 1

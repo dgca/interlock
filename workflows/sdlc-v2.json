@@ -13,7 +13,6 @@
           "source": "runInput",
           "path": "repoPath"
         },
-        "agentPermissions": "standard",
         "inputSchema": {
           "type": "object",
           "required": ["request"],
@@ -2893,7 +2892,6 @@
           "source": "runInput",
           "path": "repoPath"
         },
-        "agentPermissions": "standard",
         "inputSchema": {
           "type": "object",
           "required": ["repoPath", "baseRef"],
@@ -3897,7 +3895,6 @@
               "source": "runInput",
               "path": "repoPath"
             },
-            "agentPermissions": "standard",
             "inputSchema": {
               "type": "object",
               "required": ["repoPath", "baseRef"],

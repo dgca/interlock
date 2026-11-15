@@ -1,6 +1,6 @@
 # Allow routine Agent actions with a permission policy
 
-A managed Agent session with **Standard** permissions asks before it edits a file or runs a command. Set `permissionPolicy` on a workflow to let its managed sessions take routine actions without asking. The policy applies only in the run's own [Git worktree](https://github.com/dgca/interlock/blob/main/docs/managed-workspaces.md), so the workflow must also set `workspace`. Workflows without a policy behave as before.
+A managed Agent session with **Standard** permissions asks before it edits a file or runs a command. Set `permissionPolicy` on a workflow to let its managed sessions take routine actions without asking. The policy applies only in the run's own [Git worktree](https://github.com/dgca/interlock/blob/main/docs/managed-workspaces.md), so the workflow must also set `workspace`. Workflows without a policy behave as before. Under **Full access**, whether set as the default, on the harness or on the workflow, agents do not ask, so the policy has nothing to answer.
 
 In the editor, open **Workflow settings** and fill in **Permission policy**. In a definition:
 

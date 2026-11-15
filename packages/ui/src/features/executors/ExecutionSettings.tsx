@@ -10,6 +10,7 @@ import {
 import { StallSettings } from './StallSettings';
 import { RetentionSettings } from '../runs/RetentionSettings';
 import { ScriptApprovalSettings } from './ScriptApprovalSettings';
+import { DefaultPermissionsSettings } from './DefaultPermissions';
 import { useEffect, useId, useState } from 'react';
 
 import { executorSettingsSchema } from '@interlock/core';
@@ -27,6 +28,7 @@ export function ExecutionSettings({
   const [stallDirty, setStallDirty] = useState(false);
   const [retentionDirty, setRetentionDirty] = useState(false);
   const [approvalDirty, setApprovalDirty] = useState(false);
+  const [permissionsDirty, setPermissionsDirty] = useState(false);
   const queryClient = useQueryClient();
   const settingsQuery = useQuery(trpc.executors.settings.queryOptions());
   const [settings, setSettings] = useState(settingsQuery.data);
@@ -74,12 +76,32 @@ export function ExecutionSettings({
     setValue(next.concurrency ?? 3);
   }, [settingsQuery.data, dirty, busy]);
   useEffect(
-    () => onDirty?.(dirty || stallDirty || retentionDirty || approvalDirty),
-    [dirty, stallDirty, retentionDirty, approvalDirty, onDirty],
+    () =>
+      onDirty?.(
+        dirty ||
+          stallDirty ||
+          retentionDirty ||
+          approvalDirty ||
+          permissionsDirty,
+      ),
+    [
+      dirty,
+      stallDirty,
+      retentionDirty,
+      approvalDirty,
+      permissionsDirty,
+      onDirty,
+    ],
   );
   useEffect(() => () => onDirty?.(false), [onDirty]);
   return (
     <>
+      <section
+        id="default-permissions"
+        className={`${workspacePage.card} ${styles.sharedSettings}`}
+      >
+        <DefaultPermissionsSettings onDirty={setPermissionsDirty} />
+      </section>
       <section
         id="concurrency"
         className={`${workspacePage.card} ${styles.sharedSettings}`}

@@ -147,6 +147,7 @@ export class LauncherSupervisor {
     profile: ExecutorProfile,
     cwd: string,
     logicalSession: string,
+    permissionSource: ManagedExecution['permissionSource'],
   ) {
     const idempotencyKey = `${work.id}:${work.attempt}`;
     const existing = this.launchIdempotency.get(idempotencyKey);
@@ -187,7 +188,7 @@ export class LauncherSupervisor {
       attempt: work.attempt,
       state: 'starting',
       profile,
-      permissionSource: work.executorPermissionsSource ?? 'harness',
+      permissionSource,
       command: profile.launchCommand || profile.command || 'launch',
       cwd,
       sessionId: logicalSession,

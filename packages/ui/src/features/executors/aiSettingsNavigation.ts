@@ -10,6 +10,7 @@ export function aiSettingsTab(location: { search: string; hash: string }) {
   if (
     [
       'execution-settings',
+      'default-permissions',
       'concurrency',
       'stall-settings',
       'history-retention',

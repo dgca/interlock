@@ -741,9 +741,10 @@ export class ExecutorManager {
                 offered,
                 offered.executorPermissionsSource !== undefined
                   ? this.config.assignmentProfile(offered, configured)
-                  : configured,
+                  : this.config.inheritedProfile(configured),
                 cwd,
                 logicalSession,
+                this.config.permissionSource(offered, configured),
               );
             } finally {
               this.pendingLaunches.delete(offered.id);
@@ -810,10 +811,7 @@ export class ExecutorManager {
         const permissionSource =
           priorSession?.permissionSource ??
           previous?.permissionSource ??
-          offered.executorPermissionsSource ??
-          (offered.executorPermissions
-            ? ('workflow' as const)
-            : ('harness' as const));
+          this.config.permissionSource(offered, configured);
         const modelSource =
           priorSession?.modelSource ??
           (replacement ? ('recovery' as const) : previous?.modelSource) ??

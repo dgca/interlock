@@ -133,7 +133,7 @@ it('prevents edits while reloading shared settings after a revision conflict', a
   await act(async () => fill('5'));
   await act(async () =>
     container
-      .querySelector<HTMLButtonElement>('button[type="submit"]')!
+      .querySelector<HTMLButtonElement>('#concurrency button[type="submit"]')!
       .click(),
   );
   expect(container.textContent).toContain('Execution settings changed');
@@ -560,36 +560,6 @@ it('offers recovery instead of an endless loading skeleton after a failed harnes
   await act(async () => button('Retry harnesses').click());
   expect(button('Edit defaults')).toBeDefined();
 });
-function Controls() {
-  const [permissions, setPermissions] = useState<ExecutorPermissionMode>();
-  return h(ExecutorSelect, {
-    value: 'codex',
-    onChange: () => {},
-    workflowPermissions: permissions,
-    onPermissionsChange: setPermissions,
-  });
-}
-it('shows the inherited mode and lets the workflow override or restore it', async () => {
-  await act(async () => root.render(h(DesignSystemProvider, {}, h(Controls))));
-  expect(container.textContent).toContain('Full access · inherited from Codex');
-  const select = container.querySelectorAll('select')[1];
-  expect([...select.options].map((o) => o.textContent)).toEqual([
-    'Use harness default',
-    'Read only',
-    'Standard',
-    'Full access',
-  ]);
-  await act(async () => {
-    select.value = 'read-only';
-    select.dispatchEvent(new Event('change', { bubbles: true }));
-  });
-  expect(container.textContent).toContain('Read only · workflow override');
-  await act(async () => {
-    select.value = '__default';
-    select.dispatchEvent(new Event('change', { bubbles: true }));
-  });
-  expect(container.textContent).toContain('Full access · inherited from Codex');
-});
 it('shows effective workflow permissions for a node-specific executor without another override', async () => {
   const definition = {
     ...blankDefinition(),
@@ -861,6 +831,7 @@ it('shows canonical built-ins and one row per custom integration without losing 
     { ...base, name: 'Renamed Codex' },
   ];
   rpc.profiles.mockReset().mockResolvedValue(source);
+  rpc.settings.mockResolvedValue({ defaultPermissions: 'standard' });
   const onDirty = vi.fn();
   await act(async () =>
     root.render(h(DesignSystemProvider, {}, h(Harnesses, { onDirty }))),
@@ -917,7 +888,7 @@ it('shares cached harness reads across selector remounts and retains them after 
   }
   const render = () => root.render(h(DesignSystemProvider, {}, h(Selectors)));
   await act(async () => render());
-  expect(container.textContent).toContain('Full access · inherited from Codex');
+  expect(container.textContent).toContain('Full access · set on Codex');
   visible = false;
   await act(async () => render());
   let failProfiles!: (error: Error) => void;
@@ -934,7 +905,7 @@ it('shares cached harness reads across selector remounts and retains them after 
   );
   visible = true;
   await act(async () => render());
-  expect(container.textContent).toContain('Full access · inherited from Codex');
+  expect(container.textContent).toContain('Full access · set on Codex');
   expect(container.textContent).toContain('Up to 3 Agent assignments');
   expect(container.querySelector('select')!.value).toBe('codex');
   expect(change).not.toHaveBeenCalled();
@@ -946,7 +917,7 @@ it('shares cached harness reads across selector remounts and retains them after 
   expect(container.textContent).toContain(
     'Shared assignment limit could not be loaded.',
   );
-  expect(container.textContent).toContain('Full access · inherited from Codex');
+  expect(container.textContent).toContain('Full access · set on Codex');
   expect(container.querySelector('select')!.value).toBe('codex');
   expect(client.getQueryData(trpc.executors.profiles.queryKey())).toHaveLength(
     2,

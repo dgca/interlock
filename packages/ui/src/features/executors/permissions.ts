@@ -1,4 +1,4 @@
-import type { ExecutorPermissionMode } from '@interlock/core';
+import type { ExecutorPermissionMode, PermissionSource } from '@interlock/core';
 
 export const permissionLabels: Record<ExecutorPermissionMode, string> = {
   'read-only': 'Read only',
@@ -14,3 +14,14 @@ export const permissionDescriptions: Record<ExecutorPermissionMode, string> = {
 export const permissionOptions = (
   ['read-only', 'standard', 'full-access'] as const
 ).map((value) => ({ value, label: permissionLabels[value] }));
+
+/** Where a level came from, for helper lines and execution details. */
+export function permissionSourceLabel(
+  source: PermissionSource,
+  harness?: string,
+) {
+  if (source === 'preset') return 'agent preset';
+  if (source === 'workflow') return 'workflow override';
+  if (source === 'global') return 'from AI Settings';
+  return harness ? `set on ${harness}` : 'harness default';
+}

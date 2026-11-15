@@ -1,6 +1,7 @@
 import {
   agentAliasReference,
   eligiblePresetChoices,
+  harnessPermissions,
   inheritsWorkflowHarnessSettings,
   InterlockError,
   presetPermissions,
@@ -127,9 +128,13 @@ export class AgentExecutorSettings {
         executor = choice.executor;
         model = choice.candidate.model;
         selection = choice.candidate.modelAliasSelection;
-        permissions = override ?? choice.profile.permissions;
+        const inherited = harnessPermissions(
+          choice.profile,
+          this.executors.settings().defaultPermissions,
+        );
+        permissions = override ?? inherited.permissions;
         permissionSource = !override
-          ? 'harness'
+          ? inherited.source
           : override === definition.agentPermissions
             ? 'workflow'
             : 'preset';

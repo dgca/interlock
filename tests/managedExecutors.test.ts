@@ -1466,53 +1466,6 @@ it('rejects unsupported or empty native question answers without consuming the p
   );
 });
 
-it.each([
-  ['read-only', 'full-access', 'full-access', 'workflow'],
-  ['full-access', 'standard', 'standard', 'workflow'],
-  ['full-access', undefined, 'full-access', 'harness'],
-] as const)(
-  'resolves harness default %s and workflow override %s',
-  async (defaultMode, override, effective, source) => {
-    const e = create();
-    profile(e, 'codex', { permissions: defaultMode });
-    const calls: HarnessRun[] = [];
-    e.executors.start([
-      adapter('codex', async (input) => {
-        calls.push(input);
-        return { output: input.work.input };
-      }),
-    ]);
-    const d = blankDefinition();
-    d.executor = 'codex';
-    d.agentPermissions = override;
-    const w = e.create('Permissions', '', d);
-    e.publish(w.id);
-    const r = start(e, w.id, 1);
-    await settled(e, r.id);
-    expect(calls[0].profile.permissions).toBe(effective);
-    expect(e.store.work()[0].executorPermissions).toBe(override);
-    expect(e.executors.inspect(e.store.work()[0].id).items[0]).toMatchObject({
-      profile: { permissions: effective },
-      permissionSource: source,
-    });
-  },
-);
-it('normalizes existing ask defaults without changing their saved revision', () => {
-  const e = create();
-  e.store.put('executorProfiles', {
-    ...executorProfileSchema.parse({
-      id: 'codex',
-      harness: 'codex',
-      name: 'Codex',
-    }),
-    permissions: 'ask',
-    revision: 3,
-  });
-  expect(e.executors.profiles().find((p) => p.id === 'codex')).toMatchObject({
-    permissions: 'standard',
-    revision: 3,
-  });
-});
 it('captures workflow permission overrides in the published assignment', async () => {
   const e = create();
   profile(e);

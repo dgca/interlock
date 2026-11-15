@@ -19,6 +19,17 @@ export const executorPermissionModeSchema = z.enum([
 export type ExecutorPermissionMode = z.infer<
   typeof executorPermissionModeSchema
 >;
+/** Where a managed Agent's permission mode came from. `global` is the shared default. */
+export type PermissionSource = 'workflow' | 'harness' | 'global' | 'preset';
+/** A harness profile's own level, else the shared default, else standard. */
+export function harnessPermissions(
+  profile: { permissions?: ExecutorPermissionMode } | undefined,
+  defaultPermissions: ExecutorPermissionMode | undefined,
+): { permissions: ExecutorPermissionMode; source: 'harness' | 'global' } {
+  return profile?.permissions
+    ? { permissions: profile.permissions, source: 'harness' }
+    : { permissions: defaultPermissions ?? 'standard', source: 'global' };
+}
 export const executorModelSchema = z.string().trim().min(1).max(200);
 export const executorEffortSchema = z
   .string()
@@ -80,6 +91,9 @@ export const executorSettingsSchema = z
   .object({
     revision: z.number().int().nonnegative().default(0),
     concurrency: executorConcurrencySchema.default(3),
+    defaultPermissions: executorPermissionModeSchema
+      .optional()
+      .describe('Level when harness and workflow set none; unset is standard.'),
     allowedRoots: z
       .array(allowedRootSchema)
       .optional()
@@ -98,6 +112,10 @@ export const executorSettingsUpdateSchema = z
   .object({
     expectedRevision: z.number().int().nonnegative(),
     concurrency: executorConcurrencySchema,
+    defaultPermissions: executorPermissionModeSchema
+      .nullable()
+      .optional()
+      .describe('Used when harness and workflow set none. null clears.'),
     allowedRoots: z
       .array(allowedRootSchema)
       .optional()
@@ -195,11 +213,9 @@ export const executorProfileSchema = z
     skills: z.array(z.string().trim().min(1).max(200)).max(100).default([]),
     permissions: z
       .enum(['ask', 'read-only', 'standard', 'full-access'])
-      .default('standard')
+      .optional()
       .transform((mode) => (mode === 'ask' ? 'standard' : mode))
-      .describe(
-        'Default managed permissions: standard, read-only, or full-access.',
-      ),
+      .describe('Managed permissions. Omit to use defaultPermissions.'),
     mode: z.enum(['direct', 'launcher']).optional(),
     transport: z.enum(['subprocess', 'http', 'pull']).optional(),
     timeoutSeconds: z.number().int().positive().optional(),
@@ -387,7 +403,7 @@ export interface ManagedExecution {
   attempt: number;
   state: ExecutorState;
   profile: ExecutorProfile;
-  permissionSource?: 'workflow' | 'harness' | 'preset';
+  permissionSource?: PermissionSource;
   /** Present when the workflow has a permission policy. */
   permissionPolicy?: {
     state: 'applied' | 'awaiting_approval' | 'unavailable';
