@@ -79,11 +79,37 @@ Restoring replaces the database with the snapshot. Changes made after the snapsh
 
 5. Start Interlock with the same database path and working directory.
 
-## Before upgrading to 0.3.0
-
-Upgrading to 0.3.0 deletes disabled workflow variables. Run `interlock doctor` first: it warns about each disabled variable and names the workflow drafts and retained versions that reference it. Enable a variable in **Variables** to keep it.
-
 ## Changes that need action
+
+### Disabled variables are deleted in 0.3.0
+
+Workflow variables no longer have an enabled or disabled state. Upgrading to 0.3.0 deletes every variable that is disabled at that moment, together with its stored values and portable bindings.
+
+Before upgrading:
+
+1. With your current version running, run:
+
+   ```sh
+   interlock doctor
+   ```
+
+2. Read each `0.3.0 upgrade: disabled variable` warning. It names the variable and the workflow drafts and versions that reference it.
+3. To keep a variable, enable it. **Variables** has no enable control in 0.2.x, so use its ID and current revision from `interlock variables read '{"action":"inspect","id":"VARIABLE_ID"}'`:
+
+   ```sh
+   interlock variables manage '{"action":"update","id":"VARIABLE_ID","expectedRevision":1,"enabled":true}'
+   ```
+
+4. Run `interlock doctor` again until it reports no disabled variables, or only ones you want deleted.
+
+After the upgrade:
+
+- Workflows that referenced a deleted variable report it as missing. Create or bind a variable and select it in the step.
+- A run that captured a deleted variable fails at the step that uses it. Retrying keeps failing, even if you create a variable with the same identity. Start a new run instead.
+- API, CLI and MCP variable updates that send `enabled` are rejected. Delete a variable to stop its use. Variable metadata no longer includes `enabled`, and its `availability` is never `disabled`.
+- `interlock doctor` no longer checks for disabled variables.
+
+The upgrade is schema 23. See [the schema table](#database-schema-changes).
 
 ### Managed agents default to Full access
 
@@ -190,6 +216,7 @@ Every upgrade below takes the normal pre-upgrade backup first. Definitions, vers
 | 20     | Index for Script approvals. Scripts already in drafts and published versions are recorded as approved.                                                                                                                                                                                                                                                          |
 | 21     | Moves each run's step executions out of the run record into their own table. See below.                                                                                                                                                                                                                                                                         |
 | 22     | Index of finished runs by finish time, which boards use to show the most recently finished runs. No stored data changes.                                                                                                                                                                                                                                        |
+| 23     | One-way. Deletes variables that are disabled, with their stored values and bindings, and removes the enabled flag from the rest. See [Disabled variables are deleted in 0.3.0](#disabled-variables-are-deleted-in-030).                                                                                                                                         |
 
 ### Schema 21: executions in their own table
 
