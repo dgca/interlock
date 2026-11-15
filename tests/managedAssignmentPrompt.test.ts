@@ -57,13 +57,14 @@ it('describes Interlock tools to a managed session only when attached, without a
       },
     ],
   } as unknown as WorkRequest;
-  const attached = assignmentPrompt(work, undefined, [
-    'save_memory_note',
-    'call_workflow_tool',
-  ]);
+  // The prompt names each tool as the session sees it.
+  const attached = assignmentPrompt(work, undefined, {
+    save_memory_note: 'interlock_save_memory_note',
+    call_workflow_tool: 'interlock_call_workflow_tool',
+  });
   expect(attached).toContain('"name":"run_checks"');
-  expect(attached).toContain('call_workflow_tool tool');
-  expect(attached).toContain('save_memory_note tool');
+  expect(attached).toContain('your interlock_call_workflow_tool tool');
+  expect(attached).toContain('your interlock_save_memory_note tool');
   const bare = assignmentPrompt(work);
   for (const text of ['run_checks', 'call_', 'save_memory_note'])
     expect(bare).not.toContain(text);

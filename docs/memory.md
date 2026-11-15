@@ -93,7 +93,8 @@ When memory was on as the run started, Interlock attaches its own `save_memory_n
 - It only writes. A managed session cannot read pending notes or another workflow's memory through it.
 - The usual rules apply: notes wait for review unless the workflow sets agent notes to go live, the pending limits, the prompt budget and the escaping of note text.
 - Sessions at **Read only** get no tool, and their prompt says nothing about saving.
-- Under **Standard** and **Full access** the tool runs without an approval prompt, because it writes to Interlock rather than the workspace.
+- Under **Standard** and **Full access** the tool runs without an approval prompt, because it writes only to Interlock.
+- Claude Code sees it as `mcp__interlock_assignment__save_memory_note`, Pi as `interlock_save_memory_note`.
 
 The execution details (`interlockTools` in MCP `manage_executors` inspect) say whether the tools were attached, and why not.
 

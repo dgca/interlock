@@ -473,3 +473,39 @@ it.each([claudeAdapter])(
     expect(recorded).not.toContain(toolCallToken('claim-token-534'));
   },
 );
+
+it('leaves Interlock tools out when Claude Code reports their server failed', async () => {
+  const { tools, writes } = ownTools();
+  const transcript: string[] = [];
+  const states: unknown[] = [];
+  const result = await claudeAdapter.run({
+    command,
+    cwd: process.cwd(),
+    work: { ...work, token: 'claim-token-534' },
+    profile: executorProfileSchema.parse({
+      id: 'claude-code',
+      harness: 'claude-code',
+      name: 'Claude Code',
+      model: 'interlock-tools-failed',
+      permissions: 'standard',
+    }),
+    signal: new AbortController().signal,
+    onSession: () => {},
+    onProgress: () => {},
+    onTranscript: (event) => transcript.push(event.text ?? ''),
+    request: () => Promise.reject(new Error('Must not ask for approval')),
+    interlockTools: tools,
+    onInterlockTools: (state) => states.push(state),
+  });
+  // The fixture's call to the unconfirmed tool was refused, not approved.
+  expect(result.output).toMatchObject({ ok: true });
+  expect(writes).toEqual([]);
+  expect(states).toEqual([
+    {
+      state: 'unavailable',
+      tools: ['save_memory_note'],
+      reason: 'interlock_assignment is failed: fixture failure',
+    },
+  ]);
+  expect(transcript.join('\n')).not.toContain('save_memory_note');
+});

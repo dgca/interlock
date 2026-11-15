@@ -33,6 +33,18 @@ const extra = {};
 const leak = () =>
   'INTERLOCK_TOOL_TOKEN' in process.env ||
   Object.values(process.env).some((v) => v?.includes('claim-token'));
+// Claude Code's calls to the host's in-process MCP server.
+const mcp = (id, body) =>
+  send({
+    type: 'control_request',
+    request_id: id,
+    request: {
+      subtype: 'mcp_message',
+      server_name: 'interlock_assignment',
+      message: { jsonrpc: '2.0', ...body },
+    },
+  });
+let statusRequest;
 const ownCall = {
   name: 'save_memory_note',
   arguments: { content: 'Fixture note' },
@@ -339,6 +351,63 @@ for await (const line of createInterface({ input: process.stdin })) {
       end(true);
     }
   } else {
+    if (message.request?.subtype === 'mcp_status') {
+      if (flag('--model') === 'interlock-tools-failed')
+        send({
+          type: 'control_response',
+          response: {
+            subtype: 'success',
+            request_id: message.request_id,
+            response: {
+              mcpServers: [
+                {
+                  name: 'interlock_assignment',
+                  status: 'failed',
+                  error: 'fixture failure',
+                },
+              ],
+            },
+          },
+        });
+      else {
+        // Connect to the server to learn what it reports, as the CLI would.
+        statusRequest = message.request_id;
+        mcp('status-init', {
+          id: 1,
+          method: 'initialize',
+          params: {
+            protocolVersion: '2025-06-18',
+            capabilities: {},
+            clientInfo: { name: 'fixture', version: '1' },
+          },
+        });
+      }
+      continue;
+    }
+    if (
+      message.type === 'control_response' &&
+      message.response.request_id === 'status-init'
+    ) {
+      send({
+        type: 'control_response',
+        response: {
+          subtype: 'success',
+          request_id: statusRequest,
+          response: {
+            mcpServers: [
+              {
+                name: 'interlock_assignment',
+                status: 'connected',
+                serverInfo:
+                  message.response.response.mcp_response.result.serverInfo,
+                source: 'sdk',
+              },
+            ],
+          },
+        },
+      });
+      continue;
+    }
     if (message.type === 'control_request')
       send({
         type: 'control_response',
@@ -437,7 +506,7 @@ for await (const line of createInterface({ input: process.stdin })) {
         end(false);
         continue;
       }
-      if (model === 'interlock-tools') {
+      if (model === 'interlock-tools' || model === 'interlock-tools-failed') {
         // The CLI asks the host first, then calls the in-process MCP server.
         extra.leak = leak();
         send({
@@ -487,37 +556,17 @@ for await (const line of createInterface({ input: process.stdin })) {
       });
       waiting = true;
     }
-    const mcp = (id, body) =>
-      send({
-        type: 'control_request',
-        request_id: id,
-        request: {
-          subtype: 'mcp_message',
-          server_name: 'interlock_assignment',
-          message: { jsonrpc: '2.0', ...body },
-        },
-      });
     if (
       message.type === 'control_response' &&
       message.response.request_id === 'own-permission'
     ) {
-      if (message.response.response?.behavior !== 'allow')
+      const behavior = message.response.response?.behavior;
+      // An unconfirmed server's tools are refused, not offered for approval.
+      if (model === 'interlock-tools-failed') end(behavior === 'deny');
+      else if (behavior !== 'allow')
         throw Error('Interlock tool was not allowed');
-      mcp('own-init', {
-        id: 1,
-        method: 'initialize',
-        params: {
-          protocolVersion: '2025-06-18',
-          capabilities: {},
-          clientInfo: { name: 'fixture', version: '1' },
-        },
-      });
+      else mcp('own-call', { id: 2, method: 'tools/call', params: ownCall });
     }
-    if (
-      message.type === 'control_response' &&
-      message.response.request_id === 'own-init'
-    )
-      mcp('own-call', { id: 2, method: 'tools/call', params: ownCall });
     if (
       message.type === 'control_response' &&
       message.response.request_id === 'own-call'

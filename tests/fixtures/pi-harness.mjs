@@ -17,6 +17,11 @@ if (process.argv.includes('--extension')) {
   extension.default({
     registerCommand: (name) => commands.push({ name, source: 'extension' }),
     registerTool: (tool) => tools.push(tool),
+    getAllTools: () =>
+      tools.map((tool) => ({
+        name: tool.name,
+        sourceInfo: { path: flag('--extension') },
+      })),
     on: (name, handler) => {
       handlers[name] = handler;
     },
@@ -97,7 +102,9 @@ async function run(message) {
     }
     if (message.message.includes('INTERLOCK_TOOLS')) {
       // Call Interlock's registered tool the way Pi would: gate, then execute.
-      const own = tools.find((tool) => tool.name === 'save_memory_note');
+      const own = tools.find(
+        (tool) => tool.name === 'interlock_save_memory_note',
+      );
       const args = { content: 'Fixture note' };
       if (
         !own ||

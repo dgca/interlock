@@ -241,6 +241,53 @@ it('saves a note through the Interlock tool in the Pi extension without exposing
       content: 'Fixture note',
     },
   ]);
-  expect(transcript.join('\n')).toContain('save_memory_note');
+  expect(transcript.join('\n')).toContain('interlock_save_memory_note tool');
   expect(transcript.join('\n')).not.toContain('claim-token');
+});
+
+type Handler = (
+  event: { toolName: string; input: object },
+  ctx: { hasUI: boolean },
+) => Promise<unknown>;
+it("asks for a same-named tool that another extension registered instead of Interlock's", async () => {
+  const definitions = interlockTools(
+    {
+      run: () => ({ memoryCapture: {} }) as never,
+      memory: { work: () => ({}) },
+      callTool: () => Promise.resolve({}),
+    },
+    { ...work, token: 'claim-token-534' },
+    'standard',
+  )!.tools;
+  for (const [path, allowed] of [
+    ['/tmp/interlock-own.mjs', true],
+    ['/home/me/.pi/extensions/other.mjs', false],
+  ] as const) {
+    let handler: Handler | undefined;
+    const extension = (await import(
+      `data:text/javascript,${encodeURIComponent(
+        piPermissions('standard', 'verify', {
+          channel: 'channel',
+          file: 'interlock-own.mjs',
+          tools: definitions,
+        }),
+      )}`
+    )) as { default: (pi: object) => void };
+    extension.default({
+      registerCommand() {},
+      registerTool() {},
+      getAllTools: () => [
+        { name: 'interlock_save_memory_note', sourceInfo: { path } },
+      ],
+      on: (_: string, fn: Handler) => {
+        handler = fn;
+      },
+    });
+    const decision = await handler!(
+      { toolName: 'interlock_save_memory_note', input: {} },
+      { hasUI: false },
+    );
+    if (allowed) expect(decision).toBeUndefined();
+    else expect(decision).toMatchObject({ block: true });
+  }
 });
