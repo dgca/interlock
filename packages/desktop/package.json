@@ -1,0 +1,25 @@
+{
+  "name": "@interlock/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/main.js",
+  "dependencies": {
+    "@interlock/client": "workspace:*",
+    "@interlock/core": "workspace:*",
+    "@interlock/runtime": "workspace:*",
+    "@interlock/server": "workspace:*",
+    "@interlock/storage": "workspace:*",
+    "electron-updater": "^6.8.11"
+  },
+  "devDependencies": {
+    "electron": "^41.10.7",
+    "electron-builder": "^26.18.0"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "start": "node scripts/build.mjs && electron .",
+    "pack:mac": "node scripts/build.mjs && electron-builder --mac --dir -c electron-builder.mjs",
+    "dist:mac": "node scripts/build.mjs && electron-builder --mac -c electron-builder.mjs"
+  }
+}

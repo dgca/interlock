@@ -1,11 +1,15 @@
 import { expect, it } from 'vitest';
 import { createServer } from 'node:net';
+import { createServer as createHttpServer } from 'node:http';
 import {
   checkPort,
+  isDatabaseLocked,
   lockDatabase,
+  probeHealthyServer,
   startupError,
 } from '../packages/server/src/startup';
-import { spawnSync } from 'node:child_process';
+import { startServer } from '../packages/server/src/start';
+import { spawn, spawnSync } from 'node:child_process';
 import { Store } from '@interlock/storage';
 import { Engine } from '@interlock/runtime';
 import { createApp } from '../packages/server/src/app';
@@ -142,5 +146,154 @@ it('accepts Vite development origins only from a development server', async () =
   } finally {
     engine.stop();
     store.close();
+  }
+});
+
+it('detects database locks accurately with isDatabaseLocked', () => {
+  expect(isDatabaseLocked(':memory:')).toBe(false);
+  const database = join(
+    mkdtempSync(join(tmpdir(), 'interlock-lock-check-')),
+    'db',
+  );
+  expect(isDatabaseLocked(database)).toBe(false);
+  const unlock = lockDatabase(database);
+  expect(isDatabaseLocked(database)).toBe(true);
+  unlock();
+  expect(isDatabaseLocked(database)).toBe(false);
+});
+
+it('probes server health endpoints accurately with probeHealthyServer', async () => {
+  const probe = createServer().listen(0, '127.0.0.1');
+  await new Promise<void>((resolve) => probe.once('listening', resolve));
+  const address = probe.address();
+  if (!address || typeof address === 'string') throw new Error('No port');
+  const port = address.port;
+  await new Promise<void>((resolve) => probe.close(() => resolve()));
+
+  expect(await probeHealthyServer(`http://127.0.0.1:${port}`, 100)).toBe(false);
+
+  const nonInterlock = createHttpServer((_req, res) => {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ status: 'other' }));
+  }).listen(0, '127.0.0.1');
+  await new Promise<void>((resolve) => nonInterlock.once('listening', resolve));
+  const httpAddress = nonInterlock.address();
+  if (!httpAddress || typeof httpAddress === 'string')
+    throw new Error('No port');
+  try {
+    expect(
+      await probeHealthyServer(`http://127.0.0.1:${httpAddress.port}`, 500),
+    ).toBe(false);
+  } finally {
+    await new Promise<void>((resolve) => {
+      nonInterlock.closeAllConnections();
+      nonInterlock.close(() => resolve());
+    });
+  }
+});
+
+it('returns handle from startServer and stop cleanly releases database lock and port', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'interlock-start-server-'));
+  const database = join(dir, 'test.db');
+  const probe = createServer().listen(0, '127.0.0.1');
+  await new Promise<void>((resolve) => probe.once('listening', resolve));
+  const address = probe.address();
+  if (!address || typeof address === 'string') throw new Error('No port');
+  await new Promise<void>((resolve) => probe.close(() => resolve()));
+  const port = address.port;
+  const engineUrl = `http://127.0.0.1:${port}`;
+
+  const handle = await startServer({
+    database,
+    workdir: dir,
+    ui: join(dir, 'ui'),
+    port,
+    connection: {
+      command: 'interlock',
+      args: ['mcp'],
+      development: false,
+      engineUrl,
+    },
+    handleSignals: false,
+  });
+
+  expect(handle.engine).toBeDefined();
+  expect(handle.store).toBeDefined();
+  expect(handle.server).toBeDefined();
+  expect(handle.connection).toBeDefined();
+  expect(typeof handle.stop).toBe('function');
+  expect(isDatabaseLocked(database)).toBe(true);
+  expect(await probeHealthyServer(engineUrl)).toBe(true);
+
+  await handle.stop();
+
+  expect(isDatabaseLocked(database)).toBe(false);
+  await expect(checkPort(port)).resolves.toBeUndefined();
+  expect(await probeHealthyServer(engineUrl, 100)).toBe(false);
+});
+
+it('coexists cleanly when running bare bin.ts against an already running healthy server', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'interlock-coexist-'));
+  const database = join(dir, 'test.db');
+  const probe = createServer().listen(0, '127.0.0.1');
+  await new Promise<void>((resolve) => probe.once('listening', resolve));
+  const address = probe.address();
+  if (!address || typeof address === 'string') throw new Error('No port');
+  await new Promise<void>((resolve) => probe.close(() => resolve()));
+  const port = address.port;
+  const engineUrl = `http://127.0.0.1:${port}`;
+
+  const handle = await startServer({
+    database,
+    workdir: dir,
+    ui: join(dir, 'ui'),
+    port,
+    connection: {
+      command: 'interlock',
+      args: ['mcp'],
+      development: false,
+      engineUrl,
+    },
+    handleSignals: false,
+  });
+
+  const runCli = (args: string[]) =>
+    new Promise<{ status: number | null; stdout: string; stderr: string }>(
+      (resolve) => {
+        const child = spawn(
+          process.execPath,
+          ['--import', 'tsx', 'packages/cli/src/bin.ts', ...args],
+          { stdio: ['ignore', 'pipe', 'pipe'] },
+        );
+        let stdout = '';
+        let stderr = '';
+        child.stdout.setEncoding('utf8');
+        child.stderr.setEncoding('utf8');
+        child.stdout.on('data', (d) => {
+          stdout += d;
+        });
+        child.stderr.on('data', (d) => {
+          stderr += d;
+        });
+        child.on('close', (status) => resolve({ status, stdout, stderr }));
+      },
+    );
+
+  try {
+    expect(await probeHealthyServer(engineUrl)).toBe(true);
+
+    const sameDbCli = await runCli(['--port', String(port), '--db', database]);
+    expect(sameDbCli.status).toBe(0);
+    expect(sameDbCli.stdout).toContain(
+      `Interlock is already running at ${engineUrl}`,
+    );
+
+    const noDbCli = await runCli(['--port', String(port)]);
+    expect(noDbCli.status).toBe(0);
+    expect(noDbCli.stdout).toContain(
+      `Interlock is already running at ${engineUrl}`,
+    );
+  } finally {
+    await handle.stop();
   }
 });

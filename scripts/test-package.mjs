@@ -52,9 +52,17 @@ try {
       (file) =>
         file.path.startsWith('.interlock/') ||
         file.path.startsWith('node_modules/') ||
+        file.path.startsWith('packages/desktop/') ||
         file.path.startsWith('docs/research/'),
     ),
   );
+  const rootPkg = JSON.parse(
+    await readFile(new URL('../package.json', import.meta.url), 'utf8'),
+  );
+  assert.equal(rootPkg.dependencies, undefined);
+  assert.equal(rootPkg.devDependencies?.electron, undefined);
+  assert.equal(rootPkg.devDependencies?.['electron-builder'], undefined);
+  assert.equal(rootPkg.devDependencies?.['electron-updater'], undefined);
   const prefix = join(temp, 'install');
   execFileSync(
     'npm',

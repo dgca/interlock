@@ -1,5 +1,5 @@
 import { createServer } from 'node:net';
-import { mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
@@ -25,6 +25,43 @@ export function lockDatabase(database: string): () => void {
     );
   }
   return () => lock.close();
+}
+
+export function isDatabaseLocked(database: string): boolean {
+  if (database === ':memory:') return false;
+  const path = `${database}.lock`;
+  if (!existsSync(path)) return false;
+  const lock = new DatabaseSync(path);
+  try {
+    lock.exec('PRAGMA busy_timeout = 0; BEGIN EXCLUSIVE; ROLLBACK');
+    return false;
+  } catch (error) {
+    if (/locked|busy/i.test(error instanceof Error ? error.message : ''))
+      return true;
+    throw error;
+  } finally {
+    lock.close();
+  }
+}
+
+export async function probeHealthyServer(
+  engineUrl: string,
+  timeoutMs = 1000,
+): Promise<boolean> {
+  try {
+    const response = await fetch(`${engineUrl}/health`, {
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    if (!response.ok) return false;
+    const body = (await response.json()) as unknown;
+    return (
+      typeof body === 'object' &&
+      body !== null &&
+      (body as Record<string, unknown>).ok === true
+    );
+  } catch {
+    return false;
+  }
 }
 
 export function checkPort(port: number): Promise<void> {

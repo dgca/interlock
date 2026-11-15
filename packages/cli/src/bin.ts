@@ -6,7 +6,11 @@ import { homedir } from 'node:os';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { startServer } from '@interlock/server/start';
+import {
+  isDatabaseLocked,
+  probeHealthyServer,
+  startServer,
+} from '@interlock/server/start';
 import { createMcpServer } from '@interlock/mcp';
 import { VERSION } from '@interlock/core/version';
 import {
@@ -61,9 +65,10 @@ Report dates must be valid ISO datetimes whose rounded UTC bounds stay within ye
 System readiness check: doctor [--live] [--json]
 Run 'interlock commands' for argument syntax, or 'interlock <command> --help' for one command.
 
-Environment: INTERLOCK_DB, INTERLOCK_WORKDIR, INTERLOCK_URL, INTERLOCK_SECRET_KEY_FILE,
-             INTERLOCK_MCP_PROFILE, INTERLOCK_REQUIRE_TOKEN, INTERLOCK_LOG_LEVEL,
-             INTERLOCK_SYNC_DIR, INTERLOCK_OTEL_TRACES
+Environment: INTERLOCK_PORT, INTERLOCK_DB, INTERLOCK_WORKDIR, INTERLOCK_URL,
+             INTERLOCK_SECRET_KEY_FILE, INTERLOCK_MCP_PROFILE,
+             INTERLOCK_REQUIRE_TOKEN, INTERLOCK_LOG_LEVEL, INTERLOCK_SYNC_DIR,
+             INTERLOCK_OTEL_TRACES
 INTERLOCK_SYNC_DIR=PATH syncs workflow drafts with bundle files in PATH.
 INTERLOCK_OTEL_TRACES=1 exports run traces to OTEL_EXPORTER_OTLP_ENDPOINT (OTLP/HTTP JSON).
 Variable encryption keys are held separately from the database. Back up keys separately.
@@ -193,17 +198,27 @@ Commands and the mcp bridge read the token from the api-token file in the key fo
       db: { type: 'string' },
     },
   });
-  const port = Number(values.port ?? 4310);
+  const port = Number(values.port ?? process.env.INTERLOCK_PORT ?? 4310);
   if (!Number.isInteger(port) || port < 1 || port > 65535)
     throw new Error('Port must be between 1 and 65535.');
   const engineUrl = `http://127.0.0.1:${port}`;
+  const database = resolve(
+    values.db ??
+      process.env.INTERLOCK_DB ??
+      resolve(homedir(), '.interlock/interlock.db'),
+  );
+  if (
+    (await probeHealthyServer(engineUrl)) &&
+    (isDatabaseLocked(database) || !values.db)
+  ) {
+    console.log(
+      `Interlock is already running at ${engineUrl} (database: ${database}).\nOpen ${engineUrl} in your browser or run 'interlock <command>' to interact with the running engine.`,
+    );
+    return;
+  }
   await startServer({
     port,
-    database: resolve(
-      values.db ??
-        process.env.INTERLOCK_DB ??
-        resolve(homedir(), '.interlock/interlock.db'),
-    ),
+    database,
     workdir: resolve(
       values.workdir ?? process.env.INTERLOCK_WORKDIR ?? process.cwd(),
     ),
@@ -213,7 +228,12 @@ Commands and the mcp bridge read the token from the api-token file in the key fo
       args: ['mcp'],
       development: false,
       engineUrl,
-      env: { INTERLOCK_URL: engineUrl },
+      env: {
+        INTERLOCK_URL: engineUrl,
+        ...(process.versions.electron || process.env.ELECTRON_RUN_AS_NODE
+          ? { ELECTRON_RUN_AS_NODE: '1' }
+          : {}),
+      },
       fallback: {
         command: process.execPath,
         args: [fileURLToPath(import.meta.url), 'mcp'],

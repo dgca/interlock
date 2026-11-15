@@ -100,6 +100,13 @@ export function scriptFailure(
     : error;
 }
 
+/** Ensures Electron binaries run as headless Node when spawning process.execPath. */
+export function nodeRuntimeEnv(
+  env: NodeJS.ProcessEnv | undefined = process.env,
+): NodeJS.ProcessEnv {
+  return { ...(env ?? process.env), ELECTRON_RUN_AS_NODE: '1' };
+}
+
 /** Scripts read JSON on stdin and return JSON on stdout. They are never retried automatically. */
 export function executeScript(
   command: string,
@@ -120,7 +127,7 @@ export function executeScript(
         : ['-c', command],
       {
         cwd,
-        env,
+        env: language === 'javascript' ? nodeRuntimeEnv(env) : env,
         stdio: ['pipe', 'pipe', 'pipe'],
         detached: true,
       },

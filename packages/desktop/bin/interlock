@@ -1,0 +1,40 @@
+#!/bin/sh
+set -e
+
+# Resolve any symlinks to find the real path of this script
+TARGET="$0"
+while [ -h "$TARGET" ]; do
+  DIR="$(cd -P "$(dirname "$TARGET")" && pwd)"
+  TARGET="$(readlink "$TARGET")"
+  case "$TARGET" in
+    /*) ;;
+    *) TARGET="$DIR/$TARGET" ;;
+  esac
+done
+BIN_DIR="$(cd -P "$(dirname "$TARGET")" && pwd)"
+
+# Check if we are inside a packaged macOS app bundle
+# Structure:
+# /Applications/Interlock.app/Contents/MacOS/Interlock
+# /Applications/Interlock.app/Contents/Resources/bin/interlock
+# /Applications/Interlock.app/Contents/Resources/dist/cli.js
+if [ -x "$BIN_DIR/../../MacOS/Interlock" ]; then
+  ELECTRON_BIN="$BIN_DIR/../../MacOS/Interlock"
+  CLI_JS="$BIN_DIR/../dist/cli.js"
+elif [ -x "$BIN_DIR/../Contents/MacOS/Interlock" ]; then
+  ELECTRON_BIN="$BIN_DIR/../Contents/MacOS/Interlock"
+  CLI_JS="$BIN_DIR/../Contents/Resources/dist/cli.js"
+else
+  # Development / checkout fallback
+  REPO_ROOT="$(cd -P "$BIN_DIR/../../.." && pwd)"
+  CLI_JS="$REPO_ROOT/dist/cli.js"
+  if [ -x "$REPO_ROOT/node_modules/.bin/electron" ]; then
+    ELECTRON_BIN="$REPO_ROOT/node_modules/.bin/electron"
+  elif command -v electron >/dev/null 2>&1; then
+    ELECTRON_BIN="$(command -v electron)"
+  else
+    ELECTRON_BIN="node"
+  fi
+fi
+
+ELECTRON_RUN_AS_NODE=1 exec "$ELECTRON_BIN" "$CLI_JS" "$@"

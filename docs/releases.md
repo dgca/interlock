@@ -71,6 +71,46 @@ Keep the curated set small and self-contained. Add its template and a permanent 
 
 Test catalog discovery, explicit imports, existing/customized copies, another-copy intent, keyed retries, failure rollback and the packed installation. Update the picker copy, [starter guide](starter-workflows.md) and affected examples. Shipped template changes never overwrite user copies.
 
+## Package the macOS desktop app
+
+The macOS desktop application (`packages/desktop`) packages the engine and UI into `Interlock.app` using Electron and electron-builder.
+
+### Build and package locally
+
+From the repository root, build the workspace dependencies (`pnpm build`), then run:
+
+```sh
+# Unpacked application bundle for local testing (packages/desktop/dist/mac*):
+pnpm --filter @interlock/desktop pack:mac
+
+# Packaged distribution artifacts (.dmg, .zip, latest-mac.yml):
+pnpm --filter @interlock/desktop dist:mac
+```
+
+Without signing credentials, builds are ad-hoc signed and suitable for local testing.
+
+### Code signing and notarization
+
+Production macOS builds require Apple Developer ID code signing and notarization so Gatekeeper allows the app to open without security prompts. Set the following environment variables:
+
+| Variable                      | Description                                                                                          |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `CSC_LINK`                    | Path, HTTPS URL, or base64-encoded string of the Apple Developer ID Application certificate (`.p12`) |
+| `CSC_KEY_PASSWORD`            | Passphrase for the `.p12` certificate                                                                |
+| `APPLE_ID`                    | Apple Developer account email address for notarization                                               |
+| `APPLE_APP_SPECIFIC_PASSWORD` | App-specific password generated on appleid.apple.com                                                 |
+| `APPLE_TEAM_ID`               | 10-character Apple Developer Team ID                                                                 |
+
+Electron-builder signs the `.app` bundle, creates the `.dmg` and `.zip` distribution packages, submits the build to Apple's notarization service via `notarytool`, and staples the notarization ticket to the application and disk image.
+
+### Auto-update artifacts
+
+The `dist:mac` target produces three key release artifacts uploaded to GitHub Releases:
+
+- `Interlock-<version>-<arch>.dmg`: User-facing disk image installer.
+- `Interlock-<version>-<arch>-mac.zip`: Signed zip archive consumed by `electron-updater` for Squirrel.Mac in-app updates.
+- `latest-mac.yml`: Release manifest containing version metadata, file paths, and SHA-512 hashes used by `electron-updater` to discover and verify new releases.
+
 ## Bundled third-party code
 
 `scripts/build-package.mjs` bundles runtime dependencies into `dist/cli.js`, so the published package declares no `dependencies`. esbuild writes their license comments to `dist/cli.js.LEGAL.txt`.

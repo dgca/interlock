@@ -13,6 +13,7 @@ const allowedPackages = {
   mcp: ['client', 'core'],
   ui: ['client', 'core'],
   cli: ['client', 'core'],
+  desktop: ['client', 'core', 'runtime', 'server', 'storage'],
 };
 
 // Single files allowed more than their package; the package rules exclude them.
