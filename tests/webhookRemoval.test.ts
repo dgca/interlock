@@ -67,7 +67,7 @@ it('upgrades the published 0.2.13 database unchanged and executes both published
     const e = engine(file);
     expect(e.store.migration).toMatchObject({
       from: 7,
-      to: 22,
+      to: 23,
       backup: expect.any(String),
     });
     expect(db.prepare(existingDocuments).all()).toEqual(before);
@@ -159,22 +159,23 @@ it.each([12, 13, 14])(
       });
       put('eventTriggerReceipts', { id: 'receipt', triggerId: 'event' });
       put('runs', { id: 'keep-run', status: 'completed', executions: [] });
-      put('variables', { id: 'keep-secret', kind: 'secret' });
+      put('variables', { id: 'keep-secret', kind: 'secret', enabled: true });
       for (const collection of [
         'webhookDeliveries',
         'webhookReceipts',
         'webhookOutcomes',
       ])
         put(collection, { id: collection });
+      // Schema 23 keeps enabled variables and drops their enabled flag.
       const kept = db
         .prepare(
-          "SELECT * FROM documents WHERE id IN ('schedule', 'event', 'explicit', 'handler-delivery', 'receipt', 'keep-run', 'keep-secret') ORDER BY rowid",
+          "SELECT collection, id, CASE WHEN collection = 'variables' THEN json_remove(value, '$.enabled') ELSE value END AS value FROM documents WHERE id IN ('schedule', 'event', 'explicit', 'handler-delivery', 'receipt', 'keep-run', 'keep-secret') ORDER BY rowid",
         )
         .all();
       const upgrade = migrate(db, file);
       expect(upgrade).toMatchObject({
         from: version,
-        to: 22,
+        to: 23,
         backup: expect.any(String),
       });
       expect(
@@ -187,7 +188,7 @@ it.each([12, 13, 14])(
           )
           .all(),
       ).toEqual([]);
-      expect(migrate(db, file)).toEqual({ from: 22, to: 22 });
+      expect(migrate(db, file)).toEqual({ from: 23, to: 23 });
     } finally {
       db.close();
     }

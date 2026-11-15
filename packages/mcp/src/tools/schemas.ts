@@ -1,7 +1,11 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { toJsonSchemaCompat } from '@modelcontextprotocol/sdk/server/zod-json-schema-compat.js';
 import { z } from 'zod';
-import { definitionSchema } from '@interlock/core';
+import {
+  definitionSchema,
+  variableMutationError,
+  variableMutationSchema,
+} from '@interlock/core';
 
 const definitionUri = 'interlock://schemas/workflow-definition';
 const bundleUri = 'interlock://schemas/workflow-bundle';
@@ -65,3 +69,15 @@ export function publishSchemaResources(
       }),
     );
 }
+
+// SDK enum errors may quote malformed input; validate sensitive bodies first.
+export const safeVariableMutationSchema = z.preprocess((input, context) => {
+  if (variableMutationSchema.safeParse(input).success) return input;
+  // Explain the removed field like the API does, without echoing the input.
+  if (input !== null && typeof input === 'object' && 'enabled' in input)
+    context.addIssue({
+      code: 'custom',
+      message: variableMutationError(input),
+    });
+  return {};
+}, variableMutationSchema);

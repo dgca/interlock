@@ -89,8 +89,6 @@ describe('doctor health and readiness check', () => {
           (c) => c.name === 'Free disk space' && c.status === 'ok',
         ),
       ).toBe(true);
-      const upgrade = sysChecks.find((c) => c.name.startsWith('0.3.0'));
-      expect(upgrade?.status === 'ok' && upgrade.message).toMatch(/no manual/);
     });
 
     it('detects SQLite integrity failures', async () => {
@@ -604,42 +602,6 @@ describe('doctor health and readiness check', () => {
         );
       },
     );
-
-    it('detects disabled variables and lists each one before the 0.3.0 upgrade', async () => {
-      const { engine } = createEnv();
-      const [savedVar] = ['API_KEY', 'UNUSED_KEY'].map((name) => {
-        const v = engine.variables.mutate({
-          ...{ action: 'create', name, value: 'value', kind: 'config' },
-        }) as { id: string; revision: number };
-        engine.variables.mutate({
-          ...{ action: 'update', id: v.id, expectedRevision: v.revision },
-          enabled: false,
-        });
-        return v;
-      });
-      const def: WorkflowDefinition = blankDefinition();
-      def.nodes[1] = nodeSchema.parse({
-        id: 'agent',
-        kind: 'script',
-        label: 'Script',
-        command: 'return input;',
-        environment: [{ name: 'API_KEY', variableId: savedVar.id }],
-      });
-      const wf = engine.create('Production Pipeline', '', def);
-      engine.publish(wf.id);
-      const report = await engine.doctor();
-      expect(report.status).toBe('fail');
-      const ref: unknown = expect.objectContaining({ workflowId: wf.id });
-      expect(
-        report.checks
-          .filter((c) => /disabled variable/i.test(c.name))
-          .map((c) => [c.status, c.name, c.details?.workflows ?? []]),
-      ).toEqual([
-        ['warn', '0.3.0 upgrade: disabled variable API_KEY', [ref]],
-        ['warn', '0.3.0 upgrade: disabled variable UNUSED_KEY', []],
-        ['fail', 'Disabled variable in workflow: Production Pipeline', []],
-      ]);
-    });
 
     it('reports deleted aliases and unavailable pinned prompts while retaining literal model support', async () => {
       const { engine, store } = createEnv();
