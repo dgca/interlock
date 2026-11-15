@@ -1852,7 +1852,101 @@
           "source": "runInput",
           "path": "repoPath"
         },
-        "agentPermissions": "read-only",
+        "permissionPolicy": {
+          "allow": [
+            {
+              "kind": "read"
+            },
+            {
+              "kind": "command",
+              "pattern": "git status"
+            },
+            {
+              "kind": "command",
+              "pattern": "git status *"
+            },
+            {
+              "kind": "command",
+              "pattern": "git diff"
+            },
+            {
+              "kind": "command",
+              "pattern": "git diff *"
+            },
+            {
+              "kind": "command",
+              "pattern": "git log"
+            },
+            {
+              "kind": "command",
+              "pattern": "git log *"
+            },
+            {
+              "kind": "command",
+              "pattern": "git show *"
+            },
+            {
+              "kind": "command",
+              "pattern": "git blame *"
+            },
+            {
+              "kind": "command",
+              "pattern": "git rev-parse *"
+            },
+            {
+              "kind": "command",
+              "pattern": "git ls-files *"
+            },
+            {
+              "kind": "command",
+              "pattern": "git merge-base *"
+            },
+            {
+              "kind": "command",
+              "pattern": "git branch --show-current"
+            },
+            {
+              "kind": "command",
+              "pattern": "ls"
+            },
+            {
+              "kind": "command",
+              "pattern": "ls *"
+            },
+            {
+              "kind": "command",
+              "pattern": "pwd"
+            },
+            {
+              "kind": "command",
+              "pattern": "cat *"
+            },
+            {
+              "kind": "command",
+              "pattern": "head *"
+            },
+            {
+              "kind": "command",
+              "pattern": "tail *"
+            },
+            {
+              "kind": "command",
+              "pattern": "wc *"
+            },
+            {
+              "kind": "command",
+              "pattern": "rg *"
+            },
+            {
+              "kind": "command",
+              "pattern": "grep *"
+            },
+            {
+              "kind": "command",
+              "pattern": "find *"
+            }
+          ]
+        },
         "inputSchema": {
           "type": "object",
           "required": ["repoPath"],
@@ -2370,7 +2464,101 @@
               "source": "runInput",
               "path": "repoPath"
             },
-            "agentPermissions": "read-only",
+            "permissionPolicy": {
+              "allow": [
+                {
+                  "kind": "read"
+                },
+                {
+                  "kind": "command",
+                  "pattern": "git status"
+                },
+                {
+                  "kind": "command",
+                  "pattern": "git status *"
+                },
+                {
+                  "kind": "command",
+                  "pattern": "git diff"
+                },
+                {
+                  "kind": "command",
+                  "pattern": "git diff *"
+                },
+                {
+                  "kind": "command",
+                  "pattern": "git log"
+                },
+                {
+                  "kind": "command",
+                  "pattern": "git log *"
+                },
+                {
+                  "kind": "command",
+                  "pattern": "git show *"
+                },
+                {
+                  "kind": "command",
+                  "pattern": "git blame *"
+                },
+                {
+                  "kind": "command",
+                  "pattern": "git rev-parse *"
+                },
+                {
+                  "kind": "command",
+                  "pattern": "git ls-files *"
+                },
+                {
+                  "kind": "command",
+                  "pattern": "git merge-base *"
+                },
+                {
+                  "kind": "command",
+                  "pattern": "git branch --show-current"
+                },
+                {
+                  "kind": "command",
+                  "pattern": "ls"
+                },
+                {
+                  "kind": "command",
+                  "pattern": "ls *"
+                },
+                {
+                  "kind": "command",
+                  "pattern": "pwd"
+                },
+                {
+                  "kind": "command",
+                  "pattern": "cat *"
+                },
+                {
+                  "kind": "command",
+                  "pattern": "head *"
+                },
+                {
+                  "kind": "command",
+                  "pattern": "tail *"
+                },
+                {
+                  "kind": "command",
+                  "pattern": "wc *"
+                },
+                {
+                  "kind": "command",
+                  "pattern": "rg *"
+                },
+                {
+                  "kind": "command",
+                  "pattern": "grep *"
+                },
+                {
+                  "kind": "command",
+                  "pattern": "find *"
+                }
+              ]
+            },
             "inputSchema": {
               "type": "object",
               "required": ["repoPath"],

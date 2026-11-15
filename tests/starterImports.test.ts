@@ -147,12 +147,19 @@ it('treats sdlc-v2 as the SDLC starter, for listing, importing and board setup',
     created: false,
     workflow: { id: added.workflow.id },
   });
-  // A bundled starter is not an import: its permission policy needs no approval.
-  const definition = e.store.getVersion(added.workflow.id, 1)!.definition;
-  expect(definition.permissionPolicy?.allow.length).toBeGreaterThan(0);
-  expect(
-    e.scriptApprovals.pendingPolicy(added.workflow.id, definition),
-  ).toBeFalsy();
+  // A bundled starter is not an import: neither the root's policy nor its
+  // reviewers' policies need approval.
+  const copies = e.store
+    .list<{ id: string }>('starterCopies')
+    .filter(
+      (copy) => e.workflow(copy.id).ownerWorkflowId === added.workflow.id,
+    );
+  for (const id of [added.workflow.id, ...copies.map((copy) => copy.id)]) {
+    const definition = e.store.getVersion(id, 1)!.definition;
+    expect(definition.permissionPolicy?.allow.length).toBeGreaterThan(0);
+    expect(e.scriptApprovals.pendingPolicy(id, definition)).toBeFalsy();
+  }
+  expect(copies).toHaveLength(2);
 });
 it('reuses an earlier sdlc-v2 copy and adds a new copy beside an original SDLC copy', () => {
   // Copy records as earlier releases wrote them.
