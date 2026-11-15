@@ -289,14 +289,14 @@ Above the threshold, the median recent run cost makes the UI ask before starting
 
 ## Engine settings and holds
 
-| Command                                | Purpose                                                                                                                                                 |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `interlock executors [JSON]`           | Managed executors. Lists them by default; actions include `settings`, `save_settings`, profiles, models, transcripts, messages, `stop` and `reconcile`. |
-| `interlock launcher JSON`              | Pull launcher profiles: `credential`, `poll`, `complete`, `fail`. The credential comes from `INTERLOCK_LAUNCHER_CREDENTIAL` unless given.               |
-| `interlock stalls [JSON]`              | Stall monitoring. Reads settings by default; `configure` with `expectedRevision`, or `inspect` a run.                                                   |
-| `interlock pause JSON`                 | Create a library or workflow hold with `target`, `actor` and `reason`                                                                                   |
-| `interlock pause-holds [OPTIONS_JSON]` | List applicable holds; `workflowId`, `offset`, `limit`                                                                                                  |
-| `interlock resume HOLD_ID`             | Release one exact hold; other holds remain                                                                                                              |
+| Command                                | Purpose                                                                                                                                                                                                     |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `interlock executors [JSON]`           | Managed executors. Lists them by default; actions include `settings`, `save_settings` (concurrency, `defaultPermissions`, `allowedRoots`), profiles, models, transcripts, messages, `stop` and `reconcile`. |
+| `interlock launcher JSON`              | Pull launcher profiles: `credential`, `poll`, `complete`, `fail`. The credential comes from `INTERLOCK_LAUNCHER_CREDENTIAL` unless given.                                                                   |
+| `interlock stalls [JSON]`              | Stall monitoring. Reads settings by default; `configure` with `expectedRevision`, or `inspect` a run.                                                                                                       |
+| `interlock pause JSON`                 | Create a library or workflow hold with `target`, `actor` and `reason`                                                                                                                                       |
+| `interlock pause-holds [OPTIONS_JSON]` | List applicable holds; `workflowId`, `offset`, `limit`                                                                                                                                                      |
+| `interlock resume HOLD_ID`             | Release one exact hold; other holds remain                                                                                                                                                                  |
 
 A pause holds gate boundaries and new claims without interrupting work in flight.
 

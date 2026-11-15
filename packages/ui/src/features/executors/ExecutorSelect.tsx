@@ -3,7 +3,10 @@ import { NativeSelect, SimpleGrid, Stack } from '../../design-system';
 import { errorMessage } from '../../lib/api';
 import { trpc, useQuery } from '../../lib/query';
 import { paths } from '../../routes/paths';
-import type { ExecutorPermissionMode } from '@interlock/core';
+import {
+  harnessPermissions,
+  type ExecutorPermissionMode,
+} from '@interlock/core';
 import {
   harnessLabel,
   harnessAvailability,
@@ -15,6 +18,7 @@ import {
   permissionLabels,
   permissionDescriptions,
   permissionOptions,
+  permissionSourceLabel,
 } from './permissions';
 
 export function ExecutorSelect({
@@ -59,7 +63,12 @@ export function ExecutorSelect({
     ? 'Shared assignment limit could not be loaded.'
     : '';
   const profile = profiles?.find((p) => p.id === value);
-  const effective = workflowPermissions ?? profile?.permissions;
+  const inherited = harnessPermissions(
+    profile,
+    settingsQuery.data?.defaultPermissions,
+  );
+  const effective = workflowPermissions ?? inherited.permissions;
+  const source = workflowPermissions ? 'workflow' : inherited.source;
   return (
     <Stack gap="sm" mb="md">
       <SimpleGrid
@@ -122,21 +131,22 @@ export function ExecutorSelect({
                 )
               }
               data={[
-                { value: '__default', label: 'Use harness default' },
+                { value: '__default', label: 'Use default' },
                 ...permissionOptions,
               ]}
             />
             <p className="hint">
-              {effective ? (
+              {profile || workflowPermissions ? (
                 <>
                   {permissionLabels[effective]} ·{' '}
-                  {workflowPermissions
-                    ? 'workflow override'
-                    : `inherited from ${profile?.name ?? value}`}
+                  {permissionSourceLabel(
+                    source,
+                    profile && harnessLabel(profile),
+                  )}
                   . {permissionDescriptions[effective]}
                 </>
               ) : (
-                'Each managed Agent uses its selected harness’s default permissions.'
+                `Each managed Agent uses its harness’s level, else ${permissionLabels[effective]} from AI Settings.`
               )}
               {!value && ' Connected agents keep their own permissions.'}
             </p>

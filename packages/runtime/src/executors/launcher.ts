@@ -144,7 +144,13 @@ export class LauncherSupervisor {
   }
   async launchCustom(
     work: WorkRequest,
-    profile: ExecutorProfile,
+    {
+      profile,
+      permissionSource,
+    }: {
+      profile: ExecutorProfile;
+      permissionSource: ManagedExecution['permissionSource'];
+    },
     cwd: string,
     logicalSession: string,
   ) {
@@ -187,7 +193,7 @@ export class LauncherSupervisor {
       attempt: work.attempt,
       state: 'starting',
       profile,
-      permissionSource: work.executorPermissionsSource ?? 'harness',
+      permissionSource,
       command: profile.launchCommand || profile.command || 'launch',
       cwd,
       sessionId: logicalSession,

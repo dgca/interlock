@@ -7,9 +7,12 @@ import {
   executorEffortSchema,
   executorSettingsSchema,
   executorSettingsUpdateSchema,
+  harnessPermissions,
   type ExecutorModels,
   type ExecutorProfile,
   type ExecutorProfileUpdate,
+  type ManagedExecution,
+  type PermissionSource,
   type WorkRequest,
 } from '@interlock/core';
 import type { Engine } from '../index.js';
@@ -35,6 +38,11 @@ export type ManagedAssignment = Pick<
 };
 
 const profilesCollection = 'executorProfiles';
+/**
+ * Profile IDs whose stored `standard` was chosen explicitly. Kept apart from
+ * the strict profile record so older builds can still read every profile.
+ */
+const explicitStandardCollection = 'executorExplicitStandard';
 const defaults: ExecutorProfile[] = [
   executorProfileSchema.parse({
     id: 'claude-code',
@@ -90,9 +98,14 @@ export class ExecutorConfiguration {
     this.host.schedule();
   }
   profiles() {
+    const explicit = new Set(
+      this.engine.store
+        .list<{ id: string }>(explicitStandardCollection)
+        .map((marker) => marker.id),
+    );
     const stored = this.engine.store
       .list<unknown>(profilesCollection)
-      .map(parseProfileSnapshot);
+      .map((value) => parseStoredProfile(value, explicit));
     return [
       ...defaults.filter((d) => !stored.some((p) => p.id === d.id)),
       ...stored,
@@ -131,6 +144,7 @@ export class ExecutorConfiguration {
       id: string;
       revision: number;
       concurrency: number | null;
+      defaultPermissions?: string;
       allowedRoots?: string[];
       providerPrefixes?: Record<string, string>;
     }>('executorSettings', 'shared');
@@ -138,6 +152,9 @@ export class ExecutorConfiguration {
     return executorSettingsSchema.parse({
       revision: stored?.revision ?? 0,
       concurrency: stored ? stored.concurrency : 3,
+      ...(stored?.defaultPermissions
+        ? { defaultPermissions: stored.defaultPermissions }
+        : {}),
       ...(roots && roots.length > 0 ? { allowedRoots: roots } : {}),
       ...(stored?.providerPrefixes
         ? { providerPrefixes: stored.providerPrefixes }
@@ -151,15 +168,21 @@ export class ExecutorConfiguration {
         throw new InterlockError(
           'Execution settings changed. Reload before saving.',
         );
-      const currentRoots = this.settings().allowedRoots;
+      const current = this.settings();
+      const defaultPermissions =
+        q.defaultPermissions === undefined
+          ? current.defaultPermissions
+          : (q.defaultPermissions ?? undefined);
+      const currentRoots = current.allowedRoots;
       const roots =
         q.allowedRoots !== undefined ? q.allowedRoots : currentRoots;
-      const currentPrefixes = this.settings().providerPrefixes;
+      const currentPrefixes = current.providerPrefixes;
       const providerPrefixes =
         q.providerPrefixes !== undefined ? q.providerPrefixes : currentPrefixes;
       const next = executorSettingsSchema.parse({
         revision: q.expectedRevision + 1,
         concurrency: q.concurrency,
+        ...(defaultPermissions ? { defaultPermissions } : {}),
         ...(roots && roots.length > 0 ? { allowedRoots: roots } : {}),
         ...(providerPrefixes && Object.keys(providerPrefixes).length > 0
           ? { providerPrefixes }
@@ -208,6 +231,9 @@ export class ExecutorConfiguration {
         revision: q.expectedRevision + 1,
       });
       this.engine.store.put(profilesCollection, next);
+      if (next.permissions === 'standard')
+        this.engine.store.put(explicitStandardCollection, { id: next.id });
+      else this.engine.store.remove(explicitStandardCollection, next.id);
       return next;
     });
     this.detections.clear();
@@ -420,8 +446,44 @@ export class ExecutorConfiguration {
         work.executorEffort !== undefined
           ? work.executorEffort
           : configured.effort,
-      permissions: work.executorPermissions ?? configured.permissions,
+      permissions:
+        work.executorPermissions ?? this.permissions(configured).permissions,
     };
+  }
+  /** The profile's own permission mode, else the shared default. */
+  permissions(profile: ExecutorProfile) {
+    return harnessPermissions(profile, this.settings().defaultPermissions);
+  }
+  /** A launcher retry keeps the permission mode its earlier attempt captured. */
+  launchProfile(
+    work: ManagedAssignment,
+    configured: ExecutorProfile,
+    previous: ManagedExecution | undefined,
+  ): { profile: ExecutorProfile; permissionSource: PermissionSource } {
+    const profile =
+      work.executorPermissionsSource !== undefined
+        ? this.assignmentProfile(work, configured)
+        : {
+            ...configured,
+            permissions: this.permissions(configured).permissions,
+          };
+    const captured = previous?.profile.permissions;
+    return captured
+      ? {
+          profile: { ...profile, permissions: captured },
+          permissionSource:
+            previous.permissionSource ??
+            this.permissionSource(work, configured),
+        }
+      : { profile, permissionSource: this.permissionSource(work, configured) };
+  }
+  permissionSource(
+    work: ManagedAssignment,
+    configured: ExecutorProfile,
+  ): PermissionSource {
+    return work.executorPermissions
+      ? (work.executorPermissionsSource ?? 'workflow')
+      : this.permissions(configured).source;
   }
   effortProblem(
     profile: ExecutorProfile,
@@ -456,6 +518,21 @@ export function errorText(error: unknown) {
     0,
     2000,
   );
+}
+
+/**
+ * Configured profiles saved before the shared default stored `standard` as the
+ * creation value. That, and a missing level, inherit the shared default; an
+ * explicit Standard saved since has an entry in `explicitStandardCollection`.
+ */
+function parseStoredProfile(
+  value: unknown,
+  explicit: ReadonlySet<string>,
+): ExecutorProfile {
+  const profile = parseProfileSnapshot(value);
+  if (profile.permissions === 'standard' && !explicit.has(profile.id))
+    delete profile.permissions;
+  return profile;
 }
 
 /** Preserve captured profile settings while ignoring the retired timeout draft field. */

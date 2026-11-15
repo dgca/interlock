@@ -27,7 +27,7 @@ import type {
 
 import { api, errorMessage } from '../../lib/api';
 import styles from './ManagedExecutionPanel.module.css';
-import { permissionLabels } from './permissions';
+import { permissionLabels, permissionSourceLabel } from './permissions';
 import { managedStateLabels as stateLabels } from './managedStatus';
 import { ModelPicker } from './ModelPicker';
 import {
@@ -526,9 +526,9 @@ function Execution({
                 <dd>{record.profile.harness}</dd>
                 <dt>Permissions</dt>
                 <dd>
-                  {permissionLabels[record.profile.permissions] ?? 'Standard'}
+                  {permissionLabels[record.profile.permissions ?? 'standard']}
                   {record.permissionSource
-                    ? ` · ${record.permissionSource === 'preset' ? 'agent preset' : record.permissionSource === 'workflow' ? 'workflow override' : 'harness default'}`
+                    ? ` · ${permissionSourceLabel(record.permissionSource)}`
                     : ''}
                 </dd>
                 <dt>Directory</dt>

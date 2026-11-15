@@ -6,7 +6,7 @@ export const usage = [
   'variables <read|manage> <json|@file> [--value-stdin] (metadata list/inspect, explicit config_value with valueRevision, write-only Secret creation/replacement through stdin)',
   'memory <read|manage|work> <json|@file> (workflow memory; read action:list/history/reviews, manage action:configure/add/edit/approve/reject/revert/delete with the note revision, work action:read/write with workId and token during a claim)',
   'stalls [json|@file] (settings by default; configure with expectedRevision/policy, inspect with runId/offset/limit)',
-  'executors [json|@file] (list by default; settings/save_settings, save profiles, models, inspect work, transcript by executionId with before/after paging, message with executionId/requestId/message, receipt with executionId/requestId, respond, retry_model, stop, reconcile)',
+  'executors [json|@file] (list by default; settings/save_settings for concurrency, defaultPermissions and allowedRoots, save profiles, models, inspect work, transcript by executionId with before/after paging, message with executionId/requestId/message, receipt with executionId/requestId, respond, retry_model, stop, reconcile)',
   'launcher <json|@file> (pull launcher profiles: credential with profileId rotates and prints the credential once; poll with profileId/clientId/waitMs/limit, complete with profileId/operationId/leaseToken/result, fail with profileId/operationId/leaseToken/error/retryable; the credential is read from INTERLOCK_LAUNCHER_CREDENTIAL unless given)',
   'workflows [scope-json: {"ownerWorkflowId":null|"parent-id"}]',
   'workflow <id>',

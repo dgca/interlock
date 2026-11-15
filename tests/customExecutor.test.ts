@@ -70,7 +70,7 @@ async function launched(id: string, commands: Record<string, unknown>) {
   const work = e.available(run.id)[0];
   const session = (await (e.executors as any).launchCustom(
     work,
-    profile,
+    { profile },
     process.cwd(),
     'logical-session',
   )) as { claimTicket: string; archived: boolean };
@@ -686,7 +686,7 @@ it('keeps a delegated background session alive after its launch command succeeds
   const offered = e.available(run.id)[0];
   const session = await (e.executors as any).launchCustom(
     offered,
-    profile,
+    { profile },
     root,
     'logical-session',
   );
@@ -745,7 +745,7 @@ it.each(['status', 'archive', 'message', 'stop'] as const)(
     const work = e.available(run.id)[0];
     const session = await (e.executors as any).launchCustom(
       work,
-      profile,
+      { profile },
       process.cwd(),
       'logical-session',
     );
@@ -935,7 +935,7 @@ it.each(['direct', 'launcher'] as const)(
       const work = e.available(run.id)[0];
       const session = await (e.executors as any).launchCustom(
         work,
-        profile,
+        { profile },
         process.cwd(),
         'logical-session',
       );

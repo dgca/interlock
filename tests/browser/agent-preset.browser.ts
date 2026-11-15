@@ -158,7 +158,7 @@ it('keeps unexposed configuration when renaming an API-created integration', asy
     expect(
       await page.getByRole('link', { name: 'Edit integration' }).count(),
     ).toBe(0);
-    await defaults.selectOption('standard');
+    await defaults.selectOption('__default');
     const link = page.getByRole('link', { name: 'Edit integration' });
     expect(await link.getAttribute('aria-haspopup')).toBeNull();
     await link.click();
@@ -183,6 +183,7 @@ it('keeps unexposed configuration when renaming an API-created integration', asy
       ...preserved,
     });
     expect(stored).not.toHaveProperty('cwd');
+    expect(stored).not.toHaveProperty('permissions');
   } finally {
     await page.close();
     await app.close();

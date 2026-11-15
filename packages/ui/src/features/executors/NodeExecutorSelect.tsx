@@ -7,6 +7,7 @@ import {
 } from '../../design-system';
 import {
   firstEligiblePresetChoice,
+  harnessPermissions,
   inheritsWorkflowHarnessSettings,
   presetPermissions,
   usesDirectHarness,
@@ -23,7 +24,7 @@ import {
 } from './harnessProfiles';
 import { ModelSettings } from './ModelSettings';
 import { readModelAliases, inspectModelReference } from './modelAliasApi';
-import { permissionLabels } from './permissions';
+import { permissionLabels, permissionSourceLabel } from './permissions';
 
 type Agent = Extract<WorkflowDefinition['nodes'][number], { kind: 'agent' }>;
 type Selection = Pick<Agent, 'executor' | 'executorMode' | 'model' | 'effort'>;
@@ -58,6 +59,10 @@ export function NodeExecutorSelect({
     ...trpc.executors.profiles.queryOptions(),
     enabled,
   });
+  const defaultPermissions = useQuery({
+    ...trpc.executors.settings.queryOptions(),
+    enabled,
+  }).data?.defaultPermissions;
   const presetsQuery = useQuery({
     queryKey: [...trpc.modelAliases.pathKey(), 'executor-options'],
     queryFn: listPresets,
@@ -273,6 +278,12 @@ export function NodeExecutorSelect({
       (value === workflowDefault || nodeMasksWorkflowPreset
         ? activeDefaultProfile
         : undefined));
+  const selectedPermissions = selectedProfile && {
+    ...harnessPermissions(selectedProfile, defaultPermissions),
+    ...(workflowPermissions
+      ? { permissions: workflowPermissions, source: 'workflow' as const }
+      : {}),
+  };
   const showModels = !savedPreset && !!selectedProfile;
   const inheritSettings =
     selectedProfile &&
@@ -421,23 +432,27 @@ export function NodeExecutorSelect({
                   presetPermissions(
                     effectivePreset.permissions,
                     workflowPermissions,
-                  ) ?? effectiveChoice.profile.permissions
+                  ) ??
+                    harnessPermissions(
+                      effectiveChoice.profile,
+                      defaultPermissions,
+                    ).permissions
                 ]
               }
               {effectiveChoice.profile.harness === 'custom' ? ' requested' : ''}
             </Text>
           )}
-          {!effectivePreset && selectedProfile && (
+          {!effectivePreset && selectedProfile && selectedPermissions && (
             <Text size="xs" c="dimmed">
-              {
-                permissionLabels[
-                  workflowPermissions ?? selectedProfile.permissions
-                ]
-              }{' '}
+              {permissionLabels[selectedPermissions.permissions]}{' '}
               {selectedProfile.harness === 'custom'
                 ? ' requested'
                 : ' permissions'}{' '}
-              · {workflowPermissions ? 'workflow override' : 'harness default'}
+              ·{' '}
+              {permissionSourceLabel(
+                selectedPermissions.source,
+                harnessLabel(selectedProfile),
+              )}
             </Text>
           )}
           {value === connected && (

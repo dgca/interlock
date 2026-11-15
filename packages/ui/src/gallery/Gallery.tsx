@@ -77,6 +77,7 @@ import {
   WorkflowGrid,
 } from '../components/WorkflowCards/WorkflowCards';
 import { DiscardChangesDialog } from '../components/DiscardChangesDialog';
+import { FirstEnableDialog } from '../features/executors/DefaultPermissions';
 import { StartCostWarning } from '../features/runs/StartCostWarning';
 import classes from './Gallery.module.css';
 
@@ -600,6 +601,9 @@ function Dialogs() {
           <Button onClick={() => show('start-warning')}>
             Open start cost warning
           </Button>
+          <Button onClick={() => show('first-enable')}>
+            Open first harness choice
+          </Button>
         </Group>
       </Specimen>
       {(open === 'modal' || open === 'busy') && (
@@ -644,6 +648,14 @@ function Dialogs() {
             <Button variant="primary">Start anyway</Button>
           </ModalFooter>
         </Modal>
+      )}
+      {open === 'first-enable' && (
+        <FirstEnableDialog
+          harness="Codex"
+          settings={{ revision: 0, concurrency: 3 }}
+          onEnable={() => Promise.resolve(show(null))}
+          onCancel={() => show(null)}
+        />
       )}
       {open === 'discard' && (
         <DiscardChangesDialog

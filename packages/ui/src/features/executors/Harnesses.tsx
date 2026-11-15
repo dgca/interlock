@@ -29,7 +29,11 @@ import {
   Cpu,
   Plus,
 } from 'lucide-react';
-import { executorProfileSchema, type ExecutorProfile } from '@interlock/core';
+import {
+  executorProfileSchema,
+  harnessPermissions,
+  type ExecutorProfile,
+} from '@interlock/core';
 
 import { useDraftDismissal } from '../../lib/useDraftDismissal';
 import { useEditorDraft } from '../../lib/useEditorDraft';
@@ -43,7 +47,12 @@ import {
 } from '../../components/WorkspaceReads';
 import { HarnessRowsSkeleton, harnessTable } from './HarnessListSkeleton';
 import styles from './Harnesses.module.css';
-import { permissionOptions, permissionDescriptions } from './permissions';
+import {
+  permissionDescriptions,
+  permissionLabels,
+  permissionOptions,
+} from './permissions';
+import { FirstEnableDialog } from './DefaultPermissions';
 import { ModelSettings } from './ModelSettings';
 import { ExecutionSettings } from './ExecutionSettings';
 import { paths } from '../../routes/paths';
@@ -63,6 +72,7 @@ const harnessSetup: Record<string, string> = {
   custom: 'https://docs.interlock.dev/managed-executors',
 };
 type Profile = Awaited<ReturnType<typeof api.executors.profiles.query>>[number];
+type Settings = Awaited<ReturnType<typeof api.executors.settings.query>>;
 
 type DirtySetting = (id: string, dirty: boolean) => void;
 
@@ -99,6 +109,8 @@ export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
   const queryClient = useQueryClient();
   const profilesQuery = useQuery(trpc.executors.profiles.queryOptions());
   const profiles = profilesQuery.data;
+  const settingsQuery = useQuery(trpc.executors.settings.queryOptions());
+  const settings = settingsQuery.data;
   const harnesses = profiles?.filter(isPrimaryHarness).sort(
     (a, b) =>
       Number(b.detection.status === 'detected') -
@@ -110,6 +122,8 @@ export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
   );
   const [checkError, setCheckError] = useState('');
   const read = workspaceRead('harnesses', profilesQuery);
+  // Enabling needs the shared default to know whether to ask first.
+  const settingsRead = workspaceRead('execution settings', settingsQuery);
   const [checking, setChecking] = useState(false);
 
   const refresh = async (check = false) => {
@@ -183,7 +197,11 @@ export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
         value={activeTab}
       />
       <div className={`${workspacePage.content} ${styles.aiContent}`}>
-        <WorkspaceReadWarning reads={[read]} inline showDetails />
+        <WorkspaceReadWarning
+          reads={activeTab === 'harnesses' ? [read, settingsRead] : [read]}
+          inline
+          showDetails
+        />
         {activeTab === 'harnesses' && (
           <section
             id="harnesses"
@@ -228,6 +246,7 @@ export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
                   <ProfileRow
                     key={p.id}
                     profile={p}
+                    settings={settings}
                     refresh={refresh}
                     saveProfile={saveProfile}
                     saving={saving}
@@ -279,12 +298,14 @@ function configuration(profile: Profile): ExecutorProfile {
 }
 function ProfileRow({
   profile,
+  settings,
   refresh,
   saveProfile,
   saving,
   onDirty,
 }: {
   profile: Profile;
+  settings: Settings | undefined;
   onDirty: DirtySetting;
   refresh: () => Promise<Profile[] | undefined>;
   saveProfile: (value: ExecutorProfile) => Promise<ExecutorProfile | undefined>;
@@ -301,8 +322,11 @@ function ProfileRow({
     ),
     [writing, setWriting] = useState(false),
     [reloading, setReloading] = useState(false),
-    [error, setError] = useState('');
+    [error, setError] = useState(''),
+    [asking, setAsking] = useState(false);
   const busy = writing || reloading || saving;
+  const inherited = harnessPermissions(undefined, settings?.defaultPermissions);
+  const effective = draft.permissions ?? inherited.permissions;
   useEffect(() => {
     if (wasOpen.current && !open) defaultsTrigger.current?.focus();
     wasOpen.current = open;
@@ -406,15 +430,15 @@ function ProfileRow({
           {detected ? (
             <Switch
               checked={profile.enabled}
-              disabled={busy || open}
+              disabled={busy || open || (!profile.enabled && !settings)}
               aria-label={`Enable ${label}`}
               label={profile.enabled ? 'Enabled' : 'Disabled'}
-              onChange={(e) =>
-                void save({
-                  ...configuration(profile),
-                  enabled: e.currentTarget.checked,
-                })
-              }
+              onChange={(e) => {
+                const enabled = e.currentTarget.checked;
+                if (enabled && settings && !settings.defaultPermissions)
+                  setAsking(true);
+                else void save({ ...configuration(profile), enabled });
+              }}
             />
           ) : (
             <span className="hint">
@@ -503,29 +527,35 @@ function ProfileRow({
                     description={
                       draft.harness === 'custom'
                         ? 'Interlock sends this mode to the integration. The integration is responsible for enforcing it.'
-                        : draft.harness === 'pi' &&
-                            draft.permissions === 'standard'
+                        : draft.harness === 'pi' && effective === 'standard'
                           ? 'Allow read tools; ask before commands, file changes, and other tools.'
-                          : permissionDescriptions[draft.permissions]
+                          : permissionDescriptions[effective]
                     }
-                    value={draft.permissions}
+                    value={draft.permissions ?? '__default'}
                     onChange={(e) =>
                       setDraft({
                         ...draft,
-                        permissions: e.currentTarget
-                          .value as ExecutorProfile['permissions'],
+                        permissions:
+                          e.currentTarget.value === '__default'
+                            ? undefined
+                            : (e.currentTarget
+                                .value as ExecutorProfile['permissions']),
                       })
                     }
-                    data={permissionOptions}
+                    data={[
+                      {
+                        value: '__default',
+                        label: `Use default · ${permissionLabels[inherited.permissions]}`,
+                      },
+                      ...permissionOptions,
+                    ]}
                   />
                 </div>
-                {draft.harness !== 'custom' &&
-                  draft.permissions === 'read-only' && (
-                    <p className={styles.note}>
-                      Read-only restrictions do not sandbox project startup
-                      hooks.
-                    </p>
-                  )}
+                {draft.harness !== 'custom' && effective === 'read-only' && (
+                  <p className={styles.note}>
+                    Read-only restrictions do not sandbox project startup hooks.
+                  </p>
+                )}
                 {draft.harness === 'custom' ? (
                   busy || changed ? (
                     <Button mt="md" disabled>
@@ -661,6 +691,17 @@ function ProfileRow({
       )}
       {dismissal.confirmation}
       {reloadDismissal.confirmation}
+      {asking && settings && (
+        <FirstEnableDialog
+          harness={label}
+          settings={settings}
+          onCancel={() => setAsking(false)}
+          onEnable={async () => {
+            setAsking(false);
+            await save({ ...configuration(profile), enabled: true });
+          }}
+        />
+      )}
     </>
   );
 }

@@ -10,9 +10,33 @@ Each built-in harness and custom integration has one row. Choose **Edit defaults
 
 Built-in harness IDs are `claude-code`, `codex`, and `pi`. Existing named configuration IDs still resolve in workflows and presets. The API and MCP can still inspect and update them. Local profiles and server settings can declare `allowedRoots`. An invalid or out-of-bounds directory leaves the assignment unclaimed with a `cwd_blocked` reason. A continuity group pins the directory when its session starts. Advanced profiles can declare tool and skill names for requirement matching. Interlock does not install or verify those capabilities.
 
-In **Workflow settings**, choose a **Default Agent executor** and **Agent permissions**, then save and publish. **Use harness default** inherits each selected profile’s default. An explicit **Read only**, **Standard** or **Full access** choice overrides the default for all managed Agents in this workflow, including node-specific executor selections. Connected agents retain their own permissions. The effective mode and its source appear beside the executor selection and in execution details. Agent **Execution → Executor** can inherit that default, choose another profile, or require a connected agent. In JSON, workflow `executor` is a profile ID. Agent `executor` overrides it; `null` selects connected-agent execution; omission inherits the workflow default. Workflow `agentPermissions` stores the optional override as `read-only`, `standard` or `full-access`; omission inherits the harness default. The published assignment captures the override, and later edits do not change existing attempts. Existing definitions without these fields keep their behavior. Missing, disabled or incompatible profiles leave work unclaimed with a reason. Executor references and workflow permission overrides travel in exports; local profile paths, defaults and native sessions do not.
+In **Workflow settings**, choose a **Default Agent executor** and **Agent permissions**, then save and publish. **Use default** inherits the selected harness's level, or the shared default when the harness sets none; see [Choose permissions](#choose-permissions). An explicit **Read only**, **Standard** or **Full access** choice overrides the default for all managed Agents in this workflow, including node-specific executor selections. Connected agents retain their own permissions. The effective mode and its source appear beside the executor selection and in execution details. Agent **Execution → Executor** can inherit that default, choose another profile, or require a connected agent. In JSON, workflow `executor` is a profile ID. Agent `executor` overrides it; `null` selects connected-agent execution; omission inherits the workflow default. Workflow `agentPermissions` stores the optional override as `read-only`, `standard` or `full-access`; omission inherits the harness level or the shared default. The published assignment captures the override, and later edits do not change existing attempts. Existing definitions without these fields keep their behavior. Missing, disabled or incompatible profiles leave work unclaimed with a reason. Executor references and workflow permission overrides travel in exports; local profile paths, defaults and native sessions do not.
 
 Batch items use their owning workflow’s settings; invoked workflows use their own published settings. Agent permission modes do not restrict Script or Fetch execution.
+
+## Choose permissions
+
+Set **AI Settings → Execution settings → Default agent permissions** once. Every managed Agent whose harness and workflow set no level of their own uses it. The first time you enable a harness before choosing a default, Interlock asks **How should managed agents run?** and saves your answer here. Enabling a harness through the CLI or MCP does not ask and does not set a default.
+
+| Level       | What agents do                                                                                                               |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Read only   | Inspect and analyze without modifying files.                                                                                 |
+| Standard    | Use the harness's Standard mode and stop for approval when it needs one. This is the level when no default is set.           |
+| Full access | Run commands and edit files without asking. The harness sandbox and approval prompts are off. Native deny rules still apply. |
+
+A managed Agent uses the first level that is set:
+
+| Order | Source                                                            | Shown as           |
+| ----- | ----------------------------------------------------------------- | ------------------ |
+| 1     | Agent preset permissions (the more restrictive with the workflow) | agent preset       |
+| 2     | Workflow **Agent permissions**                                    | workflow override  |
+| 3     | Harness **Edit defaults → Default permissions**                   | set on the harness |
+| 4     | **Default agent permissions**                                     | from AI Settings   |
+| 5     | Standard                                                          | from AI Settings   |
+
+Harness **Default permissions** offers **Use default**, which shows the level it resolves to. Harnesses saved before this setting existed with **Standard**, the value every harness started with, follow the default. Choose **Standard** again in **Edit defaults** to keep a harness on Standard whatever the default is. **Read only** and **Full access** stay as saved.
+
+A harness selected directly captures the level when it claims the assignment. A preset choice captures it when the assignment is created. Retries, custom launcher relaunches and later assignments in a continuity group keep the captured level, so changing the default affects only work captured afterwards. A workflow [permission policy](permission-policy.md) applies only under Standard. Custom integrations receive the resolved level and enforce it themselves.
 
 The manager discovers ready assignments globally, including work started by scripts or in detached workflows. It uses the existing exclusive claim path, so a connected worker and managed harness cannot own the same attempt simultaneously. Budgets, shared resources, output validation and retry limits still apply. Managed local Git trials remain blocked because these adapters do not implement the scoped-tool containment contract.
 
@@ -291,6 +315,7 @@ interlock executors
 interlock executors '{"action":"settings"}'
 interlock executors '{"action":"save_settings","concurrency":3,"allowedRoots":["/worktrees"],"expectedRevision":0}'
 interlock executors '{"action":"save_settings","concurrency":null,"expectedRevision":1}'
+interlock executors '{"action":"save_settings","concurrency":null,"defaultPermissions":"full-access","expectedRevision":2}'
 interlock executors '{"action":"list","refresh":true}'
 interlock executors '{"action":"models","profileId":"codex","refresh":true}'
 interlock executors '{"action":"save","profile":{"id":"codex","harness":"codex","name":"Codex","enabled":true,"cwd":"/worktrees/default","allowedRoots":["/worktrees"],"expectedRevision":0}}'
@@ -303,7 +328,7 @@ interlock executors '{"action":"stop","executionId":"EXECUTION_ID"}'
 interlock executors '{"action":"reconcile","executionId":"EXECUTION_ID","confirmStopped":true}'
 ```
 
-Profile `permissions` defaults to `standard`; `read-only` and `full-access` are also supported. The previous draft value `ask` is accepted and normalized to `standard` without changing saved revisions. Save replaces a profile and requires its current revision as `expectedRevision`. Omit returned `revision` and `detection` fields. Keep existing settings when updating; omitted settings reset to defaults. New and unsaved built-in profiles use revision zero. Questions use `answer.answers` keyed by exact question IDs with arrays of chosen answers. Inspection never returns claim tokens. Work discovery includes compact `executor`/`managedExecution` fields, while briefing `next:inspect_executor` supplies a read-only inspection call for human attention. Neither discovery nor inspection starts a model call.
+Profile `permissions` is `read-only`, `standard` or `full-access`; omit it to use the shared default. Shared `settings` return `defaultPermissions` when one is set; `save_settings` accepts it, keeps it when omitted and clears it with `null`. A stored `standard` from before the shared default, and the retired draft value `ask`, read as omitted without changing saved revisions; a `standard` saved since stays explicit. Save replaces a profile and requires its current revision as `expectedRevision`. Omit returned `revision` and `detection` fields. Keep existing settings when updating; omitted settings reset to defaults. New and unsaved built-in profiles use revision zero. Questions use `answer.answers` keyed by exact question IDs with arrays of chosen answers. Inspection never returns claim tokens. Work discovery includes compact `executor`/`managedExecution` fields, while briefing `next:inspect_executor` supplies a read-only inspection call for human attention. Neither discovery nor inspection starts a model call.
 
 The initial adapters target macOS/Linux installations. Native account access, enterprise restrictions and CLI version compatibility still require validation in the user's environment. OpenCode, other harnesses, Channels, remote workers, automatic permission decisions beyond a workflow [permission policy](permission-policy.md) and automatic harness installation are outside this increment.
 
@@ -381,7 +406,7 @@ Active execution deadline revocation also interrupts managed supervision. Retrya
 
 Open **AI Settings → Agent presets** and choose **New preset**. Name the preset and set the primary harness, model, and thinking effort. Add and reorder fallbacks if the primary choice may be unavailable. Then select the preset under an Agent node's **Executor**, or under **Agent model** in Workflow settings for nodes that inherit the default.
 
-Interlock uses the first enabled, available choice that can enforce the requested permissions. A fallback is an alternative at assignment creation. It does not retry a failed request or skip a busy harness. The default permission setting uses the chosen harness's permissions unless the workflow supplies a mode. If both workflow and preset set a mode, the more restrictive one applies. A custom integration needs a command or URL for its configured mode and transport. It receives permission requests but does not enforce them through Interlock, so it is ineligible when the preset or workflow requires **Read only** or **Standard**.
+Interlock uses the first enabled, available choice that can enforce the requested permissions. A fallback is an alternative at assignment creation. It does not retry a failed request or skip a busy harness. Without a preset or workflow mode, the chosen harness's level or the shared default applies. If both workflow and preset set a mode, the more restrictive one applies. A custom integration needs a command or URL for its configured mode and transport. It receives permission requests but does not enforce them through Interlock, so it is ineligible when the preset or workflow requires **Read only** or **Standard**.
 
 Existing model aliases appear as presets. Their saved identities, candidate order, and workflow references stay intact. A legacy choice without a harness can still inherit a workflow harness. Nodes configured in earlier versions keep their execution behavior when you open and apply settings without choosing another executor.
 

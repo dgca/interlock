@@ -422,9 +422,10 @@ export class ExecutorManager {
     };
   }
   private continuityProblem(work: ManagedAssignment, session: Session) {
+    // An inherited level (harness or global) yields to the session's capture.
     if (
-      work.executorPermissionsSource !== undefined &&
-      work.executorPermissions !== undefined &&
+      (work.executorPermissionsSource === 'workflow' ||
+        work.executorPermissionsSource === 'preset') &&
       work.executorPermissions !== session.profile.permissions
     )
       return 'This continuity group already uses different permissions. Use the same permissions or a separate continuity group.';
@@ -734,17 +735,15 @@ export class ExecutorManager {
             ? this.engine.contextGroups.describe(offered.runId, group)
             : undefined;
           const logicalSession = binding?.session?.sessionId ?? randomUUID();
+          const launch = this.config.launchProfile(
+            offered,
+            configured,
+            this.latest(offered.id),
+          );
           try {
             this.pendingLaunches.set(offered.id, configured.id);
             try {
-              await this.launchCustom(
-                offered,
-                offered.executorPermissionsSource !== undefined
-                  ? this.config.assignmentProfile(offered, configured)
-                  : configured,
-                cwd,
-                logicalSession,
-              );
+              await this.launchCustom(offered, launch, cwd, logicalSession);
             } finally {
               this.pendingLaunches.delete(offered.id);
             }
@@ -762,7 +761,7 @@ export class ExecutorManager {
                   ?.status === 'cancelled'
                   ? 'interrupted'
                   : 'failed',
-              profile: configured,
+              ...launch,
               command:
                 configured.launchCommand || configured.command || 'launch',
               cwd,
@@ -810,10 +809,7 @@ export class ExecutorManager {
         const permissionSource =
           priorSession?.permissionSource ??
           previous?.permissionSource ??
-          offered.executorPermissionsSource ??
-          (offered.executorPermissions
-            ? ('workflow' as const)
-            : ('harness' as const));
+          this.config.permissionSource(offered, configured);
         const modelSource =
           priorSession?.modelSource ??
           (replacement ? ('recovery' as const) : previous?.modelSource) ??

@@ -9,7 +9,7 @@ export function profileDraft(profile: ExecutorProfile | null) {
     concurrency: profile?.concurrency ?? ('' as const),
     timeoutSeconds: profile?.timeoutSeconds ?? ('' as const),
     clientTimeoutSeconds: profile?.clientTimeoutSeconds ?? ('' as const),
-    permissions: profile?.permissions ?? 'standard',
+    permissions: profile?.permissions,
     env: profile?.env ?? {},
     headers: profile?.headers ?? {},
     turnCommand: profile?.turnCommand ?? profile?.command ?? '',

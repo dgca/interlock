@@ -591,14 +591,18 @@ function IntegrationEditor({
                   label="Default permissions"
                   description="The integration is responsible for enforcing this mode."
                   inputWrapperOrder={[...descriptionOrder]}
-                  value={permissions}
+                  value={permissions ?? ''}
                   onChange={(e) =>
                     update(
                       'permissions',
-                      e.currentTarget.value as typeof permissions,
+                      (e.currentTarget.value ||
+                        undefined) as typeof permissions,
                     )
                   }
-                  data={permissionOptions}
+                  data={[
+                    { value: '', label: 'Use default' },
+                    ...permissionOptions,
+                  ]}
                 />
               )}
 
