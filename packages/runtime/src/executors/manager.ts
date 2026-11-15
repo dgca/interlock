@@ -332,6 +332,7 @@ export class ExecutorManager {
         profile: record.profile,
         prefixOverrides: this.settings().providerPrefixes,
       });
+
     return {
       profileId: record.profile.id,
       harness: record.profile.harness,

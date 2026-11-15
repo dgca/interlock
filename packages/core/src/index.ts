@@ -158,6 +158,7 @@ export {
   sameExecutionScope,
   validateParallelScopes,
 } from './parallel.js';
+
 export type Json =
   null | boolean | number | string | Json[] | { [key: string]: Json };
 export const jsonSchema: z.ZodType<Json> = z.lazy(() =>
@@ -383,6 +384,7 @@ const onFailureSchema = z
   .describe(
     'Stop by default. route needs failed and success edges; Script, HTTP and output-contract failures send {input,error,output} (null output if absent). Validation, cancellation, limits, mapping and uncertain interruptions stay terminal. No automatic retry.',
   );
+
 const nodeShapeSchema = z.discriminatedUnion('kind', [
   z.object({ ...nodeBase(), kind: z.literal('entry') }),
   z.object({
@@ -904,6 +906,7 @@ export interface WorkRequest {
   resourceReservations?: import('./workResources.js').ResourceOwner[]; // Derived inspection, not stored.
   resolvedCwd?: string;
   cwdBlocked?: { reason: string; path?: string };
+
   trialEnvironment?: import('./trialEnvironments.js').TrialWorkContext;
   hold?: import('./workHolds.js').WorkHold;
   holdRevision?: number;
