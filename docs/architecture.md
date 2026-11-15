@@ -219,7 +219,7 @@ The native operation path resolves only referenced Fetch headers and Script
 environment entries, including polling checks. Persisted Fetch requests and
 previews retain safe references. Fetch requests that reference a Secret stop at
 redirects. Script inputs and Agent assignments do not receive
-injected values. Disabled, deleted, missing, or inaccessible exact revisions fail
+injected values. Deleted, missing, or inaccessible exact revisions fail
 without empty or latest-value fallback. Existing captures are checked again at
 consumption. Simulation substitutes operations without resolving live values.
 

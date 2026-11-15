@@ -85,22 +85,36 @@ Restoring replaces the database with the snapshot. Changes made after the snapsh
 
 Workflow variables no longer have an enabled or disabled state. Upgrading to 0.3.0 deletes every variable that is disabled at that moment, together with its stored values and portable bindings.
 
-Before upgrading:
+Before upgrading, find the disabled variables. The `doctor` warning exists only in 0.2.18 and later, so upgrade to the latest 0.2.x first:
 
-1. With your current version running, run:
+1. Install the latest 0.2.x and start it:
+
+   ```sh
+   npm install -g @type_of/interlock@0.2
+   ```
+
+2. Run:
 
    ```sh
    interlock doctor
    ```
 
-2. Read each `0.3.0 upgrade: disabled variable` warning. It names the variable and the workflow drafts and versions that reference it.
-3. To keep a variable, enable it. **Variables** has no enable control in 0.2.x, so use its ID and current revision from `interlock variables read '{"action":"inspect","id":"VARIABLE_ID"}'`:
+3. Read each `0.3.0 upgrade: disabled variable` warning. It names the variable and the workflow drafts and versions that reference it.
+4. To keep a variable, enable it. **Variables** has no enable control in 0.2.x, so use its ID and current revision from `interlock variables read '{"action":"inspect","id":"VARIABLE_ID"}'`:
 
    ```sh
    interlock variables manage '{"action":"update","id":"VARIABLE_ID","expectedRevision":1,"enabled":true}'
    ```
 
-4. Run `interlock doctor` again until it reports no disabled variables, or only ones you want deleted.
+5. Run `interlock doctor` again until it reports no disabled variables, or only ones you want deleted.
+
+On any 0.2.x release with variables (0.2.12 and later), you can list them instead and look for `"enabled": false`:
+
+```sh
+interlock variables read '{"action":"list","limit":100}'
+```
+
+The list returns at most 100 variables. If `truncated` is `true`, repeat with `"offset":100`, then 200, and so on. Releases before 0.2.12 have no variables.
 
 After the upgrade:
 
@@ -108,6 +122,9 @@ After the upgrade:
 - A run that captured a deleted variable fails at the step that uses it. Retrying keeps failing, even if you create a variable with the same identity. Start a new run instead.
 - API, CLI and MCP variable updates that send `enabled` are rejected. Delete a variable to stop its use. Variable metadata no longer includes `enabled`, and its `availability` is never `disabled`.
 - `interlock doctor` no longer checks for disabled variables.
+- Exporting a workflow fails with `Variable … is missing` while its draft or retained versions reference a deleted variable. Sync folder write-back fails the same way. Both work again once the variable is provisioned or bound.
+- With `INTERLOCK_SYNC_DIR` set, the next file import provisions an unset variable with the deleted variable's identity. `doctor` then reports it as unset rather than missing. No value comes back.
+- The pre-upgrade backup still holds the deleted values. To recover a variable you forgot, restore the backup on 0.2.x, enable the variable, and upgrade again.
 
 The upgrade is schema 23. See [the schema table](#database-schema-changes).
 
