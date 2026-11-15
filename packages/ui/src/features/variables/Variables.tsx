@@ -111,7 +111,6 @@ function configReadOptions(id: string, revision: number) {
 const statusName = {
   ready: 'Ready',
   unset: 'Value not set',
-  disabled: 'Disabled',
   locked: 'Store locked',
 } as const;
 
@@ -1038,11 +1037,6 @@ function VariableEditor({ id }: { id: string }) {
                       <Text size="xs" c="yellow">
                         Protected store unavailable. Restore the original key
                         file or check INTERLOCK_SECRET_KEY_FILE.
-                      </Text>
-                    )}
-                    {saved.availability === 'disabled' && (
-                      <Text size="xs" c="yellow">
-                        This variable is disabled. Restore access with the CLI.
                       </Text>
                     )}
                   </Stack>

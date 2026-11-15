@@ -46,8 +46,7 @@ const categoryDescriptions: Record<DiagnosticCategory, string> = {
   triggers: 'Schedule lag, consecutive trigger failures, and automatic pauses',
   blockers:
     'Human pauses, uncertain resource holds, work stalls, and model blockers',
-  workflows:
-    'Missing or disabled variables, model aliases, and unpublished draft diffs',
+  workflows: 'Missing variables, model aliases, and unpublished draft diffs',
 };
 
 export function Diagnostics() {

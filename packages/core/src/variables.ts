@@ -75,7 +75,6 @@ export interface SavedVariable {
   name: string;
   description: string;
   kind: VariableKind;
-  enabled: boolean;
   revision: number;
   valueRevision: number | null;
   createdAt: string;
@@ -153,7 +152,6 @@ export const variableMutationSchema = z.discriminatedUnion('action', [
       expectedRevision: z.number().int().positive(),
       name: variableName.optional(),
       description: description.optional(),
-      enabled: z.boolean().optional(),
       value: value.optional(),
     })
     .strict(),
@@ -174,6 +172,15 @@ export const variableMutationSchema = z.discriminatedUnion('action', [
     })
     .strict(),
 ]);
+/**
+ * Message for a rejected variable change. 0.3.0 removed `enabled`; it is rejected
+ * rather than ignored so an old caller never believes a credential was blocked.
+ */
+export function variableMutationError(input: unknown) {
+  return input !== null && typeof input === 'object' && 'enabled' in input
+    ? 'Variables no longer have an enabled state. Delete the variable to stop its use. Values were not saved.'
+    : 'Invalid variable change. Check required fields, name, value size, and expectedRevision. Values were not saved.';
+}
 export type VariableRead = z.input<typeof variableReadSchema>;
 export type VariableMutation = z.input<typeof variableMutationSchema>;
 export const variableRequirementSchema = z

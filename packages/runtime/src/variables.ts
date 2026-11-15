@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { Store } from '@interlock/storage';
 import {
   InterlockError,
+  variableMutationError,
   variableMutationSchema,
   variableReadSchema,
   variableRevisionConflict,
@@ -48,10 +49,6 @@ export class Variables {
       throw new InterlockError(
         `Variable ${capture.name} was deleted. Provision it and start a new run.`,
       );
-    if (!current.enabled)
-      throw new InterlockError(
-        `Variable ${current.name} is disabled. Enable it in Variables before retrying.`,
-      );
     if (current.kind !== capture.kind)
       throw new InterlockError(
         'Variable kind changed. Start a new run after correcting the reference.',
@@ -62,8 +59,7 @@ export class Variables {
       capture.valueRevision,
     );
   }
-  status(variable: SavedVariable): 'ready' | 'unset' | 'disabled' | 'locked' {
-    if (!variable.enabled) return 'disabled';
+  status(variable: SavedVariable): 'ready' | 'unset' | 'locked' {
     if (variable.valueRevision === null) return 'unset';
     try {
       this.store.protectedValues.read(
@@ -115,17 +111,6 @@ export class Variables {
       )
       .map((c) => c.id);
     return { workflows, runs, comparisons };
-  }
-  /** Disabled variables with the workflows (drafts and retained versions) that reference them. */
-  disabledReferences() {
-    return this.store
-      .list<SavedVariable>('variables')
-      .filter((v) => !v.enabled)
-      .map((v) => ({
-        id: v.id,
-        name: v.name,
-        workflows: this.dependencies(v.id).workflows,
-      }));
   }
   read(input: VariableRead) {
     const parsed = variableReadSchema.safeParse(input);
@@ -252,7 +237,6 @@ export class Variables {
       name,
       description,
       kind,
-      enabled: true,
       revision: 1,
       valueRevision: null,
       createdAt: time,
@@ -264,10 +248,7 @@ export class Variables {
   }
   mutate(input: VariableMutation) {
     const parsed = variableMutationSchema.safeParse(input);
-    if (!parsed.success)
-      throw new InterlockError(
-        'Invalid variable change. Check required fields, name, value size, and expectedRevision. Values were not saved.',
-      );
+    if (!parsed.success) throw new InterlockError(variableMutationError(input));
     const q = parsed.data;
     return this.store.transaction(() => {
       if (q.action === 'create')
@@ -305,7 +286,6 @@ export class Variables {
         v.name = q.name;
       }
       if (q.description !== undefined) v.description = q.description;
-      if (q.enabled !== undefined) v.enabled = q.enabled;
       if (q.value !== undefined) this.saveValue(v, q.value);
       v.revision++;
       v.updatedAt = stamp();

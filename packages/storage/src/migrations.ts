@@ -377,6 +377,29 @@ export const migrations: readonly Migration[] = [
       `);
     },
   },
+  {
+    version: 23,
+    // One-way (0.3.0): variables lose their enabled flag. Disabled variables are
+    // deleted with their protected values and bindings, as a delete would, so a
+    // previously blocked credential cannot become usable. Value counters stay, so
+    // a re-provisioned identity never reuses a revision that runs captured.
+    up(db) {
+      // 0.2.x blocked a variable when `!enabled` held, so every JavaScript-falsy
+      // JSON value counts as disabled: missing, null, false, 0 and "".
+      const flag = (fn: string) => `${fn}(value, '$.enabled')`;
+      const disabled = `SELECT id FROM documents WHERE collection = 'variables' AND (
+        ${flag('json_type')} IS NULL OR ${flag('json_type')} IN ('null', 'false')
+        OR (${flag('json_type')} IN ('integer', 'real') AND ${flag('json_extract')} = 0)
+        OR (${flag('json_type')} = 'text' AND ${flag('json_extract')} = ''))`;
+      db.exec(`
+        DELETE FROM documents WHERE collection IN ('variableValues', 'variableBindings')
+          AND json_extract(value, '$.variableId') IN (${disabled});
+        DELETE FROM documents WHERE collection = 'variables' AND id IN (${disabled});
+        UPDATE documents SET value = json_remove(value, '$.enabled')
+          WHERE collection = 'variables' AND json_type(value, '$.enabled') IS NOT NULL;
+      `);
+    },
+  },
 ];
 
 type Migration = { version: number; up: (db: DatabaseSync) => void };

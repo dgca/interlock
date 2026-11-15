@@ -21,7 +21,6 @@ import {
   uncertainClaimCollection,
   uncertainOperationCollection,
 } from './quiescence.js';
-import { upgradeChecks } from './doctorUpgrade.js';
 import { privateFetchCheck } from './fetch.js';
 
 export async function runDoctor(
@@ -169,9 +168,6 @@ export async function runDoctor(
       message: `Could not check filesystem free space: ${err instanceof Error ? err.message : String(err)}`,
     });
   }
-
-  // 1f. 0.3.0 upgrade readiness
-  checks.push(...upgradeChecks(engine));
 
   // ==========================================
   // 2. Harness Profiles Checks
@@ -558,21 +554,7 @@ export async function runDoctor(
           for (const ref of varRefs) {
             try {
               const variable = engine.variables.get(ref);
-              if (!variable.enabled) {
-                workflowIssues++;
-                checks.push({
-                  category: 'workflows',
-                  name: `Disabled variable in workflow: ${workflow.name}`,
-                  status: 'fail',
-                  message: `Published workflow "${workflow.name}" references disabled variable "${variable.name}" (${ref})`,
-                  details: {
-                    workflowId: workflow.id,
-                    version: workflow.latestVersion,
-                    variableId: variable.id,
-                  },
-                  remediation: `Enable variable "${variable.name}" in Variables library.`,
-                });
-              } else if (variable.valueRevision === null) {
+              if (variable.valueRevision === null) {
                 workflowIssues++;
                 checks.push({
                   category: 'workflows',
@@ -769,7 +751,7 @@ export async function runDoctor(
         category: 'workflows',
         name: 'Workflow dependencies',
         status: 'ok',
-        message: `${workflows.length} workflow(s) verified; all referenced variables and dependencies exist and are enabled`,
+        message: `${workflows.length} workflow(s) verified; all referenced variables and dependencies exist and are usable`,
         details: { totalWorkflows: workflows.length },
       });
     }

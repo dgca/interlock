@@ -118,7 +118,6 @@ const variable = {
   description: '',
   kind: 'secret',
   availability: 'ready',
-  enabled: true,
   revision: 1,
   valueRevision: 1,
 };

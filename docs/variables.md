@@ -59,19 +59,11 @@ republishing. Existing runs keep their captured value revision through delayed
 steps, retries, and restart. The editor clears entered Secret text after the
 server acknowledges the write, even if a later view refresh fails.
 
-The editor has no variable enable/disable controls. Existing disabled variables
-remain disabled until restored through the CLI or shared API. To restore one,
-inspect its current revision, then update it with `enabled: true`:
-
-```sh
-interlock variables read '{"action":"inspect","id":"VARIABLE_ID"}'
-interlock variables manage '{"action":"update","id":"VARIABLE_ID","expectedRevision":1,"enabled":true}'
-```
-
-Replace `VARIABLE_ID` and use the inspected revision for `expectedRevision`.
-Restoring access allows existing runs to use their original retained value
-revisions again. Already delivered values cannot be recalled. Cancel running work
-or revoke credentials at their provider when needed.
+To stop using a variable, delete it. Variables have no enabled or disabled state;
+0.3.0 removed it and deleted variables that were disabled. See
+[Upgrading](upgrading.md#disabled-variables-are-deleted-in-030). Already delivered
+values cannot be recalled. Cancel running work or revoke credentials at their
+provider when needed.
 
 Review **Used by** before renaming or deleting. To delete a saved variable, choose
 **Delete** in its header and review the confirmation. Renames preserve ID-based
@@ -100,7 +92,7 @@ In import preview, choose **Use a local variable** or **Provision locally, set t
 value later** for each requirement. Select a compatible kind and a unique local
 name when provisioning. Matching names do not attach credentials automatically.
 An unset value permits importing definitions for editing but blocks run startup.
-Missing references and disabled or locked values produce an actionable error.
+Missing references and unset or locked values produce an actionable error.
 
 Bindings apply throughout the instance. To redirect a portable identity, open its
 current local variable, review dependencies, and use **Change binding**. Existing
@@ -136,7 +128,7 @@ interlock variables read '{"action":"inspect","id":"VARIABLE_ID"}'
 Replace `VARIABLE_ID` and `expectedRevision` with the current metadata. Read a
 Config value explicitly with `action:"config_value"`. The result contains `id`,
 `value`, and the saved `valueRevision` for that value. Secret reads are rejected.
-Metadata edits, disable/enable, deletion, and binding changes are revision protected.
+Metadata edits, deletion, and binding changes are revision protected.
 
 Through MCP, use **read_variables** and **manage_variables**, with the operation
 under `request`. List defaults to 25 entries, maximum 100. Inspect pages workflow
