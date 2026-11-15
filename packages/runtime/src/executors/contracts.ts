@@ -11,6 +11,7 @@ import type {
   ErrorClass,
   TranscriptEvent,
 } from '@interlock/core';
+import type { InterlockTools, InterlockToolsState } from './interlockTools.js';
 
 export interface HarnessRequest {
   kind: 'permission' | 'question';
@@ -39,6 +40,10 @@ export interface HarnessRun {
   request: (request: HarnessRequest) => Promise<ExecutorAnswer>;
   /** A workflow permission policy answers some requests. */
   permissionPolicy?: boolean;
+  /** Interlock's own tools for this claim attempt; absent for Read only. */
+  interlockTools?: InterlockTools;
+  /** Whether those tools were attached to the native session, and why not. */
+  onInterlockTools?: (state: InterlockToolsState) => void;
 }
 export interface HarnessResult {
   output: Json;
@@ -64,15 +69,25 @@ export interface HarnessAdapter {
     message?: string;
   }>;
   run: (input: HarnessRun) => Promise<HarnessResult>;
+  /**
+   * The adapter records the prompt it sends as the transcript's user turn,
+   * because only it knows which Interlock tools the prompt describes.
+   */
+  recordsPrompt?: boolean;
 }
+/**
+ * The prompt a managed session receives. `attached` names the Interlock tools
+ * attached to this session; the prompt describes only those.
+ */
 export function assignmentPrompt(
   work: WorkRequest,
   resultInstructions?: string,
+  attached: readonly string[] = [],
 ) {
   return [
     work.prompt,
     work.context.instructions,
-    assignmentInstructions(work, { managedSession: true }),
+    assignmentInstructions(work, { managedSession: true, attached }),
     resultInstructions ??
       'Complete this one Interlock assignment. Return a JSON object with one field, result, whose value matches the supplied result schema. The host unwraps result and owns claim, renewal and submission; do not claim or submit this assignment yourself.',
     'Before returning, stop background commands and subprocesses you started. Do not detach daemons or leave work running after this assignment.',

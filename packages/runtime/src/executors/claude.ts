@@ -1,4 +1,8 @@
-import { query } from '@anthropic-ai/claude-agent-sdk/core';
+import {
+  createSdkMcpServer,
+  query,
+  tool,
+} from '@anthropic-ai/claude-agent-sdk/core';
 import type { SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import { MessageInput } from './messageInput.js';
 import { transcriptText } from './transcriptEvents.js';
@@ -19,7 +23,36 @@ import {
   spawnManagedProcess,
 } from './process.js';
 import { claudeAction } from './permissionPolicy.js';
-import { toolCallEnvironment } from '../toolCalls.js';
+import type { InterlockTools } from './interlockTools.js';
+
+/** The in-process MCP server name; distinct from a configured Interlock server. */
+const serverName = 'interlock_assignment';
+
+/**
+ * Interlock's tools as an in-process SDK MCP server. Calls run in Interlock
+ * against the claim the host holds; the session receives no credential.
+ */
+function interlockServer(tools: InterlockTools, signal: AbortSignal) {
+  return createSdkMcpServer({
+    name: serverName,
+    version: '1',
+    tools: tools.tools.map((definition) =>
+      tool(
+        definition.name,
+        definition.description,
+        definition.shape,
+        async (args) => {
+          const result = await tools.invoke(definition.name, args, signal);
+          return {
+            content: [{ type: 'text' as const, text: result.text }],
+            ...(result.isError ? { isError: true } : {}),
+          };
+        },
+        { alwaysLoad: true },
+      ),
+    ),
+  });
+}
 
 export const claudeAdapter: HarnessAdapter = {
   id: 'claude-code',
@@ -89,8 +122,24 @@ export const claudeAdapter: HarnessAdapter = {
       await owned?.close();
     }
   },
+  recordsPrompt: true,
   async run(input: HarnessRun) {
     const messages = new MessageInput<SDKUserMessage>();
+    const tools = input.interlockTools;
+    const ownTools = new Set(
+      tools?.tools.map((t) => `mcp__${serverName}__${t.name}`),
+    );
+    const prompt = assignmentPrompt(
+      input.work,
+      undefined,
+      tools?.tools.map((t) => t.name),
+    );
+    input.onTranscript?.({ kind: 'user', text: prompt });
+    if (tools)
+      input.onInterlockTools?.({
+        state: 'attached',
+        tools: tools.tools.map((t) => t.name),
+      });
     let taskStarted = false;
     let modelRefused = false;
     let capturedSessionId: string | undefined = input.sessionId;
@@ -108,7 +157,7 @@ export const claudeAdapter: HarnessAdapter = {
             type: 'user' as const,
             message: {
               role: 'user' as const,
-              content: assignmentPrompt(input.work),
+              content: prompt,
             },
             parent_tool_use_id: null,
             session_id: input.sessionId ?? '',
@@ -126,6 +175,14 @@ export const claudeAdapter: HarnessAdapter = {
           },
           pathToClaudeCodeExecutable: input.command,
           cwd: input.cwd,
+          // Added to the user's configured MCP servers, not replacing them.
+          ...(tools
+            ? {
+                mcpServers: {
+                  [serverName]: interlockServer(tools, abortController.signal),
+                },
+              }
+            : {}),
           ...(input.profile.model ? { model: input.profile.model } : {}),
           ...(input.profile.effort
             ? {
@@ -139,8 +196,6 @@ export const claudeAdapter: HarnessAdapter = {
           // Policy paths resolve from the session directory, so Bash returns there.
           env: {
             ...process.env,
-            // Assignment tool calls use a tool-only credential, never the claim.
-            ...toolCallEnvironment(input.work),
             ...(input.permissionPolicy
               ? { CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR: '1' }
               : {}),
@@ -161,6 +216,9 @@ export const claudeAdapter: HarnessAdapter = {
           },
           canUseTool: async (name, parameters) => {
             taskStarted = true;
+            // Interlock's own tools write to Interlock, not the workspace.
+            if (ownTools.has(name))
+              return { behavior: 'allow', updatedInput: parameters };
             if (
               input.profile.permissions === 'read-only' &&
               ![

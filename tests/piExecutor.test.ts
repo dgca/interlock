@@ -4,6 +4,7 @@ import { expect, it, vi } from 'vitest';
 import { executorProfileSchema, type WorkRequest } from '@interlock/core';
 import { piAdapter, piPermissions } from '../packages/runtime/src/executors/pi';
 import type { HarnessRun } from '../packages/runtime/src/executors/contracts';
+import { interlockTools } from '../packages/runtime/src/executors/interlockTools';
 import {
   HarnessModelError,
   HarnessResultError,
@@ -196,4 +197,50 @@ it('blocks unknown tools in read-only mode and fails closed without approval UI'
       await handler({ toolName: 'read', input: {} }, { hasUI: false }),
     ).toBeUndefined();
   }
+});
+
+it('saves a note through the Interlock tool in the Pi extension without exposing a credential', async () => {
+  const writes: unknown[] = [];
+  const transcript: string[] = [];
+  const claimed = {
+    ...work,
+    token: 'claim-token-534',
+    prompt: 'INTERLOCK_TOOLS',
+  };
+  const args = input({
+    work: claimed,
+    request: vi.fn(() =>
+      Promise.reject(new Error('Interlock tools must not ask for approval')),
+    ),
+    onTranscript: (event) => transcript.push(event.text ?? ''),
+    interlockTools: interlockTools(
+      {
+        run: () => ({ memoryCapture: {} }) as never,
+        memory: {
+          work: (q) => {
+            writes.push(q);
+            return { status: 'pending' };
+          },
+        },
+        callTool: () => Promise.resolve({}),
+      },
+      claimed,
+      'standard',
+    ),
+  });
+  expect((await piAdapter.run(args)).output).toEqual({
+    ok: true,
+    tool: '{"status":"pending"}',
+    leak: false,
+  });
+  expect(writes).toEqual([
+    {
+      action: 'write',
+      workId: 'work',
+      token: 'claim-token-534',
+      content: 'Fixture note',
+    },
+  ]);
+  expect(transcript.join('\n')).toContain('save_memory_note');
+  expect(transcript.join('\n')).not.toContain('claim-token');
 });

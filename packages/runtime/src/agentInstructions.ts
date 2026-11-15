@@ -1,5 +1,5 @@
 import type { WorkRequest } from '@interlock/core';
-import { toolCallToken } from './toolCalls.js';
+import { callToolTool, saveNoteTool } from './executors/interlockTools.js';
 export function freshContextInstructions(runId: string, workId: string) {
   return `This assignment requires fresh context.
 
@@ -14,15 +14,35 @@ Continue existing Interlock run ${runId}. Do not start a new run. Use get_run_br
 Tell the user to paste that prompt into a fresh session with Interlock connected.`;
 }
 
-/** Managed adapters have already established isolation; connected workers must arrange it themselves. */
+/**
+ * Managed adapters have already established isolation; connected workers must
+ * arrange it themselves. A managed session hears about saving notes and
+ * calling tools only when its adapter attached Interlock's tools (`attached`).
+ */
 export function assignmentInstructions(
   work: WorkRequest,
-  options: { managedSession?: boolean; lifecycleRunId?: string } = {},
+  options: {
+    managedSession?: boolean;
+    lifecycleRunId?: string;
+    attached?: readonly string[];
+  } = {},
 ) {
+  const attached = options.attached ?? [];
+  const managedTools = !!work.tools?.length && attached.includes(callToolTool);
   return [
-    ...(work.tools?.length
+    ...(work.tools?.length && !options.managedSession
       ? [
-          `Assignment tools: ${work.tools.map((t) => t.name).join(', ')}. Each runs a workflow step and returns its output. Call one with call_work_tool using workId ${work.id}, ${options.managedSession ? `token ${work.token ? toolCallToken(work.token) : ''} (a tool-only credential; the stdio MCP bridge fills workId and token from INTERLOCK_WORK_ID and INTERLOCK_TOOL_TOKEN)` : 'your claim token'}, its name and arguments matching its inputSchema in tools. If status is still running or waiting, call again with the returned callId.${options.managedSession ? `\nTools: ${JSON.stringify(work.tools)}` : ''}`,
+          `Assignment tools: ${work.tools.map((t) => t.name).join(', ')}. Each runs a workflow step and returns its output. Call one with call_work_tool using workId ${work.id}, your claim token, its name and arguments matching its inputSchema in tools. If status is still running or waiting, call again with the returned callId.`,
+        ]
+      : []),
+    ...(managedTools
+      ? [
+          `Assignment tools: ${work.tools!.map((t) => t.name).join(', ')}. Each runs a workflow step and returns its output. Call one with your ${callToolTool} tool, giving its name and arguments matching its inputSchema. If status is still running or waiting, call again with the returned callId.\nTools: ${JSON.stringify(work.tools)}`,
+        ]
+      : []),
+    ...(attached.includes(saveNoteTool)
+      ? [
+          `Save a lasting fact for later runs of this workflow with your ${saveNoteTool} tool. Usually a person reviews a note before later runs receive it.`,
         ]
       : []),
     ...(work.resources?.length

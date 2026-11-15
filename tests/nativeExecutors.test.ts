@@ -10,6 +10,8 @@ import {
 } from '../packages/runtime/src/executors/contracts';
 import { codexResult } from '../packages/runtime/src/executors/codexResult';
 import { assertOwnPropertyContract } from '@interlock/core';
+import { interlockTools } from '../packages/runtime/src/executors/interlockTools';
+import { toolCallToken } from '../packages/runtime/src/toolCalls';
 
 const command = fileURLToPath(
   new URL('./fixtures/managed-harness.mjs', import.meta.url),
@@ -399,5 +401,75 @@ it.each([claudeAdapter, codexAdapter])(
       request: async () => ({ allow: true }),
     });
     expect(result.output).toEqual({ ok: true });
+  },
+);
+
+/** Interlock's tools over a fake engine that records what reached it. */
+function ownTools() {
+  const writes: unknown[] = [];
+  const tools = interlockTools(
+    {
+      run: () => ({ memoryCapture: {} }) as never,
+      memory: {
+        work: (q) => {
+          writes.push(q);
+          return { status: 'pending', message: 'Saved for review.' };
+        },
+      },
+      callTool: () => Promise.resolve({}),
+    },
+    { ...work, token: 'claim-token-534' },
+    'standard',
+  )!;
+  return { tools, writes };
+}
+
+it.each([claudeAdapter])(
+  'saves a note through Interlock tools attached to $id without exposing a credential',
+  async (adapter) => {
+    const { tools, writes } = ownTools();
+    const transcript: string[] = [];
+    const states: unknown[] = [];
+    const result = await adapter.run({
+      command,
+      cwd: process.cwd(),
+      work: { ...work, token: 'claim-token-534' },
+      profile: executorProfileSchema.parse({
+        id: adapter.id,
+        harness: adapter.id,
+        name: adapter.id,
+        model: 'interlock-tools',
+        permissions: 'standard',
+      }),
+      signal: new AbortController().signal,
+      onSession: () => {},
+      onProgress: () => {},
+      onTranscript: (event) => transcript.push(event.text ?? ''),
+      // Interlock's own tools never wait for a person.
+      request: () =>
+        Promise.reject(new Error('Interlock tools must not ask for approval')),
+      interlockTools: tools,
+      onInterlockTools: (state) => states.push(state),
+    });
+    expect(writes).toEqual([
+      {
+        action: 'write',
+        workId: 'work',
+        token: 'claim-token-534',
+        content: 'Fixture note',
+      },
+    ]);
+    expect(result.output).toMatchObject({
+      ok: true,
+      tool: JSON.stringify({ status: 'pending', message: 'Saved for review.' }),
+      leak: false,
+    });
+    expect(states).toEqual([
+      { state: 'attached', tools: ['save_memory_note'] },
+    ]);
+    const recorded = transcript.join('\n');
+    expect(recorded).toContain('save_memory_note');
+    expect(recorded).not.toContain('claim-token');
+    expect(recorded).not.toContain(toolCallToken('claim-token-534'));
   },
 );

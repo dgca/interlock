@@ -10,6 +10,7 @@ import {
 import { Engine } from '@interlock/runtime';
 import { Store } from '@interlock/storage';
 import { toolCallToken } from '../packages/runtime/src/toolCalls';
+import { interlockTools } from '../packages/runtime/src/executors/interlockTools';
 import {
   exportWorkflows,
   importWorkflows,
@@ -337,6 +338,25 @@ it('accepts the tool-only credential for tool calls and nothing else', async () 
     e.callTool({ ...call, arguments: { target: 'all' } }),
   ).rejects.toThrow();
   expect(toolCallToken(next)).not.toBe(tool);
+});
+
+it("calls a workflow tool through a managed session's Interlock tool, within the call limits", async () => {
+  const { e, workId } = claimed(definition({}, { maxCallsPerAttempt: 1 }));
+  const work = e.store.get<WorkRequest>('work', workId)!;
+  const tools = interlockTools(e, work, 'standard')!;
+  expect(tools.tools.map((t) => t.name)).toEqual(['call_workflow_tool']);
+  const call = (args: unknown) => tools.invoke('call_workflow_tool', args);
+  const done = await call({ name: 'run_checks', arguments: { target: 'all' } });
+  expect(JSON.parse(done.text)).toMatchObject({
+    status: 'completed',
+    output: { passed: true },
+  });
+  const refused = await call({
+    name: 'run_checks',
+    arguments: { target: 'all' },
+  });
+  expect(refused.isError).toBe(true);
+  expect(refused.text).toMatch(/limit of 1 calls per claim attempt/);
 });
 
 it('cancels a running tool call when the Agent submits', async () => {

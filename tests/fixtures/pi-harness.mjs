@@ -9,12 +9,14 @@ if (process.argv.includes('--version')) {
 const flag = (name) => process.argv[process.argv.indexOf(name) + 1];
 const send = (value) => process.stdout.write(JSON.stringify(value) + '\n');
 const commands = [],
+  tools = [],
   handlers = {},
   answers = new Map();
 if (process.argv.includes('--extension')) {
   const extension = await import(pathToFileURL(flag('--extension')).href);
   extension.default({
     registerCommand: (name) => commands.push({ name, source: 'extension' }),
+    registerTool: (tool) => tools.push(tool),
     on: (name, handler) => {
       handlers[name] = handler;
     },
@@ -91,6 +93,60 @@ async function run(message) {
         toolCallId: 'checks',
         args: { command: 'pnpm test' },
       });
+      return;
+    }
+    if (message.message.includes('INTERLOCK_TOOLS')) {
+      // Call Interlock's registered tool the way Pi would: gate, then execute.
+      const own = tools.find((tool) => tool.name === 'save_memory_note');
+      const args = { content: 'Fixture note' };
+      if (
+        !own ||
+        (await handlers.tool_call(
+          { toolName: own.name, input: args },
+          { hasUI: false },
+        ))
+      )
+        throw Error('Interlock tool missing or gated');
+      const output = await own.execute('own', args, undefined, undefined, {
+        hasUI: true,
+        ui: {
+          editor: (title, prefill) =>
+            new Promise((resolve) => {
+              answers.set('own', (answer) => resolve(answer.value));
+              send({
+                type: 'extension_ui_request',
+                id: 'own',
+                method: 'editor',
+                title,
+                prefill,
+              });
+            }),
+        },
+      });
+      send({
+        type: 'message_end',
+        message: {
+          role: 'assistant',
+          stopReason: 'stop',
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                result: {
+                  ok: true,
+                  tool: output.content[0].text,
+                  leak:
+                    'INTERLOCK_TOOL_TOKEN' in process.env ||
+                    Object.values(process.env).some((v) =>
+                      v?.includes('claim-token'),
+                    ),
+                },
+              }),
+            },
+          ],
+        },
+      });
+      send({ type: 'agent_settled', aborted: false });
       return;
     }
     const blocked = await handlers.tool_call(

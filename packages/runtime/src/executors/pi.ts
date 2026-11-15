@@ -23,16 +23,50 @@ import {
   JsonLinesProcess,
 } from './process.js';
 import { piAction } from './permissionPolicy.js';
+import type {
+  InterlockToolDefinition,
+  InterlockTools,
+} from './interlockTools.js';
 
-/** Loaded explicitly by Pi; no package imports or checkout-relative assets. */
+/**
+ * Loaded explicitly by Pi; no package imports or checkout-relative assets.
+ * With `tools`, it also registers Interlock's tools. Each call travels to the
+ * host as an editor dialog titled with the private `tools.channel`, so it
+ * needs no network and the session receives no credential.
+ */
 export function piPermissions(
   mode: ExecutorProfile['permissions'],
   command: string,
+  tools?: { channel: string; tools: InterlockToolDefinition[] },
 ) {
+  const own = tools?.tools.map((t) => t.name) ?? [];
   return `export default function (pi) {
     pi.registerCommand(${JSON.stringify(command)}, { description: 'Interlock permission bridge', handler: async () => {} });
+    for (const tool of ${JSON.stringify(
+      tools?.tools.map(({ name, description, inputSchema }) => ({
+        name,
+        description,
+        inputSchema,
+      })) ?? [],
+    )}) {
+      pi.registerTool({
+        name: tool.name,
+        label: tool.name,
+        description: tool.description,
+        parameters: tool.inputSchema,
+        async execute(id, params, signal, onUpdate, ctx) {
+          const answer = await ctx.ui.editor(${JSON.stringify(tools?.channel ?? '')} + ':' + tool.name, JSON.stringify(params ?? {}));
+          if (answer === undefined) throw new Error('Interlock did not answer this tool call');
+          const result = JSON.parse(answer);
+          if (result.isError) throw new Error(result.text);
+          return { content: [{ type: 'text', text: result.text }], details: undefined };
+        },
+      });
+    }
     pi.on('tool_call', async (event, ctx) => {
       if (['read', 'grep', 'find', 'ls'].includes(event.toolName)) return;
+      // Interlock's own tools write to Interlock, not the workspace.
+      if (${JSON.stringify(own)}.includes(event.toolName)) return;
       const mode = ${JSON.stringify(mode)};
       if (mode === 'read-only') return { block: true, reason: 'This Interlock profile is read-only' };
       if (mode === 'full-access') return;
@@ -110,8 +144,12 @@ export const piAdapter: HarnessAdapter = {
       await rpc.close();
     }
   },
+  recordsPrompt: true,
   async run(input: HarnessRun) {
     const directory = await mkdtemp(join(tmpdir(), 'interlock-pi-'));
+    const tools = input.interlockTools;
+    // Only the generated extension knows this; it is never a credential.
+    const channel = `interlock-tools-${randomUUID()}`;
     let rpc: JsonLinesProcess | undefined;
     let taskStarted = false;
     const abort = () => {
@@ -124,7 +162,11 @@ export const piAdapter: HarnessAdapter = {
       const bridge = `interlock-${randomUUID()}`;
       await writeFile(
         extension,
-        piPermissions(input.profile.permissions, bridge),
+        piPermissions(
+          input.profile.permissions,
+          bridge,
+          tools ? { channel, tools: tools.tools } : undefined,
+        ),
         { mode: 0o600 },
       );
       if (input.signal.aborted) throw input.signal.reason;
@@ -215,9 +257,10 @@ export const piAdapter: HarnessAdapter = {
         if (event.type === 'tool_execution_start')
           input.onProgress(`Using ${String(event.toolName).slice(0, 160)}`);
         if (event.type === 'extension_ui_request') {
-          void answerUi(input, rpc!, event, bridge).catch((error) =>
-            fail(error),
-          );
+          void answerUi(input, rpc!, event, bridge, {
+            channel,
+            tools,
+          }).catch((error) => fail(error));
         }
       };
       const commands = await rpc.request('get_commands', {});
@@ -266,12 +309,21 @@ export const piAdapter: HarnessAdapter = {
       )
         throw new Error('Pi did not select the requested model');
       input.onSession(sessionId, modelId(state.model));
-      const prompt = await rpc.request('prompt', {
-        message: [
-          assignmentPrompt(input.work),
-          `Return only JSON, without Markdown fences. Result envelope schema:\n${JSON.stringify(resultEnvelope(input.work))}`,
-        ].join('\n\n'),
-      });
+      const message = [
+        assignmentPrompt(
+          input.work,
+          undefined,
+          tools?.tools.map((t) => t.name),
+        ),
+        `Return only JSON, without Markdown fences. Result envelope schema:\n${JSON.stringify(resultEnvelope(input.work))}`,
+      ].join('\n\n');
+      input.onTranscript?.({ kind: 'user', text: message });
+      if (tools)
+        input.onInterlockTools?.({
+          state: 'attached',
+          tools: tools.tools.map((t) => t.name),
+        });
+      const prompt = await rpc.request('prompt', { message });
       if (prompt?.disposition !== 'started')
         throw new HarnessResultError('Pi did not start the assignment prompt');
       input.onMessageChannel?.(async (message) => {
@@ -342,12 +394,37 @@ async function answerUi(
   rpc: JsonLinesProcess,
   event: any,
   bridge: string,
+  own: { channel: string; tools?: InterlockTools },
 ) {
   const respond = (value: object) => {
     if (!input.signal.aborted)
       rpc.send({ type: 'extension_ui_response', id: event.id, ...value });
   };
-  if (event.method === 'confirm') {
+  const dialog = event as {
+    method?: string;
+    title?: unknown;
+    prefill?: unknown;
+  };
+  const name =
+    dialog.method === 'editor' && typeof dialog.title === 'string'
+      ? dialog.title
+      : '';
+  if (own.tools && name.startsWith(`${own.channel}:`)) {
+    let args: unknown;
+    try {
+      args = JSON.parse(
+        typeof dialog.prefill === 'string' ? dialog.prefill : '{}',
+      );
+    } catch {
+      args = undefined;
+    }
+    const result = await own.tools.invoke(
+      name.slice(own.channel.length + 1),
+      args,
+      input.signal,
+    );
+    respond({ value: JSON.stringify(result) });
+  } else if (event.method === 'confirm') {
     // The bridge names the tool; other extensions' confirmations stay unjudged.
     const title = String(event.title ?? 'Pi requests approval');
     const tool = title.startsWith(`${bridge}:`)

@@ -28,6 +28,15 @@ let waiting = false,
   model = 'test-model';
 let awaitingGuidance = false;
 let encodedResult = false;
+// Interlock tool results and whether a credential reached this process.
+const extra = {};
+const leak = () =>
+  'INTERLOCK_TOOL_TOKEN' in process.env ||
+  Object.values(process.env).some((v) => v?.includes('claim-token'));
+const ownCall = {
+  name: 'save_memory_note',
+  arguments: { content: 'Fixture note' },
+};
 const end = (allowed) => {
   if (model === 'wait') return;
   if (model === 'model-refusal' || model === 'late-model-refusal') {
@@ -74,7 +83,7 @@ const end = (allowed) => {
     }
     return;
   }
-  const result = { result: { ok: allowed } };
+  const result = { result: { ok: allowed, ...extra } };
   if (codex && encodedResult) {
     result.result = JSON.stringify(result.result);
     if (model === 'schema-fallback') result.result += ' take';
@@ -428,6 +437,21 @@ for await (const line of createInterface({ input: process.stdin })) {
         end(false);
         continue;
       }
+      if (model === 'interlock-tools') {
+        // The CLI asks the host first, then calls the in-process MCP server.
+        extra.leak = leak();
+        send({
+          type: 'control_request',
+          request_id: 'own-permission',
+          request: {
+            subtype: 'can_use_tool',
+            tool_name: `mcp__interlock_assignment__${ownCall.name}`,
+            input: ownCall.arguments,
+            tool_use_id: 'own',
+          },
+        });
+        continue;
+      }
       if (model.startsWith('permissions-')) {
         const mode = model.slice('permissions-'.length);
         const expected =
@@ -462,6 +486,45 @@ for await (const line of createInterface({ input: process.stdin })) {
         },
       });
       waiting = true;
+    }
+    const mcp = (id, body) =>
+      send({
+        type: 'control_request',
+        request_id: id,
+        request: {
+          subtype: 'mcp_message',
+          server_name: 'interlock_assignment',
+          message: { jsonrpc: '2.0', ...body },
+        },
+      });
+    if (
+      message.type === 'control_response' &&
+      message.response.request_id === 'own-permission'
+    ) {
+      if (message.response.response?.behavior !== 'allow')
+        throw Error('Interlock tool was not allowed');
+      mcp('own-init', {
+        id: 1,
+        method: 'initialize',
+        params: {
+          protocolVersion: '2025-06-18',
+          capabilities: {},
+          clientInfo: { name: 'fixture', version: '1' },
+        },
+      });
+    }
+    if (
+      message.type === 'control_response' &&
+      message.response.request_id === 'own-init'
+    )
+      mcp('own-call', { id: 2, method: 'tools/call', params: ownCall });
+    if (
+      message.type === 'control_response' &&
+      message.response.request_id === 'own-call'
+    ) {
+      const reply = message.response.response.mcp_response.result;
+      extra.tool = reply.content[0].text;
+      end(!reply.isError);
     }
     if (
       message.type === 'control_response' &&

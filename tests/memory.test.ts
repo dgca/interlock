@@ -10,6 +10,7 @@ import {
   type WorkflowDefinition,
 } from '@interlock/core';
 import { batchDefinition } from './fixtures/batch';
+import { interlockTools } from '../packages/runtime/src/executors/interlockTools';
 
 const engines: Engine[] = [];
 const worker = {
@@ -353,4 +354,36 @@ it('isolates comparison trial writes from real memory and shares one capture acr
   expect(notes(engine, workflowId).map((n) => n.content)).toEqual([
     'Shared fact',
   ]);
+});
+
+it('gives a managed session a write-only note tool bound to its claim attempt', async () => {
+  const engine = setup();
+  const off = publish(engine, blankDefinition(), false);
+  const plain = claimNext(engine, engine.start(off, null).run.id);
+  // No memory and no workflow tools: nothing to attach.
+  expect(interlockTools(engine, plain, 'standard')).toBeUndefined();
+
+  const workflowId = publish(engine, blankDefinition());
+  const claim = claimNext(engine, engine.start(workflowId, null).run.id);
+  expect(interlockTools(engine, claim, 'read-only')).toBeUndefined();
+  const tools = interlockTools(engine, claim, 'full-access')!;
+  expect(tools.tools.map((t) => t.name)).toEqual(['save_memory_note']);
+  const saved = await tools.invoke('save_memory_note', { content: 'A fact' });
+  expect(JSON.parse(saved.text)).toMatchObject({ status: 'pending' });
+  expect(notes(engine, workflowId)).toMatchObject([
+    { content: 'A fact', status: 'pending', author: 'agent' },
+  ]);
+  // The session cannot pick another action, claim or workflow.
+  for (const args of [
+    { content: 'B', action: 'read' },
+    { content: 'B', workId: plain.id, token: plain.token },
+  ])
+    expect(await tools.invoke('save_memory_note', args)).toMatchObject({
+      isError: true,
+    });
+  engine.reportFailure(claim.id, claim.token, 'retry');
+  expect(
+    await tools.invoke('save_memory_note', { content: 'Late' }),
+  ).toMatchObject({ isError: true });
+  expect(notes(engine, workflowId)).toHaveLength(1);
 });

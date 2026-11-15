@@ -38,8 +38,8 @@ it('executes fresh managed work in its existing isolated session while retaining
   expect(prompt).toContain('Use the supplied command only.');
 });
 
-it('gives managed sessions the tool listing and a tool-only credential', () => {
-  const prompt = assignmentPrompt({
+it('describes Interlock tools to a managed session only when attached, without a credential', () => {
+  const work = {
     id: 'work',
     runId: 'run',
     token: 'claim-token',
@@ -56,11 +56,19 @@ it('gives managed sessions the tool listing and a tool-only credential', () => {
         maxCallsPerExecution: 30,
       },
     ],
-  } as unknown as WorkRequest);
-  // The prompt carries only the tool-only credential, never the claim token.
-  expect(prompt).toContain(
-    `workId work, token ${toolCallToken('claim-token')}`,
-  );
-  expect(prompt).not.toContain('claim-token');
-  expect(prompt).toContain('"name":"run_checks"');
+  } as unknown as WorkRequest;
+  const attached = assignmentPrompt(work, undefined, [
+    'save_memory_note',
+    'call_workflow_tool',
+  ]);
+  expect(attached).toContain('"name":"run_checks"');
+  expect(attached).toContain('call_workflow_tool tool');
+  expect(attached).toContain('save_memory_note tool');
+  const bare = assignmentPrompt(work);
+  for (const text of ['run_checks', 'call_', 'save_memory_note'])
+    expect(bare).not.toContain(text);
+  for (const prompt of [attached, bare]) {
+    expect(prompt).not.toContain('claim-token');
+    expect(prompt).not.toContain(toolCallToken('claim-token'));
+  }
 });

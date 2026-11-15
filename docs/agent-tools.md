@@ -80,14 +80,16 @@ If `status` is still `running` or `waiting`, call again with the returned `callI
 
 ### Managed sessions
 
-Managed sessions (Claude Code, Codex and others that Interlock launches) never receive the claim token. Instead, each claim attempt gets a tool-only credential:
+Claude Code and Pi sessions that Interlock launches get their own `call_workflow_tool` tool instead of `call_work_tool`. It takes `name`, `arguments` and an optional `callId`, and returns the same response. Interlock handles each call against the claim it holds for the session, so the session needs no Interlock MCP server and never sees a claim token or other credential. Calls work without network access from the session.
 
-- `call_work_tool` accepts it as `token`. Submit, fail, renew and hold reject it.
-- It stops working when the attempt ends.
-- Interlock sets `INTERLOCK_WORK_ID` and `INTERLOCK_TOOL_TOKEN` in the Claude Code and Codex session environment. The stdio MCP bridge (`interlock mcp`) fills in `workId` and `token` from them when a call omits them.
-- Sessions connected over HTTP MCP cannot read that environment. Their assignment prompt gives the work ID and the credential, and Interlock redacts the credential from transcripts.
+- The prompt lists the tools and explains `call_workflow_tool` only when the tool is attached.
+- Sessions at **Read only** get no tool, and their prompt does not list the tools.
+- Under **Standard** and **Full access** the tool runs without an approval prompt. The tool step itself still waits for Script approval, resources and pause holds.
+- The call limits apply as for `call_work_tool`.
 
-The harness needs the Interlock MCP server configured, as in [Connect a harness](https://github.com/dgca/interlock/blob/main/docs/connect-harness.md). Without it, a managed session cannot call tools.
+Codex sessions do not get these tools yet; their prompt does not list the tools. Custom integrations receive the claim token in `$INTERLOCK_CLAIM_TOKEN` and can call `call_work_tool` over MCP with it.
+
+Earlier releases gave managed sessions a tool-only credential in their prompt and in `INTERLOCK_WORK_ID` and `INTERLOCK_TOOL_TOKEN`. Built-in harnesses no longer receive it. `call_work_tool` still accepts it, and the stdio MCP bridge still fills in `workId` and `token` from those variables when a call omits them.
 
 ## How a call runs
 

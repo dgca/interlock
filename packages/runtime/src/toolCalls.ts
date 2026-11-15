@@ -32,16 +32,6 @@ export const toolCallToken = (claimToken: string) =>
     .update(`interlock-tool-call:${claimToken}`)
     .digest('base64url');
 
-/** Environment for managed sessions; the stdio MCP bridge fills these in. */
-export function toolCallEnvironment(work: WorkRequest): Record<string, string> {
-  return work.tools?.length && work.token
-    ? {
-        INTERLOCK_WORK_ID: work.id,
-        INTERLOCK_TOOL_TOKEN: toolCallToken(work.token),
-      }
-    : {};
-}
-
 interface ToolCallHost {
   /** Public engine reads and change notifications. */
   engine: {

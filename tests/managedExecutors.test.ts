@@ -1845,3 +1845,41 @@ it.each(['model', 'effort'] as const)(
     expect(run).toHaveBeenCalledTimes(1);
   },
 );
+
+it('hands managed sessions Interlock tools for their claim, except under Read only', async () => {
+  for (const permissions of ['standard', 'read-only'] as const) {
+    const e = create();
+    profile(e, 'pi', { permissions });
+    let tools: HarnessRun['interlockTools'];
+    e.executors.start([
+      adapter('pi', async (i) => {
+        tools = i.interlockTools;
+        if (tools) {
+          i.onInterlockTools?.({
+            state: 'attached',
+            tools: ['save_memory_note'],
+          });
+          await tools.invoke('save_memory_note', { content: 'Managed fact' });
+        }
+        return { output: i.work.input };
+      }),
+    ]);
+    const w = workflow(e, 'pi');
+    e.memory.manage({ action: 'configure', workflowId: w.id, enabled: true });
+    const run = start(e, w.id, { value: 1 });
+    await settled(e, run.id);
+    const record = e.executors.inspect(e.store.work()[0].id).items[0];
+    if (permissions === 'read-only') {
+      expect(tools).toBeUndefined();
+      expect(e.memory.list(w.id).notes).toEqual([]);
+    } else {
+      expect(record.interlockTools).toEqual({
+        state: 'attached',
+        tools: ['save_memory_note'],
+      });
+      expect(e.memory.list(w.id).notes).toMatchObject([
+        { content: 'Managed fact', status: 'pending' },
+      ]);
+    }
+  }
+});
