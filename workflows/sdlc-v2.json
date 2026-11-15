@@ -1030,7 +1030,7 @@
             "stage": "Delivery",
             "stageId": "delivery",
             "language": "javascript",
-            "command": "const { execFileSync } = await import('node:child_process');\nconst git = (...args) => execFileSync('git', args, { cwd: input.root.repoPath, encoding: 'utf8' }).trim();\nif (input.review.verdict !== 'pass') throw new Error('Delivery requires a passing review');\nconst head = git('rev-parse', 'HEAD');\nif (head !== input.review.reviewedCommit) throw new Error('The checkout is at ' + head + ' but review passed at ' + input.review.reviewedCommit + '. Review the new commit before delivery.');\nreturn { route: input.root.createPr ? 'pr' : 'local', branch: git('rev-parse', '--abbrev-ref', 'HEAD'), reviewedCommit: head };\n",
+            "command": "const { execFileSync } = await import('node:child_process');\nconst git = (...args) => execFileSync('git', args, { cwd: input.root.repoPath, encoding: 'utf8' }).trim();\nif (input.review.verdict !== 'pass') throw new Error('Delivery requires a passing review');\nconst head = git('rev-parse', 'HEAD');\nif (head !== input.review.reviewedCommit) throw new Error('The checkout is at ' + head + ' but review passed at ' + input.review.reviewedCommit + '. Review the new commit before delivery.');\n// A pull request publishes commits only, so tracked files must match the reviewed commit.\nif (input.root.createPr && git('status', '--porcelain', '--untracked-files=no') !== '') throw new Error(\n  'The checkout has uncommitted changes to tracked files after review. Commit them for review or discard them before delivery.');\nreturn { route: input.root.createPr ? 'pr' : 'local', branch: git('rev-parse', '--abbrev-ref', 'HEAD'), reviewedCommit: head };\n",
             "timeoutMs": 10000,
             "inputBindings": {
               "root": {
@@ -1063,27 +1063,59 @@
             }
           },
           {
-            "id": "openPr",
+            "id": "describePr",
             "kind": "agent",
-            "label": "Open the pull request",
+            "label": "Write the pull request",
             "inputSchema": {},
             "outputSchema": {
               "type": "object",
               "properties": {
-                "prUrl": {
-                  "type": ["string", "null"]
-                },
-                "summary": {
+                "title": {
                   "type": "string",
-                  "minLength": 1
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "description": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 60000
+                },
+                "draft": {
+                  "type": "boolean"
+                },
+                "labels": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "maxItems": 10
+                },
+                "reviewers": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "maxItems": 10
+                },
+                "baseBranch": {
+                  "type": ["string", "null"]
                 }
               },
-              "required": ["prUrl", "summary"],
+              "required": [
+                "title",
+                "description",
+                "draft",
+                "labels",
+                "reviewers",
+                "baseBranch"
+              ],
               "additionalProperties": false
             },
             "stage": "Delivery",
             "stageId": "delivery",
-            "prompt": "Open or update a pull request for the reviewed change. root.createPr is true and the change passed independent review at review.reviewedCommit on branch deliver.branch.\n\nPush that branch and create the pull request with the repository's own tooling and template, following its instructions. Base it on the branch root.baseCommit came from unless the repository says otherwise. In the description: what changed and why, the acceptance criteria and how each was verified, the checks that ran, any minor findings from review.findings left open, anything review.limitations marks \"For delivery:\", and a link to root.issue when present. Keep to the template's own sections: put findings and notes where the template has room for them and do not add sections it lacks. Attach or link UI evidence saved under root.taskDir when the change is visible.\n\nDo not change the reviewed code. If the branch must change to open the pull request, stop and report it. If no remote or credentials are available, do not invent a URL: return prUrl null and say what blocked delivery. Do not merge.\n\nReturn prUrl and summary.",
+            "prompt": "Write the pull request for the reviewed change. root.createPr is true and the change passed independent review at review.reviewedCommit on branch deliver.branch.\n\nInterlock pushes the branch and opens the pull request after you return. Do not push, fetch, run gh or run anything else that needs the network, and do not wait for CI. Do not change the reviewed code, commit or switch branches.\n\nRead the repository's pull request template and contributing instructions. In the description: what changed and why, the acceptance criteria and how each was verified, the checks that ran, any minor findings from review.findings left open, anything review.limitations marks \"For delivery:\", and a link to root.issue when present. Keep to the template's own sections: put findings and notes where the template has room for them and do not add sections it lacks. Interlock removes root.taskDir with the run's worktree, so do not point reviewers at files there or say evidence is kept there; describe what the evidence showed in the description itself.\n\nReturn:\n- title: the pull request title, following the repository's conventions.\n- description: the whole Markdown body.\n- draft: true only when the repository's instructions say to open this change as a draft.\n- labels and reviewers: names the repository's instructions ask for, or empty lists. Each must already exist on the host.\n- baseBranch: the branch root.baseCommit came from when the repository does not name another, or null for the repository's default branch.",
             "context": {
               "mode": "current",
               "instructions": "Inputs: root is this run's resolved setup (repoPath, request, taskDir, size, issue, baseCommit, reviewPolicy, createPr, commitArtifacts). previous is the result of the step that routed here.\nWork only inside root.repoPath. Read the repository's own instructions (for example AGENTS.md, CLAUDE.md, README and contributing or design docs) and follow them; where they conflict with this workflow's defaults, they win.\nPreserve unrelated files and changes. Settle routine technical questions yourself from the repository and record the assumption. Raise a decision for a person only when it changes scope, public behavior, compatibility, consequential architecture or authorization and nothing already settles it.\nPlanning artifacts live in root.taskDir. Do not commit them unless root.commitArtifacts is true or the repository's instructions require it. Put durable facts and decisions in the artifacts; keep workflow details such as root, previous and route values out of them.\nReport a real blocker with fail_work. Never invent a result.\nRun plain commands from the repository root: no heredocs, no $ variables or command substitution, no cd, no bash -c, no background jobs, and no files outside the repository such as /tmp; put notes and scratch files in the task folder. Use your file tools to read and edit files when you have them; from the shell, read with cat, head, tail, rg or git show rather than sed or awk. The workflow's permission policy can allow commands written this way without asking a person.",
@@ -1111,6 +1143,159 @@
             "position": {
               "x": 4240,
               "y": 380
+            }
+          },
+          {
+            "id": "publishPr",
+            "kind": "script",
+            "label": "Push and open the pull request",
+            "inputSchema": {},
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "route": {
+                  "type": "string",
+                  "enum": ["opened", "fallback", "blocked"]
+                },
+                "reason": {
+                  "type": ["string", "null"]
+                },
+                "prUrl": {
+                  "type": ["string", "null"]
+                },
+                "existing": {
+                  "type": "boolean"
+                },
+                "summary": {
+                  "type": "string"
+                }
+              },
+              "required": ["route", "reason", "prUrl", "existing", "summary"],
+              "additionalProperties": false
+            },
+            "stage": "Delivery",
+            "stageId": "delivery",
+            "language": "javascript",
+            "command": "const { execFileSync } = await import('node:child_process');\nconst { root, deliver, describe } = input;\nconst branch = deliver.branch;\n// Nothing may wait for a person: Git and gh fail instead of prompting.\nconst env = { ...process.env, GIT_TERMINAL_PROMPT: '0', GH_PROMPT_DISABLED: '1', GH_NO_UPDATE_NOTIFIER: '1' };\nconst run = (command, args, stdin = '') => {\n  try {\n    return { ok: true, out: execFileSync(command, args, { cwd: root.repoPath, env, input: stdin, encoding: 'utf8', timeout: 90000, stdio: 'pipe' }).trim() };\n  } catch (error) {\n    return { ok: false, missing: error.code === 'ENOENT', out: String(error.stderr || error.stdout || error.message).trim().slice(-600) };\n  }\n};\nconst git = (...args) => run('git', args);\nconst gh = (...args) => run('gh', args);\n// route: opened goes to the result; fallback hands delivery to the agent; blocked records delivery_blocked.\nconst done = (route, reason, prUrl = null, summary = '') => ({ route, reason, prUrl, existing: false, summary });\nconst fallback = (reason) => done('fallback', reason);\nconst blocked = (reason) => done('blocked', reason);\nconst openFor = () => {\n  const listed = gh('pr', 'list', '--head=' + branch, '--state=open', '--json=url', '--limit=1');\n  if (!listed.ok) return { error: listed.out };\n  try { return { url: JSON.parse(listed.out || '[]')[0]?.url ?? null }; } catch { return { error: 'unexpected output: ' + listed.out.slice(0, 200) }; }\n};\n\n// The describe step ran after the delivery check: confirm again what will be pushed.\nconst head = git('rev-parse', 'HEAD').out;\nif (head !== deliver.reviewedCommit) return blocked('The checkout moved to ' + head + ' after review passed at ' + deliver.reviewedCommit + '.');\nif (git('rev-parse', '--abbrev-ref', 'HEAD').out !== branch || branch === 'HEAD') return blocked('The checkout is no longer on branch ' + branch + '.');\nif (git('status', '--porcelain', '--untracked-files=no').out !== '') return blocked('The checkout has uncommitted changes to tracked files.');\n\nif (gh('--version').missing) return fallback('gh is not installed, or not on the PATH Interlock runs Scripts with.');\n// Push to the branch's own remote, else origin, else the only remote.\nconst remotes = git('remote').out.split('\\n').filter(Boolean);\nconst own = git('config', '--get', 'branch.' + branch + '.remote').out;\nconst remote = remotes.includes(own) ? own : remotes.includes('origin') ? 'origin' : remotes.length === 1 ? remotes[0] : null;\nif (!remote) return fallback(remotes.length ? 'The repository has several Git remotes and none is origin.' : 'The repository has no Git remote.');\n// gh takes the host from the remote; a local path or file URL has none.\nconst host = /^(?:[a-z][a-z0-9+.-]*:\\/\\/)?(?:[^@/]+@)?([a-z0-9.-]*[a-z][a-z0-9.-]*)(?::\\d+)?[:/]/i.exec(git('remote', 'get-url', remote).out)?.[1]?.toLowerCase();\nif (!host) return fallback('The remote ' + remote + ' is not a GitHub repository.');\nif (!gh('auth', 'status', '--hostname=' + host).ok) return fallback(host === 'github.com' || host.endsWith('.ghe.com')\n  ? 'gh is not signed in to ' + host + '.'\n  : 'The remote ' + remote + ' is on ' + host + ', which is neither github.com nor a GitHub Enterprise host gh is signed in to.');\n\nconst push = git('push', '--set-upstream', remote, branch);\nif (!push.ok) return fallback('git push to ' + remote + ' was rejected: ' + push.out);\nconst existing = openFor();\nif (existing.error) return blocked('gh could not look up pull requests for ' + branch + ': ' + existing.error);\nif (existing.url) return { ...done('opened', null, existing.url, 'Pushed ' + branch + ' to its open pull request ' + existing.url + '.'), existing: true };\n\nconst args = ['pr', 'create', '--head=' + branch, '--title=' + describe.title, '--body-file=-'];\nif (describe.baseBranch) args.push('--base=' + describe.baseBranch);\nif (describe.draft) args.push('--draft');\nfor (const label of describe.labels) args.push('--label=' + label);\nfor (const reviewer of describe.reviewers) args.push('--reviewer=' + reviewer);\nconst created = run('gh', args, describe.description);\nconst url = created.ok ? created.out.split('\\n').map((line) => line.trim()).reverse().find((line) => /^https?:\\/\\/\\S+$/.test(line)) : undefined;\nif (url) return done('opened', null, url, 'Pushed ' + branch + ' and opened ' + url + '.');\n// gh can fail after it opened the pull request, for example on an unknown label or reviewer.\nconst late = openFor().url;\nif (late) return done('opened', 'gh reported an error after opening the pull request: ' + created.out, late, 'Pushed ' + branch + ' and opened ' + late + '.');\nreturn blocked('gh pr create failed: ' + created.out);\n",
+            "environmentMode": "minimal",
+            "environmentPassthrough": [
+              "USER",
+              "TMPDIR",
+              "XDG_CONFIG_HOME",
+              "SSH_AUTH_SOCK",
+              "SSH_ASKPASS",
+              "GIT_SSH",
+              "GIT_SSH_COMMAND",
+              "GIT_ASKPASS",
+              "GIT_SSL_CAINFO",
+              "SSL_CERT_FILE",
+              "SSL_CERT_DIR",
+              "GH_TOKEN",
+              "GITHUB_TOKEN",
+              "GH_ENTERPRISE_TOKEN",
+              "GITHUB_ENTERPRISE_TOKEN",
+              "GH_HOST",
+              "GH_CONFIG_DIR",
+              "HTTPS_PROXY",
+              "HTTP_PROXY",
+              "ALL_PROXY",
+              "NO_PROXY",
+              "https_proxy",
+              "http_proxy",
+              "all_proxy",
+              "no_proxy"
+            ],
+            "timeoutMs": 300000,
+            "inputBindings": {
+              "root": {
+                "source": "node",
+                "nodeId": "setup",
+                "path": ""
+              },
+              "deliver": {
+                "source": "node",
+                "nodeId": "deliverCheck",
+                "path": ""
+              },
+              "describe": {
+                "source": "input",
+                "path": ""
+              }
+            },
+            "routing": {
+              "path": "route",
+              "cases": [
+                {
+                  "port": "fallback",
+                  "equals": "fallback"
+                }
+              ],
+              "default": "done"
+            },
+            "position": {
+              "x": 4540,
+              "y": 380
+            }
+          },
+          {
+            "id": "openPr",
+            "kind": "agent",
+            "label": "Open the pull request (fallback)",
+            "inputSchema": {},
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "prUrl": {
+                  "type": ["string", "null"]
+                },
+                "summary": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": ["prUrl", "summary"],
+              "additionalProperties": false
+            },
+            "stage": "Delivery",
+            "stageId": "delivery",
+            "prompt": "Interlock could not push the branch and open the pull request itself: publish.reason. Do it with the repository's own tooling. root.createPr is true and the change passed independent review at review.reviewedCommit on branch deliver.branch.\n\nPush that branch and open the pull request with describe.title and describe.description, and with describe's draft, labels, reviewers and baseBranch when set; without a baseBranch, use the repository's default branch. If an open pull request for the branch already exists, push to it and return its URL. Return as soon as the pull request is open: do not wait for CI, poll checks or rewrite the description.\n\nDo not change the reviewed code. If the branch must change to open the pull request, stop and report it. If no remote or credentials are available, do not invent a URL: return prUrl null and say what blocked delivery. Do not merge.\n\nReturn prUrl and summary.",
+            "context": {
+              "mode": "current",
+              "instructions": "Inputs: root is this run's resolved setup (repoPath, request, taskDir, size, issue, baseCommit, reviewPolicy, createPr, commitArtifacts). previous is the result of the step that routed here.\nWork only inside root.repoPath. Read the repository's own instructions (for example AGENTS.md, CLAUDE.md, README and contributing or design docs) and follow them; where they conflict with this workflow's defaults, they win.\nPreserve unrelated files and changes. Settle routine technical questions yourself from the repository and record the assumption. Raise a decision for a person only when it changes scope, public behavior, compatibility, consequential architecture or authorization and nothing already settles it.\nPlanning artifacts live in root.taskDir. Do not commit them unless root.commitArtifacts is true or the repository's instructions require it. Put durable facts and decisions in the artifacts; keep workflow details such as root, previous and route values out of them.\nReport a real blocker with fail_work. Never invent a result.\nRun plain commands from the repository root: no heredocs, no $ variables or command substitution, no cd, no bash -c, no background jobs, and no files outside the repository such as /tmp; put notes and scratch files in the task folder. Use your file tools to read and edit files when you have them; from the shell, read with cat, head, tail, rg or git show rather than sed or awk. The workflow's permission policy can allow commands written this way without asking a person.",
+              "tools": [],
+              "skills": [],
+              "tier": "fast"
+            },
+            "maxAttempts": 2,
+            "inputBindings": {
+              "root": {
+                "source": "node",
+                "nodeId": "setup",
+                "path": ""
+              },
+              "review": {
+                "source": "node",
+                "nodeId": "changeReview",
+                "path": ""
+              },
+              "deliver": {
+                "source": "node",
+                "nodeId": "deliverCheck",
+                "path": ""
+              },
+              "describe": {
+                "source": "node",
+                "nodeId": "describePr",
+                "path": ""
+              },
+              "publish": {
+                "source": "input",
+                "path": ""
+              }
+            },
+            "position": {
+              "x": 4840,
+              "y": 600
             }
           },
           {
@@ -1171,7 +1356,7 @@
             "stage": "Delivery",
             "stageId": "delivery",
             "language": "javascript",
-            "command": "const { root, review, deliver, pr } = input;\nconst minor = review.findings.map((f) => 'Minor finding left open: [' + f.id + '] ' + f.location + ': ' + f.details);\nconst unchecked = review.checksPassed === null ? ['No check commands were run by Interlock for the final review.'] : [];\nconst blocked = root.createPr && !pr?.prUrl;\nreturn { outcome: blocked ? 'delivery_blocked' : pr?.prUrl ? 'pr_created' : 'local_complete', verification: review.checks.some((c) => c.status === 'not_run') ? 'incomplete' : 'passed',\n  taskDir: root.taskDir, branch: deliver.branch, reviewedCommit: deliver.reviewedCommit, prUrl: pr?.prUrl ?? null,\n  summary: (pr?.summary ?? review.summary),\n  limitations: [...(blocked ? ['A pull request was requested but not opened. ' + (pr?.summary ?? '')] : []), ...unchecked, ...minor,\n    ...(pr?.prUrl ? [\"The pull request's own CI had not finished when this workflow ended.\"] : []),\n    ...review.limitations.map((l) => 'Review note, written before delivery: ' + l)] };\n",
+            "command": "const { root, review, deliver, pr, publish } = input;\nconst minor = review.findings.map((f) => 'Minor finding left open: [' + f.id + '] ' + f.location + ': ' + f.details);\nconst unchecked = review.checksPassed === null ? ['No check commands were run by Interlock for the final review.'] : [];\n// The Script opens the pull request; the agent only when the Script handed delivery to it.\nconst prUrl = publish?.prUrl ?? pr?.prUrl ?? null;\nconst blocked = root.createPr && !prUrl;\nconst fellBack = publish?.route === 'fallback';\nconst delivery = blocked\n  ? ['A pull request was requested but not opened. ' + (fellBack ? 'Interlock could not open it: ' + publish.reason + ' The delivery agent reported: ' + (pr?.summary ?? '') : publish?.reason ?? pr?.summary ?? '')]\n  : [...(fellBack ? ['Interlock could not open the pull request itself, so the delivery agent did: ' + publish.reason] : []),\n    ...(publish?.existing ? ['An open pull request already existed for ' + deliver.branch + '. Interlock pushed the reviewed commit to it and left its title and description unchanged.'] : []),\n    ...(publish?.route === 'opened' && publish.reason ? [publish.reason] : [])];\nreturn { outcome: blocked ? 'delivery_blocked' : prUrl ? 'pr_created' : 'local_complete', verification: review.checks.some((c) => c.status === 'not_run') ? 'incomplete' : 'passed',\n  taskDir: root.taskDir, branch: deliver.branch, reviewedCommit: deliver.reviewedCommit, prUrl,\n  summary: pr?.summary ?? (publish?.prUrl ? review.summary + ' ' + publish.summary : review.summary),\n  limitations: [...delivery, ...unchecked, ...minor,\n    ...(prUrl ? [\"The pull request's own CI had not finished when this workflow ended.\"] : []),\n    ...review.limitations.map((l) => 'Review note, written before delivery: ' + l)] };\n",
             "timeoutMs": 10000,
             "inputBindings": {
               "root": {
@@ -1194,10 +1379,16 @@
                 "nodeId": "openPr",
                 "path": "",
                 "sourceDefault": null
+              },
+              "publish": {
+                "source": "node",
+                "nodeId": "publishPr",
+                "path": "",
+                "sourceDefault": null
               }
             },
             "position": {
-              "x": 4540,
+              "x": 5140,
               "y": 380
             }
           },
@@ -1283,7 +1474,7 @@
               }
             },
             "position": {
-              "x": 4840,
+              "x": 5440,
               "y": 160
             }
           },
@@ -1394,7 +1585,7 @@
             "stage": "Delivery",
             "stageId": "delivery",
             "position": {
-              "x": 4840,
+              "x": 5440,
               "y": 380
             }
           },
@@ -1503,7 +1694,7 @@
               "additionalProperties": false
             },
             "position": {
-              "x": 5140,
+              "x": 5740,
               "y": 160
             }
           }
@@ -1648,10 +1839,28 @@
             "port": "local"
           },
           {
-            "id": "deliverCheck-pr-openPr",
+            "id": "deliverCheck-pr-describePr",
             "source": "deliverCheck",
-            "target": "openPr",
+            "target": "describePr",
             "port": "pr"
+          },
+          {
+            "id": "describePr-default-publishPr",
+            "source": "describePr",
+            "target": "publishPr",
+            "port": "default"
+          },
+          {
+            "id": "publishPr-done-result",
+            "source": "publishPr",
+            "target": "result",
+            "port": "done"
+          },
+          {
+            "id": "publishPr-fallback-openPr",
+            "source": "publishPr",
+            "target": "openPr",
+            "port": "fallback"
           },
           {
             "id": "openPr-default-result",

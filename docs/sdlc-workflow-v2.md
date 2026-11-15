@@ -8,7 +8,7 @@ Open **Workflows → Import → Starters**, select **SDLC workflow**, choose whe
 
 Each import publishes a new SDLC copy and its own copies of Plan review and Change review, owned by it and pinned to their version 1. Edit a helper and publish it, then update the SDLC step's pinned version to use your change. **Add another copy** creates another set of three. Each workflow keeps a permanent starter identity, so the picker finds your copy later; shipped template changes never overwrite it.
 
-The steps need a coding agent with file access, Git and the repository's tools: a [managed executor](managed-executors.md) or a [connected agent](connect-harness.md). The plan and change reviewers need fresh context: a new session or an isolated subagent. Pull requests need the repository's own tooling and credentials.
+The steps need a coding agent with file access, Git and the repository's tools: a [managed executor](managed-executors.md) or a [connected agent](connect-harness.md). The plan and change reviewers need fresh context: a new session or an isolated subagent. Pull requests need the [GitHub CLI](https://cli.github.com/) signed in, or an agent with the repository's own tooling and credentials. See [Open the pull request](#open-the-pull-request).
 
 To run it unattended, open the SDLC workflow's **Workflow settings**, choose a harness as **Default Agent executor**, and publish. Plan review and Change review set no executor of their own, so they use the SDLC workflow's harness; you do not need to set it on them or re-pin them.
 
@@ -47,7 +47,7 @@ To run it unattended, open the SDLC workflow's **Workflow settings**, choose a h
 
    Notes that only apply after delivery, such as the pull request description, are limitations starting with "For delivery:", not findings.
 
-6. **Delivery.** A Script confirms the checkout is still at the reviewed commit. With `createPr`, an agent pushes and opens the pull request; it does not wait for CI. The [pull request watcher](pr-watcher.md) can take over from there.
+6. **Delivery.** A Script confirms the checkout is still at the reviewed commit. With `createPr`, an agent writes the pull request's title and description, and a Script pushes the branch and opens it with `gh`. If the Script cannot, the agent opens it instead. Nothing waits for CI; the [pull request watcher](pr-watcher.md) can take over from there.
 
 ### Limits
 
@@ -73,6 +73,39 @@ Review rounds and question rounds share one checkpoint, **Continue past the limi
 | `branch`, `reviewedCommit` | Where the reviewed change is.                                                                                                               |
 | `prUrl`                    | The pull request, or `null`.                                                                                                                |
 | `limitations`              | Minor findings left open, missing checks, "The pull request's own CI had not finished when this workflow ended.", and the reviewer's notes. |
+
+## Open the pull request
+
+With `createPr: true`, delivery takes three steps after the reviewed commit is confirmed:
+
+1. **Write the pull request.** An agent reads the repository's pull request template and returns a title and description, and optionally draft, labels, reviewers and a base branch. It is told not to push, run `gh` or use the network.
+2. **Push and open the pull request.** A Script checks again that the checkout is at the reviewed commit with no uncommitted changes to tracked files. It pushes the branch and runs `gh pr create` in the checkout, so `gh` finds the repository from its Git remote, on github.com or a GitHub Enterprise host. If the branch already has an open pull request, the Script pushes to it and returns that one, leaving its title and description as they were.
+3. **Fallback.** When the Script cannot deliver, the agent opens the pull request as earlier versions did, and the result's `limitations` say why.
+
+The Script hands delivery to the agent in these cases:
+
+| Reason                   | How the Script tells                                                                                                          |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| `gh` is missing          | `gh` is not on the `PATH` Interlock runs Scripts with.                                                                        |
+| `gh` is not signed in    | `gh auth status --hostname HOST` fails for github.com or a `*.ghe.com` host.                                                  |
+| The remote is not GitHub | No remote, several remotes and none is `origin`, a local path, or a host other than github.com that `gh` is not signed in to. |
+| The push is rejected     | `git push` fails, for example a protected branch, a hook or missing push credentials.                                         |
+
+Any other failure, such as `gh pr create` itself failing, ends with `outcome: "delivery_blocked"` and the error in `limitations`. So does a checkout that moved or changed while the description was written.
+
+The Script pushes to the branch's own remote, else `origin`, else the only remote. It runs in the minimal [server environment](architecture.md#scripts-and-interruptions), plus the names Git and `gh` need:
+
+- `USER`, `TMPDIR`, `XDG_CONFIG_HOME`
+- SSH: `SSH_AUTH_SOCK`, `SSH_ASKPASS`, `GIT_SSH`, `GIT_SSH_COMMAND`, `GIT_ASKPASS`
+- Certificates: `GIT_SSL_CAINFO`, `SSL_CERT_FILE`, `SSL_CERT_DIR`
+- `gh`: `GH_TOKEN`, `GITHUB_TOKEN`, `GH_ENTERPRISE_TOKEN`, `GITHUB_ENTERPRISE_TOKEN`, `GH_HOST`, `GH_CONFIG_DIR`
+- Proxies: `HTTPS_PROXY`, `HTTP_PROXY`, `ALL_PROXY`, `NO_PROXY` and their lowercase forms
+
+Git and `gh` never prompt from this Script; a step that needs a password fails instead. Change the list in the Script's **Server environment** control.
+
+The Script is part of the starter, so like the starter's other Scripts it runs on its first run without approval. A copy imported from `workflows/sdlc-v2.json` as a file waits for [Script approval](reuse-work.md#approve-imported-scripts) first.
+
+The task folder is removed with the run's worktree, so the description does not point reviewers at files in it.
 
 ## Test your edits
 
@@ -110,7 +143,7 @@ The bundled starter's policies apply on its first run without an approval step. 
 | `git add *`, `git commit *`                                                                                                                                                        | Yes  | No                            | The builder commits its work for review. Reviewers do not commit. `git commit` runs the repository's commit hooks. If your hooks live in the tree (for example `core.hooksPath` set to `.husky`), an agent can edit them and they run on its next commit: that is code execution. Remove `git commit *` for such repositories, or accept it. |
 | `ls`, `pwd`, `cat *`, `head *`, `tail *`, `wc *`, `rg *`, `grep *`, `find *`                                                                                                       | Yes  | Yes                           | Reading and searching. Every path argument must stay inside the worktree. Interlock asks for `find -exec`, `-delete` and `-fprint`, and `rg --pre`.                                                                                                                                                                                          |
 
-None of the policies has a rule for package managers, test runners, `node`, `sed`, `awk` or `git push`: each can run arbitrary code (`pnpm test` runs whatever the repository's test script does, `sed` has an `e` command). `git grep` is also left out, because its `-O` option opens files with a program you name. When an agent runs a focused test, it asks.
+None of the policies has a rule for package managers, test runners, `node`, `sed`, `awk` or `git push`: each can run arbitrary code (`pnpm test` runs whatever the repository's test script does, `sed` has an `e` command). `git grep` is also left out, because its `-O` option opens files with a program you name. When an agent runs a focused test, it asks. No agent needs to push: a Script opens the pull request, and an agent pushes only when that Script falls back to it.
 
 The workflows avoid most of those requests by design:
 
@@ -181,5 +214,7 @@ A long run's `get_run` response can drop older executions above 64 KiB; pass `fu
 A run that reaches its budget waits and appears in **Runs → Needs attention** as **Run budget reached**. Record that as the arm's outcome rather than raising the limit.
 
 ## Existing libraries
+
+Copies of this starter added before Script delivery keep their own delivery: an agent pushes and opens the pull request, and its description may still point reviewers at the task folder. Upgrading Interlock does not change them. To use Script delivery, choose **Add another copy** and move your edits to it.
 
 Adding this starter never changes copies of the original SDLC workflow. The picker does not count an original copy as a copy of this starter, so it offers **Add to library**; a copy added earlier as SDLC workflow v2 shows **Open workflow**. See [starter workflows](starter-workflows.md).

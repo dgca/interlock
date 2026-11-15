@@ -3,7 +3,9 @@ import { setImmediate as tick } from 'node:timers/promises';
 import { execFileSync } from 'node:child_process';
 import {
   existsSync,
+  mkdirSync,
   mkdtempSync,
+  readFileSync,
   realpathSync,
   rmSync,
   writeFileSync,
@@ -367,4 +369,201 @@ it('runs the setup, check, verdict, routing and delivery Scripts on a real repos
   await expect(run(S.deliverCheck, { root, review: excused })).rejects.toThrow(
     /Review the new commit/,
   );
+});
+
+// The delivery Script against a temporary repository whose pushes go to a
+// local bare repository, with a stub gh first on PATH. Each reason the Script
+// cannot deliver hands delivery to the agent; other failures block it.
+it('pushes and opens the pull request with gh, or hands delivery to the agent', async () => {
+  const S = scripts(bundle.rootId);
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), 'interlock-sdlc-pr-')));
+  dirs.push(dir);
+  const [repo, bare, bin, gh] = ['repo', 'bare.git', 'bin', 'gh'].map((d) =>
+    join(dir, d),
+  );
+  for (const d of [repo, bin, gh]) mkdirSync(d);
+  const realGit = execFileSync('sh', ['-c', 'command -v git'], {
+    encoding: 'utf8',
+  }).trim();
+  const git = (...args: string[]) =>
+    execFileSync(realGit, args, { cwd: repo, encoding: 'utf8' }).trim();
+  execFileSync(realGit, ['init', '-q', '--bare', bare]);
+  git('init', '-q', '-b', 'main');
+  git('config', 'user.email', 't@example.com');
+  git('config', 'user.name', 't');
+  git('config', 'commit.gpgsign', 'false');
+  writeFileSync(join(repo, 'a.txt'), 'a');
+  git('add', '.');
+  git('commit', '-qm', 'base');
+  git('checkout', '-qb', 'interlock/run-1');
+  writeFileSync(join(repo, 'b.txt'), 'b');
+  git('add', '.');
+  git('commit', '-qm', 'change');
+  const head = git('rev-parse', 'HEAD');
+  // gh reads the fetch URL; pushes go to the bare repository.
+  git('remote', 'add', 'origin', 'git@ghe.example.test:o/r.git');
+  git('config', 'remote.origin.pushurl', bare);
+
+  // Only the stubs are on PATH, so gh is missing until the stub is written.
+  writeFileSync(join(bin, 'git'), `#!/bin/sh\nexec "${realGit}" "$@"\n`, {
+    mode: 0o755,
+  });
+  const stub = `#!/bin/sh
+D='${gh}'
+case "$1 $2" in
+  "--version "*) echo 'gh version 2.0.0' ;;
+  "auth status") echo "$3" >> "$D/hosts"; [ -e "$D/signed-in" ] || { echo 'not logged in' >&2; exit 1; } ;;
+  "pr list") if [ -e "$D/existing" ]; then echo '[{"url":"https://ghe.example.test/o/r/pull/7"}]'; else echo '[]'; fi ;;
+  "pr create") printf '%s\\n' "$@" > "$D/args"; /bin/cat > "$D/body"
+    if [ -e "$D/fail-create" ]; then echo 'base branch not found' >&2; exit 1; fi
+    echo 'https://ghe.example.test/o/r/pull/8' ;;
+esac
+`;
+  const flag = (name: string, on: boolean) =>
+    on
+      ? writeFileSync(join(gh, name), '')
+      : rmSync(join(gh, name), { force: true });
+  const root = { repoPath: repo, createPr: true };
+  const deliver = { branch: 'interlock/run-1', reviewedCommit: head };
+  const describe = {
+    title: '-Fix: reimport',
+    description: 'What changed',
+    draft: true,
+    labels: ['bug'],
+    reviewers: [],
+    baseBranch: 'main',
+  };
+  const path = process.env.PATH;
+  process.env.PATH = bin;
+  const publish = () => run(S.publishPr, { root, deliver, describe });
+  const expectRoute = async (route: string, reason: RegExp) => {
+    const r = (await publish()) as unknown as { route: string; reason: string };
+    expect(r.route).toBe(route);
+    expect(r.reason).toMatch(reason);
+  };
+  try {
+    await expectRoute('fallback', /gh is not installed/);
+    writeFileSync(join(bin, 'gh'), stub, { mode: 0o755 });
+    await expectRoute('fallback', /ghe\.example\.test, which is neither/);
+    git('remote', 'set-url', 'origin', 'https://github.com/o/r.git');
+    expect(await publish()).toMatchObject({
+      route: 'fallback',
+      reason: 'gh is not signed in to github.com.',
+    });
+    git('remote', 'set-url', 'origin', bare);
+    await expectRoute('fallback', /not a GitHub repository/);
+
+    // A GitHub Enterprise host gh is signed in to, given in scp form.
+    git('remote', 'set-url', 'origin', 'git@ghe.example.test:o/r.git');
+    flag('signed-in', true);
+    writeFileSync(join(bare, 'hooks', 'pre-receive'), '#!/bin/sh\nexit 1\n', {
+      mode: 0o755,
+    });
+    await expectRoute('fallback', /git push to origin was rejected/);
+    rmSync(join(bare, 'hooks', 'pre-receive'));
+    expect(await publish()).toMatchObject({
+      route: 'opened',
+      prUrl: 'https://ghe.example.test/o/r/pull/8',
+      existing: false,
+    });
+    expect(readFileSync(join(gh, 'hosts'), 'utf8')).toMatch(
+      /--hostname=ghe\.example\.test/,
+    );
+    expect(
+      execFileSync(realGit, ['rev-parse', 'interlock/run-1'], {
+        cwd: bare,
+        encoding: 'utf8',
+      }).trim(),
+    ).toBe(head);
+    const args = readFileSync(join(gh, 'args'), 'utf8').split('\n');
+    expect(args).toEqual(
+      expect.arrayContaining([
+        '--head=interlock/run-1',
+        '--title=-Fix: reimport',
+        '--body-file=-',
+        '--base=main',
+        '--draft',
+        '--label=bug',
+      ]),
+    );
+    expect(args.some((a) => a.startsWith('--repo'))).toBe(false);
+    expect(readFileSync(join(gh, 'body'), 'utf8')).toBe('What changed');
+
+    // An open pull request for the branch is reused, not created again.
+    rmSync(join(gh, 'args'));
+    flag('existing', true);
+    expect(await publish()).toMatchObject({
+      route: 'opened',
+      prUrl: 'https://ghe.example.test/o/r/pull/7',
+      existing: true,
+    });
+    expect(existsSync(join(gh, 'args'))).toBe(false);
+    flag('existing', false);
+    flag('fail-create', true);
+    expect(await publish()).toMatchObject({
+      route: 'blocked',
+      reason: 'gh pr create failed: base branch not found',
+    });
+
+    // The Script pushes only the reviewed commit, with nothing uncommitted.
+    writeFileSync(join(repo, 'b.txt'), 'dirty');
+    await expect(
+      run(S.deliverCheck, {
+        root,
+        review: { verdict: 'pass', reviewedCommit: head },
+      }),
+    ).rejects.toThrow(/uncommitted changes/);
+    await expectRoute('blocked', /uncommitted changes/);
+    git('checkout', '-q', 'b.txt');
+    git('commit', '-q', '--allow-empty', '-m', 'after review');
+    await expectRoute('blocked', /moved to/);
+  } finally {
+    process.env.PATH = path;
+  }
+
+  // The result names the reason the agent delivered, or why nothing was.
+  const review = {
+    summary: 'Reviewed.',
+    findings: [],
+    limitations: [],
+    checksPassed: true,
+    checks: [],
+  };
+  const reason = 'gh is not signed in to github.com.';
+  const fallback = { route: 'fallback', reason, prUrl: null, existing: false };
+  expect(
+    await run(S.result, {
+      root,
+      review,
+      deliver,
+      publish: fallback,
+      pr: { prUrl: null, summary: 'No credentials.' },
+    }),
+  ).toMatchObject({
+    outcome: 'delivery_blocked',
+    prUrl: null,
+    limitations: [expect.stringContaining(reason)],
+  });
+  expect(
+    await run(S.result, {
+      root,
+      review,
+      deliver,
+      publish: {
+        route: 'opened',
+        reason: null,
+        prUrl: 'https://ghe.example.test/o/r/pull/7',
+        existing: true,
+        summary: 'Pushed.',
+      },
+      pr: null,
+    }),
+  ).toMatchObject({
+    outcome: 'pr_created',
+    prUrl: 'https://ghe.example.test/o/r/pull/7',
+    limitations: [
+      expect.stringMatching(/already existed/),
+      "The pull request's own CI had not finished when this workflow ended.",
+    ],
+  });
 });
