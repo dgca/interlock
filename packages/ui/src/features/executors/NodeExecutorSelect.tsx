@@ -22,6 +22,7 @@ import {
   isPrimaryHarness,
 } from './harnessProfiles';
 import { ModelSettings } from './ModelSettings';
+import { useOwnerAgent } from './ownerAgent';
 import { readModelAliases, inspectModelReference } from './modelAliasApi';
 import {
   knownPermissions,
@@ -51,12 +52,15 @@ export function NodeExecutorSelect({
   enabled,
   onChange,
   connectedSettings,
+  workflowId,
 }: {
   node: Agent;
   definition?: WorkflowDefinition;
   enabled: boolean;
   onChange: (patch: Partial<Selection>) => void;
   connectedSettings: React.ReactNode;
+  /** An owned helper without its own executor uses its owner's agent. */
+  workflowId?: string;
 }) {
   const profilesQuery = useQuery({
     ...trpc.executors.profiles.queryOptions(),
@@ -138,9 +142,13 @@ export function NodeExecutorSelect({
     (strictWorkflowPreset
       ? choiceFor(workflowAlias)
       : legacyChoiceFor(workflowAlias));
+  const owner = useOwnerAgent(
+    workflowExecutor || workflowUsesPreset ? undefined : workflowId,
+    enabled,
+  );
   const defaultProfile = workflowUsesPreset
     ? workflowChoice?.profile
-    : availableProfile(workflowExecutor);
+    : availableProfile(workflowExecutor ?? owner?.executor);
   const loading =
     enabled &&
     (profilesQuery.isPending ||
@@ -180,12 +188,15 @@ export function NodeExecutorSelect({
   const savedChoice = savedPreset
     ? node.executorMode === 'preset'
       ? choiceFor(savedPreset)
-      : legacyChoiceFor(savedPreset, node.executor ?? workflowExecutor)
+      : legacyChoiceFor(
+          savedPreset,
+          node.executor ?? workflowExecutor ?? owner?.executor,
+        )
     : undefined;
   const connectedThroughLegacyAlias =
     effectiveLegacyAlias &&
     !node.executor &&
-    !workflowExecutor &&
+    !(workflowExecutor ?? owner?.executor) &&
     !effectiveLegacyAlias.permissions &&
     (!strictWorkflowPreset || !!node.model) &&
     !legacyCandidate(effectiveLegacyAlias)?.profileId;
@@ -316,7 +327,9 @@ export function NodeExecutorSelect({
         label="Executor"
         description={
           !loading && value === workflowDefault && defaultProfile
-            ? `Uses ${harnessLabel(defaultProfile)}${workflowAlias ? ` via ${workflowAlias.name}` : ''}.`
+            ? owner?.executor
+              ? `Uses ${owner.name}'s agent · ${harnessLabel(defaultProfile)}.`
+              : `Uses ${harnessLabel(defaultProfile)}${workflowAlias ? ` via ${workflowAlias.name}` : ''}.`
             : undefined
         }
         inputWrapperOrder={['label', 'input', 'description', 'error']}

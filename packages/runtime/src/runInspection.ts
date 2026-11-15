@@ -208,6 +208,9 @@ export class RunInspection {
       ...(work.executor
         ? {
             executor: work.executor,
+            ...(work.executorSource
+              ? { executorSource: work.executorSource }
+              : {}),
             ...(work.executorModel
               ? { executorModel: work.executorModel }
               : {}),

@@ -11,6 +11,7 @@ import {
   isPrimaryHarness,
 } from './harnessProfiles';
 import { ModelSettings } from './ModelSettings';
+import { useOwnerAgent } from './ownerAgent';
 import {
   permissionLabels,
   permissionDescriptions,
@@ -30,6 +31,7 @@ export function ExecutorSelect({
   onModelChange,
   workflowEffort,
   onEffortChange,
+  workflowId,
 }: {
   value: string | null | undefined;
   onChange: (value: string | null | undefined) => void;
@@ -44,6 +46,8 @@ export function ExecutorSelect({
   workflowModelMode?: 'literal' | 'preset';
   workflowEffort?: string | null;
   onEffortChange?: (value: string | null | undefined) => void;
+  /** An owned helper without its own executor uses its owner's agent. */
+  workflowId?: string;
 }) {
   const workflowSettings = !!(onPermissionsChange || onModelChange);
   const profilesQuery = useQuery({
@@ -60,7 +64,13 @@ export function ExecutorSelect({
   const concurrencyError = settingsQuery.error
     ? 'Shared assignment limit could not be loaded.'
     : '';
-  const profile = profiles?.find((p) => p.id === value);
+  const owner = useOwnerAgent(value ? undefined : workflowId, enabled);
+  const ownerProfile = profiles?.find((p) => p.id === owner?.executor);
+  const ownerAgent =
+    owner?.executor &&
+    `Uses ${owner.name}'s agent · ${ownerProfile ? harnessLabel(ownerProfile) : owner.executor}`;
+  // Permissions and model resolve against the harness this workflow runs on.
+  const profile = value ? profiles?.find((p) => p.id === value) : ownerProfile;
   const inherited = knownPermissions(profile, settingsQuery.data);
   const effective = workflowPermissions ?? inherited?.permissions;
   const source = workflowPermissions ? 'workflow' : inherited?.source;
@@ -82,7 +92,9 @@ export function ExecutorSelect({
               )
             }
           >
-            <option value="__manual">No default harness</option>
+            <option value="__manual">
+              {ownerAgent || 'No default harness'}
+            </option>
             {profiles
               ?.filter(
                 (p) =>
@@ -103,7 +115,11 @@ export function ExecutorSelect({
           <p className="hint">
             {value
               ? 'An Agent preset can select a different harness.'
-              : 'An agent preset can select a harness. Otherwise, a connected agent picks up the assignment.'}{' '}
+              : owner?.executor
+                ? `When ${owner.name} invokes this workflow, Agent steps without their own executor use its harness. An Agent preset can select a different one.`
+                : owner
+                  ? `${owner.name} has no default harness either, so Agent steps wait for a connected agent unless an Agent preset selects a harness.`
+                  : 'An agent preset can select a harness. Otherwise, a connected agent picks up the assignment.'}{' '}
             <a
               href={`${paths.harnesses}#harnesses`}
               target="_blank"
@@ -145,7 +161,7 @@ export function ExecutorSelect({
               ) : (
                 `Each managed Agent uses its harness’s level, else ${permissionLabels[effective]} from AI Settings.`
               )}
-              {!value && ' Connected agents keep their own permissions.'}
+              {!profile && ' Connected agents keep their own permissions.'}
             </p>
           </div>
         )}

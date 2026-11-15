@@ -12,7 +12,15 @@ Built-in harness IDs are `claude-code`, `codex`, and `pi`. Existing named config
 
 In **Workflow settings**, choose a **Default Agent executor** and **Agent permissions**, then save and publish. **Use default** inherits the selected harness's level, or the shared default when the harness sets none; see [Choose permissions](#choose-permissions). An explicit **Read only**, **Standard** or **Full access** choice overrides the default for all managed Agents in this workflow, including node-specific executor selections. Connected agents retain their own permissions. The effective mode and its source appear beside the executor selection and in execution details. Agent **Execution → Executor** can inherit that default, choose another profile, or require a connected agent. In JSON, workflow `executor` is a profile ID. Agent `executor` overrides it; `null` selects connected-agent execution; omission inherits the workflow default. Workflow `agentPermissions` stores the optional override as `read-only`, `standard` or `full-access`; omission inherits the harness level or the shared default. The published assignment captures the override, and later edits do not change existing attempts. Existing definitions without these fields keep their behavior. Missing, disabled or incompatible profiles leave work unclaimed with a reason. Executor references and workflow permission overrides travel in exports; local profile paths, defaults and native sessions do not.
 
-Batch items use their owning workflow’s settings; invoked workflows use their own published settings. Agent permission modes do not restrict Script or Fetch execution.
+Batch items use their owning workflow’s settings. Invoked workflows use their own published settings, with one exception: a child workflow owned by the workflow that invokes it, which sets no **Default Agent executor** of its own, runs on its caller's harness for that run. Selecting a harness on the SDLC workflow is therefore enough for its Plan review and Change review helpers.
+
+- Only the harness is inherited. The child's own permissions, model, effort and permission policy resolve as they would if the child had selected that harness.
+- An Agent `executor` (including `null`) and the child's own executor win. Agent presets keep their own harness choice.
+- The child captures the caller's harness from the caller's published version when it starts, so retries and restarts use the same harness after later edits. A child started before this behavior existed keeps waiting for a connected agent.
+- Library workflows, **Start and continue** (detached) children and comparison trials do not inherit.
+- Workflow settings of an owned child show **Uses _owner_'s agent · _harness_**. Execution details show the harness as **from the calling workflow**, and assignment data carries `executorSource: "caller"`.
+
+Agent permission modes do not restrict Script or Fetch execution.
 
 ## Choose permissions
 
@@ -48,7 +56,7 @@ The picker reads Claude Code's SDK `supportedModels()`, Codex's app-server `mode
 
 In an Agent node, **Execution → Executor** groups harnesses and Agent presets below **Workflow default** and **Connected agent**. The menu offers **Workflow default** when it can resolve to a managed harness. It omits disabled or unavailable harnesses and presets without an eligible choice. If a saved selection becomes unavailable, the editor keeps it visible until you choose a replacement.
 
-Select a harness to edit **Model** and **Thinking effort**. Node overrides win. Concrete workflow defaults apply when the workflow has no harness of its own or uses the same harness. A direct selection replaces an inherited preset. Remaining settings come from the selected harness, then its native defaults. Connected agents retain their own models and effort and can use the advisory **Model tier**. Batch items inherit their owning workflow; invoked workflows use their own settings. Publish to apply changes to new runs.
+Select a harness to edit **Model** and **Thinking effort**. Node overrides win. Concrete workflow defaults apply when the workflow has no harness of its own or uses the same harness. A direct selection replaces an inherited preset. Remaining settings come from the selected harness, then its native defaults. Connected agents retain their own models and effort and can use the advisory **Model tier**. Batch items inherit their owning workflow; invoked workflows use their own settings, and an owned child without a harness uses its caller's harness with its own model and effort settings. Publish to apply changes to new runs.
 
 In JSON, a direct choice uses `executorMode: "harness"` and the local profile ID in `executor`. Its `model` is a literal model ID. Omit the mode to preserve existing alias-first routing in saved definitions. Work records retain the resolved override and source for model and effort. Managed retries and continuing sessions keep their captured settings.
 

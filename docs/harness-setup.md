@@ -20,7 +20,7 @@ The first time you enable a harness, Interlock asks **How should managed agents 
 
 Your answer becomes **Default agent permissions** in **AI Settings → Execution settings**. Every harness and workflow without its own level follows it. Change it there at any time. Cancel leaves the harness off. A harness enabled over the CLI or MCP skips the question and runs Agents with Full access until a default is chosen. See [permission levels](https://github.com/dgca/interlock/blob/main/docs/managed-executors.md#choose-permissions).
 
-Choose the harness in **Workflow settings → Default Agent executor** or in an Agent node's **Execution → Executor**. Use **Add integration** for a custom harness.
+Choose the harness in **Workflow settings → Default Agent executor** or in an Agent node's **Execution → Executor**. A child workflow without its own executor uses its owner's harness when the owner invokes it, so for the SDLC workflow selecting it once on the SDLC workflow is enough. Use **Add integration** for a custom harness.
 
 For reusable model settings, open **AI Settings → Agent presets** and choose **New preset**. Set the primary harness, model, and thinking effort. Add ordered fallbacks if needed, then select the preset in the Agent node's **Executor**.
 

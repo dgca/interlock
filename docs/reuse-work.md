@@ -28,6 +28,7 @@ You can also create a child from the **Child workflows** tab with **New child**,
 - A draft can reference an unpublished child, but publication is blocked until the reference has a version.
 - Later child publications do not change existing pins. Choose a newer version in node settings or from the child editor.
 - Only the owner can reference a child. A child can invoke library workflows but cannot own or reference other children.
+- A child without its own **Default Agent executor** runs on its owner's harness when the owner invokes it. Its own permissions, model and effort still apply. See [Managed Agent execution](https://github.com/dgca/interlock/blob/main/docs/managed-executors.md).
 - The child editor links back to its owner and has its own URL and **Runs** tab.
 
 The UI cannot yet move a workflow between parents, search children from the main library, or clone a parent with its children. Parent clone is disabled, and a parent with children cannot be deleted: delete unreferenced children first. Agents can adopt, reparent or release workflows over MCP while keeping their IDs and history; see [ownership changes](https://github.com/dgca/interlock/blob/main/docs/agent-workflows.md#change-workflow-ownership).

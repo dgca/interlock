@@ -17,6 +17,8 @@ const rpc = vi.hoisted(() => ({
   profiles: vi.fn(),
   settings: vi.fn(),
   manage: vi.fn<(q: Manage) => Promise<unknown>>(),
+  workflow: vi.fn(),
+  versions: vi.fn(),
 }));
 vi.mock('../packages/ui/src/lib/api', async () => {
   const { mockRpcClient } = await import('./mockRpcClient');
@@ -27,6 +29,10 @@ vi.mock('../packages/ui/src/lib/api', async () => {
         settings: { query: rpc.settings },
         manage: { mutate: rpc.manage },
         models: { query: vi.fn() },
+      },
+      workflows: {
+        get: { query: rpc.workflow },
+        versions: { query: rpc.versions },
       },
     }),
     errorMessage: (error: Error) => error.message,
@@ -270,5 +276,41 @@ it('offers an unset default so Standard can be saved explicitly', async () => {
   });
   expect([...select(0).options].map((o) => o.textContent)).not.toContain(
     'Not set (Full access)',
+  );
+});
+it("names the owner's published agent on an owned helper without its own executor", async () => {
+  rpc.profiles.mockResolvedValue([codex('read-only')]);
+  rpc.workflow.mockImplementation(({ id }: { id: string }) =>
+    Promise.resolve(
+      id.startsWith('helper')
+        ? { id, ownerWorkflowId: id.replace('helper', 'sdlc') }
+        : { id, name: 'SDLC workflow', latestVersion: 2, draft: {} },
+    ),
+  );
+  rpc.versions.mockImplementation(({ id }: { id: string }) =>
+    Promise.resolve([
+      { version: 1, definition: { executor: 'codex' } },
+      { version: 2, definition: id === 'sdlc' ? { executor: 'codex' } : {} },
+    ]),
+  );
+  const helper = (workflowId: string) =>
+    h(ExecutorSelect, {
+      value: undefined,
+      onChange: () => {},
+      onPermissionsChange: () => {},
+      workflowId,
+    });
+  await render(helper('helper'));
+  expect(select(0).selectedOptions[0].textContent).toBe(
+    "Uses SDLC workflow's agent · Codex",
+  );
+  expect(container.textContent).toContain(
+    'When SDLC workflow invokes this workflow, Agent steps without their own executor use its harness.',
+  );
+  expect(container.textContent).toContain('Read only · set on Codex');
+  await render(helper('helper-2'));
+  expect(select(0).selectedOptions[0].textContent).toBe('No default harness');
+  expect(container.textContent).toContain(
+    'SDLC workflow has no default harness either, so Agent steps wait for a connected agent',
   );
 });
