@@ -32,7 +32,7 @@ import {
   type LauncherSession,
 } from './launcher.js';
 import { OperatorChannel } from './operator.js';
-import { interlockTools } from './interlockTools.js';
+import { managedToolRun } from './interlockTools.js';
 import { RecoveryPolicies } from './recovery.js';
 import { BudgetStops, inspected, usageDelta } from './budgetStops.js';
 import {
@@ -1251,19 +1251,13 @@ export class ExecutorManager {
                     this.log(r, message);
                   }
                 },
-                interlockTools: interlockTools(
+                ...managedToolRun(
                   this.engine,
                   currentWork,
-                  r.profile.permissions,
+                  r,
+                  (message) => this.log(r, message),
+                  () => !job.abort.signal.aborted && !this.stopped,
                 ),
-                onInterlockTools: (state) => {
-                  if (job.abort.signal.aborted || this.stopped) return;
-                  r.interlockTools = state;
-                  this.log(
-                    r,
-                    `Interlock tools ${state.state}: ${state.reason ?? state.tools.join(', ')}`,
-                  );
-                },
                 ...this.operator.sessionRequests(job),
               });
               job.sendMessage = undefined;

@@ -23,39 +23,50 @@ import {
   JsonLinesProcess,
 } from './process.js';
 import { piAction } from './permissionPolicy.js';
-import type {
-  InterlockToolDefinition,
-  InterlockTools,
+import {
+  prefixedToolName,
+  type InterlockToolDefinition,
+  type InterlockTools,
 } from './interlockTools.js';
 
 /**
  * Loaded explicitly by Pi; no package imports or checkout-relative assets.
- * With `tools`, it also registers Interlock's tools. Each call travels to the
- * host as an editor dialog titled with the private `tools.channel`, so it
- * needs no network and the session receives no credential.
+ * With `tools`, it also registers Interlock's tools under prefixed names.
+ * Each call travels to the host as an editor dialog titled with the private
+ * `tools.channel`, so it needs no network and the session receives no
+ * credential. `tools.file` is this extension's unique file name: a call skips
+ * approval only when Pi reports the tool as registered from that file, so a
+ * tool another extension registers under the same name still asks.
  */
 export function piPermissions(
   mode: ExecutorProfile['permissions'],
   command: string,
-  tools?: { channel: string; tools: InterlockToolDefinition[] },
+  tools?: { channel: string; file: string; tools: InterlockToolDefinition[] },
 ) {
-  const own = tools?.tools.map((t) => t.name) ?? [];
   return `export default function (pi) {
     pi.registerCommand(${JSON.stringify(command)}, { description: 'Interlock permission bridge', handler: async () => {} });
-    for (const tool of ${JSON.stringify(
+    const own = ${JSON.stringify(
       tools?.tools.map(({ name, description, inputSchema }) => ({
-        name,
+        name: prefixedToolName(name),
+        canonical: name,
         description,
         inputSchema,
       })) ?? [],
-    )}) {
+    )};
+    const registeredHere = (name) => {
+      try {
+        const tool = pi.getAllTools().find((t) => t.name === name);
+        return String(tool?.sourceInfo?.path ?? '').endsWith(${JSON.stringify(`/${tools?.file ?? ''}`)});
+      } catch { return false; }
+    };
+    for (const tool of own) {
       pi.registerTool({
         name: tool.name,
         label: tool.name,
         description: tool.description,
         parameters: tool.inputSchema,
         async execute(id, params, signal, onUpdate, ctx) {
-          const answer = await ctx.ui.editor(${JSON.stringify(tools?.channel ?? '')} + ':' + tool.name, JSON.stringify(params ?? {}));
+          const answer = await ctx.ui.editor(${JSON.stringify(tools?.channel ?? '')} + ':' + tool.canonical, JSON.stringify(params ?? {}));
           if (answer === undefined) throw new Error('Interlock did not answer this tool call');
           const result = JSON.parse(answer);
           if (result.isError) throw new Error(result.text);
@@ -65,8 +76,9 @@ export function piPermissions(
     }
     pi.on('tool_call', async (event, ctx) => {
       if (['read', 'grep', 'find', 'ls'].includes(event.toolName)) return;
-      // Interlock's own tools write to Interlock, not the workspace.
-      if (${JSON.stringify(own)}.includes(event.toolName)) return;
+      // Interlock's own tools never ask: the workflow's author granted the
+      // tool steps they run. Only the tools this extension registered count.
+      if (own.some((t) => t.name === event.toolName) && registeredHere(event.toolName)) return;
       const mode = ${JSON.stringify(mode)};
       if (mode === 'read-only') return { block: true, reason: 'This Interlock profile is read-only' };
       if (mode === 'full-access') return;
@@ -158,14 +170,15 @@ export const piAdapter: HarnessAdapter = {
     input.signal.addEventListener('abort', abort, { once: true });
     try {
       if (input.signal.aborted) throw input.signal.reason;
-      const extension = join(directory, 'permissions.mjs');
+      const file = `interlock-${randomUUID()}.mjs`;
+      const extension = join(directory, file);
       const bridge = `interlock-${randomUUID()}`;
       await writeFile(
         extension,
         piPermissions(
           input.profile.permissions,
           bridge,
-          tools ? { channel, tools: tools.tools } : undefined,
+          tools ? { channel, file, tools: tools.tools } : undefined,
         ),
         { mode: 0o600 },
       );
@@ -313,7 +326,9 @@ export const piAdapter: HarnessAdapter = {
         assignmentPrompt(
           input.work,
           undefined,
-          tools?.tools.map((t) => t.name),
+          Object.fromEntries(
+            (tools?.tools ?? []).map((t) => [t.name, prefixedToolName(t.name)]),
+          ),
         ),
         `Return only JSON, without Markdown fences. Result envelope schema:\n${JSON.stringify(resultEnvelope(input.work))}`,
       ].join('\n\n');

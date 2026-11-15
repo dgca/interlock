@@ -105,7 +105,7 @@ try {
     '',
     definitionSchema.parse(
       agentWorkflow(
-        `If the Memory section of this prompt holds a smoke code, return {"code":string} with that code and save nothing. Otherwise save this exact fact with your save_memory_note tool, scope workflow: "The smoke code is ${nonce}", and return {"code":"saved"}.`,
+        `If the Memory section of this prompt holds a smoke code, return {"code":string} with that code and save nothing. Otherwise save this exact fact with your Interlock tool whose name ends in save_memory_note, scope workflow: "The smoke code is ${nonce}", and return {"code":"saved"}.`,
         'code',
       ),
     ),
@@ -132,7 +132,7 @@ try {
 
   // 2. Tool call: the Agent calls a Script attached as a tool.
   const tools = agentWorkflow(
-    'Call the make_token workflow tool with your call_workflow_tool tool, arguments {"value":"smoke"}. Return {"token":string} with the token it returns.',
+    'Call the make_token workflow tool with your Interlock tool whose name ends in call_workflow_tool, arguments {"value":"smoke"}. Return {"token":string} with the token it returns.',
     'token',
   );
   tools.nodes.push(

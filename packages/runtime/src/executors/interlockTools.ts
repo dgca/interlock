@@ -7,9 +7,15 @@ import type {
 } from '@interlock/core';
 import { z } from 'zod';
 
-/** Interlock's own tool names, the same in every built-in harness. */
+/**
+ * Interlock's own tool names. Harnesses expose them under their own names:
+ * Claude Code as `mcp__interlock_assignment__<name>`, Codex and Pi through
+ * `prefixedToolName`, so another extension's tool cannot be mistaken for one.
+ */
 export const saveNoteTool = 'save_memory_note';
 export const callToolTool = 'call_workflow_tool';
+/** The name Codex and Pi sessions see. */
+export const prefixedToolName = (name: string) => `interlock_${name}`;
 
 const shapes = {
   [saveNoteTool]: {
@@ -39,7 +45,7 @@ const descriptions = {
   [saveNoteTool]:
     "Save one lasting fact to this workflow's memory for later runs. Usually a person reviews it first. Write only: it cannot read notes.",
   [callToolTool]:
-    'Run a workflow tool attached to this step and return its output. If status is running or waiting, call again with the returned callId.',
+    'Run a Script or Fetch step that the workflow attached to this step as a tool, in your working directory, and return its output. If status is running or waiting, call again with the returned callId.',
 };
 
 type ToolName = keyof typeof shapes;
@@ -102,6 +108,8 @@ export function interlockTools(
   host: Host,
   work: WorkRequest,
   permissions: string | undefined,
+  /** A failed call, for the execution log: tool name and error class only. */
+  onFailure?: (tool: string, errorClass: string) => void,
 ): InterlockTools | undefined {
   if (permissions === 'read-only' || !work.token) return undefined;
   const token = work.token;
@@ -141,11 +149,46 @@ export function interlockTools(
         }
         return { text: JSON.stringify(result) };
       } catch (error) {
+        onFailure?.(
+          tools.some((tool) => tool.name === name) ? name : 'unknown tool',
+          error instanceof Error ? error.constructor.name : typeof error,
+        );
         return {
           text: error instanceof Error ? error.message : String(error),
           isError: true,
         };
       }
+    },
+  };
+}
+
+/**
+ * The run fields that hand a managed attempt its tools and record their
+ * state on the execution. A later turn of the same attempt keeps the tools it
+ * was given. Failed calls are logged by tool name and error class only.
+ */
+export function managedToolRun(
+  host: Host,
+  work: WorkRequest,
+  record: ManagedExecution,
+  log: (message: string) => void,
+  active: () => boolean,
+) {
+  return {
+    interlockTools: interlockTools(
+      host,
+      work,
+      record.profile.permissions,
+      (tool, errorClass) =>
+        log(`Interlock tool ${tool} failed (${errorClass})`),
+    ),
+    onInterlockTools: (state: InterlockToolsState) => {
+      if (!active()) return;
+      if (record.interlockTools?.state !== 'attached')
+        record.interlockTools = state;
+      log(
+        `Interlock tools ${state.state}: ${state.reason ?? state.tools.join(', ')}`,
+      );
     },
   };
 }

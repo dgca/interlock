@@ -23,19 +23,26 @@ import {
   spawnManagedProcess,
 } from './process.js';
 import { claudeAction } from './permissionPolicy.js';
+import { randomUUID } from 'node:crypto';
 import type { InterlockTools } from './interlockTools.js';
 
 /** The in-process MCP server name; distinct from a configured Interlock server. */
 const serverName = 'interlock_assignment';
+const ownName = (name: string) => `mcp__${serverName}__${name}`;
 
 /**
  * Interlock's tools as an in-process SDK MCP server. Calls run in Interlock
- * against the claim the host holds; the session receives no credential.
+ * against the claim the host holds; the session receives no credential. The
+ * random version identifies this server in Claude Code's status report.
  */
-function interlockServer(tools: InterlockTools, signal: AbortSignal) {
+function interlockServer(
+  tools: InterlockTools,
+  signal: AbortSignal,
+  version: string,
+) {
   return createSdkMcpServer({
     name: serverName,
-    version: '1',
+    version,
     tools: tools.tools.map((definition) =>
       tool(
         definition.name,
@@ -126,20 +133,9 @@ export const claudeAdapter: HarnessAdapter = {
   async run(input: HarnessRun) {
     const messages = new MessageInput<SDKUserMessage>();
     const tools = input.interlockTools;
-    const ownTools = new Set(
-      tools?.tools.map((t) => `mcp__${serverName}__${t.name}`),
-    );
-    const prompt = assignmentPrompt(
-      input.work,
-      undefined,
-      tools?.tools.map((t) => t.name),
-    );
-    input.onTranscript?.({ kind: 'user', text: prompt });
-    if (tools)
-      input.onInterlockTools?.({
-        state: 'attached',
-        tools: tools.tools.map((t) => t.name),
-      });
+    const version = randomUUID();
+    // Filled only once Claude Code reports this session's own server connected.
+    const ownTools = new Set<string>();
     let taskStarted = false;
     let modelRefused = false;
     let capturedSessionId: string | undefined = input.sessionId;
@@ -153,6 +149,29 @@ export const claudeAdapter: HarnessAdapter = {
     try {
       stream = query({
         prompt: (async function* () {
+          // Describe Interlock's tools only once they are confirmed attached.
+          const reason = tools
+            ? await serverProblem(() => stream!.mcpServerStatus(), version)
+            : undefined;
+          if (tools && !reason)
+            for (const t of tools.tools) ownTools.add(ownName(t.name));
+          const prompt = assignmentPrompt(
+            input.work,
+            undefined,
+            Object.fromEntries(
+              (reason ? [] : (tools?.tools ?? [])).map((t) => [
+                t.name,
+                ownName(t.name),
+              ]),
+            ),
+          );
+          input.onTranscript?.({ kind: 'user', text: prompt });
+          if (tools)
+            input.onInterlockTools?.({
+              state: reason ? 'unavailable' : 'attached',
+              tools: tools.tools.map((t) => t.name),
+              ...(reason ? { reason } : {}),
+            });
           yield {
             type: 'user' as const,
             message: {
@@ -179,7 +198,11 @@ export const claudeAdapter: HarnessAdapter = {
           ...(tools
             ? {
                 mcpServers: {
-                  [serverName]: interlockServer(tools, abortController.signal),
+                  [serverName]: interlockServer(
+                    tools,
+                    abortController.signal,
+                    version,
+                  ),
                 },
               }
             : {}),
@@ -216,9 +239,15 @@ export const claudeAdapter: HarnessAdapter = {
           },
           canUseTool: async (name, parameters) => {
             taskStarted = true;
-            // Interlock's own tools write to Interlock, not the workspace.
+            // Interlock's own tools, confirmed attached, never ask: the
+            // workflow's author granted the tool steps they run.
             if (ownTools.has(name))
               return { behavior: 'allow', updatedInput: parameters };
+            if (tools && name.startsWith(ownName('')))
+              return {
+                behavior: 'deny',
+                message: 'Interlock tools are unavailable in this session',
+              };
             if (
               input.profile.permissions === 'read-only' &&
               ![
@@ -446,3 +475,41 @@ export const claudeAdapter: HarnessAdapter = {
     }
   },
 };
+
+/**
+ * Why this session's Interlock server is not usable, or undefined when Claude
+ * Code reports it connected. A server the user configured under the same name
+ * reports another version or source, so it is never mistaken for Interlock's.
+ */
+async function serverProblem(
+  status: () => Promise<
+    {
+      name: string;
+      status: string;
+      error?: string;
+      serverInfo?: { version: string };
+      source?: string;
+    }[]
+  >,
+  version: string,
+) {
+  try {
+    for (let attempt = 0; attempt < 50; attempt++) {
+      const server = (await status()).find((s) => s.name === serverName);
+      if (!server) return `Claude Code did not list the ${serverName} server`;
+      if (server.status === 'pending') {
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        continue;
+      }
+      if (server.status !== 'connected')
+        return `${serverName} is ${server.status}${server.error ? `: ${server.error.slice(0, 200)}` : ''}`;
+      return server.serverInfo?.version === version &&
+        (server.source === undefined || server.source === 'sdk')
+        ? undefined
+        : `another MCP server named ${serverName} replaced Interlock's`;
+    }
+    return `${serverName} did not connect in time`;
+  } catch (error) {
+    return `could not read MCP server status: ${(error instanceof Error ? error.message : String(error)).slice(0, 200)}`;
+  }
+}

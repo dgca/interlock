@@ -17,6 +17,7 @@ import {
 import { codexAction } from './permissionPolicy.js';
 import { transcriptText } from './transcriptEvents.js';
 import { codexResult } from './codexResult.js';
+import { prefixedToolName } from './interlockTools.js';
 import {
   codexDynamicTools,
   dynamicToolResult,
@@ -89,15 +90,19 @@ export const codexAdapter: HarnessAdapter = {
     let taskStarted = false;
     // Interlock's tools need Codex's experimental dynamic tools, attached when
     // a thread starts. Without them the session runs as it always has.
+    // `tools` are answered; `advertise` says they are attached to this thread
+    // and described in the prompt.
     let tools = input.interlockTools;
     let unavailable: string | undefined;
-    if (tools && input.sessionId) {
-      unavailable = 'Codex attaches dynamic tools only when a thread starts';
-      tools = undefined;
-    } else if (tools) {
+    if (tools) {
       unavailable = await codexDynamicTools(input.command, input.signal);
       if (unavailable) tools = undefined;
     }
+    let advertise = !!tools && !input.sessionId;
+    if (tools && input.sessionId)
+      // The resumed thread keeps the tools it started with; keep answering.
+      unavailable =
+        'Codex attaches dynamic tools only when a thread starts; calls from the resumed thread are still answered';
     const rpc = new JsonLinesProcess(
       input.command,
       ['app-server', '--listen', 'stdio://'],
@@ -204,11 +209,25 @@ export const codexAdapter: HarnessAdapter = {
         void (async () => {
           let result: unknown;
           if (message.method === 'item/tool/call' && tools) {
-            // Interlock's own tools write to Interlock, not the workspace.
+            const call = params as {
+              tool?: unknown;
+              arguments?: unknown;
+              threadId?: unknown;
+              turnId?: unknown;
+            };
+            // Only this session's thread and turn may use the attempt's tools;
+            // anything else gets the error reply below.
+            if (
+              !threadId ||
+              call.threadId !== threadId ||
+              (call.turnId !== undefined && call.turnId !== turnId)
+            )
+              throw new Error('Request does not belong to this assignment');
+            // No approval: save_memory_note writes only to Interlock, and
+            // call_workflow_tool runs the steps the workflow's author attached.
             taskStarted = true;
-            const call = params as { tool?: unknown; arguments?: unknown };
             input.onProgress(
-              `Using ${tools.tools.find((t) => t.name === call.tool)?.name ?? 'an Interlock tool'}`,
+              `Using ${tools.tools.find((t) => prefixedToolName(t.name) === call.tool)?.name ?? 'an Interlock tool'}`,
             );
             result = await dynamicToolResult(tools, call, input.signal);
           } else if (
@@ -353,6 +372,8 @@ export const codexAdapter: HarnessAdapter = {
       if (input.signal.aborted) throw new Error('Execution stopped');
       await rpc.request('initialize', {
         clientInfo: { name: 'interlock', title: 'Interlock', version: VERSION },
+        // initialize is sent once per connection, so a later fallback cannot
+        // turn this back off; the fallback thread carries no experimental fields.
         capabilities: { experimentalApi: !!tools },
       });
       rpc.send({ method: 'initialized' });
@@ -386,18 +407,25 @@ export const codexAdapter: HarnessAdapter = {
       let thread;
       try {
         thread = await begin(
-          tools ? { dynamicTools: dynamicToolSpecs(tools) } : {},
+          advertise && tools ? { dynamicTools: dynamicToolSpecs(tools) } : {},
         );
       } catch (error) {
-        if (!tools || !(error instanceof HarnessRequestError)) throw error;
-        // An explicit rejection of the experimental field; start without it.
+        // Only a rejection of the experimental field falls back; anything
+        // else, such as an unknown model, surfaces as itself.
+        if (
+          !advertise ||
+          !(error instanceof HarnessRequestError) ||
+          !/dynamic|experimental/i.test(error.message)
+        )
+          throw error;
         unavailable = `Codex rejected dynamic tools: ${error.message.slice(0, 300)}`;
         tools = undefined;
+        advertise = false;
         thread = await begin({});
       }
       if (input.interlockTools)
         input.onInterlockTools?.(
-          tools
+          advertise && tools
             ? { state: 'attached', tools: tools.tools.map((t) => t.name) }
             : {
                 state: 'unavailable',
@@ -414,7 +442,12 @@ export const codexAdapter: HarnessAdapter = {
       const prompt = assignmentPrompt(
         input.work,
         resultFormat.instructions,
-        tools?.tools.map((t) => t.name),
+        Object.fromEntries(
+          (advertise && tools ? tools.tools : []).map((t) => [
+            t.name,
+            prefixedToolName(t.name),
+          ]),
+        ),
       );
       input.onTranscript?.({ kind: 'user', text: prompt });
       const turn = await rpc.request('turn/start', {

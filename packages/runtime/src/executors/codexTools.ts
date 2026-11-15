@@ -1,22 +1,35 @@
 import { execFile } from 'node:child_process';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
-import type { InterlockTools } from './interlockTools.js';
+import { prefixedToolName, type InterlockTools } from './interlockTools.js';
+
+const run = promisify(execFile);
+/** Probe results per resolved executable and version, for this process. */
+const probes = new Map<string, string | undefined>();
 
 /**
  * Whether this Codex accepts host-handled dynamic tools, an experimental
  * app-server API. Reads the protocol schema the executable generates; this
  * starts no thread and no model call. Returns the reason when it cannot.
+ * A definite answer is cached per executable and version; a probe that could
+ * not run is tried again next time.
  */
 export async function codexDynamicTools(
   command: string,
   signal: AbortSignal,
 ): Promise<string | undefined> {
-  const directory = await mkdtemp(join(tmpdir(), 'interlock-codex-schema-'));
+  let directory: string | undefined;
   try {
-    await promisify(execFile)(
+    const { stdout } = await run(command, ['--version'], {
+      signal,
+      timeout: 15_000,
+    });
+    const key = `${await realpath(command)}\0${stdout.trim()}`;
+    if (probes.has(key)) return probes.get(key);
+    directory = await mkdtemp(join(tmpdir(), 'interlock-codex-schema-'));
+    await run(
       command,
       [
         'app-server',
@@ -34,15 +47,17 @@ export async function codexDynamicTools(
       join(directory, 'ServerRequest.json'),
       'utf8',
     );
-    return start?.properties?.dynamicTools &&
-      requests.includes('"item/tool/call"')
-      ? undefined
-      : 'this Codex version has no dynamic tools';
+    const reason =
+      start?.properties?.dynamicTools && requests.includes('"item/tool/call"')
+        ? undefined
+        : 'this Codex version has no dynamic tools';
+    probes.set(key, reason);
+    return reason;
   } catch (error) {
     if (signal.aborted) throw error;
     return 'could not read the Codex app-server protocol schema';
   } finally {
-    await rm(directory, { recursive: true, force: true });
+    if (directory) await rm(directory, { recursive: true, force: true });
   }
 }
 
@@ -50,19 +65,22 @@ export async function codexDynamicTools(
 export const dynamicToolSpecs = (tools: InterlockTools) =>
   tools.tools.map((tool) => ({
     type: 'function',
-    name: tool.name,
+    name: prefixedToolName(tool.name),
     description: tool.description,
     inputSchema: tool.inputSchema,
   }));
 
-/** The answer to an `item/tool/call` request. */
+/** The answer to an `item/tool/call` request for one of those specs. */
 export async function dynamicToolResult(
   tools: InterlockTools,
   params: { tool?: unknown; arguments?: unknown },
   signal: AbortSignal,
 ) {
+  const tool = tools.tools.find(
+    (t) => prefixedToolName(t.name) === params.tool,
+  );
   const result = await tools.invoke(
-    typeof params.tool === 'string' ? params.tool : '',
+    tool?.name ?? 'unknown',
     params.arguments,
     signal,
   );

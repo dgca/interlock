@@ -84,7 +84,8 @@ Claude Code, Codex and Pi sessions that Interlock launches get their own `call_w
 
 - The prompt lists the tools and explains `call_workflow_tool` only when the tool is attached.
 - Sessions at **Read only** get no tool, and their prompt does not list the tools.
-- Under **Standard** and **Full access** the tool runs without an approval prompt. The tool step itself still waits for Script approval, resources and pause holds.
+- Under **Standard** and **Full access** the tool runs without an approval prompt. `call_workflow_tool` runs the Script or Fetch steps that the workflow's author attached to that Agent as tools. A Script runs in the Agent's checkout, with its own [server environment](https://github.com/dgca/interlock/blob/main/docs/architecture.md#scripts-and-interruptions) mode and no sandbox, using arguments the Agent chooses within the tool's input schema. Attaching a tool is the author's grant: under **Standard** there is no prompt per call, as for connected agents calling `call_work_tool`. This is the one way an Agent at **Standard** runs code without being asked. Imported Scripts still wait for their one-time approval. The tool step still waits for resources and pause holds.
+- Claude Code sees them as `mcp__interlock_assignment__save_memory_note` and `mcp__interlock_assignment__call_workflow_tool`; Codex and Pi as `interlock_save_memory_note` and `interlock_call_workflow_tool`.
 - The call limits apply as for `call_work_tool`.
 
 A Codex session gets the tool only when its Codex supports dynamic tools and the thread is new; otherwise it runs as before and its prompt does not list the tools. See [Interlock's own tools](https://github.com/dgca/interlock/blob/main/docs/managed-executors.md#interlocks-own-tools). Custom integrations receive the claim token in `$INTERLOCK_CLAIM_TOKEN` and can call `call_work_tool` over MCP with it.

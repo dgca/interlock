@@ -3,7 +3,7 @@
   "ceilings": {
     "packages/core/src/index.ts": 1478,
     "packages/mcp/src/tools/server.ts": 807,
-    "packages/runtime/src/executors/manager.ts": 1783,
+    "packages/runtime/src/executors/manager.ts": 1777,
     "packages/runtime/src/index.ts": 3366,
     "packages/runtime/src/report.ts": 830,
     "packages/runtime/src/testbench.ts": 1011,
@@ -23,7 +23,7 @@
     "tests/editorDraftProtection.test.ts": 1059,
     "tests/eventQuiescence.test.ts": 809,
     "tests/executorPermissions.test.ts": 958,
-    "tests/managedExecutors.test.ts": 1868,
+    "tests/managedExecutors.test.ts": 1831,
     "tests/modelAliases.test.ts": 864,
     "tests/nodeEditorUx.test.ts": 1130,
     "tests/routes.test.ts": 1430,

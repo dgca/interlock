@@ -76,13 +76,14 @@ export interface HarnessAdapter {
   recordsPrompt?: boolean;
 }
 /**
- * The prompt a managed session receives. `attached` names the Interlock tools
- * attached to this session; the prompt describes only those.
+ * The prompt a managed session receives. `attached` maps each Interlock tool
+ * attached to this session to the name the session sees; the prompt
+ * describes only those.
  */
 export function assignmentPrompt(
   work: WorkRequest,
   resultInstructions?: string,
-  attached: readonly string[] = [],
+  attached: Readonly<Record<string, string>> = {},
 ) {
   return [
     work.prompt,

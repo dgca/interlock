@@ -464,11 +464,18 @@ it.each([claudeAdapter, codexAdapter])(
       tool: JSON.stringify({ status: 'pending', message: 'Saved for review.' }),
       leak: false,
     });
+    // Codex refused a call that did not name this session's thread.
+    if (adapter === codexAdapter)
+      expect(result.output).toMatchObject({ strayRefused: true });
     expect(states).toEqual([
       { state: 'attached', tools: ['save_memory_note'] },
     ]);
     const recorded = transcript.join('\n');
-    expect(recorded).toContain('save_memory_note');
+    expect(recorded).toContain(
+      adapter === codexAdapter
+        ? 'your interlock_save_memory_note tool'
+        : 'your mcp__interlock_assignment__save_memory_note tool',
+    );
     expect(recorded).not.toContain('claim-token');
     expect(recorded).not.toContain(toolCallToken('claim-token-534'));
   },
@@ -502,6 +509,90 @@ it('runs Codex as before when it rejects dynamic tools', async () => {
       state: 'unavailable',
       tools: ['save_memory_note'],
       reason: 'Codex rejected dynamic tools: dynamicTools is not supported',
+    },
+  ]);
+});
+
+it('leaves Interlock tools out when Claude Code reports their server failed', async () => {
+  const { tools, writes } = ownTools();
+  const transcript: string[] = [];
+  const states: unknown[] = [];
+  const result = await claudeAdapter.run({
+    command,
+    cwd: process.cwd(),
+    work: { ...work, token: 'claim-token-534' },
+    profile: executorProfileSchema.parse({
+      id: 'claude-code',
+      harness: 'claude-code',
+      name: 'Claude Code',
+      model: 'interlock-tools-failed',
+      permissions: 'standard',
+    }),
+    signal: new AbortController().signal,
+    onSession: () => {},
+    onProgress: () => {},
+    onTranscript: (event) => transcript.push(event.text ?? ''),
+    request: () => Promise.reject(new Error('Must not ask for approval')),
+    interlockTools: tools,
+    onInterlockTools: (state) => states.push(state),
+  });
+  // The fixture's call to the unconfirmed tool was refused, not approved.
+  expect(result.output).toMatchObject({ ok: true });
+  expect(writes).toEqual([]);
+  expect(states).toEqual([
+    {
+      state: 'unavailable',
+      tools: ['save_memory_note'],
+      reason: 'interlock_assignment is failed: fixture failure',
+    },
+  ]);
+  expect(transcript.join('\n')).not.toContain('save_memory_note');
+});
+
+/** A Codex run with Interlock's note tool, recording tool state and writes. */
+function codexWithTools(model: string, sessionId?: string) {
+  const { tools, writes } = ownTools();
+  const states: unknown[] = [];
+  const result = codexAdapter.run({
+    command,
+    cwd: process.cwd(),
+    work: { ...work, token: 'claim-token-534' },
+    ...(sessionId ? { sessionId } : {}),
+    profile: executorProfileSchema.parse({
+      id: 'codex',
+      harness: 'codex',
+      name: 'Codex',
+      model,
+    }),
+    signal: new AbortController().signal,
+    onSession: () => {},
+    onProgress: () => {},
+    request: () => Promise.resolve({ allow: true }),
+    interlockTools: tools,
+    onInterlockTools: (state) => states.push(state),
+  });
+  return { result, states, writes };
+}
+
+it('surfaces an unrelated Codex thread error instead of blaming dynamic tools', async () => {
+  const { result, states } = codexWithTools('unknown-model');
+  await expect(result).rejects.toThrow('model unknown-model not found');
+  expect(states).toEqual([]);
+});
+
+it('keeps answering Interlock tools on a resumed Codex thread without describing them', async () => {
+  const { result, states, writes } = codexWithTools(
+    'interlock-tools-resume',
+    'existing-thread',
+  );
+  expect(await result).toMatchObject({ output: { ok: true, prompt: false } });
+  expect(writes).toHaveLength(1);
+  expect(states).toEqual([
+    {
+      state: 'unavailable',
+      tools: ['save_memory_note'],
+      reason:
+        'Codex attaches dynamic tools only when a thread starts; calls from the resumed thread are still answered',
     },
   ]);
 });
