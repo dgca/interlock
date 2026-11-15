@@ -12,6 +12,7 @@ import {
   ModalBody,
   ModalFooter,
 } from '../../design-system';
+
 import { StallPolicyEditor } from '../executors/StallSettings';
 import {
   MemorySettingsFields,
@@ -29,6 +30,7 @@ import {
   type WorkflowDefinition,
   type WorkflowNode,
 } from '@interlock/core';
+
 import {
   ContractEditor,
   ContractForm,

@@ -786,7 +786,11 @@ it('rejects reconciliation for a live managed permission request', async () => {
       id: 'codex',
       detect: async () => ({ status: 'detected', command: '/fake/codex' }),
       run: async (input) => {
-        await input.request({ kind: 'permission', title: 'Tool', detail: '' });
+        await input.request({
+          kind: 'permission',
+          title: 'Use tool',
+          detail: 'Wait for user permission',
+        });
         return { output: {} };
       },
     },
