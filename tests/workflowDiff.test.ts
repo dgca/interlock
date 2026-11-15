@@ -1,5 +1,9 @@
 import { expect, it } from 'vitest';
-import { blankDefinition, type WorkflowDefinition } from '@interlock/core';
+import {
+  blankDefinition,
+  definitionSchema,
+  type WorkflowDefinition,
+} from '@interlock/core';
 import { compareWorkflow } from '../packages/ui/src/features/workflows/workflowDiff';
 
 const clone = (value: WorkflowDefinition): WorkflowDefinition =>
@@ -168,3 +172,21 @@ it.each([
     ]);
   },
 );
+
+// Publication review is the last look before a setting reaches runs. A
+// workflow setting missing from the review list is published unseen, as the
+// per-run Git worktree once was.
+it('lists a change to every workflow setting in publication review', () => {
+  const before = blankDefinition();
+  const settings = Object.keys(definitionSchema.shape).filter(
+    (key) => key !== 'nodes' && key !== 'edges',
+  );
+  const unlisted = settings.filter(
+    (key) =>
+      !compareWorkflow(
+        { ...before, [key]: { changed: key } },
+        before,
+      ).workflow.some((change) => change.id === key),
+  );
+  expect(unlisted).toEqual([]);
+});
