@@ -362,7 +362,7 @@ export class WorkflowMemory {
       revision: capture.revision,
       budget: capture.budget,
       nodeId,
-      // Managed sessions have no claim token for work_memory yet.
+      // Managed sessions save through their own tool, described separately.
       canWrite: !settings.executor,
     });
   }
