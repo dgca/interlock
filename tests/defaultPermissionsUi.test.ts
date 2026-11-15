@@ -10,6 +10,7 @@ import {
 import { UiTestProvider } from './uiTestProvider';
 import { ExecutorSelect } from '../packages/ui/src/features/executors/ExecutorSelect';
 import { Harnesses } from '../packages/ui/src/features/executors/Harnesses';
+import { DefaultPermissionsSettings } from '../packages/ui/src/features/executors/DefaultPermissions';
 
 type Manage = { action: string; profile?: Record<string, unknown> };
 const rpc = vi.hoisted(() => ({
@@ -179,4 +180,82 @@ it('asks once for the shared default when a harness is first enabled', async () 
   expect(
     [...container.querySelectorAll('option')].map((o) => o.textContent),
   ).toContain('Use default · Full access');
+});
+
+it('keeps a harness from being enabled until the shared default can be read', async () => {
+  rpc.profiles.mockResolvedValue([codex(undefined, false)]);
+  rpc.settings.mockRejectedValue(new Error('Settings offline'));
+  await render(h(MemoryRouter, {}, h(Harnesses)));
+  expect(
+    container.querySelector<HTMLInputElement>(
+      'input[aria-label="Enable Codex"]',
+    )!.disabled,
+  ).toBe(true);
+  expect(container.textContent).toContain('Could not load execution settings.');
+});
+
+it('rereads settings and retries once when the first-enable save is stale', async () => {
+  rpc.profiles.mockResolvedValue([codex(undefined, false)]);
+  rpc.settings
+    .mockResolvedValueOnce({ revision: 0, concurrency: 3 })
+    .mockResolvedValue({ revision: 4, concurrency: 2 });
+  rpc.manage
+    .mockRejectedValueOnce(new Error('Execution settings changed.'))
+    .mockImplementation((q) =>
+      Promise.resolve(
+        q.action === 'save_settings'
+          ? { revision: 5, concurrency: 2, defaultPermissions: 'standard' }
+          : { ...q.profile, revision: 1 },
+      ),
+    );
+  await render(h(MemoryRouter, {}, h(Harnesses)));
+  await settle(() =>
+    container
+      .querySelector<HTMLInputElement>('input[aria-label="Enable Codex"]')!
+      .click(),
+  );
+  const dialog = document.querySelector('[role="dialog"]')!;
+  await settle(() =>
+    dialog.querySelector<HTMLInputElement>('input[value="standard"]')!.click(),
+  );
+  await settle(() =>
+    [...dialog.querySelectorAll('button')]
+      .find((b) => b.textContent === 'Enable Codex')!
+      .click(),
+  );
+  expect(rpc.manage.mock.calls.map(([q]) => q)).toEqual([
+    expect.objectContaining({ expectedRevision: 0 }),
+    {
+      action: 'save_settings',
+      expectedRevision: 4,
+      concurrency: 2,
+      defaultPermissions: 'standard',
+    },
+    expect.objectContaining({ action: 'save' }),
+  ]);
+});
+
+it('offers an unset default so Standard can be saved explicitly', async () => {
+  rpc.manage.mockResolvedValue({
+    revision: 1,
+    concurrency: 3,
+    defaultPermissions: 'standard',
+  });
+  await render(h(DefaultPermissionsSettings));
+  expect(select(0).selectedOptions[0].textContent).toBe('Not set (Standard)');
+  const save = () =>
+    container.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+  expect(save().disabled).toBe(true);
+  await choose(select(0), 'standard');
+  expect(save().disabled).toBe(false);
+  await settle(() => save().click());
+  expect(rpc.manage).toHaveBeenCalledWith({
+    action: 'save_settings',
+    expectedRevision: 0,
+    concurrency: 3,
+    defaultPermissions: 'standard',
+  });
+  expect([...select(0).options].map((o) => o.textContent)).not.toContain(
+    'Not set (Standard)',
+  );
 });

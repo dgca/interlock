@@ -109,7 +109,8 @@ export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
   const queryClient = useQueryClient();
   const profilesQuery = useQuery(trpc.executors.profiles.queryOptions());
   const profiles = profilesQuery.data;
-  const settings = useQuery(trpc.executors.settings.queryOptions()).data;
+  const settingsQuery = useQuery(trpc.executors.settings.queryOptions());
+  const settings = settingsQuery.data;
   const harnesses = profiles?.filter(isPrimaryHarness).sort(
     (a, b) =>
       Number(b.detection.status === 'detected') -
@@ -121,6 +122,8 @@ export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
   );
   const [checkError, setCheckError] = useState('');
   const read = workspaceRead('harnesses', profilesQuery);
+  // Enabling needs the shared default to know whether to ask first.
+  const settingsRead = workspaceRead('execution settings', settingsQuery);
   const [checking, setChecking] = useState(false);
 
   const refresh = async (check = false) => {
@@ -194,7 +197,11 @@ export function Harnesses({ onDirty }: { onDirty?: (dirty: boolean) => void }) {
         value={activeTab}
       />
       <div className={`${workspacePage.content} ${styles.aiContent}`}>
-        <WorkspaceReadWarning reads={[read]} inline showDetails />
+        <WorkspaceReadWarning
+          reads={activeTab === 'harnesses' ? [read, settingsRead] : [read]}
+          inline
+          showDetails
+        />
         {activeTab === 'harnesses' && (
           <section
             id="harnesses"
@@ -423,7 +430,7 @@ function ProfileRow({
           {detected ? (
             <Switch
               checked={profile.enabled}
-              disabled={busy || open}
+              disabled={busy || open || (!profile.enabled && !settings)}
               aria-label={`Enable ${label}`}
               label={profile.enabled ? 'Enabled' : 'Disabled'}
               onChange={(e) => {

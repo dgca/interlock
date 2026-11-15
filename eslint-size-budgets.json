@@ -4,7 +4,7 @@
     "packages/core/src/index.ts": 1520,
     "packages/mcp/src/tools/server.ts": 809,
     "packages/runtime/src/doctor.ts": 804,
-    "packages/runtime/src/executors/manager.ts": 1798,
+    "packages/runtime/src/executors/manager.ts": 1796,
     "packages/runtime/src/index.ts": 3407,
     "packages/runtime/src/report.ts": 931,
     "packages/runtime/src/testbench.ts": 1018,

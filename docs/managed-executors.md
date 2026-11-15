@@ -36,7 +36,7 @@ A managed Agent uses the first level that is set:
 
 Harness **Default permissions** offers **Use default**, which shows the level it resolves to. Harnesses saved before this setting existed with **Standard**, the value every harness started with, follow the default. Choose **Standard** again in **Edit defaults** to keep a harness on Standard whatever the default is. **Read only** and **Full access** stay as saved.
 
-An assignment captures its level when a harness claims it. Changing the default does not change running assignments, retries, or a continuity group's session. A workflow [permission policy](permission-policy.md) applies only under Standard. Custom integrations receive the resolved level and enforce it themselves.
+A harness selected directly captures the level when it claims the assignment. A preset choice captures it when the assignment is created. Retries, custom launcher relaunches and later assignments in a continuity group keep the captured level, so changing the default affects only work captured afterwards. A workflow [permission policy](permission-policy.md) applies only under Standard. Custom integrations receive the resolved level and enforce it themselves.
 
 The manager discovers ready assignments globally, including work started by scripts or in detached workflows. It uses the existing exclusive claim path, so a connected worker and managed harness cannot own the same attempt simultaneously. Budgets, shared resources, output validation and retry limits still apply. Managed local Git trials remain blocked because these adapters do not implement the scoped-tool containment contract.
 

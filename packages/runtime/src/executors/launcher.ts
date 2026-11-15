@@ -144,10 +144,15 @@ export class LauncherSupervisor {
   }
   async launchCustom(
     work: WorkRequest,
-    profile: ExecutorProfile,
+    {
+      profile,
+      permissionSource,
+    }: {
+      profile: ExecutorProfile;
+      permissionSource: ManagedExecution['permissionSource'];
+    },
     cwd: string,
     logicalSession: string,
-    permissionSource: ManagedExecution['permissionSource'],
   ) {
     const idempotencyKey = `${work.id}:${work.attempt}`;
     const existing = this.launchIdempotency.get(idempotencyKey);

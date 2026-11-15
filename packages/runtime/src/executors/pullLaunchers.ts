@@ -20,7 +20,7 @@ import {
   type LeasedLauncherOperation,
 } from '@interlock/core/launcherClient';
 import type { Engine } from '../index.js';
-import { parseStoredProfile } from './configuration.js';
+import { parseProfileSnapshot } from './configuration.js';
 import { HarnessCleanupError, HarnessRequestError } from './contracts.js';
 import { now } from './supervision.js';
 
@@ -108,7 +108,7 @@ export function offlineLauncherWork(store: Engine['store']) {
   const offline = new Set(
     store
       .list<unknown>('executorProfiles')
-      .map(parseStoredProfile)
+      .map(parseProfileSnapshot)
       .filter((p) => p.transport === 'pull' && p.enabled && !polled(store, p))
       .map((p) => p.id),
   );
@@ -176,7 +176,7 @@ export class PullLaunchers {
   /** Pull profiles are always stored; built-in defaults never use this transport. */
   private profile(id: string) {
     const stored = this.store.get<unknown>('executorProfiles', id);
-    return stored === undefined ? undefined : parseStoredProfile(stored);
+    return stored === undefined ? undefined : parseProfileSnapshot(stored);
   }
   private client(profileId: string) {
     return this.store.get<ClientRecord>(clientsCollection, profileId);

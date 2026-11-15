@@ -11,6 +11,7 @@ import {
   type ExecutorModels,
   type ExecutorProfile,
   type ExecutorProfileUpdate,
+  type ManagedExecution,
   type PermissionSource,
   type WorkRequest,
 } from '@interlock/core';
@@ -37,6 +38,11 @@ export type ManagedAssignment = Pick<
 };
 
 const profilesCollection = 'executorProfiles';
+/**
+ * Profile IDs whose stored `standard` was chosen explicitly. Kept apart from
+ * the strict profile record so older builds can still read every profile.
+ */
+const explicitStandardCollection = 'executorExplicitStandard';
 const defaults: ExecutorProfile[] = [
   executorProfileSchema.parse({
     id: 'claude-code',
@@ -92,9 +98,14 @@ export class ExecutorConfiguration {
     this.host.schedule();
   }
   profiles() {
+    const explicit = new Set(
+      this.engine.store
+        .list<{ id: string }>(explicitStandardCollection)
+        .map((marker) => marker.id),
+    );
     const stored = this.engine.store
       .list<unknown>(profilesCollection)
-      .map(parseStoredProfile);
+      .map((value) => parseStoredProfile(value, explicit));
     return [
       ...defaults.filter((d) => !stored.some((p) => p.id === d.id)),
       ...stored,
@@ -219,7 +230,10 @@ export class ExecutorConfiguration {
         ...value,
         revision: q.expectedRevision + 1,
       });
-      this.engine.store.put(profilesCollection, storedProfile(next));
+      this.engine.store.put(profilesCollection, next);
+      if (next.permissions === 'standard')
+        this.engine.store.put(explicitStandardCollection, { id: next.id });
+      else this.engine.store.remove(explicitStandardCollection, next.id);
       return next;
     });
     this.detections.clear();
@@ -440,11 +454,28 @@ export class ExecutorConfiguration {
   permissions(profile: ExecutorProfile) {
     return harnessPermissions(profile, this.settings().defaultPermissions);
   }
-  inheritedProfile(configured: ExecutorProfile): ExecutorProfile {
-    return {
-      ...configured,
-      permissions: this.permissions(configured).permissions,
-    };
+  /** A launcher retry keeps the permission mode its earlier attempt captured. */
+  launchProfile(
+    work: ManagedAssignment,
+    configured: ExecutorProfile,
+    previous: ManagedExecution | undefined,
+  ): { profile: ExecutorProfile; permissionSource: PermissionSource } {
+    const profile =
+      work.executorPermissionsSource !== undefined
+        ? this.assignmentProfile(work, configured)
+        : {
+            ...configured,
+            permissions: this.permissions(configured).permissions,
+          };
+    const captured = previous?.profile.permissions;
+    return captured
+      ? {
+          profile: { ...profile, permissions: captured },
+          permissionSource:
+            previous.permissionSource ??
+            this.permissionSource(work, configured),
+        }
+      : { profile, permissionSource: this.permissionSource(work, configured) };
   }
   permissionSource(
     work: ManagedAssignment,
@@ -492,23 +523,16 @@ export function errorText(error: unknown) {
 /**
  * Configured profiles saved before the shared default stored `standard` as the
  * creation value. That, and a missing level, inherit the shared default; an
- * explicit Standard saved since carries `permissionsExplicit`.
+ * explicit Standard saved since has an entry in `explicitStandardCollection`.
  */
-export function parseStoredProfile(value: unknown): ExecutorProfile {
-  if (!value || typeof value !== 'object' || Array.isArray(value))
-    return parseProfileSnapshot(value);
-  const { permissionsExplicit, ...profile } = value as Record<string, unknown>;
-  if (
-    permissionsExplicit !== true &&
-    (profile.permissions === 'standard' || profile.permissions === 'ask')
-  )
+function parseStoredProfile(
+  value: unknown,
+  explicit: ReadonlySet<string>,
+): ExecutorProfile {
+  const profile = parseProfileSnapshot(value);
+  if (profile.permissions === 'standard' && !explicit.has(profile.id))
     delete profile.permissions;
-  return parseProfileSnapshot(profile);
-}
-function storedProfile(profile: ExecutorProfile) {
-  return profile.permissions === 'standard'
-    ? { ...profile, permissionsExplicit: true }
-    : profile;
+  return profile;
 }
 
 /** Preserve captured profile settings while ignoring the retired timeout draft field. */

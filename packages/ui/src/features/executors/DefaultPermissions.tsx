@@ -29,22 +29,39 @@ const defaultDescriptions: Record<ExecutorPermissionMode, string> = {
     'Agents run commands and edit files without asking. The harness sandbox and approval prompts are off.',
 };
 
-/** Saves the shared default with the settings revision the caller read. */
+/**
+ * Saves the shared default with the settings revision the caller read. With
+ * `retryStale`, a failed save rereads the settings and tries once more.
+ */
 function useSaveDefaultPermissions() {
   const queryClient = useQueryClient();
-  return async (settings: Settings, mode: ExecutorPermissionMode) => {
-    const next = executorSettingsSchema.parse(
-      await api.executors.manage.mutate({
-        action: 'save_settings',
-        expectedRevision: settings.revision,
-        concurrency: settings.concurrency,
-        defaultPermissions: mode,
-      }),
-    );
-    await queryClient.cancelQueries(trpc.executors.settings.queryFilter());
-    queryClient.setQueryData(trpc.executors.settings.queryKey(), next);
-    return next;
+  const save = async (
+    settings: Settings,
+    mode: ExecutorPermissionMode,
+    retryStale = false,
+  ): Promise<Settings> => {
+    try {
+      const next = executorSettingsSchema.parse(
+        await api.executors.manage.mutate({
+          action: 'save_settings',
+          expectedRevision: settings.revision,
+          concurrency: settings.concurrency,
+          defaultPermissions: mode,
+        }),
+      );
+      await queryClient.cancelQueries(trpc.executors.settings.queryFilter());
+      queryClient.setQueryData(trpc.executors.settings.queryKey(), next);
+      return next;
+    } catch (error) {
+      if (!retryStale) throw error;
+      const latest = await queryClient.fetchQuery({
+        ...trpc.executors.settings.queryOptions(),
+        staleTime: 0,
+      });
+      return save(latest, mode);
+    }
   };
+  return save;
 }
 
 /** Execution settings card for the level harnesses and workflows inherit. */
@@ -60,7 +77,8 @@ export function DefaultPermissionsSettings({
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
   const current = query.data?.defaultPermissions;
-  const selected = mode ?? current ?? 'standard';
+  // '' is the unset state, which runs as Standard until a level is saved.
+  const selected = mode ?? current ?? '';
   const dirty = !!mode && mode !== current;
   useEffect(() => onDirty?.(dirty), [dirty, onDirty]);
   useEffect(() => () => onDirty?.(false), [onDirty]);
@@ -93,7 +111,7 @@ export function DefaultPermissionsSettings({
     >
       <div className={styles.sharedCopy}>
         <h3 className={styles.sharedLabel}>Default agent permissions</h3>
-        <p>{defaultDescriptions[selected]}</p>
+        <p>{defaultDescriptions[selected || 'standard']}</p>
         <p className={styles.sharedNote}>
           Applies to managed Agents whose harness and workflow set no level.
           Running assignments keep their mode.
@@ -110,10 +128,14 @@ export function DefaultPermissionsSettings({
           value={selected}
           disabled={busy}
           onChange={(event) => {
-            setMode(event.currentTarget.value as ExecutorPermissionMode);
+            const value = event.currentTarget.value;
+            setMode(value ? (value as ExecutorPermissionMode) : undefined);
             setSaved(false);
           }}
-          data={permissionOptions}
+          data={[
+            ...(current ? [] : [{ value: '', label: 'Not set (Standard)' }]),
+            ...permissionOptions,
+          ]}
         />
         <Button type="submit" variant="primary" disabled={!dirty || busy}>
           {busy ? 'Saving…' : saved && !dirty ? 'Saved' : 'Save'}
@@ -163,7 +185,7 @@ export function FirstEnableDialog({
     setBusy(true);
     setError('');
     try {
-      await saveDefault(settings, mode);
+      await saveDefault(settings, mode, true);
       await onEnable();
     } catch (e) {
       setError(errorMessage(e));
