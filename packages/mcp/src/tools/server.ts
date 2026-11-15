@@ -94,7 +94,7 @@ export function createMcpServer(
   publishSchemaResources(server, workflowBundleSchema);
   tool(
     'doctor',
-    'Read-only readiness check. Reports storage, disk and harness status; disabled variables that upgrading to 0.3.0 would delete, with the workflows that reference them; enabled triggers with failures or automatic pauses; active pauses and uncertain resource reservations; and the variables, known model aliases and prompt pins that the latest published versions depend on. Set live:true to also probe model connectivity.',
+    'Read-only readiness check. Reports storage, disk and harness status; enabled triggers with failures or automatic pauses; active pauses and uncertain resource reservations; and the variables, known model aliases and prompt pins that the latest published versions depend on. Set live:true to also probe model connectivity.',
     doctorOptionsSchema,
     (options) => client.system.doctor(options),
   );
@@ -203,13 +203,13 @@ export function createMcpServer(
   );
   tool(
     'read_variables',
-    'Read instance-wide workflow variables. request.action:list returns metadata only, with search and offset/limit (25 default, 100 max), exact total and truncation. inspect returns metadata, availability, the local key-file location for recovery, paged dependent workflows and portable bindings (20 default, 50 max), plus active-run/comparison counts; retained-version samples cap at 20. config_value returns the ordinary Config value and its valueRevision. Secret read-back always rejects. Inspect before revision-protected edits or rebinding. Disabled, unset and locked values remain discoverable. No multi-user isolation is provided.',
+    'Read instance-wide workflow variables. request.action:list returns metadata only, with search and offset/limit (25 default, 100 max), exact total and truncation. inspect returns metadata, availability, the local key-file location for recovery, paged dependent workflows and portable bindings (20 default, 50 max), plus active-run/comparison counts; retained-version samples cap at 20. config_value returns the ordinary Config value and its valueRevision. Secret read-back always rejects. Inspect before revision-protected edits or rebinding. Unset and locked values remain discoverable. No multi-user isolation is provided.',
     z.object({ request: variableReadSchema }).strict(),
     (input) => client.variables.read(input.request),
   );
   tool(
     'manage_variables',
-    'Explicit write-only local variable management: create (Config/Secret; optional value), update (metadata, enabled or replacement value), delete, or bind a portable ID directly to a same-kind local variable. Updates/deletion require expectedRevision; binding starts at revision 0. Unique case-insensitive names and 16 KiB string values; Secret cannot be empty. No Secret read-back. Prefer the local UI or CLI stdin for credentials: supplying a value through MCP discloses it to this agent and transport. Rotation affects new captures; old run revisions remain for retry/restart. Disable blocks later consumption, including existing runs, but cannot recall already delivered values or revoke provider credentials. Delete blocks retained workflow, active-run, and comparison dependencies; inspect first. Rebinding affects future captures and requires dependency review. Mutations return safe metadata only.',
+    'Explicit write-only local variable management: create (Config/Secret; optional value), update (metadata or replacement value), delete, or bind a portable ID directly to a same-kind local variable. Updates/deletion require expectedRevision; binding starts at revision 0. Unique case-insensitive names and 16 KiB string values; Secret cannot be empty. No Secret read-back. Prefer the local UI or CLI stdin for credentials: supplying a value through MCP discloses it to this agent and transport. Rotation affects new captures; old run revisions remain for retry/restart. Delete blocks retained workflow, active-run, and comparison dependencies; inspect first. It cannot recall delivered values or revoke provider credentials. Rebinding affects future captures and requires dependency review. Mutations return safe metadata only.',
     z.object({ request: safeVariableMutationSchema }).strict(),
     (input) => client.variables.manage(input.request),
   );

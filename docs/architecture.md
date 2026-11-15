@@ -219,7 +219,7 @@ The native operation path resolves only referenced Fetch headers and Script
 environment entries, including polling checks. Persisted Fetch requests and
 previews retain safe references. Fetch requests that reference a Secret stop at
 redirects. Script inputs and Agent assignments do not receive
-injected values. Disabled, deleted, missing, or inaccessible exact revisions fail
+injected values. Deleted, missing, or inaccessible exact revisions fail
 without empty or latest-value fallback. Existing captures are checked again at
 consumption. Simulation substitutes operations without resolving live values.
 
@@ -237,9 +237,10 @@ accidental disclosure, not arbitrary transformations, partial values, or
 disclosures by trusted code outside Interlock. Literal credentials and unrelated
 host environment secrets are not automatically recognized.
 
-Old encrypted revisions remain while a variable exists. Disable rejects future
-consumption by new and retained runs but cannot recall already delivered values.
-Provider revocation is external. Deletion blocks draft and retained published
+Old encrypted revisions remain while a variable exists. Variables have no
+enabled state; schema 23 deleted variables that were disabled, with their
+revisions and bindings, and kept their value counters so a re-provisioned identity
+never reuses a captured revision. Provider revocation is external. Deletion blocks draft and retained published
 references, active captures, and running comparisons. Allowed deletion removes
 current protected revisions; safe history survives and backups may retain
 ciphertext. Later retries requiring a deleted revision fail explicitly.
@@ -664,11 +665,11 @@ Interlock provides a unified read-only readiness and health check via `interlock
 
 Core owns the diagnostic schemas (`diagnosticCategorySchema`, `diagnosticStatusSchema`, `diagnosticCheckSchema`, `doctorReportSchema`, and `doctorOptionsSchema`). Diagnostics evaluate five categories without mutating state or starting workflow runs:
 
-1. **System**: Checks engine version match, SQLite database integrity (`PRAGMA quick_check`), schema migration version, database file size and run history count, and available disk space (`statfsSync`). It also warns about each disabled variable, naming the workflow drafts and retained versions that reference it, because upgrading to 0.3.0 deletes disabled variables; with none disabled it reports that the upgrade needs no manual variable step.
+1. **System**: Checks engine version match, SQLite database integrity (`PRAGMA quick_check`), schema migration version, database file size and run history count, and available disk space (`statfsSync`).
 2. **Harnesses**: Verifies enabled harness profiles, binary detection, version discovery, `cwd` and `allowedRoots` existence, and optional live single-turn auth/model verification (`--live`).
 3. **Triggers**: Checks schedule execution lag (>60s), consecutive failures and automatic pauses across enabled schedule and lifecycle event triggers.
 4. **Blockers**: Inspects active library and workflow pause holds (`pauseHolds`), uncertain resource and executor holds (`uncertainClaims`, `uncertainOperations`, and uncertain `workResources` reservations), active stalled work items (`currentStalls`), and `needs_model` execution holds (`managedExecutions`).
-5. **Workflows**: Validates missing, disabled, unset, or locked variables, known missing aliases and unavailable candidate profiles, and required saved prompt content or exact publish pins in latest published workflows. Literal native model IDs remain valid. Released pauses do not count as active blockers. Detects unpublished content edits only in non-archived workflows, ignoring direct node positions; archived workflows retain their published-dependency checks.
+5. **Workflows**: Validates missing, unset, or locked variables, known missing aliases and unavailable candidate profiles, and required saved prompt content or exact publish pins in latest published workflows. Literal native model IDs remain valid. Released pauses do not count as active blockers. Detects unpublished content edits only in non-archived workflows, ignoring direct node positions; archived workflows retain their published-dependency checks.
 
 The overall status evaluates to `ok` if all checks pass, `warn` if warnings exist without errors, and `fail` if any check fails. The CLI exits with code 0 on `ok` and `warn`, and code 1 on `fail`.
 
