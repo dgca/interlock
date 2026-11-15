@@ -31,6 +31,10 @@ it.each([
   ).rejects.toThrow(location);
 });
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 const childSeesElectronVariable = `
   const { execFileSync } = require('node:child_process');
   const child = execFileSync(process.execPath, ['-e', 'process.stdout.write(String(process.env.ELECTRON_RUN_AS_NODE))'], { encoding: 'utf8' });
@@ -38,6 +42,8 @@ const childSeesElectronVariable = `
 `;
 
 it('keeps ELECTRON_RUN_AS_NODE from JavaScript Scripts under plain Node', async () => {
+  // The shell running the tests may have it set; plain Node means it is absent.
+  vi.stubEnv('ELECTRON_RUN_AS_NODE', undefined);
   expect(nodeRuntimeEnv({ FOO: 'bar' })).toEqual({ FOO: 'bar' });
   await expect(
     executeScript(
@@ -54,9 +60,6 @@ it('keeps ELECTRON_RUN_AS_NODE from JavaScript Scripts under plain Node', async 
 describe('inside an Electron engine', () => {
   beforeEach(() => {
     vi.stubEnv('ELECTRON_RUN_AS_NODE', '1');
-  });
-  afterEach(() => {
-    vi.unstubAllEnvs();
   });
 
   it('starts the Script process with ELECTRON_RUN_AS_NODE', () => {

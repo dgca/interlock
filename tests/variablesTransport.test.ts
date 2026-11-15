@@ -215,6 +215,21 @@ it.each(['http', 'stdio'])(
         expect(commandError(enabledError)).toBe(
           'Variables no longer have an enabled state. Delete the variable to stop its use. Values were not saved.',
         );
+        const laneError = await shared.boardTypes.save
+          .mutate({
+            type: {
+              name: 'Duplicate lanes',
+              lanes: [
+                { id: 'todo', name: 'To do' },
+                { id: 'todo', name: 'Again' },
+              ],
+            },
+          })
+          .catch((error: unknown) => error);
+        // Custom issues keep their path so the failing field is named.
+        expect(commandError(laneError)).toBe(
+          'Lane IDs must be unique and cannot be "unmapped" (at type.lanes)',
+        );
         const rejections = [
           {
             call: shared.variables.manage.mutate({

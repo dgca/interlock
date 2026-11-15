@@ -5,6 +5,7 @@ import { parseArgs } from 'node:util';
 import { usage } from './usage.js';
 import { pricingLines, runPricesCommand } from './prices.js';
 import { parse } from './json.js';
+import { customInputMessages } from './inputErrors.js';
 import { runLauncherCommand } from './launcher.js';
 import { parseSummaryArgs } from './args.js';
 import { runBoardCommand } from './boards.js';
@@ -503,30 +504,6 @@ export async function runCommand(argv: string[]) {
     default:
       return { usage };
   }
-}
-
-/**
- * Messages of a rejected input whose issues Interlock wrote itself, such as a
- * removed variable field. Other validation failures keep the full issue list.
- */
-function customInputMessages(message: string) {
-  try {
-    const issues: unknown = JSON.parse(message);
-    if (
-      Array.isArray(issues) &&
-      issues.length > 0 &&
-      issues.every(
-        (issue: { code?: unknown; message?: unknown }) =>
-          issue?.code === 'custom' && typeof issue.message === 'string',
-      )
-    )
-      return issues
-        .map((issue: { message: string }) => issue.message)
-        .join('\n');
-  } catch {
-    /* Not an issue list. */
-  }
-  return undefined;
 }
 
 export function commandError(error: unknown) {
