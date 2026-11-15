@@ -220,7 +220,10 @@ export const codexAdapter: HarnessAdapter = {
             if (
               !threadId ||
               call.threadId !== threadId ||
-              (call.turnId !== undefined && call.turnId !== turnId)
+              // A call can arrive before turn/start's reply names the turn.
+              (call.turnId !== undefined &&
+                turnId !== undefined &&
+                call.turnId !== turnId)
             )
               throw new Error('Request does not belong to this assignment');
             // No approval: save_memory_note writes only to Interlock, and
