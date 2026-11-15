@@ -1,4 +1,11 @@
 import type { api } from '../../lib/api';
+import { trpc, useQuery } from '../../lib/query';
+import { harnessLabel } from '../executors/harnessProfiles';
+import {
+  knownPermissions,
+  permissionLabels,
+  permissionSourceLabel,
+} from '../executors/permissions';
 import styles from './ImportWorkflowDialog.module.css';
 
 type DocumentPreview = Awaited<
@@ -6,6 +13,27 @@ type DocumentPreview = Awaited<
 >;
 
 const languages = { javascript: 'JavaScript', bash: 'Bash' };
+type AgentLevel = DocumentPreview['agentPermissions'][number];
+
+/**
+ * The level an imported workflow's managed Agents would run with here, worded
+ * as in Workflow settings. Unknown until local harnesses and settings load.
+ */
+function useAgentLevel() {
+  const profiles = useQuery(trpc.executors.profiles.queryOptions()).data;
+  const settings = useQuery(trpc.executors.settings.queryOptions()).data;
+  return (entry: AgentLevel) => {
+    if (entry.agentPermissions)
+      return `${permissionLabels[entry.agentPermissions]} · set in this workflow`;
+    if (entry.harness === null)
+      return 'No harness selected · a connected agent uses its own permissions';
+    const profile = profiles?.find((p) => p.id === entry.harness);
+    const known = profiles && knownPermissions(profile, settings);
+    return known
+      ? `${permissionLabels[known.permissions]} · ${permissionSourceLabel(known.source, profile && harnessLabel(profile))}`
+      : 'Not known yet · the harness level, else the default from AI Settings';
+  };
+}
 
 /**
  * Every Script an import contains, so a person can read the code before
@@ -16,6 +44,7 @@ function ImportedScripts({
   scripts,
   workspaces,
   policies,
+  agents,
 }: {
   scripts: {
     workflowName: string;
@@ -25,7 +54,9 @@ function ImportedScripts({
   }[];
   workspaces: DocumentPreview['workspaces'];
   policies: DocumentPreview['policies'];
+  agents: AgentLevel[];
 }) {
+  const level = useAgentLevel();
   return (
     <details className={styles.details}>
       <summary>
@@ -33,7 +64,9 @@ function ImportedScripts({
           ? `${scripts.length} Script${scripts.length === 1 ? '' : 's'} to review · imported Scripts wait for approval before their first run`
           : policies.length
             ? 'Permission policy to review · it waits for approval before it applies'
-            : 'Git worktree settings to review'}
+            : workspaces.length
+              ? 'Git worktree settings to review'
+              : 'Agent permissions to review'}
       </summary>
       {policies.map((policy, index) => (
         <div key={`policy-${index}`}>
@@ -42,6 +75,11 @@ function ImportedScripts({
             {policy.rules.join('\n')}
           </pre>
         </div>
+      ))}
+      {agents.map((entry, index) => (
+        <p key={`agents-${index}`}>
+          Agent permissions · {entry.workflowName}: {level(entry)}
+        </p>
       ))}
       {workspaces.map((workspace, index) => (
         <div key={`workspace-${index}`}>
@@ -76,6 +114,7 @@ export function Details({
     scripts?: DocumentPreview['scripts'];
     workspaces?: DocumentPreview['workspaces'];
     policies?: DocumentPreview['policies'];
+    agentPermissions?: DocumentPreview['agentPermissions'];
   };
   filename?: string;
   commit?: string;
@@ -93,7 +132,9 @@ export function Details({
   const scripts = item.scripts ?? [];
   const workspaces = item.workspaces ?? [];
   const policies = item.policies ?? [];
-  const review = scripts.length + workspaces.length + policies.length > 0;
+  const agents = item.agentPermissions ?? [];
+  const review =
+    scripts.length + workspaces.length + policies.length + agents.length > 0;
   if (!included && !filename && !commit && !review) return null;
   return (
     <>
@@ -102,6 +143,7 @@ export function Details({
           scripts={scripts}
           workspaces={workspaces}
           policies={policies}
+          agents={agents}
         />
       )}
       {(included || filename || commit) && (

@@ -61,7 +61,7 @@ Each managed execution keeps the count of actions the policy allowed and its lat
 
 ## Imported and agent-written policies wait for a person
 
-A policy grants an Agent actions, so it is reviewed like a Script. Import review lists each workflow's policy next to its Scripts and worktree settings. A policy that arrives in an import, or that an agent writes over MCP, does not apply until a person approves it: a new run waits at its entry with an **Approve permission policy** request in Review. A run already past its entry keeps going and its Agents keep asking. Approval applies to that exact policy in that workflow. A person's own edit applies without approval. With Script approval set to **Off**, policies apply without approval too.
+A policy grants an Agent actions, so it is reviewed like a Script. Import review lists each workflow's policy next to its Scripts, worktree settings and the agent permission level its Agents would run with here. A policy that arrives in an import, or that an agent writes over MCP, does not apply until a person approves it: a new run waits at its entry with an **Approve permission policy** request in Review. A run already past its entry keeps going and its Agents keep asking. Approval applies to that exact policy in that workflow. A person's own edit applies without approval. With Script approval set to **Off**, policies apply without approval too.
 
 Under a policy, an Agent that can edit workflows over MCP can still add Script nodes. Set Script approval to **Imports and agents** to make those Scripts wait for a person as well.
 
