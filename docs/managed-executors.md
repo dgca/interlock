@@ -16,13 +16,13 @@ Batch items use their owning workflow’s settings; invoked workflows use their 
 
 ## Choose permissions
 
-Set **AI Settings → Execution settings → Default agent permissions** once. Every managed Agent whose harness and workflow set no level of their own uses it. The first time you enable a harness before choosing a default, Interlock asks **How should managed agents run?** and saves your answer here. Enabling a harness through the CLI or MCP does not ask and does not set a default.
+Set **AI Settings → Execution settings → Default agent permissions** once. Every managed Agent whose harness and workflow set no level of their own uses it. The first time you enable a harness before choosing a default, Interlock asks **How should managed agents run?** and saves your answer here. Enabling a harness through the CLI or MCP does not ask and does not set a default, so its Agents run with **Full access** until you choose one.
 
-| Level       | What agents do                                                                                                               |
-| ----------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| Read only   | Inspect and analyze without modifying files.                                                                                 |
-| Standard    | Use the harness's Standard mode and stop for approval when it needs one. This is the level when no default is set.           |
-| Full access | Run commands and edit files without asking. The harness sandbox and approval prompts are off. Native deny rules still apply. |
+| Level       | What agents do                                                                                                                                                         |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Read only   | Inspect and analyze without modifying files.                                                                                                                           |
+| Standard    | Use the harness's Standard mode and stop for approval when it needs one.                                                                                               |
+| Full access | Run commands and edit files without asking. The harness sandbox and approval prompts are off. Native deny rules still apply. This is the level when no default is set. |
 
 A managed Agent uses the first level that is set:
 
@@ -32,9 +32,9 @@ A managed Agent uses the first level that is set:
 | 2     | Workflow **Agent permissions**                                    | workflow override  |
 | 3     | Harness **Edit defaults → Default permissions**                   | set on the harness |
 | 4     | **Default agent permissions**                                     | from AI Settings   |
-| 5     | Standard                                                          | from AI Settings   |
+| 5     | Full access                                                       | from AI Settings   |
 
-Harness **Default permissions** offers **Use default**, which shows the level it resolves to. Harnesses saved before this setting existed with **Standard**, the value every harness started with, follow the default. Choose **Standard** again in **Edit defaults** to keep a harness on Standard whatever the default is. **Read only** and **Full access** stay as saved.
+Harness **Default permissions** offers **Use default**, which shows the level it resolves to. Harnesses saved before this setting existed with **Standard**, the value every harness started with, follow the default, which is Full access until you choose one. Choose **Standard** again in **Edit defaults** to keep a harness on Standard whatever the default is. **Read only** and **Full access** stay as saved.
 
 A harness selected directly captures the level when it claims the assignment. A preset choice captures it when the assignment is created. Retries, custom launcher relaunches and later assignments in a continuity group keep the captured level, so changing the default affects only work captured afterwards. A workflow [permission policy](permission-policy.md) applies only under Standard. Custom integrations receive the resolved level and enforce it themselves.
 
@@ -328,7 +328,7 @@ interlock executors '{"action":"stop","executionId":"EXECUTION_ID"}'
 interlock executors '{"action":"reconcile","executionId":"EXECUTION_ID","confirmStopped":true}'
 ```
 
-Profile `permissions` is `read-only`, `standard` or `full-access`; omit it to use the shared default. Shared `settings` return `defaultPermissions` when one is set; `save_settings` accepts it, keeps it when omitted and clears it with `null`. A stored `standard` from before the shared default, and the retired draft value `ask`, read as omitted without changing saved revisions; a `standard` saved since stays explicit. Save replaces a profile and requires its current revision as `expectedRevision`. Omit returned `revision` and `detection` fields. Keep existing settings when updating; omitted settings reset to defaults. New and unsaved built-in profiles use revision zero. Questions use `answer.answers` keyed by exact question IDs with arrays of chosen answers. Inspection never returns claim tokens. Work discovery includes compact `executor`/`managedExecution` fields, while briefing `next:inspect_executor` supplies a read-only inspection call for human attention. Neither discovery nor inspection starts a model call.
+Profile `permissions` is `read-only`, `standard` or `full-access`; omit it to use the shared default, which is `full-access` while none is set. Shared `settings` return `defaultPermissions` when one is set; `save_settings` accepts it, keeps it when omitted and clears it with `null`. A stored `standard` from before the shared default, and the retired draft value `ask`, read as omitted without changing saved revisions; a `standard` saved since stays explicit. Save replaces a profile and requires its current revision as `expectedRevision`. Omit returned `revision` and `detection` fields. Keep existing settings when updating; omitted settings reset to defaults. New and unsaved built-in profiles use revision zero. Questions use `answer.answers` keyed by exact question IDs with arrays of chosen answers. Inspection never returns claim tokens. Work discovery includes compact `executor`/`managedExecution` fields, while briefing `next:inspect_executor` supplies a read-only inspection call for human attention. Neither discovery nor inspection starts a model call.
 
 The initial adapters target macOS/Linux installations. Native account access, enterprise restrictions and CLI version compatibility still require validation in the user's environment. OpenCode, other harnesses, Channels, remote workers, automatic permission decisions beyond a workflow [permission policy](permission-policy.md) and automatic harness installation are outside this increment.
 

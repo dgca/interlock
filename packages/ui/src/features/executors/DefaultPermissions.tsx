@@ -77,7 +77,7 @@ export function DefaultPermissionsSettings({
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
   const current = query.data?.defaultPermissions;
-  // '' is the unset state, which runs as Standard until a level is saved.
+  // '' is the unset state, which runs as Full access until a level is saved.
   const selected = mode ?? current ?? '';
   const dirty = !!mode && mode !== current;
   useEffect(() => onDirty?.(dirty), [dirty, onDirty]);
@@ -111,7 +111,7 @@ export function DefaultPermissionsSettings({
     >
       <div className={styles.sharedCopy}>
         <h3 className={styles.sharedLabel}>Default agent permissions</h3>
-        <p>{defaultDescriptions[selected || 'standard']}</p>
+        <p>{defaultDescriptions[selected || 'full-access']}</p>
         <p className={styles.sharedNote}>
           Applies to managed Agents whose harness and workflow set no level.
           Running assignments keep their mode.
@@ -133,7 +133,7 @@ export function DefaultPermissionsSettings({
             setSaved(false);
           }}
           data={[
-            ...(current ? [] : [{ value: '', label: 'Not set (Standard)' }]),
+            ...(current ? [] : [{ value: '', label: 'Not set (Full access)' }]),
             ...permissionOptions,
           ]}
         />

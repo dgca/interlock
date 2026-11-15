@@ -30,7 +30,7 @@ Interlock creates and publishes your own copy. It does not start a run. Edit, pu
 
 More detail for each:
 
-- [SDLC workflow](https://github.com/dgca/interlock/blob/main/docs/sdlc-workflow-v2.md). Each copy gets its own published **Plan review** and **Change review**, owned by that copy. Every Agent action asks a person until you turn on the workflow's Git worktree. Plan check commands run unprompted; pin them with `checkCommands`.
+- [SDLC workflow](https://github.com/dgca/interlock/blob/main/docs/sdlc-workflow-v2.md). Each copy gets its own published **Plan review** and **Change review**, owned by that copy. Its Agents follow your default agent permissions, which are Full access until you choose one. Under Standard, every Agent action asks a person until you turn on the workflow's Git worktree. Plan check commands run unprompted; pin them with `checkCommands`.
 - [Pull request watcher](https://github.com/dgca/interlock/blob/main/docs/pr-watcher.md). Gets its own copy of SDLC's **Change review**. Its one outward action is pushing reviewed fixes to the pull request's branch. It never force-pushes and never pushes to the default branch.
 - [Evaluate workflow comparison](https://github.com/dgca/interlock/blob/main/docs/workflow-evaluation.md). Reads the results of a [workflow comparison](testing-workflows.md#compare-two-published-versions).
 - [GitHub issue intake](https://github.com/dgca/interlock/blob/main/docs/integration-starters.md). On each issue it starts, it removes your label and adds a picked-up label. Adding it creates the `github_token` Secret without a value, or reuses one an earlier copy created. Set the value in **Variables** before the first run. It does not create an automation; add the schedule yourself.

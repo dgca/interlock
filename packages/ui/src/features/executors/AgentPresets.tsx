@@ -573,7 +573,7 @@ function PresetEditor({
             description={
               permissions
                 ? 'The stricter workflow or preset mode applies.'
-                : 'The workflow can override the harness default.'
+                : 'The workflow or harness level applies, else the default.'
             }
             inputWrapperOrder={['label', 'input', 'description', 'error']}
             value={permissions ?? ''}
@@ -584,10 +584,7 @@ function PresetEditor({
                   ExecutorPermissionMode | undefined,
               )
             }
-            data={[
-              { value: '', label: 'Use harness default' },
-              ...permissionOptions,
-            ]}
+            data={[{ value: '', label: 'Use default' }, ...permissionOptions]}
           />
         </div>
         {alias && name.trim().toLowerCase() !== alias.name.toLowerCase() && (

@@ -85,6 +85,18 @@ Upgrading to 0.3.0 deletes disabled workflow variables. Run `interlock doctor` f
 
 ## Changes that need action
 
+### Managed agents default to Full access
+
+After upgrading, managed Agents whose harness and workflow set no permission level run with **Full access** until you choose a default. Full access runs commands and edits files without asking; the harness sandbox and approval prompts are off. This includes harnesses saved with the original **Standard** value, which every harness started with.
+
+To keep approvals, do one of these:
+
+- Select **Standard** in **AI Settings → Execution settings → Default agent permissions** and save. **Not set (Full access)** there means no default is chosen yet.
+- Set **Standard** on a harness in **Edit defaults → Default permissions**.
+- Set **Standard** in a workflow's **Agent permissions**.
+
+Explicit levels keep winning: a workflow's or harness's **Standard** or **Read only**, and Agent preset permissions. Work that already captured a level keeps it.
+
 ### MCP response defaults in 0.2
 
 Interlock 0.2 changed the default responses of three MCP tools. In 0.1, omitted options return full inspection or assignments. In 0.2, they return summaries. Execution rules, stored workflows, UI responses and CLI responses are unchanged.

@@ -110,15 +110,18 @@ it('shows the resolved workflow level and its source, and lets the workflow over
   await choose(select(1), '__default');
   expect(container.textContent).toContain('Full access · set on Codex');
 });
-it('resolves a harness without its own level to the shared default', async () => {
+it('resolves a harness without its own level to Full access while no default is stored', async () => {
   rpc.profiles.mockResolvedValue([codex()]);
+  await render(h(WorkflowPermissions));
+  expect(container.textContent).toContain('Full access · from AI Settings');
   rpc.settings.mockResolvedValue({
     revision: 1,
     concurrency: 3,
-    defaultPermissions: 'full-access',
+    defaultPermissions: 'standard',
   });
+  await render(h('div'));
   await render(h(WorkflowPermissions));
-  expect(container.textContent).toContain('Full access · from AI Settings');
+  expect(container.textContent).toContain('Standard · from AI Settings');
 });
 
 // Ask once: only before a shared default exists (a stored default enables
@@ -242,7 +245,9 @@ it('offers an unset default so Standard can be saved explicitly', async () => {
     defaultPermissions: 'standard',
   });
   await render(h(DefaultPermissionsSettings));
-  expect(select(0).selectedOptions[0].textContent).toBe('Not set (Standard)');
+  expect(select(0).selectedOptions[0].textContent).toBe(
+    'Not set (Full access)',
+  );
   const save = () =>
     container.querySelector<HTMLButtonElement>('button[type="submit"]')!;
   expect(save().disabled).toBe(true);
@@ -256,6 +261,6 @@ it('offers an unset default so Standard can be saved explicitly', async () => {
     defaultPermissions: 'standard',
   });
   expect([...select(0).options].map((o) => o.textContent)).not.toContain(
-    'Not set (Standard)',
+    'Not set (Full access)',
   );
 });

@@ -61,7 +61,7 @@ function usePreset(e: Engine, d: WorkflowDefinition) {
 }
 
 // Workflow override, then the harness's own level, then the shared default,
-// then standard. Profiles saved before the shared default stored `standard`
+// then full access. Explicit levels keep winning while no default is stored. Profiles saved before the shared default stored `standard`
 // as their creation value, so that value follows the shared default. The
 // preset row routes through an Agent preset that sets no level.
 it.each([
@@ -71,7 +71,13 @@ it.each([
   ['standard', 'full-access', undefined, 'standard', 'harness'],
   ['legacy standard', 'full-access', undefined, 'full-access', 'global'],
   [undefined, 'full-access', undefined, 'full-access', 'global'],
-  [undefined, undefined, undefined, 'standard', 'global'],
+  [undefined, undefined, undefined, 'full-access', 'global'],
+  [undefined, undefined, 'standard', 'standard', 'workflow'],
+  [undefined, undefined, 'read-only', 'read-only', 'workflow'],
+  ['standard', undefined, undefined, 'standard', 'harness'],
+  ['read-only', undefined, undefined, 'read-only', 'harness'],
+  ['legacy standard', undefined, undefined, 'full-access', 'global'],
+  [undefined, 'standard', undefined, 'standard', 'global'],
   ['preset', 'full-access', undefined, 'full-access', 'global'],
 ] as const)(
   'resolves harness %s, shared default %s and workflow override %s',
@@ -182,7 +188,7 @@ it('keeps a continuity session on its captured mode when the shared default chan
         e.executors.saveSettings({
           expectedRevision: 0,
           concurrency: 3,
-          defaultPermissions: 'full-access',
+          defaultPermissions: 'standard',
         });
     }),
   ]);
@@ -201,11 +207,11 @@ it('keeps a continuity session on its captured mode when the shared default chan
   const r = e.start(w.id, 1).run;
   await vi.waitFor(() => expect(e.run(r.id).status).toBe('completed'));
   expect(calls.map((c) => c.profile.permissions)).toEqual([
-    'standard',
-    'standard',
+    'full-access',
+    'full-access',
   ]);
   expect(e.store.work().map((work) => work.executorPermissions)).toContain(
-    'full-access',
+    'standard',
   );
 });
 
