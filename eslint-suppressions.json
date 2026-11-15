@@ -2962,10 +2962,10 @@
       "count": 1
     },
     "@typescript-eslint/no-unsafe-assignment": {
-      "count": 5
+      "count": 3
     },
     "@typescript-eslint/no-unsafe-member-access": {
-      "count": 6
+      "count": 4
     },
     "@typescript-eslint/no-unsafe-return": {
       "count": 3
@@ -2974,7 +2974,7 @@
       "count": 4
     },
     "@typescript-eslint/require-await": {
-      "count": 24
+      "count": 22
     }
   },
   "tests/variableLibrary.test.ts": {
@@ -3019,7 +3019,7 @@
       "count": 21
     },
     "@typescript-eslint/no-unsafe-member-access": {
-      "count": 25
+      "count": 24
     },
     "@typescript-eslint/no-unsafe-return": {
       "count": 1

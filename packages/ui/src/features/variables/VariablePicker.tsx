@@ -11,7 +11,6 @@ import styles from './VariablePicker.module.css';
 export type VariableSummary = SavedVariable & { availability: string };
 const availabilityLabels: Record<string, string> = {
   unset: 'Value not set',
-  disabled: 'Use disabled',
   locked: 'Value locked',
 };
 function optionLabel(variable: VariableSummary) {

@@ -129,7 +129,6 @@ function savedVariable(kind: 'secret' | 'config' = 'secret', references = 0) {
     name: 'saved_variable',
     description: 'Saved description',
     kind,
-    enabled: true,
     revision: 1,
     valueRevision: 1,
     availability: 'ready' as const,
@@ -208,8 +207,6 @@ it.each([0, 1])(
         (summary) => summary.textContent,
       ),
     ).not.toContain('Danger zone');
-    expect(container.textContent).not.toContain('Disable use');
-    expect(container.textContent).not.toContain('Enable use');
     expect(container.textContent).toContain('Storage and recovery');
     expect(remove.disabled).toBe(false);
     await act(async () => {
@@ -250,42 +247,6 @@ it('omits variable Delete while creating a new variable', async () => {
     'Delete',
   );
   expect(read).not.toHaveBeenCalled();
-});
-
-it('keeps already-disabled variables read-only about their status while metadata saves omit enablement', async () => {
-  let saved = { ...savedVariable(), enabled: false, availability: 'disabled' };
-  read.mockImplementation(async () => saved);
-  manage.mockImplementation(async (input) => {
-    saved = {
-      ...saved,
-      name: input.name,
-      description: input.description,
-      revision: saved.revision + 1,
-    };
-    return saved;
-  });
-  await show();
-  expect(container.textContent).toContain(
-    'This variable is disabled. Restore access with the CLI.',
-  );
-  expect(container.textContent).not.toContain('Enable use');
-  expect(container.textContent).not.toContain('Disable use');
-  expect(container.textContent).not.toContain('Danger zone');
-  expect(manage).not.toHaveBeenCalled();
-  await changeName('renamed_variable');
-  await submit();
-  expect(manage).toHaveBeenCalledWith({
-    action: 'update',
-    id: 'v',
-    expectedRevision: 1,
-    name: 'renamed_variable',
-    description: 'Saved description',
-  });
-  expect(manage.mock.lastCall![0]).not.toHaveProperty('enabled');
-  expect(saved.enabled).toBe(false);
-  expect(container.textContent).toContain(
-    'This variable is disabled. Restore access with the CLI.',
-  );
 });
 
 it('retains the last Config value when reading a new revision fails and retries that revision', async () => {

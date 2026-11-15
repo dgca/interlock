@@ -62,7 +62,7 @@ function create(
 function update(
   engine: Engine,
   variable: SavedVariable,
-  patch: { value?: string; enabled?: boolean; name?: string },
+  patch: { value?: string; name?: string },
 ) {
   return engine.variables.mutate({
     action: 'update',
@@ -391,17 +391,19 @@ it('delivers only declared Script environment entries and scrubs stdout, JSON ke
   expect(error.error).not.toContain(token);
 });
 
-it('blocks missing, disabled, stale and retained references without fallback and preserves legacy scripts', async () => {
+it('blocks missing, stale and retained references without fallback and preserves legacy scripts', async () => {
   const { engine } = setup();
   const v = create(engine);
-  const id = publish(engine, script(v.id));
-  const disabled = update(engine, v, { enabled: false });
-  expect(() => engine.start(id, {})).toThrow(/disabled/);
+  publish(engine, script(v.id));
+  // 0.3.0 removed enablement; rejecting it keeps old callers from assuming a block.
+  expect(() => update(engine, v, { enabled: false } as never)).toThrow(
+    /no longer have an enabled state/,
+  );
   expect(() =>
     engine.variables.mutate({
       action: 'delete',
       id: v.id,
-      expectedRevision: disabled.revision,
+      expectedRevision: v.revision,
     }),
   ).toThrow(/dependent workflows/);
   expect(() => publish(engine, script('missing-id'))).toThrow(/missing/);
@@ -937,22 +939,6 @@ it('keeps a captured value across server restart and explicit retry after rotati
     `Bearer ${token}`,
     'Bearer new-after-restart',
   ]);
-});
-
-it('disables later consumption by an already captured run and re-enables its original revision', async () => {
-  const { engine } = setup();
-  const endpoint = await service();
-  const v = create(engine);
-  const id = publish(engine, fetchDefinition(v.id, endpoint.url, true));
-  const run = engine.start(id, {}).run;
-  const disabled = update(engine, v, { enabled: false });
-  completeAgent(engine, run.id);
-  expect((await done(engine, run.id)).error).toContain('disabled');
-  expect(endpoint.headers).toEqual([]);
-  update(engine, disabled, { enabled: true });
-  engine.retry(run.id);
-  await done(engine, run.id);
-  expect(endpoint.headers).toEqual([`Bearer ${token}`]);
 });
 
 it.each(['wait', 'detached'] as const)(

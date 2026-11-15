@@ -165,14 +165,7 @@ it.each(['http', 'stdio'])(
           [variable.id]: { action: 'bind', variableId: variable.id },
         },
       });
-      await call('manage_variables', {
-        request: {
-          action: 'update',
-          id: variable.id,
-          expectedRevision: 1,
-          enabled: false,
-        },
-      });
+      // 0.3.0 removed enablement: old callers are rejected, not ignored.
       await call(
         'manage_variables',
         {
@@ -180,18 +173,37 @@ it.each(['http', 'stdio'])(
             action: 'update',
             id: variable.id,
             expectedRevision: 1,
+            enabled: false,
+          },
+        },
+        true,
+      );
+      await call(
+        'manage_variables',
+        {
+          request: {
+            action: 'update',
+            id: variable.id,
+            expectedRevision: 2,
             value: token,
           },
         },
         true,
       );
-      await call('start_run', { workflowId: w.id, input: {} }, true);
       await call(
         'manage_variables',
-        { request: { action: 'delete', id: variable.id, expectedRevision: 2 } },
+        { request: { action: 'delete', id: variable.id, expectedRevision: 1 } },
         true,
       );
       if (mode === 'http') {
+        await expect(
+          shared.variables.manage.mutate({
+            action: 'update',
+            id: 'any-variable',
+            expectedRevision: 1,
+            enabled: false,
+          }),
+        ).rejects.toThrow('Variables no longer have an enabled state');
         const rejections = [
           {
             call: shared.variables.manage.mutate({

@@ -14,6 +14,7 @@ import {
   scriptOperationSchema,
   workResourceRequestSchema,
   variableReadSchema,
+  variableMutationError,
   variableMutationSchema,
   variableImportBindingsSchema,
   executorOperationSchema,
@@ -217,8 +218,7 @@ export const appRouter = t.router({
           if (!parsed.success) {
             context.addIssue({
               code: z.ZodIssueCode.custom,
-              message:
-                'Invalid variable change. Check required fields, name, value size, and expectedRevision. Values were not saved.',
+              message: variableMutationError(input),
             });
             return z.NEVER;
           }
