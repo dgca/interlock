@@ -337,14 +337,15 @@ it.each([claudeAdapter, codexAdapter])(
 
 it.each(
   [claudeAdapter, codexAdapter].flatMap((adapter) =>
-    (['read-only', 'standard', 'full-access'] as const).map((permissions) => ({
-      adapter,
-      permissions,
-    })),
+    // An unresolved level must fail narrow: adapters treat it as Standard.
+    (['read-only', 'standard', 'full-access', undefined] as const).map(
+      (permissions) => ({ adapter, permissions }),
+    ),
   ),
 )(
   'maps $adapter.id $permissions into native controls',
   async ({ adapter, permissions }) => {
+    const mode = permissions ?? 'standard';
     const requests: any[] = [];
     const result = await adapter.run({
       command,
@@ -355,7 +356,7 @@ it.each(
         harness: adapter.id,
         name: adapter.id,
         permissions,
-        model: 'permissions-' + permissions,
+        model: 'permissions-' + mode,
       }),
       signal: new AbortController().signal,
       onSession: () => {},
@@ -365,10 +366,10 @@ it.each(
         return { allow: false };
       },
     });
-    expect(result.output).toEqual({ ok: permissions === 'full-access' });
-    expect(requests).toHaveLength(permissions === 'standard' ? 1 : 0);
+    expect(result.output).toEqual({ ok: mode === 'full-access' });
+    expect(requests).toHaveLength(mode === 'standard' ? 1 : 0);
     // The policy judges the same action each harness asks about.
-    if (permissions === 'standard')
+    if (mode === 'standard')
       expect(requests[0]).toHaveProperty('action', {
         kind: 'command',
         command: 'test command',

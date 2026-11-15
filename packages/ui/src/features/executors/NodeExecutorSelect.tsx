@@ -7,7 +7,6 @@ import {
 } from '../../design-system';
 import {
   firstEligiblePresetChoice,
-  harnessPermissions,
   inheritsWorkflowHarnessSettings,
   presetPermissions,
   usesDirectHarness,
@@ -24,7 +23,11 @@ import {
 } from './harnessProfiles';
 import { ModelSettings } from './ModelSettings';
 import { readModelAliases, inspectModelReference } from './modelAliasApi';
-import { permissionLabels, permissionSourceLabel } from './permissions';
+import {
+  knownPermissions,
+  permissionLabels,
+  permissionSourceLabel,
+} from './permissions';
 
 type Agent = Extract<WorkflowDefinition['nodes'][number], { kind: 'agent' }>;
 type Selection = Pick<Agent, 'executor' | 'executorMode' | 'model' | 'effort'>;
@@ -59,10 +62,10 @@ export function NodeExecutorSelect({
     ...trpc.executors.profiles.queryOptions(),
     enabled,
   });
-  const defaultPermissions = useQuery({
+  const settings = useQuery({
     ...trpc.executors.settings.queryOptions(),
     enabled,
-  }).data?.defaultPermissions;
+  }).data;
   const presetsQuery = useQuery({
     queryKey: [...trpc.modelAliases.pathKey(), 'executor-options'],
     queryFn: listPresets,
@@ -278,12 +281,9 @@ export function NodeExecutorSelect({
       (value === workflowDefault || nodeMasksWorkflowPreset
         ? activeDefaultProfile
         : undefined));
-  const selectedPermissions = selectedProfile && {
-    ...harnessPermissions(selectedProfile, defaultPermissions),
-    ...(workflowPermissions
-      ? { permissions: workflowPermissions, source: 'workflow' as const }
-      : {}),
-  };
+  const selectedPermissions = workflowPermissions
+    ? { permissions: workflowPermissions, source: 'workflow' as const }
+    : knownPermissions(selectedProfile, settings);
   const showModels = !savedPreset && !!selectedProfile;
   const inheritSettings =
     selectedProfile &&
@@ -304,6 +304,12 @@ export function NodeExecutorSelect({
     value === workflowDefault ? workflowChoice : savedChoice;
   const effectivePreset =
     value === workflowDefault ? workflowAlias : savedPreset;
+  // Omitted while the shared default is unknown and the harness sets none.
+  const presetLevel =
+    effectivePreset &&
+    effectiveChoice &&
+    (presetPermissions(effectivePreset.permissions, workflowPermissions) ??
+      knownPermissions(effectiveChoice.profile, settings)?.permissions);
   return (
     <Stack gap="sm" mb="md">
       <Select<string>
@@ -426,19 +432,7 @@ export function NodeExecutorSelect({
               {effectiveChoice.candidate.effort
                 ? ` · ${effectiveChoice.candidate.effort} effort`
                 : ''}
-              {' · '}
-              {
-                permissionLabels[
-                  presetPermissions(
-                    effectivePreset.permissions,
-                    workflowPermissions,
-                  ) ??
-                    harnessPermissions(
-                      effectiveChoice.profile,
-                      defaultPermissions,
-                    ).permissions
-                ]
-              }
+              {presetLevel ? ` · ${permissionLabels[presetLevel]}` : ''}
               {effectiveChoice.profile.harness === 'custom' ? ' requested' : ''}
             </Text>
           )}

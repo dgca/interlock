@@ -778,6 +778,7 @@ it('rejects reconciliation for a live managed permission request', async () => {
     harness: 'codex',
     name: 'Live request test',
     enabled: true,
+    permissions: 'standard',
     expectedRevision: 0,
   });
   e.executors.start([
@@ -785,11 +786,7 @@ it('rejects reconciliation for a live managed permission request', async () => {
       id: 'codex',
       detect: async () => ({ status: 'detected', command: '/fake/codex' }),
       run: async (input) => {
-        await input.request({
-          kind: 'permission',
-          title: 'Use tool',
-          detail: 'Wait for user permission',
-        });
+        await input.request({ kind: 'permission', title: 'Tool', detail: '' });
         return { output: {} };
       },
     },

@@ -321,6 +321,7 @@ it('records live managed needs_human exclusion and resumes idle timing after the
     harness: 'codex',
     name: 'Fake',
     enabled: true,
+    permissions: 'standard',
     expectedRevision: 0,
   });
   e.executors.start([

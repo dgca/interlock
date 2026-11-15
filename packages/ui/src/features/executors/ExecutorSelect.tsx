@@ -3,10 +3,7 @@ import { NativeSelect, SimpleGrid, Stack } from '../../design-system';
 import { errorMessage } from '../../lib/api';
 import { trpc, useQuery } from '../../lib/query';
 import { paths } from '../../routes/paths';
-import {
-  harnessPermissions,
-  type ExecutorPermissionMode,
-} from '@interlock/core';
+import type { ExecutorPermissionMode } from '@interlock/core';
 import {
   harnessLabel,
   harnessAvailability,
@@ -19,6 +16,7 @@ import {
   permissionDescriptions,
   permissionOptions,
   permissionSourceLabel,
+  knownPermissions,
 } from './permissions';
 
 export function ExecutorSelect({
@@ -63,12 +61,9 @@ export function ExecutorSelect({
     ? 'Shared assignment limit could not be loaded.'
     : '';
   const profile = profiles?.find((p) => p.id === value);
-  const inherited = harnessPermissions(
-    profile,
-    settingsQuery.data?.defaultPermissions,
-  );
-  const effective = workflowPermissions ?? inherited.permissions;
-  const source = workflowPermissions ? 'workflow' : inherited.source;
+  const inherited = knownPermissions(profile, settingsQuery.data);
+  const effective = workflowPermissions ?? inherited?.permissions;
+  const source = workflowPermissions ? 'workflow' : inherited?.source;
   return (
     <Stack gap="sm" mb="md">
       <SimpleGrid
@@ -136,7 +131,9 @@ export function ExecutorSelect({
               ]}
             />
             <p className="hint">
-              {profile || workflowPermissions ? (
+              {!effective || !source ? (
+                'Uses the default from AI Settings.'
+              ) : profile || workflowPermissions ? (
                 <>
                   {permissionLabels[effective]} ·{' '}
                   {permissionSourceLabel(

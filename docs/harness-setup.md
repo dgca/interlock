@@ -18,7 +18,7 @@ The first time you enable a harness, Interlock asks **How should managed agents 
 | **Full access**                   | Run commands and edit files without asking. The harness sandbox and approval prompts are off.  |
 | **Ask before actions (Standard)** | Stop for your approval before commands and file changes the harness does not allow on its own. |
 
-Your answer becomes **Default agent permissions** in **AI Settings → Execution settings**. Every harness and workflow without its own level follows it. Change it there at any time. Cancel leaves the harness off. See [permission levels](https://github.com/dgca/interlock/blob/main/docs/managed-executors.md#choose-permissions).
+Your answer becomes **Default agent permissions** in **AI Settings → Execution settings**. Every harness and workflow without its own level follows it. Change it there at any time. Cancel leaves the harness off. A harness enabled over the CLI or MCP skips the question and runs Agents with Full access until a default is chosen. See [permission levels](https://github.com/dgca/interlock/blob/main/docs/managed-executors.md#choose-permissions).
 
 Choose the harness in **Workflow settings → Default Agent executor** or in an Agent node's **Execution → Executor**. Use **Add integration** for a custom harness.
 

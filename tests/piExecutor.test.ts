@@ -177,7 +177,8 @@ it('cancels a Pi subprocess awaiting model completion', async () => {
   await rejected;
 }, 10000);
 it('blocks unknown tools in read-only mode and fails closed without approval UI', async () => {
-  for (const mode of ['read-only', 'standard'] as const) {
+  // An unresolved level fails narrow: undefined behaves as Standard.
+  for (const mode of ['read-only', 'standard', undefined] as const) {
     let handler: any;
     const extension = await import(
       `data:text/javascript,${encodeURIComponent(piPermissions(mode, 'verify'))}`

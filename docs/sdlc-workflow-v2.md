@@ -78,9 +78,9 @@ Each workflow can be checked with [fixture simulation](workflow-simulation.md), 
 
 ## Run with few approvals
 
-The quickest way is **Full access**. Choose it in **AI Settings → Execution settings → Default agent permissions**, or when you first enable a harness. The SDLC builder and **Change review** set no level of their own, so they follow it and run without asking. **Plan review** stays **Read only**. Full access removes the harness sandbox and approval prompts, so use it only on a repository you trust. Copies imported before this change set **Standard** on the workflow; switch their **Agent permissions** to **Use default** to follow the default.
+The quickest way is **Full access**. It is the level when no default agent permissions are chosen; you can also choose it in **AI Settings → Execution settings → Default agent permissions**, or when you first enable a harness. The SDLC builder and **Change review** set no level of their own, so they follow it and run without asking. **Plan review** stays **Read only**. Full access removes the harness sandbox and approval prompts, so use it only on a repository you trust. Copies imported before this change set **Standard** on the workflow; switch their **Agent permissions** to **Use default** to follow the default.
 
-To keep approvals but skip routine ones, stay on **Standard** and use the permission policy below.
+To keep approvals but skip routine ones, choose **Standard** as the default (or on the workflow) and use the permission policy below.
 
 Under **Standard**, every Agent action asks a person, but the check commands Interlock runs before each review do not: they run as a Script with your permissions, not as an Agent action. When the plan chooses them and `reviewPolicy` is `auto` on a small change, nobody sees them before they run. Pin them with the `checkCommands` input, or use `reviewPolicy: "always"` to approve each plan first; plan approval lists the commands.
 

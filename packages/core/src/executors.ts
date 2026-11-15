@@ -21,14 +21,18 @@ export type ExecutorPermissionMode = z.infer<
 >;
 /** Where a managed Agent's permission mode came from. `global` is the shared default. */
 export type PermissionSource = 'workflow' | 'harness' | 'global' | 'preset';
-/** A harness profile's own level, else the shared default, else standard. */
+/**
+ * A harness profile's own level, else the shared default, else full access.
+ * Only this resolution supplies full access; adapters given no level treat it
+ * as standard.
+ */
 export function harnessPermissions(
   profile: { permissions?: ExecutorPermissionMode } | undefined,
   defaultPermissions: ExecutorPermissionMode | undefined,
 ): { permissions: ExecutorPermissionMode; source: 'harness' | 'global' } {
   return profile?.permissions
     ? { permissions: profile.permissions, source: 'harness' }
-    : { permissions: defaultPermissions ?? 'standard', source: 'global' };
+    : { permissions: defaultPermissions ?? 'full-access', source: 'global' };
 }
 export const executorModelSchema = z.string().trim().min(1).max(200);
 export const executorEffortSchema = z
@@ -93,7 +97,9 @@ export const executorSettingsSchema = z
     concurrency: executorConcurrencySchema.default(3),
     defaultPermissions: executorPermissionModeSchema
       .optional()
-      .describe('Level when harness and workflow set none; unset is standard.'),
+      .describe(
+        'Level when harness and workflow set none; unset is full-access.',
+      ),
     allowedRoots: z
       .array(allowedRootSchema)
       .optional()

@@ -242,6 +242,8 @@ try {
           name: harness,
           enabled: true,
           command: harnessFixture,
+          // Standard is explicit: with no default stored, Agents run with Full access.
+          permissions: 'standard',
           expectedRevision: 0,
         },
       },
