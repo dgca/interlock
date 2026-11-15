@@ -7,7 +7,9 @@ import {
   Button,
   SegmentedControl,
 } from '../../design-system';
+
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+
 import {
   ArrowUpRight,
   Check,
@@ -22,6 +24,7 @@ import type {
   ExecutorRequest,
   WorkRequest,
 } from '@interlock/core';
+
 import { api, errorMessage } from '../../lib/api';
 import styles from './ManagedExecutionPanel.module.css';
 import { permissionLabels, permissionSourceLabel } from './permissions';
@@ -70,6 +73,7 @@ function Execution({
   const [error, setError] = useState('');
   const [busy, setBusy] = useState<string>();
   const [copiedResume, setCopiedResume] = useState(false);
+
   const handleCopyResume = (cmd: string) => {
     void navigator.clipboard.writeText(cmd);
     setCopiedResume(true);

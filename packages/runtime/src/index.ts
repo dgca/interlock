@@ -145,6 +145,7 @@ import { ExternalInputs } from './externalInputs.js';
 import { AssignmentSizes } from './assignmentSize.js';
 import { ContextContinuityGroups } from './contextContinuity.js';
 import { claimTokenHash, leaseCounts, expiredClaimMessage } from './leases.js';
+
 class ExpiredClaimError extends InterlockError {}
 type Cb = (() => void)[];
 const now = () => new Date().toISOString();
@@ -3117,6 +3118,7 @@ export class Engine {
       this.executors.deadlineRevoked(work);
       return;
     }
+
     if (exhausted) {
       work.status = 'failed';
       this.fail(
@@ -3403,5 +3405,6 @@ export class Engine {
     return this.inspect(id);
   }
 }
+
 export { runDoctor } from './doctor.js';
 export { generateWorkflowReport } from './report.js';
