@@ -80,8 +80,8 @@ The macOS desktop application (`packages/desktop`) packages the engine and UI in
 From the repository root, build the workspace dependencies (`pnpm build`), then run:
 
 ```sh
-# Unpacked application bundle for local testing (packages/desktop/dist/mac*):
-pnpm --filter @interlock/desktop pack:mac
+# Unpacked application bundle for local testing (packages/desktop/release/mac*):
+pnpm --filter @interlock/desktop dist:dir
 
 # Packaged distribution artifacts (.dmg, .zip, latest-mac.yml):
 pnpm --filter @interlock/desktop dist:mac
@@ -103,9 +103,11 @@ Production macOS builds require Apple Developer ID code signing and notarization
 
 Electron-builder signs the `.app` bundle, creates the `.dmg` and `.zip` distribution packages, submits the build to Apple's notarization service via `notarytool`, and staples the notarization ticket to the application and disk image.
 
+The `release-macos` job in `.github/workflows/release.yml` runs on `macos-latest` when a release publishes on `main` (or via manual `workflow_dispatch`). It imports Apple's Developer ID G2 intermediate certificate, builds and notarizes the application, and attaches the distribution artifacts to the GitHub release.
+
 ### Auto-update artifacts
 
-The `dist:mac` target produces three key release artifacts uploaded to GitHub Releases:
+The `dist:mac` target produces release artifacts in `packages/desktop/release/` uploaded to GitHub Releases:
 
 - `Interlock-<version>-<arch>.dmg`: User-facing disk image installer.
 - `Interlock-<version>-<arch>-mac.zip`: Signed zip archive consumed by `electron-updater` for Squirrel.Mac in-app updates.

@@ -12,10 +12,16 @@ export interface DesktopBuilderConfig {
   extraMetadata: {
     version: string;
   };
+  directories: {
+    output: string;
+    buildResources: string;
+  };
   mac: {
     target: MacBuilderTarget[];
     category: string;
+    icon: string;
     hardenedRuntime: boolean;
+    notarize: boolean;
     entitlements: string;
     entitlementsInherit: string;
   };
@@ -40,13 +46,19 @@ export function createDesktopBuilderConfig(
     extraMetadata: {
       version,
     },
+    directories: {
+      output: 'release',
+      buildResources: 'build',
+    },
     mac: {
       target: [
         { target: 'dmg', arch: ['arm64', 'x64'] },
         { target: 'zip', arch: ['arm64', 'x64'] },
       ],
       category: 'public.app-category.developer-tools',
+      icon: 'build/icon.icns',
       hardenedRuntime: true,
+      notarize: true,
       entitlements: 'build/entitlements.mac.plist',
       entitlementsInherit: 'build/entitlements.mac.plist',
     },

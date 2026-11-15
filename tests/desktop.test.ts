@@ -52,6 +52,8 @@ import {
 } from '../packages/desktop/src/updater.js';
 import {
   DESKTOP_VERSION,
+  TRAY_ICON_1X_DATA_URL,
+  TRAY_ICON_2X_DATA_URL,
   buildAppMenuTemplate,
   buildTrayMenuTemplate,
 } from '../packages/desktop/src/menu.js';
@@ -607,6 +609,10 @@ describe('cliInstall & bin wrapper', () => {
     expect(electronBuilderConfig.appId).toBe('com.typeof.interlock');
     expect(electronBuilderConfig.productName).toBe('Interlock');
     expect(electronBuilderConfig.buildVersion).toBe(VERSION);
+    expect(electronBuilderConfig.directories.output).toBe('release');
+    expect(electronBuilderConfig.directories.buildResources).toBe('build');
+    expect(electronBuilderConfig.mac.icon).toBe('build/icon.icns');
+    expect(electronBuilderConfig.mac.notarize).toBe(true);
     expect(electronBuilderConfig.mac.target).toEqual([
       { target: 'dmg', arch: ['arm64', 'x64'] },
       { target: 'zip', arch: ['arm64', 'x64'] },
@@ -744,6 +750,8 @@ describe('menus', () => {
     });
 
     expect(DESKTOP_VERSION).toBe(VERSION);
+    expect(TRAY_ICON_1X_DATA_URL).toMatch(/^data:image\/png;base64,/);
+    expect(TRAY_ICON_2X_DATA_URL).toMatch(/^data:image\/png;base64,/);
     expect(appMenu.find((item) => item.label === 'Interlock')).toBeDefined();
     expect(appMenu.find((item) => item.label === 'Edit')).toBeDefined();
   });
