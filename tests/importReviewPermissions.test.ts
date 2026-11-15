@@ -65,13 +65,18 @@ it('shows each imported workflow agent level and its source', async () => {
   const noAgents = blankDefinition();
   noAgents.nodes = noAgents.nodes.filter((n) => n.kind !== 'agent');
   const review = importReview([
-    { name: 'Builder', draft: inherits },
+    { id: 'builder', name: 'Builder', draft: inherits },
     { name: 'Reviewer', draft: readOnly },
     { name: 'Notifier', draft: noAgents },
+    // Owned helpers without a harness run on their owner's.
+    { name: 'Helper', ownerWorkflowId: 'builder', draft: blankDefinition() },
+    { name: 'Orphan', ownerWorkflowId: 'missing', draft: blankDefinition() },
   ]);
   expect(review.agentPermissions.map((a) => a.workflowName)).toEqual([
     'Builder',
     'Reviewer',
+    'Helper',
+    'Orphan',
   ]);
   await act(async () => {
     root.render(
@@ -89,6 +94,12 @@ it('shows each imported workflow agent level and its source', async () => {
   );
   expect(lines).toContain(
     'Agent permissions · Reviewer: Read only · set in this workflow',
+  );
+  expect(lines).toContain(
+    "Agent permissions · Helper: Full access · from AI Settings · uses Builder's agent",
+  );
+  expect(lines).toContain(
+    'Agent permissions · Orphan: No harness selected · a connected agent uses its own permissions',
   );
   expect(lines.join('\n')).not.toContain('Notifier');
 });

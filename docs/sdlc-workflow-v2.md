@@ -10,6 +10,8 @@ Each import publishes a new SDLC copy and its own copies of Plan review and Chan
 
 The steps need a coding agent with file access, Git and the repository's tools: a [managed executor](managed-executors.md) or a [connected agent](connect-harness.md). The plan and change reviewers need fresh context: a new session or an isolated subagent. Pull requests need the repository's own tooling and credentials.
 
+To run it unattended, open the SDLC workflow's **Workflow settings**, choose a harness as **Default Agent executor**, and publish. Plan review and Change review set no executor of their own, so they use the SDLC workflow's harness; you do not need to set it on them or re-pin them.
+
 ## Start a change
 
 ```json

@@ -410,6 +410,8 @@ export interface ManagedExecution {
   state: ExecutorState;
   profile: ExecutorProfile;
   permissionSource?: PermissionSource;
+  /** The harness came from the owning workflow that invoked this helper. */
+  executorSource?: 'caller';
   /** Present when the workflow has a permission policy. */
   permissionPolicy?: {
     state: 'applied' | 'awaiting_approval' | 'unavailable';

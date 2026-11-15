@@ -332,7 +332,6 @@ export class ExecutorManager {
         profile: record.profile,
         prefixOverrides: this.settings().providerPrefixes,
       });
-
     return {
       profileId: record.profile.id,
       harness: record.profile.harness,
@@ -956,6 +955,7 @@ export class ExecutorManager {
           state: 'starting',
           profile,
           permissionSource,
+          executorSource: work.executorSource,
           modelSource,
           effortSource,
           command: session.command,

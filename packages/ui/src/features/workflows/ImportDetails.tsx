@@ -22,7 +22,9 @@ type AgentLevel = DocumentPreview['agentPermissions'][number];
 function useAgentLevel() {
   const profiles = useQuery(trpc.executors.profiles.queryOptions()).data;
   const settings = useQuery(trpc.executors.settings.queryOptions()).data;
-  return (entry: AgentLevel) => {
+  return (entry: AgentLevel) =>
+    `${level(entry)}${entry.harnessOwner ? ` · uses ${entry.harnessOwner}'s agent` : ''}`;
+  function level(entry: AgentLevel) {
     if (entry.agentPermissions)
       return `${permissionLabels[entry.agentPermissions]} · set in this workflow`;
     if (entry.harness === null)
@@ -32,7 +34,7 @@ function useAgentLevel() {
     return known
       ? `${permissionLabels[known.permissions]} · ${permissionSourceLabel(known.source, profile && harnessLabel(profile))}`
       : 'Not known yet · the harness level, else the default from AI Settings';
-  };
+  }
 }
 
 /**

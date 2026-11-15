@@ -26,7 +26,6 @@ import { ParallelBranchesEditor } from './ParallelBranchesEditor';
 import { NodeResultEditor } from './NodeResultEditor';
 import { StageInput } from './StageInput';
 import { HumanInputEditor } from './HumanInputEditor';
-
 import {
   DEFAULT_BATCH_MAX_ITEMS,
   MAX_BATCH_ITEMS,
@@ -337,6 +336,7 @@ export function NodeInspector({
             <NodeSection name="execution">
               <NodeExecutorSelect
                 node={node}
+                workflowId={workflowId}
                 definition={definition}
                 enabled={active === 'execution'}
                 onChange={patch}

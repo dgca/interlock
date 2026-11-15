@@ -37,6 +37,7 @@ export type WorkMetadata = Pick<
   | 'executorModelSource'
   | 'executorEffort'
   | 'executorEffortSource'
+  | 'executorSource'
   | 'managedExecution'
   | 'id'
   | 'createdAt'

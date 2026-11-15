@@ -103,6 +103,8 @@ export function definitionScripts(
  */
 export function importedScripts(
   workflows: readonly {
+    id?: string;
+    ownerWorkflowId?: string | null;
     name: string;
     draft?: ScriptSource;
     versions?: readonly { definition: ScriptSource }[];
@@ -171,28 +173,43 @@ function importedPolicies(workflows: Parameters<typeof importedScripts>[0]) {
  * Each distinct agent permission setting of a workflow with Agent steps: its
  * own `agentPermissions`, if any, and the harness its Agents use by default.
  * `harness` is null when no step names one, so connected agents do the work.
+ * An owned helper without one uses its owner's when the bundle includes the
+ * owner; `harnessOwner` then names that owner.
  */
 function importedAgentPermissions(
   workflows: Parameters<typeof importedScripts>[0],
 ) {
   return workflows.flatMap((workflow) => {
     const seen = new Set<string>();
+    const owner = workflow.ownerWorkflowId
+      ? workflows.find((w) => w.id === workflow.ownerWorkflowId)
+      : undefined;
+    // New runs use the owner's latest published version, else its draft.
+    const ownerHarness =
+      owner &&
+      ((owner.versions?.length
+        ? owner.versions[owner.versions.length - 1].definition
+        : owner.draft
+      )?.executor ??
+        null);
     return [
       ...(workflow.draft ? [workflow.draft] : []),
       ...(workflow.versions ?? []).map((v) => v.definition),
     ].flatMap((definition) => {
       const agents = definition.nodes.filter((n) => n.kind === 'agent');
       if (!agents.length) return [];
-      const harness =
+      const own =
         definition.executor ??
         agents.find((n) => typeof n.executor === 'string')?.executor ??
         null;
+      const inherited = !own && !!ownerHarness;
       const entry = {
         workflowName: workflow.name,
         ...(definition.agentPermissions
           ? { agentPermissions: definition.agentPermissions }
           : {}),
-        harness,
+        harness: inherited ? ownerHarness : own,
+        ...(inherited ? { harnessOwner: owner.name } : {}),
       };
       const key = JSON.stringify(entry);
       if (seen.has(key)) return [];

@@ -53,7 +53,10 @@ export class AgentExecutorSettings {
       (selectsPreset(node, definition) ||
         (captures !== undefined && alias?.permissions !== undefined));
     const profiles = this.executors.profiles();
-    let executor = node.executor ?? definition.executor;
+    const own = node.executor ?? definition.executor;
+    // An owned helper without its own harness uses its caller's; presets keep their own choice.
+    let fromCaller = !own && !!run.callerExecutor;
+    let executor = own ?? run.callerExecutor;
     let model = target;
     let effort =
       node.effort !== undefined ? node.effort : definition.agentEffort;
@@ -92,7 +95,7 @@ export class AgentExecutorSettings {
         const choices = alias && [
           ...eligiblePresetChoices(
             candidates,
-            executor,
+            own,
             (id) =>
               !binding || binding.executorId === id
                 ? this.executors.configuredPresetProfile(
@@ -126,6 +129,7 @@ export class AgentExecutorSettings {
             `Agent preset "${aliasRef}" has no eligible harness for ${node.label}.`,
           );
         executor = choice.executor;
+        fromCaller = false;
         model = choice.candidate.model;
         selection = choice.candidate.modelAliasSelection;
         const inherited = harnessPermissions(
@@ -170,6 +174,7 @@ export class AgentExecutorSettings {
               ),
           ) ?? candidates[0];
         executor = candidate?.profileId ?? executor;
+        if (candidate?.profileId) fromCaller = false;
         model = candidate?.model ?? model;
         selection = candidate?.modelAliasSelection;
         if (candidate?.effort !== undefined) {
@@ -190,6 +195,7 @@ export class AgentExecutorSettings {
       ...(executor
         ? {
             executor,
+            ...(fromCaller ? { executorSource: 'caller' as const } : {}),
             ...(effort !== undefined
               ? { executorEffort: effort, executorEffortSource: effortSource }
               : {}),

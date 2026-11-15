@@ -12,7 +12,6 @@ import {
   ModalBody,
   ModalFooter,
 } from '../../design-system';
-
 import { StallPolicyEditor } from '../executors/StallSettings';
 import {
   MemorySettingsFields,
@@ -30,7 +29,6 @@ import {
   type WorkflowDefinition,
   type WorkflowNode,
 } from '@interlock/core';
-
 import {
   ContractEditor,
   ContractForm,
@@ -603,6 +601,7 @@ export function SettingsDialog({
 
                     <ExecutorSelect
                       value={settings.definition.executor}
+                      workflowId={workflowId}
                       workflowPermissions={settings.definition.agentPermissions}
                       workflowModel={settings.definition.agentModel}
                       workflowModelMode={settings.definition.agentModelMode}

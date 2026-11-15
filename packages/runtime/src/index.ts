@@ -33,6 +33,7 @@ import { RunInspection } from './runInspection.js';
 import { WorkflowAuthoring } from './workflowAuthoring.js';
 import { WorkflowDeletion } from './workflowDeletion.js';
 import { AgentExecutorSettings } from './agentExecutorSettings.js';
+import { callerExecutorCapture } from './callerExecutor.js';
 import { BackgroundScriptControl } from './backgroundScriptControl.js';
 import {
   fetchHttpError,
@@ -144,7 +145,6 @@ import { ExternalInputs } from './externalInputs.js';
 import { AssignmentSizes } from './assignmentSize.js';
 import { ContextContinuityGroups } from './contextContinuity.js';
 import { claimTokenHash, leaseCounts, expiredClaimMessage } from './leases.js';
-
 class ExpiredClaimError extends InterlockError {}
 type Cb = (() => void)[];
 const now = () => new Date().toISOString();
@@ -875,6 +875,7 @@ export class Engine {
       this.chains.start(run, rollover.continueAsNew.maxRuns);
     if (schedule ?? continuedFrom?.schedule)
       run.schedule = schedule ?? continuedFrom?.schedule;
+    Object.assign(run, callerExecutorCapture(this.store, run, w, definition));
     new RunAdmission(this.store).queue(run, definition, startOptions);
     this.save(run);
     this.usage.prices.start(run, continuedFrom?.id);
@@ -1743,6 +1744,7 @@ export class Engine {
             ? this.run(step.childRunIds[0])
             : this.newRun(node.workflowId, version, step.input, run.id);
           child.parentMode = 'detached';
+          delete child.callerExecutor; // Detached starts keep their own agent.
           child.parentExecutionId = step.id;
           this.save(child);
           step.childRunIds = [child.id];
@@ -3115,7 +3117,6 @@ export class Engine {
       this.executors.deadlineRevoked(work);
       return;
     }
-
     if (exhausted) {
       work.status = 'failed';
       this.fail(
@@ -3402,6 +3403,5 @@ export class Engine {
     return this.inspect(id);
   }
 }
-
 export { runDoctor } from './doctor.js';
 export { generateWorkflowReport } from './report.js';

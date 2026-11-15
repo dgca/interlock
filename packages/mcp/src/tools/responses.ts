@@ -95,6 +95,7 @@ export const workListResponseSchema = z
         .object({
           id: z.string(),
           executor: executorReferenceSchema.optional(),
+          executorSource: z.literal('caller').optional(),
           executorModelSource: z.enum(['node', 'workflow']).optional(),
           executorEffort: z.string().nullable().optional(),
           executorEffortSource: z.enum(['node', 'workflow']).optional(),
