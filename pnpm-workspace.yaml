@@ -4,6 +4,8 @@ packages:
   - website
 allowBuilds:
   core-js: false
+  electron: true
+  electron-winstaller: false
   esbuild: true
 overrides:
   # hast-util-raw 9.2 uses tokenizer APIs absent from parse5 8.0.

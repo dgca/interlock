@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { executeScript } from '../packages/runtime/src/scripts';
+import { executeScript, nodeRuntimeEnv } from '../packages/runtime/src/scripts';
 
 it('preserves dynamic imports and top-level await', async () => {
   await expect(
@@ -26,4 +26,29 @@ it.each([
   await expect(
     executeScript(command, null, 5000, process.cwd(), undefined, 'javascript'),
   ).rejects.toThrow(location);
+});
+
+it('sets ELECTRON_RUN_AS_NODE in nodeRuntimeEnv while preserving existing environment variables', () => {
+  const custom = { FOO: 'bar', INTERLOCK_TEST: '1' };
+  expect(nodeRuntimeEnv(custom)).toEqual({
+    FOO: 'bar',
+    INTERLOCK_TEST: '1',
+    ELECTRON_RUN_AS_NODE: '1',
+  });
+  const fromProcess = nodeRuntimeEnv();
+  expect(fromProcess.ELECTRON_RUN_AS_NODE).toBe('1');
+  expect(fromProcess.PATH).toBe(process.env.PATH);
+});
+
+it('executes JavaScript scripts with ELECTRON_RUN_AS_NODE set', async () => {
+  await expect(
+    executeScript(
+      'return process.env.ELECTRON_RUN_AS_NODE;',
+      null,
+      5000,
+      process.cwd(),
+      undefined,
+      'javascript',
+    ),
+  ).resolves.toBe('1');
 });

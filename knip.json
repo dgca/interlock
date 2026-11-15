@@ -15,6 +15,16 @@
     "packages/cli": {
       "entry": ["src/bin.ts", "src/index.ts"]
     },
+    "packages/desktop": {
+      "entry": [
+        "src/main.ts",
+        "src/index.ts",
+        "scripts/*.mjs",
+        "electron-builder.mjs"
+      ],
+      "ignoreDependencies": ["electron", "electron-builder"],
+      "includeEntryExports": false
+    },
     "packages/mcp": {
       "entry": ["src/index.ts"]
     },

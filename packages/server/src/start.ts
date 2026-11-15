@@ -8,6 +8,7 @@ import { isLoopback, parseRequireToken } from './apiToken.js';
 import { apiTokenPath, ensureApiToken } from '@interlock/core/apiToken';
 import type { ConnectionConfig } from './connection.js';
 import { checkPort, lockDatabase, startupError } from './startup.js';
+export { isDatabaseLocked, probeHealthyServer } from './startup.js';
 import { nativeAdapters } from '@interlock/runtime/executors/native';
 import {
   startWorkflowSync,
@@ -68,6 +69,7 @@ export async function startServer(options: {
   syncDir?: string;
   /** Listen address. Not user-configurable yet; a non-loopback address requires the API token. */
   hostname?: string;
+  handleSignals?: boolean;
 }) {
   const hostname = options.hostname ?? '127.0.0.1';
   await checkPort(options.port);
@@ -84,7 +86,7 @@ export async function startServer(options: {
     console.log(
       `Database upgraded from schema ${store.migration.from} to ${store.migration.to}. Backup: ${store.migration.backup}`,
     );
-  let engine: Engine | undefined;
+  let engine!: Engine;
   let sync: WorkflowSync | undefined;
   let traces: TraceExport | undefined;
   try {
@@ -133,6 +135,31 @@ export async function startServer(options: {
         : `Interlock is running at ${connection.engineUrl}`,
     ),
   );
+  let stopping = false;
+  const stop = async () => {
+    if (stopping) return;
+    stopping = true;
+    clearInterval(timer);
+    sync?.stop();
+    await engine.executors.stop();
+    await traces?.stop(2000);
+    engine.stop();
+    await new Promise<void>((resolve) => {
+      const fallback = setTimeout(() => resolve(), 1000);
+      fallback.unref();
+      try {
+        server.close(() => {
+          clearTimeout(fallback);
+          resolve();
+        });
+      } catch {
+        clearTimeout(fallback);
+        resolve();
+      }
+    });
+    store.close();
+    unlock();
+  };
   const onError =
     (port: number, option: string) => (error: NodeJS.ErrnoException) => {
       console.error(
@@ -140,33 +167,18 @@ export async function startServer(options: {
           ? `Port ${port} is already in use. Choose ${option} or stop the process using that port.`
           : error.message,
       );
-      clearInterval(timer);
-      server.close();
-      sync?.stop();
-      void traces?.stop(0);
-      engine.stop();
-      store.close();
-      unlock();
+      void stop();
       process.exitCode = 1;
     };
   server.on('error', onError(options.port, '--port'));
-  let stopping = false;
-  for (const signal of ['SIGINT', 'SIGTERM'] as const)
-    process.on(signal, async () => {
-      if (stopping) return;
-      stopping = true;
-      // Persist uncertainty immediately; bound shutdown even if a native transport stalls.
-      setTimeout(() => process.exit(0), 6000).unref();
-      clearInterval(timer);
-      sync?.stop();
-      await engine.executors.stop();
-      await traces?.stop(2000);
-      engine.stop();
-      server.close(() => {
-        store.close();
-        unlock();
+  if (options.handleSignals !== false) {
+    for (const signal of ['SIGINT', 'SIGTERM'] as const)
+      process.on(signal, async () => {
+        // Persist uncertainty immediately; bound shutdown even if a native transport stalls.
+        setTimeout(() => process.exit(0), 6000).unref();
+        await stop();
         process.exit(0);
       });
-      setTimeout(() => process.exit(0), 1000).unref();
-    });
+  }
+  return { engine, store, server, connection, stop };
 }

@@ -8,6 +8,10 @@ Use it when you want agent work to follow a known path, stop for your decisions,
 
 ## Quick start
 
+On macOS, you can use the standalone desktop app (`Interlock.app`) or the CLI (`interlock`). On Linux, use the CLI.
+
+### CLI
+
 You need **Node.js 24.13 or later** on **macOS or Linux**. Bash Script steps also need `/bin/bash`.
 
 ```sh
@@ -16,6 +20,15 @@ interlock
 ```
 
 Open [http://127.0.0.1:4310](http://127.0.0.1:4310). Keep the terminal running; Ctrl+C stops Interlock. To try it without a global install, run `npx -y @type_of/interlock@latest`.
+
+### macOS desktop app
+
+Download `Interlock.app` from [GitHub Releases](https://github.com/dgca/interlock/releases).
+
+- **Shared state**: Shares `~/.interlock/interlock.db` and `http://127.0.0.1:4310` with the CLI. If an `interlock` CLI server is already running, the desktop app attaches to it without port conflicts, and automatically takes over engine hosting if the CLI process stops.
+- **Login shell PATH hydration**: Automatically inherits your macOS login shell `PATH` so tools and agent harnesses installed with Homebrew, mise, nvm, or asdf work inside Script and Agent nodes without extra wrapper scripts.
+- **Dock and Menu Bar**: Closing the window leaves Interlock running in the Dock and Menu Bar. Dock badges and native notifications alert you when runs need attention or fail.
+- **Install CLI in PATH**: Choose **Interlock → Install "interlock" Command in PATH…** from the menu bar to symlink the CLI into your system `PATH`.
 
 Run the Parallel checks demo. It uses only Script steps, so no agent is needed:
 

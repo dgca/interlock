@@ -13,7 +13,7 @@ import {
 } from '@interlock/core';
 import { secretRedaction } from './secretRedaction.js';
 import { scriptSupervisorSource } from './scriptSupervisor.js';
-import { javascriptRunner } from './scripts.js';
+import { javascriptRunner, nodeRuntimeEnv } from './scripts.js';
 function boundedProgress(text: string) {
   return Buffer.from(text).subarray(-8189).toString('utf8');
 }
@@ -123,7 +123,12 @@ export class BackgroundScripts {
         'interlock-script-supervisor',
         job.token,
       ],
-      { detached: true, stdio: ['pipe', 'ignore', 'ignore'], cwd },
+      {
+        detached: true,
+        stdio: ['pipe', 'ignore', 'ignore'],
+        cwd,
+        env: nodeRuntimeEnv(process.env),
+      },
     );
     child.stdin.on('error', () => {});
     // Errors leave the launch intent uncertain, never eligible for an automatic second launch.
@@ -141,7 +146,7 @@ export class BackgroundScripts {
             ? ['--input-type=commonjs', '-e', javascriptRunner(command)]
             : ['-c', command],
         input,
-        env,
+        env: language === 'javascript' ? nodeRuntimeEnv(env) : env,
         hasSecrets,
         provenanceFile,
       }),

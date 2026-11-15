@@ -117,7 +117,18 @@ What Interlock implements today, grouped by area. See [current limits](v1.md) fo
 - One-time [approval of imported Scripts](reuse-work.md#approve-imported-scripts) by workflow and content, with an `imports`, `imports_and_agents` or `off` library setting, an import preview of every Script, **Approve and run** in the UI and `interlock approve-script`.
 - Recorded [private-network Fetch targets](fetch.md) with a run event and doctor warning, and an optional `blockPrivateNetwork` setting that fails such requests before sending.
 
+## macOS desktop app
+
+- Native macOS desktop application (`Interlock.app`) packaging the local engine and web UI with native windowing, Dock, and Menu Bar integration.
+- Coexistent engine lifecycle: runs an owned engine subprocess or attaches to an already-running CLI engine on `http://127.0.0.1:4310`, seamlessly taking over engine hosting if the attached CLI process exits.
+- Automatic login shell `PATH` hydration at launch, ensuring Agent harnesses, package managers, and developer tools installed via user dotfiles are available to Script and Agent executions.
+- Configurable default working directory defaulting to `~`, with a native folder picker in settings to choose the fallback directory for workflow executions.
+- Dock badge count and native desktop notifications for runs requiring human input or entering failure states.
+- Background persistence keeping the engine running in the Dock and Menu Bar when windows are closed, plus an "Install `interlock` Command in PATH…" menu action.
+- Safe background updates via GitHub Releases that download update artifacts automatically and defer restart while workflow runs remain active.
+
 ## Package
 
 - Public MIT-licensed `@type_of/interlock` npm package with an `interlock` command for the local engine and built UI.
 - Changesets versioning and changelogs for the public root package, with synchronized CLI, UI, and MCP versions.
+- Native macOS desktop app package (`@interlock/desktop`) producing signed and notarized `.dmg` and `.zip` distribution artifacts.
