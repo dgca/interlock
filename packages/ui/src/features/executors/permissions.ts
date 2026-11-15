@@ -1,4 +1,8 @@
-import type { ExecutorPermissionMode, PermissionSource } from '@interlock/core';
+import {
+  harnessPermissions,
+  type ExecutorPermissionMode,
+  type PermissionSource,
+} from '@interlock/core';
 
 export const permissionLabels: Record<ExecutorPermissionMode, string> = {
   'read-only': 'Read only',
@@ -24,4 +28,24 @@ export function permissionSourceLabel(
   if (source === 'workflow') return 'workflow override';
   if (source === 'global') return 'from AI Settings';
   return harness ? `set on ${harness}` : 'harness default';
+}
+
+/**
+ * The inherited level, or undefined while the shared default is still loading
+ * or failed to load and the harness sets no level of its own.
+ */
+export function knownPermissions(
+  profile: { permissions?: ExecutorPermissionMode } | undefined,
+  settings: { defaultPermissions?: ExecutorPermissionMode } | undefined,
+) {
+  return profile?.permissions || settings
+    ? harnessPermissions(profile, settings?.defaultPermissions)
+    : undefined;
+}
+/** "Use default", with the level it resolves to once that is known. */
+export function defaultOptionLabel(
+  settings: { defaultPermissions?: ExecutorPermissionMode } | undefined,
+) {
+  const level = knownPermissions(undefined, settings)?.permissions;
+  return level ? `Use default · ${permissionLabels[level]}` : 'Use default';
 }

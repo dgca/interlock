@@ -87,7 +87,9 @@ Upgrading to 0.3.0 deletes disabled workflow variables. Run `interlock doctor` f
 
 ### Managed agents default to Full access
 
-After upgrading, managed Agents whose harness and workflow set no permission level run with **Full access** until you choose a default. Full access runs commands and edits files without asking; the harness sandbox and approval prompts are off. This includes harnesses saved with the original **Standard** value, which every harness started with.
+After upgrading, managed Agents whose harness and workflow set no permission level run with **Full access** until you choose a default. Full access runs commands and edits files without asking; the harness sandbox and approval prompts are off. This includes harnesses saved with the original **Standard** value, which every harness started with, and harnesses stored with the older `ask` value, which is read the same way.
+
+Custom integrations whose profile sets no level now receive `full-access` where they received `standard`. An integration that asks for approval only under Standard stops asking until you set a level on it.
 
 To keep approvals, do one of these:
 

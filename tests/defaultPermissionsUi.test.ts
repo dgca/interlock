@@ -124,6 +124,14 @@ it('resolves a harness without its own level to Full access while no default is 
   expect(container.textContent).toContain('Standard · from AI Settings');
 });
 
+it('prints no inherited level while the shared default is unknown', async () => {
+  rpc.profiles.mockResolvedValue([codex()]);
+  rpc.settings.mockRejectedValue(new Error('Settings offline'));
+  await render(h(WorkflowPermissions));
+  expect(container.textContent).toContain('Uses the default from AI Settings.');
+  expect(container.textContent).not.toContain('Full access ·');
+});
+
 // Ask once: only before a shared default exists (a stored default enables
 // directly; see the custom integration test in executorPermissions), Cancel
 // leaves the harness off, and confirming saves the default before enabling.

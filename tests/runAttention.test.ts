@@ -15,6 +15,7 @@ function setup() {
     name: 'Codex',
     harness: 'codex',
     enabled: true,
+    permissions: 'standard',
     expectedRevision: 0,
   });
   const adapter: HarnessAdapter = {

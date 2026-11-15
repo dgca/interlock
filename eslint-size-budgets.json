@@ -23,7 +23,7 @@
     "tests/customExecutor.test.ts": 946,
     "tests/doctor.test.ts": 930,
     "tests/editorDraftProtection.test.ts": 1121,
-    "tests/eventQuiescence.test.ts": 827,
+    "tests/eventQuiescence.test.ts": 824,
     "tests/executorPermissions.test.ts": 969,
     "tests/managedExecutors.test.ts": 1847,
     "tests/modelAliases.test.ts": 944,

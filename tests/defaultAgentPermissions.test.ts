@@ -61,9 +61,10 @@ function usePreset(e: Engine, d: WorkflowDefinition) {
 }
 
 // Workflow override, then the harness's own level, then the shared default,
-// then full access. Explicit levels keep winning while no default is stored. Profiles saved before the shared default stored `standard`
-// as their creation value, so that value follows the shared default. The
-// preset row routes through an Agent preset that sets no level.
+// then full access. Explicit levels keep winning while no default is stored.
+// Profiles saved before the shared default stored `standard` as their
+// creation value, so that value follows the shared default. The preset rows
+// route through an Agent preset that sets no level.
 it.each([
   ['read-only', undefined, 'full-access', 'full-access', 'workflow'],
   ['full-access', 'read-only', 'standard', 'standard', 'workflow'],
@@ -79,6 +80,7 @@ it.each([
   ['legacy standard', undefined, undefined, 'full-access', 'global'],
   [undefined, 'standard', undefined, 'standard', 'global'],
   ['preset', 'full-access', undefined, 'full-access', 'global'],
+  ['preset', undefined, undefined, 'full-access', 'global'],
 ] as const)(
   'resolves harness %s, shared default %s and workflow override %s',
   async (harness, shared, override, effective, source) => {

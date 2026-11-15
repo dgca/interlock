@@ -28,7 +28,7 @@ import { useDraftDismissal } from '../../lib/useDraftDismissal';
 import { useEditorDraft } from '../../lib/useEditorDraft';
 import { KeyValueEditor } from './KeyValueEditor';
 import { integrationReturnFocusId } from './harnessProfiles';
-import { permissionOptions } from './permissions';
+import { defaultOptionLabel, permissionOptions } from './permissions';
 import { preservedFields, profileDraft } from './integrationDraft';
 import styles from './IntegrationEditor.module.css';
 
@@ -104,6 +104,7 @@ function IntegrationEditor({
     () => initial?.id ?? `custom-${crypto.randomUUID().slice(0, 8)}`,
   );
   const [profile, setProfile] = useState(initial);
+  const shared = useQuery(trpc.executors.settings.queryOptions()).data;
   const isNew = !profile;
   const baseline = profileDraft(profile ?? null);
   const [draft, setDraft] = useState(baseline);
@@ -600,7 +601,7 @@ function IntegrationEditor({
                     )
                   }
                   data={[
-                    { value: '', label: 'Use default' },
+                    { value: '', label: defaultOptionLabel(shared) },
                     ...permissionOptions,
                   ]}
                 />

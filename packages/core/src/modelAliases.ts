@@ -123,9 +123,7 @@ export const modelAliasMutationSchema = z.discriminatedUnion('action', [
       candidates: z.array(modelAliasCandidateSchema).min(1).max(32),
       permissions: executorPermissionModeSchema
         .optional()
-        .describe(
-          'Omit to use the selected harness default or workflow override.',
-        ),
+        .describe('Omit to use the workflow, harness or shared default level.'),
     })
     .strict(),
   z

@@ -29,11 +29,7 @@ import {
   Cpu,
   Plus,
 } from 'lucide-react';
-import {
-  executorProfileSchema,
-  harnessPermissions,
-  type ExecutorProfile,
-} from '@interlock/core';
+import { executorProfileSchema, type ExecutorProfile } from '@interlock/core';
 
 import { useDraftDismissal } from '../../lib/useDraftDismissal';
 import { useEditorDraft } from '../../lib/useEditorDraft';
@@ -49,7 +45,8 @@ import { HarnessRowsSkeleton, harnessTable } from './HarnessListSkeleton';
 import styles from './Harnesses.module.css';
 import {
   permissionDescriptions,
-  permissionLabels,
+  defaultOptionLabel,
+  knownPermissions,
   permissionOptions,
 } from './permissions';
 import { FirstEnableDialog } from './DefaultPermissions';
@@ -325,8 +322,8 @@ function ProfileRow({
     [error, setError] = useState(''),
     [asking, setAsking] = useState(false);
   const busy = writing || reloading || saving;
-  const inherited = harnessPermissions(undefined, settings?.defaultPermissions);
-  const effective = draft.permissions ?? inherited.permissions;
+  const effective =
+    draft.permissions ?? knownPermissions(undefined, settings)?.permissions;
   useEffect(() => {
     if (wasOpen.current && !open) defaultsTrigger.current?.focus();
     wasOpen.current = open;
@@ -529,7 +526,9 @@ function ProfileRow({
                         ? 'Interlock sends this mode to the integration. The integration is responsible for enforcing it.'
                         : draft.harness === 'pi' && effective === 'standard'
                           ? 'Allow read tools; ask before commands, file changes, and other tools.'
-                          : permissionDescriptions[effective]
+                          : effective
+                            ? permissionDescriptions[effective]
+                            : 'Uses the default from AI Settings.'
                     }
                     value={draft.permissions ?? '__default'}
                     onChange={(e) =>
@@ -545,7 +544,7 @@ function ProfileRow({
                     data={[
                       {
                         value: '__default',
-                        label: `Use default · ${permissionLabels[inherited.permissions]}`,
+                        label: defaultOptionLabel(settings),
                       },
                       ...permissionOptions,
                     ]}
