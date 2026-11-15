@@ -57,7 +57,7 @@ To preview and apply a whole bundle from a repository, use `interlock import bun
 Open **Workflows → Import**. The dialog opens on bundled **Starters** and also accepts a public GitHub folder, a local file, or pasted JSON. Every source shows a preview first, and importing never starts a run.
 
 1. Choose **GitHub folder**, paste an HTTPS `github.com/OWNER/REPO/tree/REF/FOLDER` link and choose **Find workflows**. Branch names with slashes and commit links work.
-2. Review each workflow's description, source file and dependencies. Included dependencies are listed under a disclosure.
+2. Review each workflow's description, source file and dependencies. Included dependencies are listed under a disclosure. For each workflow with Agent steps, the review also shows the agent permission level they would run with here and where it comes from, for example **Full access · from AI Settings**.
 3. Select the workflows and choose **Import workflow**, or **Import N workflows** for several.
 
 For **Paste JSON**, paste a legacy workflow or portable bundle and choose **Preview workflow**. Invalid JSON and validation errors keep your text so you can correct it. **Local file** uses the same import rules unless the host disables it.

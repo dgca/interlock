@@ -34,6 +34,7 @@ type ScriptSource = {
     label: string;
     language?: 'javascript' | 'bash';
     command?: string;
+    executor?: string | null;
     timing?: {
       kind: string;
       check?: { kind: string } & Partial<ScriptContent>;
@@ -46,6 +47,8 @@ type ScriptSource = {
     hooks?: { afterCreate?: ScriptContent; beforeRemove?: ScriptContent };
   };
   permissionPolicy?: PermissionPolicy;
+  agentPermissions?: 'read-only' | 'standard' | 'full-access';
+  executor?: string;
 };
 const hookLabels = {
   afterCreate: 'Workspace hook after create',
@@ -164,11 +167,49 @@ function importedPolicies(workflows: Parameters<typeof importedScripts>[0]) {
     });
   });
 }
-/** What a person reviews before importing: Scripts, Git worktree settings and permission policies. */
+/**
+ * Each distinct agent permission setting of a workflow with Agent steps: its
+ * own `agentPermissions`, if any, and the harness its Agents use by default.
+ * `harness` is null when no step names one, so connected agents do the work.
+ */
+function importedAgentPermissions(
+  workflows: Parameters<typeof importedScripts>[0],
+) {
+  return workflows.flatMap((workflow) => {
+    const seen = new Set<string>();
+    return [
+      ...(workflow.draft ? [workflow.draft] : []),
+      ...(workflow.versions ?? []).map((v) => v.definition),
+    ].flatMap((definition) => {
+      const agents = definition.nodes.filter((n) => n.kind === 'agent');
+      if (!agents.length) return [];
+      const harness =
+        definition.executor ??
+        agents.find((n) => typeof n.executor === 'string')?.executor ??
+        null;
+      const entry = {
+        workflowName: workflow.name,
+        ...(definition.agentPermissions
+          ? { agentPermissions: definition.agentPermissions }
+          : {}),
+        harness,
+      };
+      const key = JSON.stringify(entry);
+      if (seen.has(key)) return [];
+      seen.add(key);
+      return [entry];
+    });
+  });
+}
+/**
+ * What a person reviews before importing: Scripts, Git worktree settings,
+ * permission policies and agent permission levels.
+ */
 export const importReview = (
   workflows: Parameters<typeof importedScripts>[0],
 ) => ({
   scripts: importedScripts(workflows),
   workspaces: importedWorkspaces(workflows),
   policies: importedPolicies(workflows),
+  agentPermissions: importedAgentPermissions(workflows),
 });
