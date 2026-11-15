@@ -15,6 +15,7 @@ import {
   type ResourceReservation,
   type ManagedExecution,
   type PauseHold,
+  type WorkflowDefinition,
 } from '@interlock/core';
 import type { Engine } from './index.js';
 import {
@@ -22,6 +23,33 @@ import {
   uncertainOperationCollection,
 } from './quiescence.js';
 import { privateFetchCheck } from './fetch.js';
+
+/**
+ * Where a workflow uses a variable, by environment or header name and step.
+ * A deleted variable's own name is gone; these names stay in the workflow.
+ */
+function variableUses(definition: WorkflowDefinition, variableId: string) {
+  return definition.nodes.flatMap((node) => {
+    const operation =
+      node.kind === 'wait' && node.timing.kind === 'poll'
+        ? node.timing.check
+        : node;
+    const step = `step "${node.label}"`;
+    if (operation.kind === 'fetch')
+      return operation.headers
+        .filter(
+          (header) =>
+            header.value.kind === 'variable' &&
+            header.value.variableId === variableId,
+        )
+        .map((header) => `header ${header.name} in ${step}`);
+    if (operation.kind === 'script')
+      return (operation.environment ?? [])
+        .filter((entry) => entry.variableId === variableId)
+        .map((entry) => `environment variable ${entry.name} in ${step}`);
+    return [];
+  });
+}
 
 export async function runDoctor(
   engine: Engine,
@@ -586,17 +614,18 @@ export async function runDoctor(
               }
             } catch (err) {
               workflowIssues++;
+              const uses = variableUses(version.definition, ref).join(', ');
               checks.push({
                 category: 'workflows',
                 name: `Missing variable in workflow: ${workflow.name}`,
                 status: 'fail',
-                message: `Published workflow "${workflow.name}" references missing variable "${ref}"`,
+                message: `Published workflow "${workflow.name}" uses a missing variable for ${uses} (variable ID ${ref})`,
                 details: {
                   workflowId: workflow.id,
                   version: workflow.latestVersion,
                   reference: ref,
                 },
-                remediation: `Create or bind variable "${ref}" in Variables library.`,
+                remediation: `Create or bind a variable for ${uses} in Variables library.`,
               });
             }
           }

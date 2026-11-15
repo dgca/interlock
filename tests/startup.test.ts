@@ -257,13 +257,13 @@ it('coexists cleanly when running bare bin.ts against an already running healthy
     handleSignals: false,
   });
 
-  const runCli = (args: string[]) =>
+  const runCli = (args: string[], env: NodeJS.ProcessEnv = process.env) =>
     new Promise<{ status: number | null; stdout: string; stderr: string }>(
       (resolve) => {
         const child = spawn(
           process.execPath,
           ['--import', 'tsx', 'packages/cli/src/bin.ts', ...args],
-          { stdio: ['ignore', 'pipe', 'pipe'] },
+          { stdio: ['ignore', 'pipe', 'pipe'], env },
         );
         let stdout = '';
         let stderr = '';
@@ -288,10 +288,16 @@ it('coexists cleanly when running bare bin.ts against an already running healthy
       `Interlock is already running at ${engineUrl}`,
     );
 
-    const noDbCli = await runCli(['--port', String(port)]);
-    expect(noDbCli.status).toBe(0);
-    expect(noDbCli.stdout).toContain(
-      `Interlock is already running at ${engineUrl}`,
+    expect(sameDbCli.stdout).not.toContain('different database');
+
+    const other = join(dir, 'other.db');
+    const otherDbCli = await runCli(['--port', String(port)], {
+      ...process.env,
+      INTERLOCK_DB: other,
+    });
+    expect(otherDbCli.status).toBe(0);
+    expect(otherDbCli.stdout).toContain(
+      `Interlock is already running at ${engineUrl}. It may be using a different database than ${other};`,
     );
   } finally {
     await handle.stop();

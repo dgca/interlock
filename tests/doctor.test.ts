@@ -597,8 +597,8 @@ describe('doctor health and readiness check', () => {
           c.name.includes('Missing variable'),
         );
         expect(varCheck!.status).toBe('fail');
-        expect(varCheck!.message).toContain(
-          `references missing variable "${savedVar.id}"`,
+        expect(varCheck!.message).toBe(
+          `Published workflow "Production Pipeline" uses a missing variable for environment variable TEMPORARY_KEY in step "Script" (variable ID ${savedVar.id})`,
         );
       },
     );

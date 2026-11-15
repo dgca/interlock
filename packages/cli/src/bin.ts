@@ -207,12 +207,12 @@ Commands and the mcp bridge read the token from the api-token file in the key fo
       process.env.INTERLOCK_DB ??
       resolve(homedir(), '.interlock/interlock.db'),
   );
-  if (
-    (await probeHealthyServer(engineUrl)) &&
-    (isDatabaseLocked(database) || !values.db)
-  ) {
+  const healthy = await probeHealthyServer(engineUrl);
+  const databaseInUse = healthy && isDatabaseLocked(database);
+  if (databaseInUse || (healthy && !values.db)) {
+    // The health check does not reveal the server's database; only the lock says it is in use.
     console.log(
-      `Interlock is already running at ${engineUrl} (database: ${database}).\nOpen ${engineUrl} in your browser or run 'interlock <command>' to interact with the running engine.`,
+      `Interlock is already running at ${engineUrl}.${databaseInUse ? '' : ` It may be using a different database than ${database}; stop it or choose another --port to open that database.`}\nOpen ${engineUrl} in your browser or run 'interlock <command>' to interact with the running engine.`,
     );
     return;
   }

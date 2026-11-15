@@ -9,6 +9,7 @@ import { Engine } from '@interlock/runtime';
 import { Store } from '@interlock/storage';
 import { createClient } from '@interlock/client';
 import { createApp } from '../packages/server/src/app';
+import { commandError } from '../packages/cli/src/commands';
 import { isConfirmedWriteRejection } from '../packages/ui/src/lib/isConfirmedWriteRejection';
 
 let discovery: unknown;
@@ -166,22 +167,24 @@ it.each(['http', 'stdio'])(
         },
       });
       // 0.3.0 removed enablement: old callers are rejected, not ignored.
-      expect(
-        JSON.stringify(
-          await call(
-            'manage_variables',
-            {
-              request: {
-                action: 'update',
-                id: variable.id,
-                expectedRevision: 1,
-                enabled: false,
-              },
+      const enabledRejection = JSON.stringify(
+        await call(
+          'manage_variables',
+          {
+            request: {
+              action: 'update',
+              id: variable.id,
+              expectedRevision: 1,
+              enabled: false,
             },
-            true,
-          ),
+          },
+          true,
         ),
-      ).toContain('Variables no longer have an enabled state');
+      );
+      expect(enabledRejection).toContain(
+        'Variables no longer have an enabled state',
+      );
+      expect(enabledRejection).not.toContain('discriminator');
       await call(
         'manage_variables',
         {
@@ -200,14 +203,33 @@ it.each(['http', 'stdio'])(
         true,
       );
       if (mode === 'http') {
-        await expect(
-          shared.variables.manage.mutate({
+        const enabledError = await shared.variables.manage
+          .mutate({
             action: 'update',
             id: 'any-variable',
             expectedRevision: 1,
             enabled: false,
-          }),
-        ).rejects.toThrow('Variables no longer have an enabled state');
+          })
+          .catch((error: unknown) => error);
+        // The CLI prints this line, not the raw issue list.
+        expect(commandError(enabledError)).toBe(
+          'Variables no longer have an enabled state. Delete the variable to stop its use. Values were not saved.',
+        );
+        const laneError = await shared.boardTypes.save
+          .mutate({
+            type: {
+              name: 'Duplicate lanes',
+              lanes: [
+                { id: 'todo', name: 'To do' },
+                { id: 'todo', name: 'Again' },
+              ],
+            },
+          })
+          .catch((error: unknown) => error);
+        // Custom issues keep their path so the failing field is named.
+        expect(commandError(laneError)).toBe(
+          'Lane IDs must be unique and cannot be "unmapped" (at type.lanes)',
+        );
         const rejections = [
           {
             call: shared.variables.manage.mutate({

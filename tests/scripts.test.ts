@@ -1,4 +1,7 @@
-import { expect, it } from 'vitest';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { executeScript, nodeRuntimeEnv } from '../packages/runtime/src/scripts';
 
 it('preserves dynamic imports and top-level await', async () => {
@@ -28,27 +31,66 @@ it.each([
   ).rejects.toThrow(location);
 });
 
-it('sets ELECTRON_RUN_AS_NODE in nodeRuntimeEnv while preserving existing environment variables', () => {
-  const custom = { FOO: 'bar', INTERLOCK_TEST: '1' };
-  expect(nodeRuntimeEnv(custom)).toEqual({
-    FOO: 'bar',
-    INTERLOCK_TEST: '1',
-    ELECTRON_RUN_AS_NODE: '1',
-  });
-  const fromProcess = nodeRuntimeEnv();
-  expect(fromProcess.ELECTRON_RUN_AS_NODE).toBe('1');
-  expect(fromProcess.PATH).toBe(process.env.PATH);
+afterEach(() => {
+  vi.unstubAllEnvs();
 });
 
-it('executes JavaScript scripts with ELECTRON_RUN_AS_NODE set', async () => {
+const childSeesElectronVariable = `
+  const { execFileSync } = require('node:child_process');
+  const child = execFileSync(process.execPath, ['-e', 'process.stdout.write(String(process.env.ELECTRON_RUN_AS_NODE))'], { encoding: 'utf8' });
+  return [String(process.env.ELECTRON_RUN_AS_NODE), child];
+`;
+
+it('keeps ELECTRON_RUN_AS_NODE from JavaScript Scripts under plain Node', async () => {
+  // The shell running the tests may have it set; plain Node means it is absent.
+  vi.stubEnv('ELECTRON_RUN_AS_NODE', undefined);
+  expect(nodeRuntimeEnv({ FOO: 'bar' })).toEqual({ FOO: 'bar' });
   await expect(
     executeScript(
-      'return process.env.ELECTRON_RUN_AS_NODE;',
+      childSeesElectronVariable,
       null,
       5000,
       process.cwd(),
       undefined,
       'javascript',
     ),
-  ).resolves.toBe('1');
+  ).resolves.toEqual(['undefined', 'undefined']);
+});
+
+describe('inside an Electron engine', () => {
+  beforeEach(() => {
+    vi.stubEnv('ELECTRON_RUN_AS_NODE', '1');
+  });
+
+  it('starts the Script process with ELECTRON_RUN_AS_NODE', () => {
+    expect(nodeRuntimeEnv({ FOO: 'bar' })).toEqual({
+      FOO: 'bar',
+      ELECTRON_RUN_AS_NODE: '1',
+    });
+  });
+
+  it('removes ELECTRON_RUN_AS_NODE before Script code runs', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'interlock-electron-'));
+    const preload = join(directory, 'electron.cjs');
+    // Reports an Electron version the way Electron's own Node mode does.
+    writeFileSync(
+      preload,
+      "Object.defineProperty(process, 'versions', { value: { ...process.versions, electron: '0.0.0' } });",
+    );
+    try {
+      await expect(
+        executeScript(
+          childSeesElectronVariable,
+          null,
+          5000,
+          process.cwd(),
+          undefined,
+          'javascript',
+          { ...process.env, NODE_OPTIONS: `--require ${preload}` },
+        ),
+      ).resolves.toEqual(['undefined', 'undefined']);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
 });

@@ -5,6 +5,7 @@ import { parseArgs } from 'node:util';
 import { usage } from './usage.js';
 import { pricingLines, runPricesCommand } from './prices.js';
 import { parse } from './json.js';
+import { customInputMessages } from './inputErrors.js';
 import { runLauncherCommand } from './launcher.js';
 import { parseSummaryArgs } from './args.js';
 import { runBoardCommand } from './boards.js';
@@ -506,6 +507,10 @@ export async function runCommand(argv: string[]) {
 }
 
 export function commandError(error: unknown) {
+  if (error instanceof TRPCClientError) {
+    const custom = customInputMessages(error.message);
+    if (custom) return custom;
+  }
   return error instanceof TRPCClientError && error.data?.resultCheck
     ? JSON.stringify(
         { message: error.message, resultCheck: error.data.resultCheck },
