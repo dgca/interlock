@@ -80,32 +80,61 @@ With `createPr: true`, delivery takes three steps after the reviewed commit is c
 
 1. **Write the pull request.** An agent reads the repository's pull request template and returns a title and description, and optionally draft, labels, reviewers and a base branch. It is told not to push, run `gh` or use the network.
 2. **Push and open the pull request.** A Script checks again that the checkout is at the reviewed commit with no uncommitted changes to tracked files. It pushes the branch and runs `gh pr create` in the checkout, so `gh` finds the repository from its Git remote, on github.com or a GitHub Enterprise host. If the branch already has an open pull request, the Script pushes to it and returns that one, leaving its title and description as they were.
-3. **Fallback.** When the Script cannot deliver, the agent opens the pull request as earlier versions did, and the result's `limitations` say why.
+3. **Fallback.** When the Script cannot deliver, the agent opens the pull request as earlier versions did, and the result's `limitations` say why. The agent is told never to force-push and never to push to the base or default branch.
+
+Nothing waits for CI. The task folder is removed with the run's worktree, so the description does not point reviewers at files in it.
+
+### When the agent takes over
 
 The Script hands delivery to the agent in these cases:
 
-| Reason                   | How the Script tells                                                                                                          |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
-| `gh` is missing          | `gh` is not on the `PATH` Interlock runs Scripts with.                                                                        |
-| `gh` is not signed in    | `gh auth status --hostname HOST` fails for github.com or a `*.ghe.com` host.                                                  |
-| The remote is not GitHub | No remote, several remotes and none is `origin`, a local path, or a host other than github.com that `gh` is not signed in to. |
-| The push is rejected     | `git push` fails, for example a protected branch, a hook or missing push credentials.                                         |
+| Reason                           | How the Script tells                                                                                                                   |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `gh` is missing                  | `gh` is not on the `PATH` Interlock runs Scripts with.                                                                                 |
+| `gh` is not signed in            | `gh auth status --hostname HOST` fails for github.com or a `*.ghe.com` host.                                                           |
+| The remote is not GitHub         | No remote, several remotes and none is `origin`, or a local path.                                                                      |
+| The host is unknown              | `gh` is not signed in to the remote's host. It may not be GitHub, or it may be an ssh host alias such as `git@github-work:owner/repo`. |
+| The target repository is unclear | Another remote is on the same host, as with a fork, or `branch.<name>.pushRemote` or `remote.pushDefault` names another remote.        |
+| The push is rejected             | `git push` fails or times out, for example a protected branch, a hook or missing push credentials.                                     |
 
-Any other failure, such as `gh pr create` itself failing, ends with `outcome: "delivery_blocked"` and the error in `limitations`. So does a checkout that moved or changed while the description was written.
+### When delivery is blocked
 
-The Script pushes to the branch's own remote, else `origin`, else the only remote. It runs in the minimal [server environment](architecture.md#scripts-and-interruptions), plus the names Git and `gh` need:
+These end with `outcome: "delivery_blocked"` and the reason in `limitations`. Nothing is pushed, and the agent does not take over:
+
+- The branch is the pull request's base branch, the remote's default branch, or, without a run worktree, the branch the run started on.
+- The remote's URL or push URL changed after the run started. Setup records them before any agent runs.
+- The checkout moved or changed while the description was written.
+- `gh pr list` or `gh pr create` fails, or times out, for another reason.
+
+A checkout with uncommitted changes to tracked files at **Confirm the reviewed commit** fails that step, and the run fails there, as it does when the checkout is not at the reviewed commit.
+
+### What the result notes
+
+`limitations` also lists:
+
+- untracked files outside the task folder, with the first five paths, because they are not in the pull request;
+- a reused pull request whose base branch or draft state differs from what the description asked for;
+- an error `gh` reported after it opened the pull request, for example an unknown label.
+
+### Reference
+
+The Script pushes `refs/heads/BRANCH:refs/heads/BRANCH` to the remote setup recorded: the branch's own remote, else `origin`, else the only remote. The explicit refspec keeps a `remote.<name>.push` mapping from redirecting or forcing it.
+
+The Script has 240 seconds for all its commands, at most 45 seconds each, inside the step's 300-second timeout. A command that runs out of time ends in a fallback or a block, never a killed step.
+
+Git, ssh and `gh` never prompt. Without your own `GIT_SSH_COMMAND` or `GIT_SSH`, ssh runs with `BatchMode=yes`. A step that needs a password fails instead.
+
+It runs in the minimal [server environment](architecture.md#scripts-and-interruptions), plus the names Git and `gh` need:
 
 - `USER`, `TMPDIR`, `XDG_CONFIG_HOME`
-- SSH: `SSH_AUTH_SOCK`, `SSH_ASKPASS`, `GIT_SSH`, `GIT_SSH_COMMAND`, `GIT_ASKPASS`
+- SSH: `SSH_AUTH_SOCK`, `GIT_SSH`, `GIT_SSH_COMMAND`
 - Certificates: `GIT_SSL_CAINFO`, `SSL_CERT_FILE`, `SSL_CERT_DIR`
-- `gh`: `GH_TOKEN`, `GITHUB_TOKEN`, `GH_ENTERPRISE_TOKEN`, `GITHUB_ENTERPRISE_TOKEN`, `GH_HOST`, `GH_CONFIG_DIR`
+- `gh`: `GH_TOKEN`, `GITHUB_TOKEN`, `GH_ENTERPRISE_TOKEN`, `GITHUB_ENTERPRISE_TOKEN`, `GH_CONFIG_DIR`
 - Proxies: `HTTPS_PROXY`, `HTTP_PROXY`, `ALL_PROXY`, `NO_PROXY` and their lowercase forms
 
-Git and `gh` never prompt from this Script; a step that needs a password fails instead. Change the list in the Script's **Server environment** control.
+Change the list in the Script's **Server environment** control.
 
 The Script is part of the starter, so like the starter's other Scripts it runs on its first run without approval. A copy imported from `workflows/sdlc-v2.json` as a file waits for [Script approval](reuse-work.md#approve-imported-scripts) first.
-
-The task folder is removed with the run's worktree, so the description does not point reviewers at files in it.
 
 ## Test your edits
 
@@ -135,13 +164,13 @@ The bundled starter's policies apply on its first run without an approval step. 
 
 ### What the policies allow
 
-| Rule                                                                                                                                                                               | SDLC | Plan review and Change review | Why                                                                                                                                                                                                                                                                                                                                          |
-| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---- | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `read`                                                                                                                                                                             | Yes  | Yes                           | Agents read files only inside the worktree.                                                                                                                                                                                                                                                                                                  |
-| `edit`                                                                                                                                                                             | Yes  | No                            | The author writes the spec, plan and code. A reviewer must not change what it reviews. Interlock always asks before anything under `.git` is edited.                                                                                                                                                                                         |
-| `git status`, `git diff`, `git log` (with or without arguments), `git show *`, `git blame *`, `git rev-parse *`, `git ls-files *`, `git merge-base *`, `git branch --show-current` | Yes  | Yes                           | Read-only Git. They run a program only if your own Git configuration names one (an external diff or text conversion), which an agent cannot edit under this policy. Interlock asks for `--ext-diff`, `-c` and `-C`.                                                                                                                          |
-| `git add *`, `git commit *`                                                                                                                                                        | Yes  | No                            | The builder commits its work for review. Reviewers do not commit. `git commit` runs the repository's commit hooks. If your hooks live in the tree (for example `core.hooksPath` set to `.husky`), an agent can edit them and they run on its next commit: that is code execution. Remove `git commit *` for such repositories, or accept it. |
-| `ls`, `pwd`, `cat *`, `head *`, `tail *`, `wc *`, `rg *`, `grep *`, `find *`                                                                                                       | Yes  | Yes                           | Reading and searching. Every path argument must stay inside the worktree. Interlock asks for `find -exec`, `-delete` and `-fprint`, and `rg --pre`.                                                                                                                                                                                          |
+| Rule                                                                                                                                                                               | SDLC | Plan review and Change review | Why                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `read`                                                                                                                                                                             | Yes  | Yes                           | Agents read files only inside the worktree.                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `edit`                                                                                                                                                                             | Yes  | No                            | The author writes the spec, plan and code. A reviewer must not change what it reviews. Interlock always asks before anything under `.git` is edited.                                                                                                                                                                                                                                                                                                                     |
+| `git status`, `git diff`, `git log` (with or without arguments), `git show *`, `git blame *`, `git rev-parse *`, `git ls-files *`, `git merge-base *`, `git branch --show-current` | Yes  | Yes                           | Read-only Git. They run a program only if your own Git configuration names one (an external diff or text conversion), which an agent cannot edit under this policy. Interlock asks for `--ext-diff`, `-c` and `-C`.                                                                                                                                                                                                                                                      |
+| `git add *`, `git commit *`                                                                                                                                                        | Yes  | No                            | The builder commits its work for review. Reviewers do not commit. `git commit` runs the repository's commit hooks. If your hooks live in the tree (for example `core.hooksPath` set to `.husky`), an agent can edit them and they run on its next commit: that is code execution. Remove `git commit *` for such repositories, or accept it. The delivery Script's `git push` runs pre-push hooks the same way, with your Git and GitHub credentials in its environment. |
+| `ls`, `pwd`, `cat *`, `head *`, `tail *`, `wc *`, `rg *`, `grep *`, `find *`                                                                                                       | Yes  | Yes                           | Reading and searching. Every path argument must stay inside the worktree. Interlock asks for `find -exec`, `-delete` and `-fprint`, and `rg --pre`.                                                                                                                                                                                                                                                                                                                      |
 
 None of the policies has a rule for package managers, test runners, `node`, `sed`, `awk` or `git push`: each can run arbitrary code (`pnpm test` runs whatever the repository's test script does, `sed` has an `e` command). `git grep` is also left out, because its `-O` option opens files with a program you name. When an agent runs a focused test, it asks. No agent needs to push: a Script opens the pull request, and an agent pushes only when that Script falls back to it.
 
