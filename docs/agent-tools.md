@@ -80,15 +80,15 @@ If `status` is still `running` or `waiting`, call again with the returned `callI
 
 ### Managed sessions
 
-Claude Code and Pi sessions that Interlock launches get their own `call_workflow_tool` tool instead of `call_work_tool`. It takes `name`, `arguments` and an optional `callId`, and returns the same response. Interlock handles each call against the claim it holds for the session, so the session needs no Interlock MCP server and never sees a claim token or other credential. Calls work without network access from the session.
+Claude Code, Codex and Pi sessions that Interlock launches get their own `call_workflow_tool` tool instead of `call_work_tool`. It takes `name`, `arguments` and an optional `callId`, and returns the same response. Interlock handles each call against the claim it holds for the session, so the session needs no Interlock MCP server and never sees a claim token or other credential. Calls work without network access from the session.
 
 - The prompt lists the tools and explains `call_workflow_tool` only when the tool is attached.
 - Sessions at **Read only** get no tool, and their prompt does not list the tools.
 - Under **Standard** and **Full access** the tool runs without an approval prompt. `call_workflow_tool` runs the Script or Fetch steps that the workflow's author attached to that Agent as tools. A Script runs in the Agent's checkout, with its own [server environment](https://github.com/dgca/interlock/blob/main/docs/architecture.md#scripts-and-interruptions) mode and no sandbox, using arguments the Agent chooses within the tool's input schema. Attaching a tool is the author's grant: under **Standard** there is no prompt per call, as for connected agents calling `call_work_tool`. This is the one way an Agent at **Standard** runs code without being asked. Imported Scripts still wait for their one-time approval. The tool step still waits for resources and pause holds.
-- Claude Code sees them as `mcp__interlock_assignment__save_memory_note` and `mcp__interlock_assignment__call_workflow_tool`; Pi as `interlock_save_memory_note` and `interlock_call_workflow_tool`.
+- Claude Code sees them as `mcp__interlock_assignment__save_memory_note` and `mcp__interlock_assignment__call_workflow_tool`; Codex and Pi as `interlock_save_memory_note` and `interlock_call_workflow_tool`.
 - The call limits apply as for `call_work_tool`.
 
-Codex sessions do not get these tools yet; their prompt does not list the tools. Custom integrations receive the claim token in `$INTERLOCK_CLAIM_TOKEN` and can call `call_work_tool` over MCP with it.
+A Codex session gets the tool only when its Codex supports dynamic tools and the thread is new; otherwise it runs as before and its prompt does not list the tools. See [Interlock's own tools](https://github.com/dgca/interlock/blob/main/docs/managed-executors.md#interlocks-own-tools). Custom integrations receive the claim token in `$INTERLOCK_CLAIM_TOKEN` and can call `call_work_tool` over MCP with it.
 
 Earlier releases gave managed sessions a tool-only credential in their prompt and in `INTERLOCK_WORK_ID` and `INTERLOCK_TOOL_TOKEN`. Built-in harnesses no longer receive it. `call_work_tool` still accepts it, and the stdio MCP bridge still fills in `workId` and `token` from those variables when a call omits them.
 

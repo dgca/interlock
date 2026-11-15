@@ -84,17 +84,17 @@ Implement the change.
 - When the notes do not fit the budget, older notes are left out and the section says how many. The last note shown may be shortened, with a marker.
 - Notes are fenced. When a note is saved, lines that start with a number sign (including look-alikes such as `＃`) are escaped, and runs of four or more backticks or tildes are shortened to three. A note cannot add a section or end the block.
 
-[Managed sessions](https://github.com/dgca/interlock/blob/main/docs/managed-executors.md) receive the Memory section. Claude Code and Pi sessions also get a `save_memory_note` tool, and their prompt tells them to use it; see [Managed sessions save notes](#managed-sessions-save-notes). Other managed sessions can read memory in their prompt but cannot save notes, and their prompt does not mention saving.
+[Managed sessions](https://github.com/dgca/interlock/blob/main/docs/managed-executors.md) receive the Memory section. Claude Code, Codex and Pi sessions also get a `save_memory_note` tool when it can be attached, and their prompt tells them to use it; see [Managed sessions save notes](#managed-sessions-save-notes). Other managed sessions can read memory in their prompt but cannot save notes, and their prompt does not mention saving.
 
 ## Managed sessions save notes
 
-When memory was on as the run started, Interlock attaches its own `save_memory_note` tool to Claude Code and Pi sessions it launches. The tool takes `content` and an optional `scope` (`node`, the default, or `workflow`). It acts on the session's current claim, which Interlock holds; the session never sees a claim token or other credential.
+When memory was on as the run started, Interlock attaches its own `save_memory_note` tool to Claude Code, Codex and Pi sessions it launches. Codex needs dynamic tool support; see [Interlock's own tools](https://github.com/dgca/interlock/blob/main/docs/managed-executors.md#interlocks-own-tools). The tool takes `content` and an optional `scope` (`node`, the default, or `workflow`). It acts on the session's current claim, which Interlock holds; the session never sees a claim token or other credential.
 
 - It only writes. A managed session cannot read pending notes or another workflow's memory through it.
 - The usual rules apply: notes wait for review unless the workflow sets agent notes to go live, the pending limits, the prompt budget and the escaping of note text.
 - Sessions at **Read only** get no tool, and their prompt says nothing about saving.
 - Under **Standard** and **Full access** the tool runs without an approval prompt, because it writes only to Interlock.
-- Claude Code sees it as `mcp__interlock_assignment__save_memory_note`, Pi as `interlock_save_memory_note`.
+- Claude Code sees it as `mcp__interlock_assignment__save_memory_note`, Codex and Pi as `interlock_save_memory_note`.
 
 The execution details (`interlockTools` in MCP `manage_executors` inspect) say whether the tools were attached, and why not.
 
