@@ -88,7 +88,7 @@ Implement the change.
 
 ## Managed sessions save notes
 
-When memory was on as the run started, Interlock attaches its own `save_memory_note` tool to Claude Code, Codex and Pi sessions it launches. Codex needs dynamic tool support; see [Interlock's own tools](managed-executors.md#interlocks-own-tools). The tool takes `content` and an optional `scope` (`node`, the default, or `workflow`). It acts on the session's current claim, which Interlock holds; the session never sees a claim token or other credential.
+When memory was on as the run started, Interlock attaches its own `save_memory_note` tool to Claude Code, Codex and Pi sessions it launches. Codex needs dynamic tool support; see [Interlock's own tools](https://github.com/dgca/interlock/blob/main/docs/managed-executors.md#interlocks-own-tools). The tool takes `content` and an optional `scope` (`node`, the default, or `workflow`). It acts on the session's current claim, which Interlock holds; the session never sees a claim token or other credential.
 
 - It only writes. A managed session cannot read pending notes or another workflow's memory through it.
 - The usual rules apply: notes wait for review unless the workflow sets agent notes to go live, the pending limits, the prompt budget and the escaping of note text.

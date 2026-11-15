@@ -87,7 +87,7 @@ Claude Code, Codex and Pi sessions that Interlock launches get their own `call_w
 - Under **Standard** and **Full access** the tool runs without an approval prompt. The tool step itself still waits for Script approval, resources and pause holds.
 - The call limits apply as for `call_work_tool`.
 
-A Codex session gets the tool only when its Codex supports dynamic tools and the thread is new; otherwise it runs as before and its prompt does not list the tools. See [Interlock's own tools](managed-executors.md#interlocks-own-tools). Custom integrations receive the claim token in `$INTERLOCK_CLAIM_TOKEN` and can call `call_work_tool` over MCP with it.
+A Codex session gets the tool only when its Codex supports dynamic tools and the thread is new; otherwise it runs as before and its prompt does not list the tools. See [Interlock's own tools](https://github.com/dgca/interlock/blob/main/docs/managed-executors.md#interlocks-own-tools). Custom integrations receive the claim token in `$INTERLOCK_CLAIM_TOKEN` and can call `call_work_tool` over MCP with it.
 
 Earlier releases gave managed sessions a tool-only credential in their prompt and in `INTERLOCK_WORK_ID` and `INTERLOCK_TOOL_TOKEN`. Built-in harnesses no longer receive it. `call_work_tool` still accepts it, and the stdio MCP bridge still fills in `workId` and `token` from those variables when a call omits them.
 

@@ -55,7 +55,7 @@ Command rules are a convenience for a workflow you trust, not a sandbox. A rule 
 | Pi          | No prompt | Yes (`edit`, `write`)       | Yes (`bash`) | Yes                           |
 | Custom      | —         | —                           | —            | —                             |
 
-Interlock's own tools, `save_memory_note` and `call_workflow_tool`, never ask under **Standard** or **Full access**, with or without a policy: they write to Interlock, not the workspace. At **Read only** they are not attached. Every other tool keeps its usual handling. See [managed executors](managed-executors.md#interlocks-own-tools).
+Interlock's own tools, `save_memory_note` and `call_workflow_tool`, never ask under **Standard** or **Full access**, with or without a policy: they write to Interlock, not the workspace. At **Read only** they are not attached. Every other tool keeps its usual handling. See [managed executors](https://github.com/dgca/interlock/blob/main/docs/managed-executors.md#interlocks-own-tools).
 
 Interlock answers the harness's own approval request, so the harness's native rules and sandbox still apply first. Under a policy, Claude Code returns Bash to the session directory after each command. Custom harnesses never receive the policy; their requests still reach a person. A rule a harness cannot apply is listed in the report as not applied, and those actions ask.
 
