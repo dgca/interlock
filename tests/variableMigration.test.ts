@@ -178,6 +178,15 @@ it('treats every value 0.2.x read as falsy as disabled, and upgrades an empty st
   const db = new DatabaseSync(':memory:');
   connections.push(db);
   migrate(db, ':memory:', migrations.slice(0, 22));
+  // 0.2.19 reads variable records as raw JSON with no schema or backfill
+  // (packages/storage/src/index.ts:213-221 and 375-384 at @type_of/interlock@0.2.19)
+  // and blocks a variable wherever `!enabled` holds: ready() for captures and
+  // retries (packages/runtime/src/variables.ts:51), status() (:66),
+  // disabledReferences() (:123) and doctor (packages/runtime/src/doctor.ts:561).
+  // Every 0.2.x release with variables (0.2.12-0.2.19) has the same checks and
+  // writes `enabled: true` on create (variables.ts:255 at 0.2.19). So JavaScript
+  // falsiness decides: falsy values were blocked and are deleted, truthy ones
+  // were usable and are kept. No shape is unreadable.
   const cases: [string, unknown][] = [
     ['missing', undefined],
     ['null', null],
