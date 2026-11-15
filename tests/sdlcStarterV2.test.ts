@@ -61,9 +61,10 @@ async function simulate(e: Engine, suite: TestSuite, caseId: string) {
   );
 }
 
-// Builders inherit the shared default so one Full access choice covers them;
-// reviewers stay read-only whatever that default is.
-it('ships builders without a permission level and reviewers read-only', () => {
+// Every starter workflow inherits the shared default, so one choice covers
+// them all. Both reviewers carry the same read-only policy, so under Standard
+// they read without asking and still ask before any edit.
+it('ships every workflow without a permission level and reviewers with a read-only policy', () => {
   const levels = (b: { workflows: unknown[] }) =>
     (
       b.workflows as {
@@ -79,9 +80,17 @@ it('ships builders without a permission level and reviewers read-only', () => {
     ]);
   expect(levels(bundle)).toEqual([
     ['SDLC workflow', [null]],
-    ['Plan review', ['read-only', 'read-only']],
+    ['Plan review', [null, null]],
     ['Change review', [null, null]],
   ]);
+  const [, plan, change] = bundle.workflows;
+  for (const definition of [plan.draft, plan.versions[0].definition])
+    expect(definition.permissionPolicy).toEqual(change.draft.permissionPolicy);
+  const rules = change.draft.permissionPolicy.allow.map((rule) =>
+    'pattern' in rule ? rule.pattern : rule.kind,
+  );
+  for (const write of ['edit', 'git add *', 'git commit *'])
+    expect(rules).not.toContain(write);
   expect(levels(prWatcher).flatMap(([, l]) => l)).not.toContain('standard');
 });
 
