@@ -32,6 +32,7 @@ import {
   type LauncherSession,
 } from './launcher.js';
 import { OperatorChannel } from './operator.js';
+import { managedToolRun } from './interlockTools.js';
 import { RecoveryPolicies } from './recovery.js';
 import { BudgetStops, inspected, usageDelta } from './budgetStops.js';
 import {
@@ -1165,11 +1166,12 @@ export class ExecutorManager {
             try {
               r.state = 'running';
               this.write(r);
-              this.transcripts.capture(
-                r,
-                { kind: 'user', text: assignmentPrompt(currentWork) },
-                [job.work.token ?? ''],
-              );
+              if (!adapter.recordsPrompt)
+                this.transcripts.capture(
+                  r,
+                  { kind: 'user', text: assignmentPrompt(currentWork) },
+                  [job.work.token ?? ''],
+                );
               const sessionName = this.resolveSessionName(
                 currentWork,
                 r.profile,
@@ -1249,6 +1251,13 @@ export class ExecutorManager {
                     this.log(r, message);
                   }
                 },
+                ...managedToolRun(
+                  this.engine,
+                  currentWork,
+                  r,
+                  (message) => this.log(r, message),
+                  () => !job.abort.signal.aborted && !this.stopped,
+                ),
                 ...this.operator.sessionRequests(job),
               });
               job.sendMessage = undefined;

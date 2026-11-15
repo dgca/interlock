@@ -138,7 +138,8 @@ export function createMcpClient(url?: string) {
       submit: client.work.submit.mutate,
       renew: client.work.renew.mutate,
       fail: client.work.fail.mutate,
-      // Managed sessions get a tool-only credential in their environment.
+      // A session with INTERLOCK_WORK_ID and INTERLOCK_TOOL_TOKEN set (for
+      // example by a custom launcher) need not repeat them in each call.
       callTool: (
         input: Parameters<typeof client.work.callTool.mutate>[0],
         options?: Parameters<typeof client.work.callTool.mutate>[1],

@@ -422,6 +422,15 @@ export interface ManagedExecution {
     /** The latest auto-allowed actions, at most 50, with the rules that matched. */
     allowed?: { action: string; rule: string; at: string }[];
   };
+  /**
+   * Interlock's own tools for this session (saving memory notes, calling
+   * workflow tools): attached, or unavailable with the reason.
+   */
+  interlockTools?: {
+    state: 'attached' | 'unavailable';
+    tools: string[];
+    reason?: string;
+  };
   modelSource?: z.infer<typeof executorSettingSourceSchema>;
   effortSource?: z.infer<typeof executorSettingSourceSchema>;
   command: string;
