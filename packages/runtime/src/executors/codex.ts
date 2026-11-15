@@ -17,6 +17,11 @@ import {
 import { codexAction } from './permissionPolicy.js';
 import { transcriptText } from './transcriptEvents.js';
 import { codexResult } from './codexResult.js';
+import {
+  codexDynamicTools,
+  dynamicToolResult,
+  dynamicToolSpecs,
+} from './codexTools.js';
 
 export const codexAdapter: HarnessAdapter = {
   id: 'codex',
@@ -78,9 +83,21 @@ export const codexAdapter: HarnessAdapter = {
       await rpc.close();
     }
   },
+  recordsPrompt: true,
   async run(input: HarnessRun) {
     const resultFormat = codexResult(input.work);
     let taskStarted = false;
+    // Interlock's tools need Codex's experimental dynamic tools, attached when
+    // a thread starts. Without them the session runs as it always has.
+    let tools = input.interlockTools;
+    let unavailable: string | undefined;
+    if (tools && input.sessionId) {
+      unavailable = 'Codex attaches dynamic tools only when a thread starts';
+      tools = undefined;
+    } else if (tools) {
+      unavailable = await codexDynamicTools(input.command, input.signal);
+      if (unavailable) tools = undefined;
+    }
     const rpc = new JsonLinesProcess(
       input.command,
       ['app-server', '--listen', 'stdio://'],
@@ -186,7 +203,15 @@ export const codexAdapter: HarnessAdapter = {
       if (message.id !== undefined && message.method) {
         void (async () => {
           let result: unknown;
-          if (
+          if (message.method === 'item/tool/call' && tools) {
+            // Interlock's own tools write to Interlock, not the workspace.
+            taskStarted = true;
+            const call = params as { tool?: unknown; arguments?: unknown };
+            input.onProgress(
+              `Using ${tools.tools.find((t) => t.name === call.tool)?.name ?? 'an Interlock tool'}`,
+            );
+            result = await dynamicToolResult(tools, call, input.signal);
+          } else if (
             message.method === 'item/commandExecution/requestApproval' ||
             message.method === 'item/fileChange/requestApproval'
           ) {
@@ -328,7 +353,7 @@ export const codexAdapter: HarnessAdapter = {
       if (input.signal.aborted) throw new Error('Execution stopped');
       await rpc.request('initialize', {
         clientInfo: { name: 'interlock', title: 'Interlock', version: VERSION },
-        capabilities: { experimentalApi: false },
+        capabilities: { experimentalApi: !!tools },
       });
       rpc.send({ method: 'initialized' });
       const options = {
@@ -347,25 +372,54 @@ export const codexAdapter: HarnessAdapter = {
               : 'workspace-write',
         ...(input.profile.model ? { model: input.profile.model } : {}),
       };
-      const thread = await rpc.request(
-        input.sessionId ? 'thread/resume' : 'thread/start',
-        input.sessionId ? { threadId: input.sessionId, ...options } : options,
-      );
+      const begin = (extra: object) =>
+        rpc.request(
+          input.sessionId ? 'thread/resume' : 'thread/start',
+          input.sessionId
+            ? { threadId: input.sessionId, ...options }
+            : { ...options, ...extra },
+        ) as Promise<{
+          thread: { id: string };
+          model: string;
+          modelProvider?: string;
+        }>;
+      let thread;
+      try {
+        thread = await begin(
+          tools ? { dynamicTools: dynamicToolSpecs(tools) } : {},
+        );
+      } catch (error) {
+        if (!tools || !(error instanceof HarnessRequestError)) throw error;
+        // An explicit rejection of the experimental field; start without it.
+        unavailable = `Codex rejected dynamic tools: ${error.message.slice(0, 300)}`;
+        tools = undefined;
+        thread = await begin({});
+      }
+      if (input.interlockTools)
+        input.onInterlockTools?.(
+          tools
+            ? { state: 'attached', tools: tools.tools.map((t) => t.name) }
+            : {
+                state: 'unavailable',
+                tools: input.interlockTools.tools.map((t) => t.name),
+                reason: unavailable ?? 'unknown',
+              },
+        );
       threadId = thread.thread.id;
       if (input.sessionId && threadId !== input.sessionId)
         throw new Error('Codex did not resume the required native session');
       model = thread.model;
       provider = thread.modelProvider ?? 'openai';
-      input.onSession(threadId!, model);
+      input.onSession(threadId, model);
+      const prompt = assignmentPrompt(
+        input.work,
+        resultFormat.instructions,
+        tools?.tools.map((t) => t.name),
+      );
+      input.onTranscript?.({ kind: 'user', text: prompt });
       const turn = await rpc.request('turn/start', {
         threadId,
-        input: [
-          {
-            type: 'text',
-            text: assignmentPrompt(input.work, resultFormat.instructions),
-            text_elements: [],
-          },
-        ],
+        input: [{ type: 'text', text: prompt, text_elements: [] }],
         ...(input.profile.effort ? { effort: input.profile.effort } : {}),
         outputSchema: resultFormat.schema,
       });

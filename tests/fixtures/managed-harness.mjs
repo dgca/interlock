@@ -6,6 +6,18 @@ if (process.argv.includes('--version')) {
   console.log('test-harness 1.0');
   process.exit(0);
 }
+if (process.argv.includes('generate-json-schema')) {
+  // The protocol schema probe for Codex dynamic tools.
+  const { mkdirSync, writeFileSync } = await import('node:fs');
+  const out = process.argv[process.argv.indexOf('--out') + 1];
+  mkdirSync(`${out}/v2`, { recursive: true });
+  writeFileSync(
+    `${out}/v2/ThreadStartParams.json`,
+    JSON.stringify({ properties: { dynamicTools: {} } }),
+  );
+  writeFileSync(`${out}/ServerRequest.json`, '{"enum":["item/tool/call"]}');
+  process.exit(0);
+}
 const codex = process.argv.includes('app-server');
 const send = (value) => process.stdout.write(JSON.stringify(value) + '\n');
 function flag(name) {
@@ -28,6 +40,7 @@ let waiting = false,
   model = 'test-model';
 let awaitingGuidance = false;
 let encodedResult = false;
+let experimental = false;
 // Interlock tool results and whether a credential reached this process.
 const extra = {};
 const leak = () =>
@@ -147,8 +160,10 @@ const end = (allowed) => {
 for await (const line of createInterface({ input: process.stdin })) {
   const message = JSON.parse(line);
   if (codex) {
-    if (message.method === 'initialize')
+    if (message.method === 'initialize') {
+      experimental = message.params.capabilities?.experimentalApi === true;
       send({ id: message.id, result: { userAgent: 'test' } });
+    }
     if (message.method === 'model/list') {
       send({
         id: message.id,
@@ -189,6 +204,19 @@ for await (const line of createInterface({ input: process.stdin })) {
           throw Error('Unexpected native Codex permission configuration');
       }
       if (model === 'diagnostic-flood') await diagnostics();
+      if (message.params.dynamicTools && model === 'no-dynamic-tools') {
+        send({
+          id: message.id,
+          error: { code: -32600, message: 'dynamicTools is not supported' },
+        });
+        continue;
+      }
+      if (
+        model === 'interlock-tools' &&
+        (!experimental ||
+          message.params.dynamicTools?.[0]?.name !== ownCall.name)
+      )
+        throw Error('Interlock dynamic tools were not attached');
       send({
         id: message.id,
         result: {
@@ -235,6 +263,27 @@ for await (const line of createInterface({ input: process.stdin })) {
       }
       if (model === 'model-refusal') {
         end(false);
+        continue;
+      }
+      if (model === 'interlock-tools') {
+        extra.prompt = message.params.input[0].text.includes(ownCall.name);
+        extra.leak = leak();
+        send({
+          id: 901,
+          method: 'item/tool/call',
+          params: {
+            threadId: session,
+            turnId: 'turn',
+            callId: 'own',
+            tool: ownCall.name,
+            arguments: ownCall.arguments,
+          },
+        });
+        continue;
+      }
+      if (model === 'no-dynamic-tools') {
+        extra.prompt = message.params.input[0].text.includes(ownCall.name);
+        end(true);
         continue;
       }
       if (model === 'permissions-full-access') {
@@ -302,6 +351,10 @@ for await (const line of createInterface({ input: process.stdin })) {
         },
       });
       waiting = true;
+    }
+    if (message.id === 901 && message.result) {
+      extra.tool = message.result.contentItems[0].text;
+      end(message.result.success);
     }
     if (message.id === 900 && message.result && waiting) {
       waiting = false;

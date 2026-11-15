@@ -424,7 +424,7 @@ function ownTools() {
   return { tools, writes };
 }
 
-it.each([claudeAdapter])(
+it.each([claudeAdapter, codexAdapter])(
   'saves a note through Interlock tools attached to $id without exposing a credential',
   async (adapter) => {
     const { tools, writes } = ownTools();
@@ -473,3 +473,35 @@ it.each([claudeAdapter])(
     expect(recorded).not.toContain(toolCallToken('claim-token-534'));
   },
 );
+
+it('runs Codex as before when it rejects dynamic tools', async () => {
+  const { tools, writes } = ownTools();
+  const states: unknown[] = [];
+  const result = await codexAdapter.run({
+    command,
+    cwd: process.cwd(),
+    work: { ...work, token: 'claim-token-534' },
+    profile: executorProfileSchema.parse({
+      id: 'codex',
+      harness: 'codex',
+      name: 'Codex',
+      model: 'no-dynamic-tools',
+    }),
+    signal: new AbortController().signal,
+    onSession: () => {},
+    onProgress: () => {},
+    request: () => Promise.resolve({ allow: true }),
+    interlockTools: tools,
+    onInterlockTools: (state) => states.push(state),
+  });
+  // The prompt says nothing about tools the session does not have.
+  expect(result.output).toEqual({ ok: true, prompt: false });
+  expect(writes).toEqual([]);
+  expect(states).toEqual([
+    {
+      state: 'unavailable',
+      tools: ['save_memory_note'],
+      reason: 'Codex rejected dynamic tools: dynamicTools is not supported',
+    },
+  ]);
+});
