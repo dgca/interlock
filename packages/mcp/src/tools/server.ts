@@ -5,7 +5,6 @@ import { historyRequestSchema, executorOperationSchema } from '@interlock/core';
 import { z } from 'zod';
 import {
   variableReadSchema,
-  variableMutationSchema,
   variableImportBindingsSchema,
   boardImportSetupSchema,
   modelAliasReadSchema,
@@ -81,12 +80,8 @@ import {
   publishSchemaResources,
   sharedDefinitionSchema,
   sharedBundle,
+  safeVariableMutationSchema,
 } from './schemas.js';
-// SDK enum errors may quote malformed input; validate sensitive bodies first.
-const safeVariableMutationSchema = z.preprocess(
-  (input) => (variableMutationSchema.safeParse(input).success ? input : {}),
-  variableMutationSchema,
-);
 /** Profile names come from the HTTP path, header or stdio environment. */
 export function createMcpServer(
   client: ReturnType<typeof createMcpClient>,
