@@ -12,6 +12,8 @@ export function javascriptRunner(command: string) {
   const source = `(async function(input, require) {\n${command}\n})`;
   return `
 const input = JSON.parse(require('node:fs').readFileSync(0, 'utf8'));
+// Electron needs this variable to start as Node; keep it from Script code and its children.
+if (process.versions.electron) delete process.env.ELECTRON_RUN_AS_NODE;
 console.log = console.info = console.debug = console.error;
 const { Script, constants } = require('node:vm');
 const execute = new Script(${JSON.stringify(source)}, {
@@ -100,11 +102,18 @@ export function scriptFailure(
     : error;
 }
 
-/** Ensures Electron binaries run as headless Node when spawning process.execPath. */
+/**
+ * Environment for spawning process.execPath as Node. Inside Electron that
+ * binary runs as headless Node only with ELECTRON_RUN_AS_NODE, so it is added
+ * there and nowhere else.
+ */
 export function nodeRuntimeEnv(
   env: NodeJS.ProcessEnv | undefined = process.env,
 ): NodeJS.ProcessEnv {
-  return { ...(env ?? process.env), ELECTRON_RUN_AS_NODE: '1' };
+  const base = env ?? process.env;
+  return process.versions.electron || process.env.ELECTRON_RUN_AS_NODE
+    ? { ...base, ELECTRON_RUN_AS_NODE: '1' }
+    : { ...base };
 }
 
 /** Scripts read JSON on stdin and return JSON on stdout. They are never retried automatically. */

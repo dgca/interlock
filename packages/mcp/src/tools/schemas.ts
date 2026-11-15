@@ -75,9 +75,11 @@ export const safeVariableMutationSchema = z.preprocess((input, context) => {
   if (variableMutationSchema.safeParse(input).success) return input;
   // Explain the removed field like the API does, without echoing the input.
   if (input !== null && typeof input === 'object' && 'enabled' in input)
+    // Fatal stops the union check from appending its own discriminator error.
     context.addIssue({
       code: 'custom',
       message: variableMutationError(input),
+      fatal: true,
     });
   return {};
 }, variableMutationSchema);

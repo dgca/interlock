@@ -26,6 +26,8 @@ npx -y @type_of/interlock@latest
 
 Installed copies store workflows and run history in `~/.interlock/interlock.db`. Saved data survives restarts and upgrades. Scripts use the directory where you started Interlock as their default working directory.
 
+The macOS desktop app instead uses your home folder, or the folder chosen with **Change Default Working Directory…** in its menu. When the desktop app takes over from a stopped `interlock` process, workflows without their own directory switch to that folder. Set a directory on workflows that depend on one.
+
 ## Install an update
 
 Stop the running server with Ctrl+C, then install the latest version:
