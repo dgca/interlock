@@ -175,6 +175,7 @@ export function compareWorkflow(
     ['agentModelMode', 'Agent model selection'],
     ['agentEffort', 'Agent thinking effort'],
     ['cwd', 'Working directory'],
+    ['workspace', 'Per-run Git worktree'],
     ['permissionPolicy', 'Permission policy'],
     ['continueOnMissingResult', 'Missing result continuation'],
     ['transientRetry', 'Transient retry'],
