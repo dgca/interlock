@@ -16,7 +16,7 @@ Batch items use their owning workflow’s settings. Invoked workflows use their 
 
 - Only the harness is inherited. The child's own permissions, model, effort and permission policy resolve as they would if the child had selected that harness.
 - An Agent `executor` (including `null`) and the child's own executor win. Agent presets keep their own harness choice.
-- The child captures the caller's harness from the caller's published version when it starts, so retries and restarts use the same harness after later edits. A child started before this behavior existed keeps waiting for a connected agent.
+- The child captures the caller's harness from the caller's published version when it starts, so retries and restarts use the same harness after later edits. After an upgrade, a caller run already in flight creates its new children on its pinned harness. Only children that already existed before the upgrade keep waiting for a connected agent.
 - Library workflows, **Start and continue** (detached) children and comparison trials do not inherit.
 - Workflow settings of an owned child show **Uses _owner_'s agent · _harness_**. Execution details show the harness as **from the calling workflow**, and assignment data carries `executorSource: "caller"`.
 

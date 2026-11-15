@@ -8,6 +8,7 @@ import {
   blankDefinition,
   definitionSchema,
   nodeSchema,
+  STARTED_RUN_SCHEMA,
   type Json,
   type Workflow,
   type WorkflowDefinition,
@@ -273,17 +274,28 @@ function agentOnly(executor?: string, node: Record<string, unknown> = {}) {
   Object.assign(d.nodes[1], node);
   return definitionSchema.parse(d);
 }
-// Starts an owner whose Workflow node invokes `helper` (owned unless `owned` is false).
+// Starts an owner whose Workflow node invokes `helper`: an owned child it waits
+// for, a library workflow, or an owned child started with Start and continue.
 function invoke(
   e: Engine,
   ownerExecutor: string | undefined,
   helper: WorkflowDefinition,
-  owned = true,
+  link: 'owned' | 'library' | 'detached' = 'owned',
 ) {
   const owner = e.create('Owner');
-  const child = e.create('Helper', '', helper, owned ? owner.id : null);
+  const child = e.create(
+    'Helper',
+    '',
+    helper,
+    link === 'library' ? null : owner.id,
+  );
   e.publish(child.id);
   const draft = withReference(child.id, 1);
+  if (link === 'detached')
+    Object.assign(draft.nodes[1], {
+      mode: 'detached',
+      outputSchema: STARTED_RUN_SCHEMA,
+    });
   draft.executor = ownerExecutor;
   e.update(owner.id, { draft, draftRevision: owner.draftRevision });
   e.publish(owner.id);
@@ -307,24 +319,36 @@ const assignments = (e: Engine, root: string) =>
     .map((w) => [w.status, w.executor, w.executorSource]);
 it('runs owned helpers without their own agent on the caller harness', async () => {
   const calls = harnesses(engine);
+  // A helper of a helper cannot exist: only the owner may reference an owned
+  // workflow, and owned workflows cannot own others. Batch items inside a
+  // helper exercise the inheritance chain instead.
+  // Comparison trees are excluded too; they are not covered here because a
+  // comparison needs a full testbench suite.
   const cases = [
-    ['inherits', 'codex', agentOnly(), true, 'codex', 'caller'],
-    ['keeps its own', 'codex', agentOnly('claude-code'), true, 'claude-code'],
+    ['inherits', 'codex', agentOnly(), 'owned', 'codex', 'caller'],
+    [
+      'keeps its own',
+      'codex',
+      agentOnly('claude-code'),
+      'owned',
+      'claude-code',
+    ],
     ['explicit connected', 'codex', agentOnly(undefined, { executor: null })],
-    ['independent', 'codex', agentOnly(), false],
+    ['independent', 'codex', agentOnly(), 'library'],
+    ['detached start', 'codex', agentOnly(), 'detached'],
     [
       'batch items inherit',
       'codex',
       batchDefinition(),
-      true,
+      'owned',
       'codex',
       'caller',
     ],
     ['caller without agent', undefined, agentOnly()],
   ] as const;
   const runs = cases.map(
-    ([, caller, helper, owned = true]) =>
-      invoke(engine, caller, helper, owned).run,
+    ([, caller, helper, link = 'owned']) =>
+      invoke(engine, caller, helper, link).run,
   );
   await vi.waitFor(() =>
     cases.forEach(([, , , , harness], i) => {

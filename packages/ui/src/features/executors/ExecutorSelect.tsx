@@ -161,7 +161,9 @@ export function ExecutorSelect({
               ) : (
                 `Each managed Agent uses its harness’s level, else ${permissionLabels[effective]} from AI Settings.`
               )}
-              {!profile && ' Connected agents keep their own permissions.'}
+              {!value &&
+                !owner?.executor &&
+                ' Connected agents keep their own permissions.'}
             </p>
           </div>
         )}
