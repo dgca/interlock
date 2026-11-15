@@ -10,13 +10,23 @@ export default {
   extraMetadata: {
     version,
   },
+  directories: {
+    output: 'release',
+    buildResources: 'build',
+  },
   mac: {
     target: [
       { target: 'dmg', arch: ['arm64', 'x64'] },
       { target: 'zip', arch: ['arm64', 'x64'] },
     ],
     category: 'public.app-category.developer-tools',
+    icon: 'build/icon.icns',
     hardenedRuntime: true,
+    notarize: Boolean(
+      process.env.APPLE_ID &&
+      process.env.APPLE_APP_SPECIFIC_PASSWORD &&
+      process.env.APPLE_TEAM_ID,
+    ),
     entitlements: 'build/entitlements.mac.plist',
     entitlementsInherit: 'build/entitlements.mac.plist',
   },

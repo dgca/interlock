@@ -31,6 +31,8 @@ import { DesktopUpdater, type UpdaterLike } from './updater.js';
 import {
   buildAppMenuTemplate,
   buildTrayMenuTemplate,
+  TRAY_ICON_1X_DATA_URL,
+  TRAY_ICON_2X_DATA_URL,
   type MenuContextOptions,
 } from './menu.js';
 import {
@@ -38,9 +40,6 @@ import {
   navigateToRun,
   shouldConfirmQuit,
 } from './window.js';
-
-const TRAY_ICON_PNG =
-  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAUklEQVR4nGNgGFjAiM8wIwMDE055RqIBI1kGjBoAApQcQBgYGP7jU0AogNlAlAEEjRqgZgDDKBhgAKt0BhIE+BThYgO1/YdYvB81YNQA7AAAlmQ8h9n/g4IAAAAASUVORK5CYII=';
 
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
@@ -227,6 +226,12 @@ app.on('before-quit', (event) => {
 
 void app.whenReady().then(async () => {
   hydrateProcessEnv();
+  if (process.platform === 'darwin' && !app.isPackaged && app.dock) {
+    const devIconPath = resolve(import.meta.dirname, '../build/icon.png');
+    if (existsSync(devIconPath)) {
+      app.dock.setIcon(devIconPath);
+    }
+  }
   if (typeof app.setAboutPanelOptions === 'function') {
     app.setAboutPanelOptions({
       applicationName: 'Interlock',
@@ -270,7 +275,15 @@ void app.whenReady().then(async () => {
     openExternal: (url) => shell.openExternal(url),
   });
 
-  const icon = nativeImage.createFromDataURL(TRAY_ICON_PNG);
+  const icon = nativeImage.createFromDataURL(TRAY_ICON_1X_DATA_URL);
+  if (typeof icon.addRepresentation === 'function') {
+    icon.addRepresentation({
+      scaleFactor: 2.0,
+      width: 36,
+      height: 36,
+      dataURL: TRAY_ICON_2X_DATA_URL,
+    });
+  }
   icon.setTemplateImage(true);
   tray = new Tray(icon);
   tray.setToolTip('Interlock');

@@ -19,7 +19,8 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "start": "node scripts/build.mjs && electron .",
-    "pack:mac": "node scripts/build.mjs && electron-builder --mac --dir -c electron-builder.mjs",
-    "dist:mac": "node scripts/build.mjs && electron-builder --mac -c electron-builder.mjs"
+    "dist:dir": "node scripts/build.mjs && electron-builder --mac --dir -c electron-builder.mjs --publish never",
+    "pack:mac": "node scripts/build.mjs && electron-builder --mac --dir -c electron-builder.mjs --publish never",
+    "dist:mac": "node scripts/build.mjs && electron-builder --mac -c electron-builder.mjs --publish never"
   }
 }
