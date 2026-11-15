@@ -384,8 +384,13 @@ export const migrations: readonly Migration[] = [
     // previously blocked credential cannot become usable. Value counters stay, so
     // a re-provisioned identity never reuses a revision that runs captured.
     up(db) {
-      const disabled = `SELECT id FROM documents WHERE collection = 'variables'
-        AND json_type(value, '$.enabled') = 'false'`;
+      // 0.2.x blocked a variable when `!enabled` held, so every JavaScript-falsy
+      // JSON value counts as disabled: missing, null, false, 0 and "".
+      const flag = (fn: string) => `${fn}(value, '$.enabled')`;
+      const disabled = `SELECT id FROM documents WHERE collection = 'variables' AND (
+        ${flag('json_type')} IS NULL OR ${flag('json_type')} IN ('null', 'false')
+        OR (${flag('json_type')} IN ('integer', 'real') AND ${flag('json_extract')} = 0)
+        OR (${flag('json_type')} = 'text' AND ${flag('json_extract')} = ''))`;
       db.exec(`
         DELETE FROM documents WHERE collection IN ('variableValues', 'variableBindings')
           AND json_extract(value, '$.variableId') IN (${disabled});

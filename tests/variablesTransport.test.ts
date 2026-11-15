@@ -166,18 +166,22 @@ it.each(['http', 'stdio'])(
         },
       });
       // 0.3.0 removed enablement: old callers are rejected, not ignored.
-      await call(
-        'manage_variables',
-        {
-          request: {
-            action: 'update',
-            id: variable.id,
-            expectedRevision: 1,
-            enabled: false,
-          },
-        },
-        true,
-      );
+      expect(
+        JSON.stringify(
+          await call(
+            'manage_variables',
+            {
+              request: {
+                action: 'update',
+                id: variable.id,
+                expectedRevision: 1,
+                enabled: false,
+              },
+            },
+            true,
+          ),
+        ),
+      ).toContain('Variables no longer have an enabled state');
       await call(
         'manage_variables',
         {

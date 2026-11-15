@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { DatabaseSync } from 'node:sqlite';
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { Store } from '@interlock/storage';
@@ -121,6 +121,16 @@ it('deletes disabled variables at schema 23 so referenced, bound and captured va
   expect(store.list('variableBindings')).toEqual([
     expect.objectContaining({ id: 'portable-kept', variableId: kept.id }),
   ]);
+  // A restored pre-upgrade backup upgrades again with the same result.
+  const restoredFile = join(dir, 'restored.db');
+  copyFileSync(store.migration.backup!, restoredFile);
+  const restored = new Store(restoredFile, { secretKeyFile });
+  connections.push(restored);
+  expect(restored.migration).toMatchObject({ from: 22, to: 23 });
+  expect(restored.list('variables')).toEqual([keptRecord]);
+  expect(restored.list('variableBindings')).toEqual(
+    store.list('variableBindings'),
+  );
   const engine = new Engine(store, dir);
   const worker = {
     workerId: 'upgrade',
@@ -162,4 +172,69 @@ it('deletes disabled variables at schema 23 so referenced, bound and captured va
   } finally {
     engine.stop();
   }
+});
+
+it('treats every value 0.2.x read as falsy as disabled, and upgrades an empty store', () => {
+  const db = new DatabaseSync(':memory:');
+  connections.push(db);
+  migrate(db, ':memory:', migrations.slice(0, 22));
+  const cases: [string, unknown][] = [
+    ['missing', undefined],
+    ['null', null],
+    ['false', false],
+    ['zero', 0],
+    ['real-zero', 0.0],
+    ['empty', ''],
+    ['true', true],
+    ['one', 1],
+    ['text-false', 'false'],
+    ['object', {}],
+  ];
+  const kept = ['true', 'one', 'text-false', 'object'];
+  const insert = db.prepare('INSERT INTO documents VALUES (?, ?, ?)');
+  for (const [id, enabled] of cases) {
+    const variable: Record<string, unknown> = { id, name: id, kind: 'secret' };
+    if (enabled !== undefined) variable.enabled = enabled;
+    insert.run('variables', id, JSON.stringify(variable));
+    insert.run(
+      'variableValues',
+      `${id}:1`,
+      JSON.stringify({ id: `${id}:1`, variableId: id }),
+    );
+    insert.run(
+      'variableBindings',
+      `portable-${id}`,
+      JSON.stringify({ id: `portable-${id}`, variableId: id }),
+    );
+  }
+  // 0.0 is stored as a JSON real, not an integer.
+  db.prepare(
+    `UPDATE documents SET value = json_set(value, '$.enabled', json('0.0')) WHERE id = 'real-zero' AND collection = 'variables'`,
+  ).run();
+  expect(migrate(db, ':memory:')).toEqual({ from: 22, to: 23 });
+  const ids = (collection: string) =>
+    (
+      db
+        .prepare(
+          `SELECT json_extract(value, '$.variableId') AS id FROM documents WHERE collection = ? ORDER BY id`,
+        )
+        .all(collection) as { id: string }[]
+    ).map((row) => row.id);
+  expect(
+    db
+      .prepare(
+        `SELECT id, json_type(value, '$.enabled') AS flag FROM documents WHERE collection = 'variables' ORDER BY id`,
+      )
+      .all(),
+  ).toEqual(kept.sort().map((id) => ({ id, flag: null })));
+  expect(ids('variableValues')).toEqual(kept.sort());
+  expect(ids('variableBindings')).toEqual(kept.sort());
+
+  const empty = new DatabaseSync(':memory:');
+  connections.push(empty);
+  migrate(empty, ':memory:', migrations.slice(0, 22));
+  expect(migrate(empty, ':memory:')).toEqual({ from: 22, to: 23 });
+  expect(empty.prepare('SELECT count(*) AS n FROM documents').get()).toEqual({
+    n: 0,
+  });
 });
