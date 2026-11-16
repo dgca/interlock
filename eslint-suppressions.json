@@ -264,9 +264,6 @@
     "@typescript-eslint/await-thenable": {
       "count": 1
     },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "@typescript-eslint/no-unused-vars": {
       "count": 6
     },
