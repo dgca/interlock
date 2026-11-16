@@ -39,6 +39,7 @@ import {
 } from './runStarts.js';
 import { continueAsNewSchema } from './runChains.js';
 import { z } from 'zod';
+import { InterlockError } from './errors.js';
 export * from './usage.js';
 export * from './pricing.js';
 export { DEFAULT_PRICE_TABLE } from './priceTable.js';
@@ -975,20 +976,7 @@ export interface RunEvent {
   waiting?: import('./runProjection.js').RunWaiting | null;
   actor?: import('./runProjection.js').RunProjection['actor'];
 }
-export class InterlockError extends Error {}
-export class ExternalInputConflict extends InterlockError {}
-/** A start that conflicts with a retained receipt or an active task; nothing was started. */
-export class RunStartConflict extends InterlockError {}
-export class ResultRejection extends InterlockError {
-  constructor(
-    readonly resultCheck: import('./resultValidation.js').ResultCheck,
-    detail = '',
-  ) {
-    super(
-      `Agent result rejected (${resultCheck.code}). No result accepted by this call. ${resultCheck.code === 'completed_conflict' ? 'A different result was already accepted. ' : resultCheck.code === 'invalid_claim' ? 'Claim token does not match. ' : ''}Claim ${resultCheck.claimUsable ? 'remains usable' : 'is not usable'}. Next: ${resultCheck.nextAction}. ${resultCheck.diagnostics.items.map((d) => `${d.path || '/'}: ${d.message}`).join(' ')} ${detail.slice(0, 2048)}`,
-    );
-  }
-}
+export * from './errors.js';
 const ajv = new Ajv({ allErrors: true, strict: false });
 const ownPropertyContracts = new Ajv({
   allErrors: true,
