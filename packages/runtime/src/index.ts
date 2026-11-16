@@ -74,7 +74,6 @@ import {
   isPollWait,
   hasFailureRoute,
   decideJoin,
-  type JoinCancel as Why,
   blankDefinition,
   InterlockError,
   readPath,
@@ -103,7 +102,6 @@ import { RunAdmission } from './runAdmission.js';
 import { HistoryRetention } from './historyRetention.js';
 import { RunHistory } from './runHistory.js';
 import {
-  cancelRunTreeSchema,
   type RunCancellationPreview,
   type CancelRunTree,
 } from '@interlock/core';
@@ -129,12 +127,13 @@ import { ContextContinuityGroups } from './contextContinuity.js';
 import { claimTokenHash, leaseCounts, expiredClaimMessage } from './leases.js';
 
 class ExpiredClaimError extends InterlockError {}
-import { type Cb, now, terminal, message } from './engineHelpers.js';
+import { now, terminal, message } from './engineHelpers.js';
 export type { Worker } from './engineTypes.js';
 import { ResultProcessingError, type Worker } from './engineTypes.js';
 import { ToolCalls } from './toolCalls.js';
 import { StepCompletion } from './stepCompletion.js';
 import { RunCreation } from './runCreation.js';
+import { RunCancellation } from './runCancellation.js';
 import { recoverInterruptedOperations } from './interruptedOperations.js';
 export class Engine {
   readonly stalls: Stalls;
@@ -177,6 +176,7 @@ export class Engine {
   private readonly scriptControl: BackgroundScriptControl;
   private readonly completion: StepCompletion;
   private readonly creation: RunCreation;
+  private readonly cancellation: RunCancellation;
   private localJobs = new Map<string, AbortController>();
   private backgroundScripts: BackgroundScripts;
   private stopped = false;
@@ -514,6 +514,21 @@ export class Engine {
       this.memory,
       this.modelAliases,
       this.usage,
+    );
+    this.cancellation = new RunCancellation(
+      store,
+      (id) => this.run(id),
+      (run) => this.save(run),
+      (run, type, text) => this.event(run, type, text),
+      () => this.pump(),
+      (id) => this.inspect(id),
+      this.localJobs,
+      this.backgroundScripts,
+      this.resources,
+      this.usage,
+      this.holds,
+      this.chains,
+      this.inspection,
     );
     this.completion = new StepCompletion(
       store,
@@ -2537,117 +2552,20 @@ export class Engine {
   } {
     return this.scriptControl.manageScript(request);
   }
-  /** Records why on each run and unfinished step; joins cancel in their transaction. */
-  private cancelTree(id: string, afterCommit?: Cb, why?: Why) {
-    const run = this.run(id);
-    if (terminal(run.status)) return;
-    for (const child of this.store.runScopes.attachedChildIds(id))
-      this.cancelTree(child, afterCommit, why);
-    this.cancelOne(run, afterCommit, why?.reason, why);
+  private cancelTree(...args: Parameters<RunCancellation['cancelTree']>) {
+    return this.cancellation.cancelTree(...args);
   }
-  private cancelOne(run: Run, afterCommit?: Cb, reason?: string, why?: Why) {
-    const id = run.id;
-    run.status = 'cancelled';
-    if (reason) run.cancellationReason = reason;
-    if (why?.join) run.cancellationKind = 'join';
-    const execution = run.executions.at(-1);
-    if (execution?.resourceActive)
-      this.resources.endExecution(run.id, execution, true);
-    if (execution && this.localJobs.has(execution.id))
-      this.resources.uncertainExecution(
-        run.id,
-        execution,
-        'Cancelled request may still be running remotely',
-      );
-    const stop = () => {
-      if (
-        execution?.background &&
-        ['launching', 'running'].includes(execution.background.state)
-      ) {
-        try {
-          this.backgroundScripts.stop(run.id, execution.id);
-        } catch {
-          execution.background.state = 'uncertain';
-          execution.error =
-            'Background stop could not verify the supervisor. Inspect processes and reconcile stopped.';
-          if (afterCommit) this.save(run);
-        }
-      }
-      if (execution) this.localJobs.get(execution.id)?.abort();
-    };
-    // Atomic task replacement must commit cancellation and its receipt before
-    // requesting external stops. A rolled-back start leaves the old job alone.
-    if (afterCommit) afterCommit.push(stop);
-    else stop();
-    if (execution && !terminal(execution.status)) {
-      execution.status = 'cancelled';
-      if (why) execution.error = why.reason;
-    }
-    for (const work of this.store
-      .work(undefined, id)
-      .filter((w) => ['available', 'claimed', 'held'].includes(w.status))) {
-      this.resources.end(work, 'cancelled');
-      this.usage.ended(work, 'cancelled');
-      this.holds.close(work, now(), reason ?? 'run cancellation', 'cancelled');
-      work.status = 'cancelled';
-      work.endedAt = now();
-      work.token = undefined;
-      this.store.put('work', work);
-    }
-    this.save(run);
-    this.event(
-      run,
-      'run.cancelled',
-      reason ? `Run cancelled: ${reason}` : 'Run cancelled',
-    );
+  private cancelOne(...args: Parameters<RunCancellation['cancelOne']>) {
+    return this.cancellation.cancelOne(...args);
   }
   previewRunCancellation(input: RunCancellationPreview) {
     return this.inspection.previewRunCancellation(input);
   }
   cancelRunTree(input: CancelRunTree) {
-    const query = cancelRunTreeSchema.parse(input);
-    const afterCommit: (() => void)[] = [];
-    const result = this.store.transaction(() => {
-      const selected = this.inspection.cancellationSelection(
-        query.id,
-        query.includeDetached,
-      );
-      const active = selected.filter((run) => !terminal(run.status));
-      for (const member of selected) {
-        const run = this.run(member.id);
-        if (run.chain) this.chains.cancel(run);
-        if (!terminal(run.status))
-          this.cancelOne(run, afterCommit, query.reason);
-      }
-      return {
-        rootRunId: query.id,
-        includeDetached: query.includeDetached,
-        reason: query.reason,
-        cancelled: {
-          items: active.slice(0, query.limit).map((run) =>
-            this.inspection.cancellationReference({
-              ...run,
-              status: 'cancelled',
-            }),
-          ),
-          total: active.length,
-          truncated: active.length > query.limit,
-        },
-      };
-    });
-    // Never stop external work until all cancellation state and lifecycle receipts commit.
-    for (const effect of afterCommit) effect();
-    this.pump();
-    return result;
+    return this.cancellation.cancelRunTree(input);
   }
   cancel(id: string, scope: 'run' | 'chain' = 'run') {
-    this.store.transaction(() =>
-      this.cancelTree(
-        scope === 'chain' ? this.chains.cancel(this.run(id)) : id,
-      ),
-    );
-    this.pump();
-    return this.inspect(id);
+    return this.cancellation.cancel(id, scope);
   }
   private assertResumeSafe(run: Run, checked = new Set<string>()) {
     if (checked.has(run.id)) return;
