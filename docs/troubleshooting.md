@@ -17,6 +17,12 @@ interlock doctor
 
 Doctor reports readiness problems without repairing or deleting data. **Diagnostics** in the sidebar shows the same checks. If you selected another port, set `INTERLOCK_URL` to that engine address for CLI commands.
 
+## The desktop app behaves differently from the CLI
+
+- **A Script runs in the wrong folder.** In the macOS app, a workflow without its own directory runs in your home folder or the folder set with **Change Default Working Directory…**. Set a directory on the workflow.
+- **A Script that starts another Node process opens the app instead.** Inside the app, `process.execPath` is the app itself. Run `node` from your `PATH` instead of `fork()` or `process.execPath`.
+- **`interlock` in a terminal says a newer database schema is not supported.** The app updated itself and upgraded the shared database. Update the CLI with `npm install -g @type_of/interlock@latest`, or use the app's own command from **Install 'interlock' Command in PATH…**.
+
 ## An agent cannot connect
 
 Confirm Interlock is running, then copy the endpoint from **Connect with MCP**. Restart or reconnect your client after changing its configuration. See [Connect with MCP](connect-mcp.md) for setup and clients that require stdio.

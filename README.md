@@ -23,13 +23,7 @@ Open [http://127.0.0.1:4310](http://127.0.0.1:4310). Keep the terminal running; 
 
 ### macOS desktop app
 
-Download `Interlock.app` from [GitHub Releases](https://github.com/dgca/interlock/releases).
-
-- **Shared state**: Shares `~/.interlock/interlock.db` and `http://127.0.0.1:4310` with the CLI. If an `interlock` CLI server is already running, the desktop app attaches to it without port conflicts, and automatically takes over engine hosting if the CLI process stops.
-- **Default working directory**: Workflows without their own directory run in your home folder, or the folder chosen with **Change Default Working Directory…**, not the folder where you started the CLI. Set a directory on workflows that depend on one.
-- **Login shell PATH hydration**: Automatically inherits your macOS login shell `PATH` so tools and agent harnesses installed with Homebrew, mise, nvm, or asdf work inside Script and Agent nodes without extra wrapper scripts.
-- **Dock and Menu Bar**: Closing the window leaves Interlock running in the Dock and Menu Bar. Dock badges and native notifications alert you when runs need attention or fail.
-- **Install CLI in PATH**: Choose **Interlock → Install "interlock" Command in PATH…** from the menu bar to symlink the CLI into your system `PATH`.
+Download the `.dmg` from [GitHub Releases](https://github.com/dgca/interlock/releases) and drag **Interlock** to **Applications**. The app needs no Node.js, keeps running in the menu bar when you close its window, updates itself, and shares its data with the CLI. See [Installation](https://dgca.github.io/interlock/docs/installation/#macos-desktop-app) for how it differs from the CLI.
 
 Run the Parallel checks demo. It uses only Script steps, so no agent is needed:
 
