@@ -76,6 +76,11 @@
       "symbol": "LifecycleEventKind"
     },
     {
+      "file": "packages/core/src/executionProvenance.ts",
+      "type": "exports",
+      "symbol": "executionProvenanceSchema"
+    },
+    {
       "file": "packages/core/src/executors.ts",
       "type": "exports",
       "symbol": "allowedRootSchema"
@@ -173,27 +178,7 @@
     {
       "file": "packages/core/src/index.ts",
       "type": "exports",
-      "symbol": "cwdBindingSchema"
-    },
-    {
-      "file": "packages/core/src/index.ts",
-      "type": "exports",
       "symbol": "deletedVersionSchema"
-    },
-    {
-      "file": "packages/core/src/index.ts",
-      "type": "exports",
-      "symbol": "executionProvenanceSchema"
-    },
-    {
-      "file": "packages/core/src/index.ts",
-      "type": "exports",
-      "symbol": "pollCheckSchema"
-    },
-    {
-      "file": "packages/core/src/index.ts",
-      "type": "exports",
-      "symbol": "routingSchema"
     },
     {
       "file": "packages/core/src/index.ts",
@@ -213,11 +198,6 @@
     {
       "file": "packages/core/src/index.ts",
       "type": "exports",
-      "symbol": "valueBindingSchema"
-    },
-    {
-      "file": "packages/core/src/index.ts",
-      "type": "exports",
       "symbol": "versionReferenceSchema"
     },
     {
@@ -233,22 +213,12 @@
     {
       "file": "packages/core/src/index.ts",
       "type": "types",
-      "symbol": "ContextPolicy"
-    },
-    {
-      "file": "packages/core/src/index.ts",
-      "type": "types",
       "symbol": "DraftChanges"
     },
     {
       "file": "packages/core/src/index.ts",
       "type": "types",
       "symbol": "InputHint"
-    },
-    {
-      "file": "packages/core/src/index.ts",
-      "type": "types",
-      "symbol": "PollCheckResult"
     },
     {
       "file": "packages/core/src/index.ts",
@@ -279,6 +249,11 @@
       "file": "packages/core/src/providers.ts",
       "type": "exports",
       "symbol": "normalizeProvider"
+    },
+    {
+      "file": "packages/core/src/records.ts",
+      "type": "types",
+      "symbol": "PollCheckResult"
     },
     {
       "file": "packages/core/src/report.ts",
@@ -509,6 +484,26 @@
       "file": "packages/core/src/workflowBoards.ts",
       "type": "types",
       "symbol": "BoardColumn"
+    },
+    {
+      "file": "packages/core/src/workflowDefinition.ts",
+      "type": "exports",
+      "symbol": "cwdBindingSchema"
+    },
+    {
+      "file": "packages/core/src/workflowDefinition.ts",
+      "type": "exports",
+      "symbol": "pollCheckSchema"
+    },
+    {
+      "file": "packages/core/src/workflowDefinition.ts",
+      "type": "exports",
+      "symbol": "routingSchema"
+    },
+    {
+      "file": "packages/core/src/workflowDefinition.ts",
+      "type": "exports",
+      "symbol": "valueBindingSchema"
     },
     {
       "file": "packages/core/src/workflowDiff.ts",
