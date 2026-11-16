@@ -1294,17 +1294,18 @@ export class Engine {
         );
         const step = previous.executions.at(-1)!;
         const visitCount = calculateVisitCount(previous.executions, node.id);
+        // One clock read, so the step and its provenance agree on when it ended.
+        step.completedAt = now();
         step.provenance = buildExecutionProvenance({
           node,
           execution: step,
           visitCount,
           attempt: step.attempt ?? 1,
-          endedAt: now(),
+          endedAt: step.completedAt,
         });
         step.output = output;
         step.port = port;
         step.status = 'completed';
-        step.completedAt = now();
         previous.value = output;
         previous.status = 'completed';
         // A continuing Exit produces a checkpoint, not a final workflow result.
@@ -1366,19 +1367,20 @@ export class Engine {
         }
       }
     }
+    // One clock read, so the step and its provenance agree on when it ended.
+    execution.completedAt = now();
     execution.provenance = buildExecutionProvenance({
       node,
       execution,
       visitCount,
       managed,
       attempt,
-      endedAt: now(),
+      endedAt: execution.completedAt,
     });
     if (rawResult !== undefined) execution.result = rawResult;
     execution.output = output;
     execution.port = port;
     execution.status = 'completed';
-    execution.completedAt = now();
     run.value = output;
     if (
       node.kind === 'exit' ||
