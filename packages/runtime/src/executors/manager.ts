@@ -2,16 +2,13 @@ import { ManagedTranscripts } from './transcripts.js';
 import {
   InterlockError,
   executorOperationSchema,
-  resolveProvider,
   type ExecutorModels,
   type ExecutorProfile,
   type ExecutorProfileUpdate,
   type ManagedExecution,
   type ManagedWorkSummary,
   type WorkRequest,
-  type ModelUsage,
   type RecoveryEvent,
-  type UsageAttempt,
   type TranscriptPage,
   type MessageReceipt,
 } from '@interlock/core';
@@ -31,8 +28,9 @@ import { RecoveryPolicies } from './recovery.js';
 import { ModelRecovery } from './modelRecovery.js';
 import { NativeTurns } from './nativeTurns.js';
 import { ExecutorDispatch } from './dispatch.js';
+import { ExecutionInspection } from './inspection.js';
 import { resolveSessionName } from './continuity.js';
-import { BudgetStops, inspected } from './budgetStops.js';
+import { BudgetStops } from './budgetStops.js';
 import {
   active,
   attemptsCollection,
@@ -58,6 +56,7 @@ export class ExecutorManager {
   private modelRecovery: ModelRecovery;
   private turns: NativeTurns;
   private dispatch: ExecutorDispatch;
+  private inspection: ExecutionInspection;
   readonly budgetStops: BudgetStops;
   private adapters = new Map<string, HarnessAdapter>();
   private jobs = new Map<string, Job>();
@@ -181,6 +180,9 @@ export class ExecutorManager {
         execute: (job, adapter, session) => this.execute(job, adapter, session),
       },
     );
+    this.inspection = new ExecutionInspection(engine, this.jobs, {
+      settings: () => this.settings(),
+    });
   }
   profiles() {
     return this.config.profiles();
@@ -297,62 +299,8 @@ export class ExecutorManager {
       .reverse()
       .sort((a, b) => b.attempt - a.attempt)[0];
   }
-  executionProvenance(
-    workId: string,
-    attempt: number,
-  ):
-    | {
-        profileId: string | null;
-        harness: string | null;
-        sessionId: string | null;
-        requestedModel: string | null;
-        actualModel: string | null;
-        provider: string | null;
-        effort: string | null;
-        usage: ModelUsage[] | null;
-      }
-    | undefined {
-    const job = this.jobs.get(workId);
-    const record =
-      (job && job.record.attempt === attempt ? job.record : undefined) ??
-      this.engine.store.get<ManagedExecution>(
-        attemptsCollection,
-        `${workId}:${attempt}`,
-      );
-    if (!record) return undefined;
-    const sessionKey = job?.sessionKey ?? record.sessionId;
-    const session = sessionKey
-      ? this.engine.store.get<Session>(sessionsCollection, sessionKey)
-      : undefined;
-    const usageAttempt = this.engine.store.get<UsageAttempt>(
-      'usageAttempts',
-      `${workId}:${attempt}`,
-    );
-    const usage =
-      usageAttempt?.snapshot?.models ?? (job && session?.usage) ?? null;
-    const actualModel =
-      usage?.[0]?.model ??
-      session?.requestedModel ??
-      record.profile.model ??
-      null;
-    const provider =
-      usage?.[0]?.provider ??
-      resolveProvider({
-        model: actualModel,
-        profile: record.profile,
-        prefixOverrides: this.settings().providerPrefixes,
-      });
-
-    return {
-      profileId: record.profile.id,
-      harness: record.profile.harness,
-      sessionId: session?.id ?? record.sessionId ?? null,
-      requestedModel: session?.requestedModel ?? record.profile.model ?? null,
-      actualModel,
-      provider,
-      effort: record.profile.effort ?? null,
-      usage: usage ?? null,
-    };
+  executionProvenance(workId: string, attempt: number) {
+    return this.inspection.executionProvenance(workId, attempt);
   }
   describe(work: ManagedAssignment): ManagedWorkSummary | undefined {
     return this.dispatch.describe(work);
@@ -473,45 +421,7 @@ export class ExecutorManager {
     return resolveSessionName(this.engine, work, profile);
   }
   inspect(workId: string) {
-    if (!this.engine.store.get<WorkRequest>('work', workId))
-      throw new InterlockError('Assignment not found');
-    const records = this.engine.store
-      .forWork<ManagedExecution>(attemptsCollection, workId)
-      .reverse()
-      .sort((a, b) => b.attempt - a.attempt);
-    const latest = records[0];
-    return {
-      items: latest
-        ? [
-            {
-              ...inspected(latest),
-              requests: [
-                ...latest.requests.filter((r) => r.state === 'pending'),
-                ...latest.requests
-                  .filter((r) => r.state !== 'pending')
-                  .slice(-3),
-              ],
-              requestCount: latest.requests.length,
-              logs: latest.logs.slice(-20),
-            },
-          ]
-        : [],
-      total: records.length,
-      history: records.slice(1, 11).map((r) => ({
-        id: r.id,
-        attempt: r.attempt,
-        state: inspected(r).state,
-        startedAt: r.startedAt,
-        endedAt: r.endedAt,
-        error: r.error,
-        sessionId: r.sessionId,
-        sessionName: r.sessionName,
-        resumeCommand: r.resumeCommand,
-        deepLink: r.deepLink,
-        recoveryEvents: r.recoveryEvents,
-        transcriptCapture: r.transcriptCapture,
-      })),
-    };
+    return this.inspection.inspect(workId);
   }
   transcript(input: unknown): TranscriptPage {
     return this.operator.transcript(input);
