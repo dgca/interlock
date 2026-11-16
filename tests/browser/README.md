@@ -6,7 +6,7 @@
 
 `screenshots.browser.ts` compares the gallery sections, the hover, focus, and dialog states, and the main screens (workflow list, workflow editor, run inspector, board library, board, variables) at 1440px and 390px. Baselines live in `__screenshots__/`.
 
-Baselines are pinned to Linux, the CI `ubuntu-latest` runner. Font rasterization differs between macOS and Linux, so on other platforms the comparisons are skipped with a message, and the other assertions in these tests still run. Seeded data, a fixed clock in the browser and the engine, the UTC time zone, and masks over the version, engine address, and short IDs keep the captures stable.
+Baselines are pinned to Linux, the CI `ubuntu-latest` runner. Font rasterization differs between macOS and Linux, so on other platforms the comparisons are skipped with a message, and the other assertions in these tests still run. Seeded data, a fixed clock in the browser and the engine, the UTC time zone, and masks over the version, engine address, and short IDs keep the captures stable. The version label is also replaced with a fixed `v0.0.0` before capture, so a release that changes the version's length does not move its mask.
 
 When a comparison fails, the test writes `<name>-actual.png`, `<name>-expected.png`, and `<name>-diff.png` to `test-results/screenshots/`. CI's `browser` job uploads that directory as the `screenshot-diffs` artifact on failure. It ignores a missing directory when a failure produced no screenshots.
 
