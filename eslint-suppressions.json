@@ -271,7 +271,12 @@
       "count": 6
     },
     "no-empty": {
-      "count": 3
+      "count": 1
+    }
+  },
+  "packages/runtime/src/executors/nativeTurns.ts": {
+    "no-empty": {
+      "count": 2
     }
   },
   "packages/runtime/src/executors/pi.ts": {
