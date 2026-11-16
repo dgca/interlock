@@ -40,6 +40,7 @@ import {
 import { continueAsNewSchema } from './runChains.js';
 import { z } from 'zod';
 import { InterlockError } from './errors.js';
+import { jsonSchema, type Json } from './json.js';
 export * from './usage.js';
 export * from './pricing.js';
 export { DEFAULT_PRICE_TABLE } from './priceTable.js';
@@ -160,24 +161,7 @@ export {
   validateParallelScopes,
 } from './parallel.js';
 
-export type Json =
-  null | boolean | number | string | Json[] | { [key: string]: Json };
-export const jsonSchema: z.ZodType<Json> = z.lazy(() =>
-  z.union([
-    z.null(),
-    z.boolean(),
-    z.number().finite(),
-    z.string(),
-    z.array(jsonSchema),
-    z.record(jsonSchema),
-  ]),
-);
-// Authoring validators need the original keys for draft and contract diagnostics.
-// A Zod record checks "__proto__" values but drops the key from its parsed copy.
-export const authoringJsonSchema = z.custom<Json>(
-  (value) => jsonSchema.safeParse(value).success,
-  'Expected a JSON value',
-);
+export * from './json.js';
 export const contractSchema = z.record(z.unknown());
 export const contextPolicySchema = z.object({
   tier: modelTierSchema.optional(),
