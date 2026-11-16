@@ -64,11 +64,8 @@ import {
   type WorkHoldRequest,
   ResultRejection,
   type ResultCheck,
-  DEFAULT_BATCH_MAX_ITEMS,
-  isStartedRunSchema,
   isPollWait,
   hasFailureRoute,
-  decideJoin,
   blankDefinition,
   InterlockError,
   readPath,
@@ -129,6 +126,7 @@ import { RunCancellation } from './runCancellation.js';
 import { RunRetry } from './runRetry.js';
 import { WorkClaims } from './workClaims.js';
 import { OperationJobs } from './operationJobs.js';
+import { ChildRuns } from './childRuns.js';
 import { recoverInterruptedOperations } from './interruptedOperations.js';
 export class Engine {
   readonly stalls: Stalls;
@@ -175,6 +173,7 @@ export class Engine {
   private readonly retries: RunRetry;
   private readonly claims: WorkClaims;
   private readonly operationJobs: OperationJobs;
+  private readonly childRuns: ChildRuns;
   private localJobs = new Map<string, AbortController>();
   private backgroundScripts: BackgroundScripts;
   private stopped = false;
@@ -585,6 +584,17 @@ export class Engine {
       this.pauses,
       this.resources,
     );
+    this.childRuns = new ChildRuns(
+      store,
+      (id) => this.run(id),
+      (run) => this.save(run),
+      (run) => this.definition(run),
+      (...args) => this.newRun(...args),
+      (...args) => this.finish(...args),
+      (...args) => this.failWorkflow(...args),
+      (...args) => this.cancelTree(...args),
+      (run) => this.resumeStep(run),
+    );
     this.completion = new StepCompletion(
       store,
       (id) => this.run(id),
@@ -775,13 +785,6 @@ export class Engine {
   publish(id: string | string[], cascade = false) {
     return this.authoring.publish(id, cascade);
   }
-  private pinnedVersion(node: Extract<WorkflowNode, { kind: 'workflow' }>) {
-    if (node.version === null)
-      throw new InterlockError(
-        'Cannot execute an unpublished workflow reference',
-      );
-    return node.version;
-  }
   private newRun(...args: Parameters<RunCreation['newRun']>) {
     return this.creation.newRun(...args);
   }
@@ -967,7 +970,7 @@ export class Engine {
         if (execution.status === 'waiting') {
           const work = this.store
             .work('available', run.id)
-            .find((w) => w.executionId === execution!.id);
+            .find((w) => w.executionId === execution.id);
           if (node.unclaimedTimeoutMs === undefined) return false;
           if (
             work?.budgetBlocked ||
@@ -1170,42 +1173,8 @@ export class Engine {
         this.admitOperation(run, execution);
         return false;
       }
-      if (node.kind === 'workflow' && node.mode === 'detached') {
-        if (!isStartedRunSchema(node.outputSchema))
-          throw new InterlockError(
-            `${node.label}: Start and continue requires the fixed Started run output contract`,
-          );
-        const version = this.pinnedVersion(node);
-        const target = this.definition({
-          workflowId: node.workflowId,
-          version,
-        });
-        assertContract(
-          target.inputSchema,
-          execution.input,
-          `${node.label}: workflow input`,
-        );
-        // A savepoint protects child creation if finishing the dispatch fails.
-        // Mutate a copy so the failure path never retains rolled-back child IDs.
-        this.store.transaction(() => {
-          const dispatched = structuredClone(run);
-          const step = dispatched.executions.at(-1)!;
-          const child = step.childRunIds.length
-            ? this.run(step.childRunIds[0])
-            : this.newRun(node.workflowId, version, step.input, run.id);
-          child.parentMode = 'detached';
-          delete child.callerExecutor; // Detached starts keep their own agent.
-          child.parentExecutionId = step.id;
-          this.save(child);
-          step.childRunIds = [child.id];
-          this.finish(dispatched, step, node, {
-            runId: child.id,
-            workflowId: child.workflowId,
-            version: child.version,
-          });
-        });
-        return true;
-      }
+      if (node.kind === 'workflow' && node.mode === 'detached')
+        return this.childRuns.advanceDetached(run, execution, node);
       if (
         node.kind === 'workflow' &&
         this.options.substituteWorkflow &&
@@ -1296,163 +1265,13 @@ export class Engine {
       }
       if (node.kind === 'parallel')
         return this.advanceParallel(run, execution, node, starting);
-      if (node.kind === 'workflow' || node.kind === 'batch') {
-        const value =
-          node.kind !== 'workflow'
-            ? readPath(execution.input, node.itemsPath)
-            : [execution.input];
-        if (!Array.isArray(value))
-          throw new InterlockError('Batch input must resolve to an array');
-        if (
-          node.kind === 'batch' &&
-          value.length > (node.maxItems ?? DEFAULT_BATCH_MAX_ITEMS)
-        )
-          throw new InterlockError(
-            `Batch input has ${value.length} items; limit is ${node.maxItems ?? DEFAULT_BATCH_MAX_ITEMS} items (maxItems). Raise Maximum items or split the input.`,
-          );
-        let children = execution.childRunIds.map((id) => this.run(id));
-        if (node.kind === 'workflow' || node.failurePolicy === 'all') {
-          const failed = children.find(
-            (c) =>
-              (c.status === 'failed' || c.status === 'cancelled') &&
-              !execution!.retryChildRunIds?.includes(c.id),
-          );
-          if (failed) {
-            if (
-              node.kind === 'workflow' &&
-              hasFailureRoute(node) &&
-              failed.status === 'failed'
-            ) {
-              this.failWorkflow(
-                run,
-                node,
-                failed,
-                `Child run ${failed.id}: ${failed.error ?? 'failed'}`,
-                'child',
-              );
-              return true;
-            }
-            for (const child of children)
-              if (!terminal(child.status)) this.cancelTree(child.id);
-            throw new InterlockError(
-              `Child run ${failed.id}: ${failed.error ?? failed.status}${node.kind === 'batch' ? `; ${children.filter((c) => c.status === 'completed').length} of ${value.length} Batch items completed` : ''}`,
-            );
-          }
-        }
-        let changed = starting;
-        const concurrency = node.kind !== 'workflow' ? node.concurrency : 1;
-        let active = children.filter((c) => !terminal(c.status)).length;
-        while (execution.retryChildRunIds?.length && active < concurrency) {
-          this.resumeStep(this.run(execution.retryChildRunIds.shift()!));
-          active++;
-          changed = true;
-        }
-        while (
-          execution.nextItem < value.length &&
-          active < concurrency &&
-          !execution.retryChildRunIds?.length
-        ) {
-          if (node.kind === 'workflow' && hasFailureRoute(node))
-            assertContract(
-              this.definition({
-                workflowId: node.workflowId,
-                version: this.pinnedVersion(node),
-              }).inputSchema,
-              execution.input,
-              `${node.label}: workflow input`,
-            );
-          if (node.kind === 'workflow' && hasFailureRoute(node)) {
-            // Dispatch configuration and persistence failures are terminal, not
-            // child outcomes. Commit allocation and its caller link together.
-            const dispatched = this.store.transaction(() => {
-              const copy = structuredClone(run),
-                step = copy.executions.at(-1)!;
-              const child = this.newRun(
-                node.workflowId,
-                this.pinnedVersion(node),
-                step.input,
-                run.id,
-              );
-              step.childRunIds.push(child.id);
-              step.nextItem++;
-              step.status = 'waiting';
-              copy.status = 'waiting';
-              this.save(copy);
-              return copy;
-            });
-            Object.assign(run, dispatched);
-            execution = run.executions.at(-1)!;
-          } else {
-            const child = this.newRun(
-              node.kind === 'batch' ? run.workflowId : node.workflowId,
-              node.kind === 'batch' ? run.version : this.pinnedVersion(node),
-              value[execution.nextItem],
-              run.id,
-              node.kind === 'batch' ? node.id : undefined,
-            );
-            if (node.kind === 'batch') {
-              child.workflowName = `${node.label} · item ${execution.nextItem + 1}`;
-              child.batchItemIndex = execution.nextItem;
-              child.parentExecutionId = execution.id;
-              this.save(child);
-            }
-            execution.childRunIds.push(child.id);
-            execution.nextItem++;
-          }
-          active++;
-          changed = true;
-        }
-        children = execution.childRunIds.map((id) => this.run(id));
-        if (
-          !execution.retryChildRunIds?.length &&
-          execution.nextItem === value.length &&
-          children.every((c) => terminal(c.status))
-        ) {
-          const output: Json =
-            node.kind === 'workflow'
-              ? children[0].output!
-              : node.failurePolicy === 'collect'
-                ? children.map((c) => ({
-                    runId: c.id,
-                    status: c.status,
-                    output: c.output ?? null,
-                    error: c.error ?? null,
-                  }))
-                : children.map((c) => c.output!);
-          if (node.kind === 'workflow' && hasFailureRoute(node)) {
-            try {
-              assertContract(node.outputSchema, output, `${node.label} output`);
-            } catch (error) {
-              this.failWorkflow(
-                run,
-                node,
-                children[0],
-                message(error),
-                'output',
-              );
-              return true;
-            }
-          }
-          this.finish(
-            run,
-            execution,
-            node,
-            output,
-            node.kind === 'batch' ? 'complete' : 'default',
-          );
-          return true;
-        }
-        if (
-          changed ||
-          execution.status !== 'waiting' ||
-          run.status !== 'waiting'
-        ) {
-          execution.status = 'waiting';
-          run.status = 'waiting';
-          this.save(run);
-        }
-        return changed;
-      }
+      if (node.kind === 'workflow' || node.kind === 'batch')
+        return this.childRuns.advanceWorkflowOrBatch(
+          run,
+          execution,
+          node,
+          starting,
+        );
       if (node.kind === 'switch') {
         const value = readBranchValue(run, execution, node.path);
         const port =
@@ -1514,76 +1333,8 @@ export class Engine {
       this.save(owner);
     }
   }
-  private advanceParallel(
-    run: Run,
-    execution: NodeExecution,
-    node: Extract<WorkflowNode, { kind: 'parallel' }>,
-    starting: boolean,
-  ) {
-    const children = execution.childRunIds.map((id) => this.run(id));
-    const join = decideJoin(node, children, execution.retryChildRunIds);
-    // The ordinary failure path cancels unfinished waited descendants.
-    if (join.kind === 'fail') throw new InterlockError(join.error);
-    if (join.kind === 'complete') {
-      try {
-        this.finish(run, execution, node, join.output, 'complete');
-      } catch (error) {
-        join.cancel = { reason: `${node.label} failed: ${message(error)}` };
-        throw error;
-      } finally {
-        for (const id of execution.childRunIds)
-          this.cancelTree(id, undefined, join.cancel);
-      }
-      return true;
-    }
-    let changed = starting;
-    let active = children.filter((child) => !terminal(child.status)).length;
-    while (execution.retryChildRunIds?.length && active < node.concurrency) {
-      this.resumeStep(this.run(execution.retryChildRunIds.shift()!));
-      active++;
-      changed = true;
-    }
-    while (
-      execution.nextItem < node.branches.length &&
-      active < node.concurrency &&
-      !execution.retryChildRunIds?.length
-    ) {
-      const branch = node.branches[execution.nextItem];
-      const next = { ...execution, childRunIds: [...execution.childRunIds] };
-      this.store.transaction(() => {
-        const child = this.newRun(
-          run.workflowId,
-          run.version,
-          structuredClone(execution.input),
-          run.id,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          { nodeId: node.id, id: branch.id, key: branch.key },
-          execution.id,
-        );
-        next.childRunIds.push(child.id);
-        next.nextItem++;
-        next.status = 'waiting';
-        this.save({
-          ...run,
-          status: 'waiting',
-          executions: [...run.executions.slice(0, -1), next],
-        });
-      });
-      Object.assign(execution, next);
-      active++;
-      changed = true;
-    }
-    if (changed || execution.status !== 'waiting' || run.status !== 'waiting') {
-      execution.status = 'waiting';
-      run.status = 'waiting';
-      this.save(run);
-    }
-    return changed;
+  private advanceParallel(...args: Parameters<ChildRuns['advanceParallel']>) {
+    return this.childRuns.advanceParallel(...args);
   }
   stop() {
     if (this.stopped) return;
