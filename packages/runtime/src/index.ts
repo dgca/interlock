@@ -147,12 +147,7 @@ import { ContextContinuityGroups } from './contextContinuity.js';
 import { claimTokenHash, leaseCounts, expiredClaimMessage } from './leases.js';
 
 class ExpiredClaimError extends InterlockError {}
-type Cb = (() => void)[];
-const now = () => new Date().toISOString();
-const terminal = (s: string) =>
-  ['completed', 'failed', 'cancelled'].includes(s);
-const message = (error: unknown) =>
-  error instanceof Error ? error.message : String(error);
+import { type Cb, now, terminal, message } from './engineHelpers.js';
 export type { Worker } from './engineTypes.js';
 import { ResultProcessingError, type Worker } from './engineTypes.js';
 import { ToolCalls } from './toolCalls.js';
