@@ -2,7 +2,6 @@
   "maxLines": 800,
   "ceilings": {
     "packages/mcp/src/tools/server.ts": 807,
-    "packages/runtime/src/executors/manager.ts": 1777,
     "packages/runtime/src/index.ts": 3366,
     "packages/runtime/src/report.ts": 830,
     "packages/runtime/src/testbench.ts": 1011,
