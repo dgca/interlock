@@ -79,11 +79,24 @@ jobs:
         run: |
           VERSION=$(node -p "require('./package.json').version")
           TAG="@type_of/interlock@${VERSION}"
-          gh release upload "$TAG" \
+          # One file at a time: gh retries a failed upload without replacing
+          # the copy that already arrived, which fails the whole command. The
+          # update manifest goes last so it never points at a missing file.
+          for file in \
             packages/desktop/release/*.dmg \
             packages/desktop/release/*.zip \
             packages/desktop/release/*.blockmap \
-            packages/desktop/release/latest-mac.yml \
-            --clobber
+            packages/desktop/release/latest-mac.yml
+          do
+            for attempt in 1 2 3; do
+              if gh release upload "$TAG" "$file" --clobber; then
+                continue 2
+              fi
+              echo "Upload of $file failed (attempt $attempt of 3)."
+              sleep 10
+            done
+            echo "::error::Could not upload $file to $TAG."
+            exit 1
+          done
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
