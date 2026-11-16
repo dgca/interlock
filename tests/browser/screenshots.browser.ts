@@ -76,8 +76,19 @@ const screens: {
 ];
 
 /** Values that change between builds or test runs, independent of the UI. */
+const versionLabel = (page: Page) => page.getByText(/^v\d+\.\d+\.\d+/);
+
+/**
+ * A mask is as wide as the text it covers, so a release that changes the
+ * version's length would move it. A fixed label keeps the mask the same size.
+ */
+const pinVersionLabel = (page: Page) =>
+  versionLabel(page).evaluateAll((labels) => {
+    for (const label of labels) label.textContent = 'v0.0.0';
+  });
+
 const volatile = (page: Page) => [
-  page.getByText(/^v\d+\.\d+\.\d+/),
+  versionLabel(page),
   page.getByText(/127\.0\.0\.1:\d+/),
   page.getByText(/^[0-9a-f]{8}$/),
 ];
@@ -196,6 +207,7 @@ describe.each(widths)('main screens at %dpx', (width) => {
     await page.goto(app.url + screen.path(seed));
     await screen.ready(page).first().waitFor();
     await expectAccessible(page, `${screen.name}@${width}`);
+    await pinVersionLabel(page);
     await expectScreenshot(page, `${screen.name}-${width}`, {
       mask: volatile(page),
     });

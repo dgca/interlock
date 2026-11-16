@@ -24,6 +24,8 @@ Upgrading installs a new package and lets Interlock upgrade its database on the 
 
 4. Start `interlock` with the same `--db` and `--workdir` options as before.
 
+The macOS desktop app updates itself and shares the database with the CLI. After the app applies a schema upgrade, an older `interlock` from npm will not open the database until you update it too.
+
 Only one server can use a database at a time. A second server started on the same database exits with an error naming it.
 
 ### What happens on the first start
