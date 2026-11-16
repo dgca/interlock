@@ -1,5 +1,38 @@
 # @type_of/interlock
 
+## 0.3.0
+
+### Minor Changes
+
+- 8e3caa8: Breaking: workflow variables no longer have an enabled or disabled state, and upgrading deletes every variable that is disabled. Run `interlock doctor` with your current version before upgrading to list them; enable any you want to keep.
+
+  The upgrade (database schema 23) takes a backup first and is one-way. Deleted variables lose their protected values and portable bindings. Runs that captured one fail at the step that uses it, and retries keep failing even if a variable with the same identity is provisioned again. Workflows that reference one report the variable as missing.
+
+  Variable changes that send `enabled` through the API, CLI or MCP are rejected with an explanation instead of being ignored, and variable metadata no longer returns `enabled` or the `disabled` availability. To stop a variable from being used, delete it. The doctor check for disabled variables is removed.
+
+### Patch Changes
+
+- 34d3289: Interlock is now packaged as a native macOS desktop application (`Interlock.app`) alongside the existing CLI and browser interface.
+
+  - **macOS desktop app (`packages/desktop`)**: Native desktop interface with Dock and Menu Bar integration that keeps Interlock running in the background when the main window is closed. Features a seamless, text-free macOS title bar styled to match the page, custom application icons (`icon.icns`), high-resolution Retina Menu Bar template icons, Dock badge counts, and native system notifications when runs fail or need human attention.
+  - **"Attach, then Take Over" coexistence**: Shares the local database (`~/.interlock/interlock.db`) and port `4310` with the `interlock` CLI. The desktop app seamlessly attaches to an already-running CLI engine if present and takes over hosting the engine if the CLI process exits. Running bare `interlock` in a terminal while an engine is already healthy on the target port detects the existing server and reports its status instead of failing.
+  - **Login shell PATH hydration**: Automatically imports the user's macOS login shell `PATH` at launch so tools and agent harnesses installed via Homebrew, mise, nvm, or asdf resolve inside Script and Agent executions without special wrapper scripts.
+  - **Configurable working directory**: Workflows default their working directory to `~`, with a folder picker in settings to configure the default directory.
+  - **CLI helper**: Includes an **Interlock → Install "interlock" Command in PATH…** menu item to symlink the CLI command into `/usr/local/bin` or `~/.local/bin`.
+  - **Safe auto-updates & notarization**: Automatically checks for updates and downloads new releases via GitHub Releases in the background, safely deferring application restart while any workflow runs remain active. CI release automation builds, signs, notarizes with Apple, and attaches macOS release artifacts to GitHub Releases.
+  - **Child process execution**: Configures `ELECTRON_RUN_AS_NODE=1` when spawning child processes from `process.execPath` for JavaScript Script nodes, background script supervisors, and MCP fallback bridges.
+
+- 75cfb8e: Claude Code, Codex and Pi sessions that Interlock launches can save workflow memory notes and call workflow tools. Interlock attaches two tools of its own, `save_memory_note` and `call_workflow_tool`, and handles each call against the claim it holds, so the session never receives a claim token or other credential. Saving is write-only and keeps the usual review, pending limits, prompt budget and escaping. The tools are off at Read only and need no approval at Standard or Full access. That means a managed session at Standard whose step has tool edges now runs those Script and Fetch steps, in its checkout and with arguments it chooses, without a prompt per call: attaching a tool is the workflow author's grant, as it already is for connected agents. Imported Scripts still need their one-time approval. The prompt mentions the tools only when they are attached. Built-in harnesses no longer receive the tool-only credential in their prompt or environment. Codex needs its experimental dynamic tools; when they are missing or rejected the session runs as before. Execution details record whether the tools were attached, and why not, and log failed tool calls.
+- 3f3a465: **Review & publish** now lists a change to the workflow's per-run Git worktree setting (**Give each run its own Git worktree**). Before, turning the setting on, off or editing it showed no workflow change, and the dialog could say there were no definition changes although the setting was published.
+- fa39ff2: The SDLC starter now opens pull requests with a Script. With `createPr: true`, an agent writes the title and description (and optional draft, labels, reviewers and base branch) without using the network, and a Script pushes the run's branch and runs `gh pr create` in the checkout, so `gh` finds github.com or a GitHub Enterprise host from the Git remote. An open pull request for the branch is reused. When `gh` is missing or not signed in, the remote is not GitHub, or the push is rejected, the agent opens the pull request as before and the result says why. With a fork-style setup (another remote on the same host, or a push remote other than the recorded one) the agent takes over too. The Script never pushes the base branch, the remote's default branch or the branch a run without a worktree started on, and refuses a remote whose URL changed after the run started; these and other failures end with `delivery_blocked`. The result notes untracked files left out of the pull request and a reused pull request whose base or draft state differs. Delivery never waits for CI, and the description no longer points reviewers at the task folder, which is removed with the worktree. Before pushing, delivery also refuses uncommitted changes to tracked files. Copies added earlier keep their agent-driven delivery; add another copy to use the new one.
+- 1dcf63c: Fixes from release testing:
+
+  - JavaScript Scripts no longer receive `ELECTRON_RUN_AS_NODE`, so programs they start behave normally. The desktop app still uses it to start Scripts, then removes it before Script code runs. In the desktop app, a Script that needs another Node process should run `node` from `PATH` instead of `fork()` or `process.execPath`.
+  - When Interlock is already running, `interlock` no longer names a database it has not checked. It says when the running server may be using a different database.
+  - Setting `enabled` on a variable now returns only the explanation, in MCP and in the CLI. The CLI prints other rejections that Interlock explains itself as plain messages with the field they apply to.
+  - `interlock doctor` names a missing variable by the environment variable or header that uses it and its step, with the variable ID after.
+  - The installation guide and README explain that the desktop app's default working directory differs from the CLI's.
+
 ## 0.2.19
 
 ### Patch Changes
