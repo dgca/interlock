@@ -42,6 +42,11 @@ import { z } from 'zod';
 import { InterlockError } from './errors.js';
 import { jsonSchema, type Json } from './json.js';
 import type { ExecutionProvenance } from './executionProvenance.js';
+import {
+  ajv,
+  compileOwnPropertyContract,
+  contractSchema,
+} from './contracts.js';
 export * from './usage.js';
 export * from './pricing.js';
 export { DEFAULT_PRICE_TABLE } from './priceTable.js';
@@ -67,7 +72,6 @@ import { workspaceFields } from './workspaces.js';
 export * from './authoringLayout.js';
 import { modelTierSchema } from './modelTiers.js';
 import { continuityGroupSchema } from './contextContinuity.js';
-import Ajv, { type ValidateFunction } from 'ajv';
 import { bindingLeaves } from './valueBindings.js';
 import {
   variableReferenceSchema,
@@ -117,7 +121,6 @@ export {
 } from './parallel.js';
 
 export * from './json.js';
-export const contractSchema = z.record(z.unknown());
 export const contextPolicySchema = z.object({
   tier: modelTierSchema.optional(),
   continuityGroup: continuityGroupSchema.optional(),
@@ -916,108 +919,6 @@ export interface RunEvent {
   actor?: import('./runProjection.js').RunProjection['actor'];
 }
 export * from './errors.js';
-const ajv = new Ajv({ allErrors: true, strict: false });
-const ownPropertyContracts = new Ajv({
-  allErrors: true,
-  strict: false,
-  ownProperties: true,
-});
-const propertiesKeyword = ownPropertyContracts.getKeyword('properties');
-if (
-  !propertiesKeyword ||
-  propertiesKeyword === true ||
-  !('code' in propertiesKeyword)
-)
-  throw new Error('AJV properties validator is unavailable');
-const generateProperties = propertiesKeyword.code;
-// Fail closed when AJV would skip this name, including inside resolved refs.
-ownPropertyContracts.removeKeyword('properties').addKeyword({
-  ...propertiesKeyword,
-  code(context, ruleType) {
-    if (Object.hasOwn(context.schema, '__proto__'))
-      throw new InterlockError(
-        'Use patternProperties with "^__proto__$" to constrain the "__proto__" field',
-      );
-    generateProperties(context, ruleType);
-  },
-});
-
-function compileOwnPropertyContract(schema: Record<string, unknown>) {
-  if (schema.$async === true)
-    throw new InterlockError('This contract must validate synchronously');
-  return ownPropertyContracts.compile(schema);
-}
-
-export function validateContractSchema(schema: Record<string, unknown>) {
-  contractSchema.parse(schema);
-  ajv.compile(schema);
-}
-export function assertContract(
-  schema: Record<string, unknown>,
-  value: Json,
-  label: string,
-) {
-  assertContractValue(ajv.compile(schema), value, label);
-}
-export function assertOwnPropertyContract(
-  schema: Record<string, unknown>,
-  value: Json,
-  label: string,
-) {
-  assertContractValue(compileOwnPropertyContract(schema), value, label);
-}
-function assertContractValue(
-  validate: ValidateFunction,
-  value: Json,
-  label: string,
-) {
-  if (!validate(value)) {
-    const errors = (validate.errors ?? []).slice(0, 3).map((error) => {
-      const segments = error.instancePath
-        .split('/')
-        .slice(1)
-        .map((p) => p.replaceAll('~1', '/').replaceAll('~0', '~'));
-      const path = segments.length ? segments.join('.') : 'value';
-      let actual: unknown = value;
-      for (const part of segments)
-        actual =
-          actual !== null && typeof actual === 'object'
-            ? (actual as Record<string, unknown>)[part]
-            : undefined;
-      const received =
-        actual === null
-          ? 'null'
-          : Array.isArray(actual)
-            ? 'a list'
-            : typeof actual === 'string'
-              ? 'text'
-              : typeof actual === 'object'
-                ? 'an object'
-                : typeof actual;
-      const excerpt = JSON.stringify(actual)?.slice(0, 100) ?? 'missing';
-      if (error.keyword === 'required')
-        return `Missing required field "${[...segments, error.params.missingProperty].join('.')}".`;
-      if (error.keyword === 'type') {
-        const types: Record<string, string> = {
-          array: 'a list',
-          object: 'an object',
-          string: 'text',
-          boolean: 'yes/no',
-          integer: 'a whole number',
-          number: 'a number',
-          null: 'null',
-        };
-        return `"${path}" expects ${types[error.params.type] ?? error.params.type}; received ${received}: ${excerpt}.`;
-      }
-      if (error.keyword === 'enum')
-        return `"${path}" must be one of ${JSON.stringify(error.params.allowedValues)}; received ${excerpt}.`;
-      if (error.keyword === 'additionalProperties')
-        return `Unexpected field "${[...segments, error.params.additionalProperty].join('.')}". Remove it or add it to the contract.`;
-      return `"${path}" ${error.message}; received ${excerpt}.`;
-    });
-    throw new InterlockError(`${label}: ${errors.join(' ')}`);
-  }
-}
 export { readPath } from './dataPath.js';
 export function supportsResultRouting(node: WorkflowNode): boolean {
   return (
@@ -1312,6 +1213,10 @@ export {
   renameField,
   inferContract,
   contractExample,
+  contractSchema,
+  validateContractSchema,
+  assertContract,
+  assertOwnPropertyContract,
   type Contract,
   type FieldType,
 } from './contracts.js';

@@ -18,16 +18,16 @@
       "count": 1
     }
   },
-  "packages/core/src/fetch.ts": {
-    "@typescript-eslint/no-base-to-string": {
-      "count": 1
-    }
-  },
-  "packages/core/src/index.ts": {
+  "packages/core/src/contracts.ts": {
     "@typescript-eslint/no-unsafe-argument": {
       "count": 1
     },
     "@typescript-eslint/no-unsafe-member-access": {
+      "count": 1
+    }
+  },
+  "packages/core/src/fetch.ts": {
+    "@typescript-eslint/no-base-to-string": {
       "count": 1
     }
   },
