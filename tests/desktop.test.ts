@@ -59,6 +59,7 @@ import {
 } from '../packages/desktop/src/menu.js';
 import { VERSION } from '@interlock/core/version';
 import {
+  DESKTOP_TITLEBAR_CSS,
   createMainWindow,
   navigateToRun,
   shouldConfirmQuit,
@@ -522,6 +523,8 @@ describe('window & navigation', () => {
       string,
       ((event?: { preventDefault: () => void }) => void)[]
     > = {};
+    const webContentsListeners: Record<string, (() => void)[]> = {};
+    const insertCSS = vi.fn().mockResolvedValue('');
     const winMock = {
       show: vi.fn(),
       hide: vi.fn(),
@@ -532,6 +535,14 @@ describe('window & navigation', () => {
       on: (event: string, fn: (e?: { preventDefault: () => void }) => void) => {
         listeners[event] = listeners[event] || [];
         listeners[event].push(fn);
+      },
+      webContents: {
+        setWindowOpenHandler: vi.fn(),
+        insertCSS,
+        on: (event: string, fn: () => void) => {
+          webContentsListeners[event] = webContentsListeners[event] || [];
+          webContentsListeners[event].push(fn);
+        },
       },
       loadURL: vi.fn().mockResolvedValue(undefined),
     };
@@ -545,16 +556,40 @@ describe('window & navigation', () => {
     });
 
     expect(win).toBe(winMock);
+    expect(ctor).toHaveBeenCalledWith({
+      width: 1280,
+      height: 840,
+      minWidth: 800,
+      minHeight: 600,
+      title: '',
+      titleBarStyle: 'hidden',
+      trafficLightPosition: { x: 14, y: 10 },
+      backgroundColor: '#1a1a1a',
+      show: false,
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+      },
+    });
     expect(winMock.loadURL).toHaveBeenCalledWith('http://127.0.0.1:4310');
 
+    const preventTitleDefault = vi.fn();
+    listeners['page-title-updated']?.[0]?.({
+      preventDefault: preventTitleDefault,
+    });
+    expect(preventTitleDefault).toHaveBeenCalled();
+
+    webContentsListeners['dom-ready']?.[0]?.();
+    expect(insertCSS).toHaveBeenCalledWith(DESKTOP_TITLEBAR_CSS);
+
     const preventDefault = vi.fn();
-    listeners.close?.[0]({ preventDefault });
+    listeners.close?.[0]?.({ preventDefault });
     expect(preventDefault).toHaveBeenCalled();
     expect(winMock.hide).toHaveBeenCalled();
 
     isQuitting = true;
     const preventDefault2 = vi.fn();
-    listeners.close?.[0]({ preventDefault: preventDefault2 });
+    listeners.close?.[0]?.({ preventDefault: preventDefault2 });
     expect(preventDefault2).not.toHaveBeenCalled();
   });
 

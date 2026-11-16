@@ -1,5 +1,31 @@
 import type { BrowserWindow as BrowserWindowType } from 'electron';
 
+export const DESKTOP_TITLEBAR_CSS = `
+  body::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 28px;
+    z-index: 9999;
+    -webkit-app-region: drag;
+  }
+  .app > aside,
+  .app > .main {
+    padding-top: 24px;
+  }
+  .app > .main {
+    background: linear-gradient(
+      to bottom,
+      var(--structural, #1a1a1a) 0,
+      var(--structural, #1a1a1a) 28px,
+      var(--bg, #151515) 28px,
+      var(--bg, #151515) 100%
+    );
+  }
+`;
+
 export interface BrowserWindowLike {
   isVisible(): boolean;
   isFocused?(): boolean;
@@ -43,7 +69,10 @@ export function createMainWindow(
     height: 840,
     minWidth: 800,
     minHeight: 600,
-    title: 'Interlock',
+    title: '',
+    titleBarStyle: 'hidden',
+    trafficLightPosition: { x: 14, y: 10 },
+    backgroundColor: '#1a1a1a',
     show: false,
     webPreferences: {
       nodeIntegration: false,
@@ -61,6 +90,20 @@ export function createMainWindow(
       win.hide();
     }
   });
+
+  win.on('page-title-updated', (event) => {
+    event.preventDefault();
+  });
+
+  const webContents = win.webContents;
+  if (
+    typeof webContents?.on === 'function' &&
+    typeof webContents?.insertCSS === 'function'
+  ) {
+    webContents.on('dom-ready', () => {
+      void webContents.insertCSS(DESKTOP_TITLEBAR_CSS);
+    });
+  }
 
   if (typeof win.webContents?.setWindowOpenHandler === 'function') {
     win.webContents.setWindowOpenHandler(({ url }) => {
