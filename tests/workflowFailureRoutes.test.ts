@@ -12,6 +12,7 @@ import {
   WORKFLOW_FAILURE_ROUTE_SCHEMA,
   type WorkflowDefinition,
   type Json,
+  type Run,
 } from '@interlock/core';
 import { Engine } from '@interlock/runtime';
 import { Store } from '@interlock/storage';
@@ -476,6 +477,39 @@ it('rolls back route-enabled child allocation when the caller link cannot be per
   expect(run.executions[1].childRunIds).toEqual([]);
   expect(run.executions[1].port).toBeUndefined();
   expect(e.store.runs()).toHaveLength(1);
+});
+
+it('fails the dispatched call and cancels its child when saving the waiting caller fails', () => {
+  const e = setup(),
+    child = publish(e, childDefinition()),
+    parent = publish(e, parentDefinition(child.id));
+  const put = e.store.put.bind(e.store);
+  let linked = 0;
+  vi.spyOn(e.store, 'put').mockImplementation((collection, value) => {
+    const caller = value as Run;
+    if (
+      collection === 'runs' &&
+      caller.workflowId === parent.id &&
+      caller.status === 'waiting' &&
+      caller.executions.at(-1)?.childRunIds.length === 1 &&
+      ++linked === 2
+    )
+      throw new Error('Cannot save waiting caller');
+    return put(collection, value);
+  });
+  const run = e.start(parent.id, {}).run;
+  expect(linked).toBe(2);
+  expect(run).toMatchObject({
+    status: 'failed',
+    error: 'Cannot save waiting caller',
+  });
+  expect(run.executions.at(-1)).toMatchObject({
+    status: 'failed',
+    error: 'Cannot save waiting caller',
+  });
+  expect(run.executions.at(-1)?.completedAt).toBeTypeOf('string');
+  const [childRun] = e.inspect(run.id).children;
+  expect(e.run(childRun.id).status).toBe('cancelled');
 });
 
 it('routes a validly dispatched child internal input failure without treating it as a caller dispatch error', () => {

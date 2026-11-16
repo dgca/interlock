@@ -1160,6 +1160,8 @@ export class Engine {
           execution,
           node,
           starting,
+          // advance's catch must fail the execution that dispatch put in place.
+          (next) => (execution = next),
         );
       if (node.kind === 'switch') {
         const value = readBranchValue(run, execution, node.path);

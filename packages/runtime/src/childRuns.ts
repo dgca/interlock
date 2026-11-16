@@ -89,6 +89,8 @@ export class ChildRuns {
     execution: NodeExecution,
     node: Extract<WorkflowNode, { kind: 'workflow' | 'batch' }>,
     starting: boolean,
+    /** Receives the live execution when dispatch replaces it, before anything else can throw. */
+    replaced: (execution: NodeExecution) => void,
   ): boolean {
     const value =
       node.kind !== 'workflow'
@@ -175,6 +177,7 @@ export class ChildRuns {
         });
         Object.assign(run, dispatched);
         execution = run.executions.at(-1)!;
+        replaced(execution);
       } else {
         const child = this.newRun(
           node.kind === 'batch' ? run.workflowId : node.workflowId,
