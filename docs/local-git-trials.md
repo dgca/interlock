@@ -34,7 +34,7 @@ Replace the placeholders with retained versions, a saved suite and a full 40- or
 
 Each sample has a separate clone of that exact commit, even if the source branch changes later. Preparation reserves comparison capacity before a run exists. Failed preparation records `not_started` and an error without dispatching evaluated work. Interlock never substitutes its own working directory.
 
-The server stores clones beside its database under `evaluation-trials/ENVIRONMENT_ID/workspace`. A programmatic in-memory Engine must supply an explicit `trialRoot`. The Git operations run outside database transactions and do not use shared worktrees, hardlinks, borrowed object databases, source Git hooks or remote fetching.
+The server stores clones under `evaluation-trials/ENVIRONMENT_ID/workspace` in `INTERLOCK_DATA_DIR`, or beside the database when the setting is unset. A programmatic in-memory Engine must supply an explicit `trialRoot`. The Git operations run outside database transactions and do not use shared worktrees, hardlinks, borrowed object databases, source Git hooks or remote fetching.
 
 ## Execute Agent assignments
 

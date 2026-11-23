@@ -90,6 +90,7 @@ try {
   delete env.INTERLOCK_URL;
   Object.assign(env, {
     PATH: `${join(prefix, 'bin')}:${process.env.PATH}`,
+    INTERLOCK_DATA_DIR: join(temp, 'instance'),
     INTERLOCK_SECRET_KEY_FILE: join(temp, 'secret.key'),
     INTERLOCK_KILL_TEST_HARNESS_LOG: files.harnessLog,
   });
@@ -236,6 +237,12 @@ try {
       return state.background?.state === 'running' && step.id;
     },
   );
+  assert(
+    existsSync(
+      join(env.INTERLOCK_DATA_DIR, 'script-spool', backgroundExecutionId),
+    ),
+  );
+  assert(!existsSync(`${files.db}.scripts`));
   const [backgroundPid] = (
     await until('background Script start', () => lines(files.backgroundStarts))
   )[0]

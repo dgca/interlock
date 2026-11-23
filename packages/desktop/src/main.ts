@@ -1,6 +1,5 @@
 import '@interlock/server/sqliteWarning';
 import { existsSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import {
   app,
@@ -13,7 +12,6 @@ import {
   Tray,
 } from 'electron';
 import { VERSION } from '@interlock/core/version';
-import { readApiToken } from '@interlock/core/apiToken';
 import { hydrateProcessEnv } from './shellEnv.js';
 import {
   readDesktopSettings,
@@ -224,7 +222,7 @@ app.on('before-quit', (event) => {
   void lifecycle.stop();
 });
 
-void app.whenReady().then(async () => {
+const startup = app.whenReady().then(async () => {
   hydrateProcessEnv();
   if (process.platform === 'darwin' && !app.isPackaged && app.dock) {
     const devIconPath = resolve(import.meta.dirname, '../build/icon.png');
@@ -241,13 +239,10 @@ void app.whenReady().then(async () => {
 
   const workdir = resolveDesktopWorkdir();
   const port = Number(process.env.INTERLOCK_PORT ?? 4310);
-  const database =
-    process.env.INTERLOCK_DB ?? join(homedir(), '.interlock/interlock.db');
   const ui = resolveUiPath();
 
   lifecycle = new DesktopEngineLifecycle({
     port,
-    database,
     workdir,
     ui,
     onStateChange: (newState) => {
@@ -265,7 +260,7 @@ void app.whenReady().then(async () => {
   const state = await lifecycle.start();
   const attachedSnapshotProvider = createAttachedSnapshotProvider(
     lifecycle.getEngineUrl(),
-    readApiToken(),
+    lifecycle.readApiToken(),
   );
 
   mainWindow = createMainWindow({
@@ -362,4 +357,10 @@ void app.whenReady().then(async () => {
   }
 
   updateMenus();
+});
+void startup.catch((error: unknown) => {
+  const message = error instanceof Error ? error.message : String(error);
+  console.error(message);
+  dialog.showErrorBox('Interlock could not start', message);
+  app.exit(1);
 });

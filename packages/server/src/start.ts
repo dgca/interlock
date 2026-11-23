@@ -1,14 +1,21 @@
 import { serve } from '@hono/node-server';
-import { dirname, join, resolve } from 'node:path';
+import { resolve } from 'node:path';
 import { Store } from '@interlock/storage';
 import { Engine } from '@interlock/runtime';
 import { JsonLog, parseLogLevel } from '@interlock/runtime/log';
 import { createApp, serveUi } from './app.js';
 import { isLoopback, parseRequireToken } from './apiToken.js';
-import { apiTokenPath, ensureApiToken } from '@interlock/core/apiToken';
+import { ensureApiToken } from '@interlock/core/apiToken';
+import {
+  resolveDataPaths,
+  type DataPaths,
+  type ResolvedPath,
+} from '@interlock/core/dataPaths';
+import { bindDataDirectory, prepareDataDirectory } from './dataDirectory.js';
 import type { ConnectionConfig } from './connection.js';
 import { checkPort, lockDatabase, startupError } from './startup.js';
 export { isDatabaseLocked, probeHealthyServer } from './startup.js';
+export { prepareDataDirectory } from './dataDirectory.js';
 import { nativeAdapters } from '@interlock/runtime/executors/native';
 import {
   startWorkflowSync,
@@ -46,20 +53,27 @@ export function parseAllowedRoots(value?: string): string[] | undefined {
 export function withApiToken(
   connection: ConnectionConfig,
   hostname = '127.0.0.1',
+  paths = resolveDataPaths(),
 ): ConnectionConfig {
   const requireToken = parseRequireToken() || !isLoopback(hostname);
+  const env = paths.tokenEnv;
+  const config = Object.keys(env).length
+    ? { ...connection, env: { ...connection.env, ...env } }
+    : connection;
   try {
-    return { ...connection, token: ensureApiToken(), requireToken };
+    return { ...config, token: ensureApiToken(paths.token.path), requireToken };
   } catch (error) {
-    const message = `Cannot use the API token file ${apiTokenPath()}: ${error instanceof Error ? error.message : String(error)}`;
+    const message = `Cannot use the API token file ${paths.token.path}: ${error instanceof Error ? error.message : String(error)}`;
     if (requireToken) throw new Error(message, { cause: error });
     console.warn(`${message} Continuing without a token.`);
-    return { ...connection, requireToken };
+    return { ...config, requireToken };
   }
 }
 
 export async function startServer(options: {
-  database: string;
+  database?: string;
+  defaultDatabase?: ResolvedPath;
+  paths?: DataPaths;
   workdir: string;
   ui: string;
   port: number;
@@ -71,25 +85,42 @@ export async function startServer(options: {
   hostname?: string;
   handleSignals?: boolean;
 }) {
+  const paths =
+    options.paths ??
+    resolveDataPaths({
+      database:
+        options.database === undefined
+          ? undefined
+          : { path: options.database, source: 'explicit server option' },
+      defaultDatabase: options.defaultDatabase,
+    });
+  const database = paths.database.path;
+  prepareDataDirectory(paths);
   const hostname = options.hostname ?? '127.0.0.1';
   await checkPort(options.port);
-  const connection = withApiToken(options.connection, hostname);
-  const unlock = lockDatabase(options.database);
+  const legacyConnection = paths.dataDir
+    ? undefined
+    : withApiToken(options.connection, hostname, paths);
+  const unlock = lockDatabase(database);
   let store: Store;
   try {
-    store = new Store(options.database);
+    store = new Store(database, { paths });
   } catch (error) {
     unlock();
-    throw startupError(error, options.database);
+    throw startupError(error, database);
   }
   if (store.migration.backup)
     console.log(
       `Database upgraded from schema ${store.migration.from} to ${store.migration.to}. Backup: ${store.migration.backup}`,
     );
   let engine!: Engine;
+  let connection: ConnectionConfig;
   let sync: WorkflowSync | undefined;
   let traces: TraceExport | undefined;
   try {
+    bindDataDirectory(paths, store);
+    connection =
+      legacyConnection ?? withApiToken(options.connection, hostname, paths);
     const allowedRoots =
       options.allowedRoots ??
       parseAllowedRoots(process.env.INTERLOCK_ALLOWED_ROOTS);
@@ -103,7 +134,7 @@ export async function startServer(options: {
     if (connection.requireToken) engine.executors.apiToken = connection.token;
     engine.executors.errors.attach(
       new JsonLog(
-        join(dirname(options.database), 'logs'),
+        paths.logRoot,
         parseLogLevel(process.env.INTERLOCK_LOG_LEVEL),
       ),
     );
@@ -123,7 +154,7 @@ export async function startServer(options: {
     engine?.stop();
     store.close();
     unlock();
-    throw startupError(error, options.database);
+    throw startupError(error, database);
   }
   const app = createApp(engine, connection);
   serveUi(app, options.ui, connection);

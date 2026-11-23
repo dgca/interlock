@@ -16,7 +16,6 @@ import {
 } from 'node:fs';
 import { dirname, isAbsolute, join } from 'node:path';
 import { InterlockError, type VariableKind } from '@interlock/core';
-import { interlockConfigDir } from '@interlock/core/apiToken';
 
 interface Documents {
   get<T>(collection: string, id: string): T | undefined;
@@ -44,6 +43,7 @@ export class ProtectedValues {
   constructor(
     private documents: Documents,
     private database: string,
+    private keysDir: string,
     private configuredKeyFile?: string,
   ) {}
   private failure() {
@@ -52,10 +52,7 @@ export class ProtectedValues {
     );
   }
   private keyPath(vaultId: string) {
-    return (
-      this.configuredKeyFile ??
-      join(interlockConfigDir(), 'keys', `${vaultId}.key`)
-    );
+    return this.configuredKeyFile ?? join(this.keysDir, `${vaultId}.key`);
   }
   info() {
     const vault = this.documents.get<{ vaultId: string }>(

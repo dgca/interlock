@@ -29,7 +29,7 @@ In the editor, open **Workflow settings** and turn on **Give each run its own Gi
 
 ## Where runs work
 
-The worktree is created under the Interlock data folder, beside the database, at `workspaces/<run id>`. The run starts its first step once the worktree is ready. If creation fails, that step fails with the Git error.
+Interlock creates a worktree at `<data-dir>/workspaces/<run id>` when `INTERLOCK_DATA_DIR` is set. Otherwise `workspaces/` sits beside the database. The run starts its first step once the worktree is ready. If creation fails, that step fails with the Git error.
 
 Agent and Script nodes, including polling Script checks, use the first of these that is set:
 

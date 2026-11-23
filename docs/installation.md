@@ -24,7 +24,7 @@ To run without a global installation, use:
 npx -y @type_of/interlock@latest
 ```
 
-Installed copies store workflows and run history in `~/.interlock/interlock.db`. Saved data survives restarts and upgrades. Scripts use the directory where you started Interlock as their default working directory.
+Installed copies store workflows and run history in `~/.interlock/interlock.db` by default. Set `INTERLOCK_DATA_DIR` to keep engine state in an absolute directory you choose. Scripts use the directory where you started Interlock as their default working directory. See [engine state locations](architecture.md#engine-state-locations).
 
 ## macOS desktop app
 
@@ -34,7 +34,7 @@ On macOS you can run Interlock as an app instead of from a terminal. It includes
 2. Download `Interlock-<version>-arm64.dmg` for a Mac with Apple silicon, or `Interlock-<version>.dmg` for an Intel Mac.
 3. Open the file and drag **Interlock** to **Applications**.
 
-The app uses the same database and address as the CLI: `~/.interlock/interlock.db` and `http://127.0.0.1:4310`. You can switch between the two without moving data.
+The app and CLI use `~/.interlock/interlock.db` and `http://127.0.0.1:4310` by default. Give both the same `INTERLOCK_DATA_DIR` if you configure one. You can switch between the two without moving data.
 
 - **Closing the window does not stop Interlock.** It keeps running in the Dock and the menu bar, and notifies you when a run fails or needs you. Choose **Quit Interlock** to stop it. Quitting asks first when runs are active, because it ends them.
 - **If `interlock` is already running in a terminal,** the app connects to that engine. When the terminal process stops, the app starts its own engine.

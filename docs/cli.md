@@ -15,13 +15,14 @@ interlock [--port 4310] [--workdir PATH] [--db PATH]
 
 With no command, `interlock` starts the engine, the UI and the HTTP MCP endpoint at `/mcp`. Keep the terminal open. Pending database migrations run at startup, with a backup before schema upgrades.
 
-| Flag        | Default                        | Environment variable |
-| ----------- | ------------------------------ | -------------------- |
-| `--port`    | `4310`                         | none                 |
-| `--workdir` | Current directory, for Scripts | `INTERLOCK_WORKDIR`  |
-| `--db`      | `~/.interlock/interlock.db`    | `INTERLOCK_DB`       |
+| Flag        | Default                                                                                    | Environment variable |
+| ----------- | ------------------------------------------------------------------------------------------ | -------------------- |
+| `--port`    | `4310`                                                                                     | none                 |
+| `--workdir` | Current directory, for Scripts                                                             | `INTERLOCK_WORKDIR`  |
+| `--db`      | `<data-dir>/interlock.db` with `INTERLOCK_DATA_DIR`, otherwise `~/.interlock/interlock.db` | `INTERLOCK_DB`       |
 
 Explicit flags take precedence over environment variables.
+Set `INTERLOCK_DATA_DIR` to an absolute path to put the database, keys and API token, background Script spool, and managed worktrees in one directory. `--db` and `INTERLOCK_DB` override the database path. See [engine state locations](architecture.md#engine-state-locations).
 
 ## How commands work
 
@@ -33,7 +34,7 @@ Explicit flags take precedence over environment variables.
   INTERLOCK_URL=http://127.0.0.1:4400 interlock workflows
   ```
 
-- When the engine runs with `INTERLOCK_REQUIRE_TOKEN=1`, commands and the MCP bridge read the API token from the `api-token` file in the key folder.
+- When the engine runs with `INTERLOCK_REQUIRE_TOKEN=1`, commands and the MCP bridge read the same [API token file](connect-harness.md#api-token). Give them the engine's `INTERLOCK_DATA_DIR` if it is set.
 
 | Command                    | Purpose                           |
 | -------------------------- | --------------------------------- |
@@ -311,18 +312,20 @@ A pause holds gate boundaries and new claims without interrupting work in flight
 | `interlock report --json`                 | Machine-readable report                            |
 
 - `doctor` exits with code `1` for a failure, and `0` for passing checks or warnings. `--live` makes model requests, so use it only when you want them.
+- `doctor` reports the running engine's data directory, database, protected-value key, API token, spool, and managed worktree paths. Each path includes the setting or default that selected it.
 - `report` also takes `--since` and `--until` (ISO datetimes), `--limit N` and `--tag KEY=VALUE`. Dates must stay within years 0000–9999 once rounded to UTC. See [Reports](reports.md) and [Troubleshooting](troubleshooting.md).
 
 ## Environment variables
 
 | Variable                        | Effect                                                                                                                           |
 | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `INTERLOCK_DB`                  | Default database path                                                                                                            |
+| `INTERLOCK_DATA_DIR`            | Absolute directory for engine state. See [engine state locations](architecture.md#engine-state-locations).                       |
+| `INTERLOCK_DB`                  | Database path. Takes precedence over `INTERLOCK_DATA_DIR` for SQLite.                                                            |
 | `INTERLOCK_WORKDIR`             | Default Script working directory                                                                                                 |
 | `INTERLOCK_URL`                 | Engine that commands and `interlock mcp` talk to                                                                                 |
 | `INTERLOCK_MCP_PROFILE`         | Default tool profile for `interlock mcp`                                                                                         |
 | `INTERLOCK_REQUIRE_TOKEN`       | `1` rejects API, MCP and event requests without the API token                                                                    |
-| `INTERLOCK_SECRET_KEY_FILE`     | Location of the variable encryption key. Back up keys separately from the database.                                              |
+| `INTERLOCK_SECRET_KEY_FILE`     | Absolute override for the variable encryption key file, including when `INTERLOCK_DATA_DIR` is set.                              |
 | `INTERLOCK_LOG_LEVEL`           | `debug`, `info` (default), `warn` or `error`                                                                                     |
 | `INTERLOCK_SYNC_DIR`            | Sync workflow drafts with bundle files in a folder. See [Sync workflows](reuse-work.md#sync-workflows-with-a-repository-folder). |
 | `INTERLOCK_OTEL_TRACES`         | `1` exports run traces to `OTEL_EXPORTER_OTLP_ENDPOINT`. See [OpenTelemetry traces](opentelemetry.md).                           |

@@ -15,11 +15,12 @@ The API is local, like the rest of Interlock:
 
 - It accepts requests only for `127.0.0.1`, `localhost` or `[::1]`, and rejects untrusted browser origins.
 - Request bodies are limited to 2 MiB.
-- When `INTERLOCK_REQUIRE_TOKEN=1` is set, every `/api` request needs the [API token](https://github.com/dgca/interlock/blob/main/docs/connect-harness.md#api-token). Without it the server answers `401`.
+- When `INTERLOCK_REQUIRE_TOKEN=1` is set, every `/api` request needs the [API token](https://github.com/dgca/interlock/blob/main/docs/connect-harness.md#api-token). Without it the server answers `401`. Read the file reported by `interlock doctor` or use the matching path below.
 
 ```sh
 TOKEN=$(cat ~/Library/Application\ Support/Interlock/keys/api-token)   # macOS
 # TOKEN=$(cat ~/.config/interlock/keys/api-token)                     # Linux
+# TOKEN=$(cat "$INTERLOCK_DATA_DIR/keys/api-token")                  # Configured data directory
 curl -s http://127.0.0.1:4310/api/workflows -H "Authorization: Bearer $TOKEN"
 ```
 

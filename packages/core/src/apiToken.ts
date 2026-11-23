@@ -8,27 +8,13 @@ import {
   readFileSync,
   writeFileSync,
 } from 'node:fs';
-import { homedir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { dirname } from 'node:path';
+import { resolveDataPaths } from '@interlock/core/dataPaths';
 
 // Node-only helpers. Browser code must not import this module.
 
-/** Per-user Interlock configuration folder that holds protected-value keys. */
-export function interlockConfigDir() {
-  return process.platform === 'darwin'
-    ? join(homedir(), 'Library/Application Support/Interlock')
-    : join(
-        process.env.XDG_CONFIG_HOME || join(homedir(), '.config'),
-        'interlock',
-      );
-}
-
-/** The API token sits beside the protected-value key, including a configured key file. */
 export function apiTokenPath() {
-  const keyFile = process.env.INTERLOCK_SECRET_KEY_FILE;
-  return keyFile
-    ? join(dirname(resolve(keyFile)), 'api-token')
-    : join(interlockConfigDir(), 'keys', 'api-token');
+  return resolveDataPaths().token.path;
 }
 
 const tokenPattern = /^[A-Za-z0-9_-]{43}$/;

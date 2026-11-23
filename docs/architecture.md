@@ -309,7 +309,7 @@ Both languages run with your OS permissions. Script execution is not sandboxed. 
 
 A Script node's `timeoutMs` defaults to 60,000 milliseconds and accepts integers from 100 to 3,600,000. Scripts also have output limits. Omitted `executionMode` or `"foreground"` retains the server-owned runner. Cancellation kills its process group, shutdown stops it, and restart marks an interrupted execution failed. Interlock never automatically replays interrupted operations. An explicit retry can repeat effects.
 
-Opt into `executionMode: "background"` or the editor's **Background execution** switch for a local supervisor that survives server shutdown. This requires a file-backed database on the same host and user account. The server persists launch intent before spawning; the supervisor owns the Script process group, absolute deadline and encrypted progress/result receipts beside the database in `<database>.scripts/`. Command, input, environment and per-execution encryption key travel through stdin. The existing protected-value vault stores the key. Keep the database, spool and original vault key together for recovery. Workflow exports exclude these local execution records.
+Opt into `executionMode: "background"` or the editor's **Background execution** switch for a local supervisor that survives server shutdown. This requires a file-backed database on the same host and user account. The server persists launch intent before spawning. The supervisor owns the Script process group and absolute deadline and writes encrypted progress and result receipts to `<data-dir>/script-spool/` when `INTERLOCK_DATA_DIR` is set, or `<database>.scripts/` otherwise. Command, input, environment and per-execution encryption key travel through stdin. The protected-value vault stores the key. Keep the database, spool and original vault key together for recovery. Workflow exports exclude these local execution records.
 
 Restart reconnects to the same run and execution. OS PID, process start identity and an unpredictable execution token identify a live supervisor. Authenticated terminal receipts can be recovered after the supervisor exits. The existing guarded settlement transaction validates the JSON result, applies optional failure routing and advances once. No missing launch or result record authorizes a replay. Missing, corrupt or mismatched evidence marks the execution `uncertain` and fails terminally. After inspecting the original process group and external effects, an operator must confirm `stopped:true` with a reason through `runs.script`, CLI `interlock script`, or MCP `manage_script` before explicit retry can create a new execution. This guard also covers failed attached descendants resumed by a Workflow or Batch parent retry. Completed children are retained, and detached runs keep their independent lifecycle.
 
@@ -380,7 +380,7 @@ The shared API exposes `report.summary` (with `system.report` as an alias), the 
 
 The main service binds to `127.0.0.1` and rejects unexpected request hosts and browser origins. It is a single-user local service. A per-install [API token](connect-harness.md#api-token) is sent by first-party clients; on loopback it is required on `/api`, `/trpc`, `/mcp` and `/events` only when `INTERLOCK_REQUIRE_TOKEN` is set, so by default local processes can invoke its interfaces. `startServer` always requires it, and refuses to start without one, when given a non-loopback `hostname`; no user-facing option sets one yet. The check lives in `packages/server/src/apiToken.ts`. It must not be exposed through a public tunnel.
 
-Installed copies use `~/.interlock/interlock.db`; development uses `.interlock/interlock.db` inside the checkout. `interlock` starts the engine and built UI in the foreground. Its `--port`, `--db`, and `--workdir` flags override defaults. Development uses `pnpm dev` for the engine and Vite UI, or `pnpm start` for the engine and previously built UI.
+Installed copies default to `~/.interlock/interlock.db`. Development defaults to `.interlock/interlock.db` inside the checkout. `interlock` starts the engine and built UI in the foreground. Its `--port`, `--db`, and `--workdir` flags override defaults. Development uses `pnpm dev` for the engine and Vite UI, or `pnpm start` for the engine and previously built UI.
 
 The Hono listener exposes Streamable HTTP MCP at `/mcp`, behind the same host, origin, and 2 MiB request-body restrictions as the other APIs. Each POST creates an MCP server and SDK transport, calls the shared server router, returns JSON, and closes the transport. There are no transport sessions or server-initiated notifications; GET and DELETE return 405. Runs and claims remain in SQLite across requests and restarts. The endpoint URL stays stable across upgrades at the same address, for both global and npx startup.
 
@@ -390,7 +390,23 @@ The plain [HTTP API](http-api.md) at `/api` (`packages/server/src/httpApi.ts`) s
 
 `interlock mcp` remains a stdio bridge to an already running engine. The connection dialog defaults to HTTP and provides a stdio fallback: checkout paths in development, the portable CLI command for installed copies, and optional absolute paths derived from the installed runtime.
 
-The UI uses tRPC requests and server-sent notifications, with periodic refresh as a reconnect fallback. Events and node execution data remain in SQLite. `INTERLOCK_DB` changes the database location. `INTERLOCK_URL` changes the service URL used by CLI and MCP callers.
+The UI uses tRPC requests and server-sent notifications, with periodic refresh as a reconnect fallback. Events and node execution data remain in SQLite. `INTERLOCK_URL` changes the service URL used by CLI and MCP callers.
+
+### Engine state locations
+
+Set `INTERLOCK_DATA_DIR` to an absolute path before starting the engine. Interlock creates the directory with owner-only permissions if it is missing. Startup fails if the path is invalid or the directory cannot be created or written.
+
+| State                              | Path under `INTERLOCK_DATA_DIR`  |
+| ---------------------------------- | -------------------------------- |
+| Database                           | `interlock.db`                   |
+| Protected-value keys and API token | `keys/`                          |
+| Background Script spool            | `script-spool/`                  |
+| Managed worktrees                  | `workspaces/`                    |
+| Engine logs and local Git trials   | `logs/` and `evaluation-trials/` |
+
+For the database, `--db` takes precedence over `INTERLOCK_DB`, which takes precedence over `INTERLOCK_DATA_DIR`. SQLite sidecars, the database lock, and schema backups stay beside the selected database. `INTERLOCK_SECRET_KEY_FILE` overrides the encryption key file. With a data directory configured, the API token still lives at `<data-dir>/keys/api-token`.
+
+Each configured directory is bound to one database. Use a different data directory for a different database so workspace reconciliation cannot mistake its worktrees for orphans. The CLI, checkout server, macOS app, and stdio bridge share the path resolver. With the setting unset, Interlock uses its existing platform-specific key and token locations, and keeps the spool, worktrees, logs, and Git trials beside the database. Desktop preferences and explicitly configured working and sync directories use their own paths. See [how to move an install](upgrading.md#move-an-install-into-a-data-directory).
 
 ## Workflow testbench
 
@@ -593,7 +609,7 @@ Opt-in local Git comparisons use `TrialEnvironments` in runtime to persist per-s
 
 Runtime lifecycle handling is needed because a wrapper workflow cannot change native Script cwd or guarantee a finally step after cancellation. Cleanup waits for all descendants and native job closure. Uncertain claimed work, expiry and interrupted native work require external quiescence confirmation. Managed Agent expiry cancels its sample tree; explicit run retries are disabled. Ownership markers and derived paths protect deletion. Artifacts survive workspace cleanup and workflow deletion. This is a trusted local recipe with external tool enforcement, not a sandbox or provider system. See [local Git trials](local-git-trials.md).
 
-Managed workspaces (`packages/runtime/src/workspaces.ts`) give a run whose definition sets `workspace` a Git worktree under `<data dir>/workspaces/<run id>`. Batch items, Parallel branches, continue-as-new runs, and invoked workflows without their own setting share it. Before an owning run takes a step, the engine waits for the worktree, and it fails that step if preparation failed. Node `cwd` comes first, then the worktree, then workflow `cwd`. Removal waits for the owning run's source-tree quiescence and honors `retention`. Like trials, deletion uses derived paths and ownership markers, and startup reconciles interrupted records, unrecorded marked checkouts, and `git worktree prune`. Hooks are Scripts for approval: a pending imported hook holds the run's entry step. See [managed workspaces](managed-workspaces.md).
+Managed workspaces (`packages/runtime/src/workspaces.ts`) give a run whose definition sets `workspace` a Git worktree under `workspaces/<run id>` in the [engine state directory](#engine-state-locations), or beside the database when `INTERLOCK_DATA_DIR` is unset. Batch items, Parallel branches, continue-as-new runs, and invoked workflows without their own setting share it. Before an owning run takes a step, the engine waits for the worktree, and it fails that step if preparation failed. Node `cwd` comes first, then the worktree, then workflow `cwd`. Removal waits for the owning run's source-tree quiescence and honors `retention`. Like trials, deletion uses derived paths and ownership markers, and startup reconciles interrupted records, unrecorded marked checkouts, and `git worktree prune`. Hooks are Scripts for approval: a pending imported hook holds the run's entry step. See [managed workspaces](managed-workspaces.md).
 
 ## Bounded workflow improvement
 
@@ -665,7 +681,7 @@ Interlock provides a unified read-only readiness and health check via `interlock
 
 Core owns the diagnostic schemas (`diagnosticCategorySchema`, `diagnosticStatusSchema`, `diagnosticCheckSchema`, `doctorReportSchema`, and `doctorOptionsSchema`). Diagnostics evaluate five categories without mutating state or starting workflow runs:
 
-1. **System**: Checks engine version match, SQLite database integrity (`PRAGMA quick_check`), schema migration version, database file size and run history count, and available disk space (`statfsSync`).
+1. **System**: Reports storage paths and their sources, engine version, SQLite database integrity (`PRAGMA quick_check`), schema migration version, database file size and run history count, and available disk space (`statfsSync`).
 2. **Harnesses**: Verifies enabled harness profiles, binary detection, version discovery, `cwd` and `allowedRoots` existence, and optional live single-turn auth/model verification (`--live`).
 3. **Triggers**: Checks schedule execution lag (>60s), consecutive failures and automatic pauses across enabled schedule and lifecycle event triggers.
 4. **Blockers**: Inspects active library and workflow pause holds (`pauseHolds`), uncertain resource and executor holds (`uncertainClaims`, `uncertainOperations`, and uncertain `workResources` reservations), active stalled work items (`currentStalls`), and `needs_model` execution holds (`managedExecutions`).

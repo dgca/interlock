@@ -35,7 +35,7 @@ For automatic execution, check the selected harness is enabled in **AI Settings 
 
 ## A harness fails in the background
 
-The engine writes JSON lines to `logs/interlock.log` beside its database (`~/.interlock/logs/` for installed copies). The file rotates at 5 MiB and keeps three older files. Set `INTERLOCK_LOG_LEVEL` to `debug`, `info` (default), `warn`, or `error` before starting Interlock to change what is written. Doctor's **Scheduler errors** check shows the most recent background failure, such as a failing launcher status command, with its time. Error text has claim tickets and tokens masked.
+The engine writes JSON lines to `logs/interlock.log` in `INTERLOCK_DATA_DIR`, or beside its database when that setting is unset. The file rotates at 5 MiB and keeps three older files. Set `INTERLOCK_LOG_LEVEL` to `debug`, `info` (default), `warn`, or `error` before starting Interlock to change what is written. Doctor's **Scheduler errors** check shows the most recent background failure, such as a failing launcher status command, with its time. Error text has claim tickets and tokens masked.
 
 ## A step fails
 

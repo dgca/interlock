@@ -1,5 +1,5 @@
 import { statfsSync, existsSync, statSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import {
   VERSION,
   type DiagnosticCheck,
@@ -23,6 +23,62 @@ import {
   uncertainOperationCollection,
 } from './quiescence.js';
 import { privateFetchCheck } from './fetch.js';
+
+function storagePathChecks(engine: Engine): DiagnosticCheck[] {
+  const { paths, protectedValues } = engine.store;
+  const key = protectedValues.info().keyFile;
+  const workspaceRoot = engine.workspaces.root;
+  const items: [string, { path: string | null; source: string }][] = [
+    [
+      'Data directory',
+      {
+        path: paths.dataDir ?? null,
+        source: paths.dataDir ? 'INTERLOCK_DATA_DIR' : 'legacy defaults',
+      },
+    ],
+    [
+      'Database path',
+      {
+        ...paths.database,
+        path:
+          paths.database.path === ':memory:'
+            ? ':memory:'
+            : resolve(paths.database.path),
+      },
+    ],
+    [
+      'Protected-value key path',
+      {
+        path:
+          key ??
+          paths.keyFile?.path ??
+          (engine.store.path === ':memory:'
+            ? null
+            : join(paths.keysDir.path, '<vault-id>.key')),
+        source: paths.keyFile?.source ?? paths.keysDir.source,
+      },
+    ],
+    ['API token path', paths.token],
+    ['Background Script spool', paths.spool],
+    [
+      'Managed worktrees',
+      {
+        path: workspaceRoot,
+        source:
+          workspaceRoot === paths.workspaces.path
+            ? paths.workspaces.source
+            : 'explicit engine option',
+      },
+    ],
+  ];
+  return items.map(([name, details]) => ({
+    category: 'system',
+    name,
+    status: 'ok',
+    message: `${details.path ?? 'Unset'} (${details.source})`,
+    details,
+  }));
+}
 
 /**
  * Where a workflow uses a variable, by environment or header name and step.
@@ -55,7 +111,7 @@ export async function runDoctor(
   engine: Engine,
   options: DoctorOptions = {},
 ): Promise<DoctorReport> {
-  const checks: DiagnosticCheck[] = [];
+  const checks = storagePathChecks(engine);
 
   // ==========================================
   // 1. System & Storage Checks

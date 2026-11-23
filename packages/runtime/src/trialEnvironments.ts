@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { dirname, join, resolve } from 'node:path';
+import { resolve } from 'node:path';
 import { existsSync } from 'node:fs';
 import {
   InterlockError,
@@ -72,9 +72,7 @@ export class TrialEnvironments {
     private wake: () => void = () => {},
   ) {
     this.configured = root !== undefined || store.path !== ':memory:';
-    this.root = resolve(
-      root ?? join(dirname(resolve(store.path)), 'evaluation-trials'),
-    );
+    this.root = resolve(root ?? store.paths.trialRoot);
   }
   create(c: WorkflowComparison, sample: ComparisonSample): TrialEnvironment {
     return {

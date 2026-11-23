@@ -7,7 +7,7 @@ import {
 } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { interlockConfigDir } from '@interlock/core/apiToken';
+import { interlockConfigDir } from '@interlock/core/dataPaths';
 
 export interface DesktopSettings {
   workdir?: string;

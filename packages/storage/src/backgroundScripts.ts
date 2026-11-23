@@ -15,7 +15,7 @@ import {
   fsyncSync,
   closeSync,
 } from 'node:fs';
-import { resolve, join } from 'node:path';
+import { join } from 'node:path';
 import type { Store } from './index.js';
 
 export interface BackgroundJob {
@@ -38,7 +38,7 @@ export class BackgroundFiles {
       throw new Error('Background Scripts require a file-backed database');
     if (!/^[a-zA-Z0-9-]+$/.test(id))
       throw new Error('Invalid background execution ID');
-    return join(resolve(this.store.path) + '.scripts', id);
+    return join(this.store.paths.spool.path, id);
   }
   private secureDirectory(path: string) {
     mkdirSync(path, { recursive: true, mode: 0o700 });
@@ -55,7 +55,7 @@ export class BackgroundFiles {
   }
   create(runId: string, id: string): BackgroundJob {
     const directory = this.directory(id);
-    this.secureDirectory(resolve(this.store.path) + '.scripts');
+    this.secureDirectory(this.store.paths.spool.path);
     this.secureDirectory(directory);
     const job = {
       id,
