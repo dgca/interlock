@@ -325,7 +325,7 @@ A pause holds gate boundaries and new claims without interrupting work in flight
 | `INTERLOCK_URL`                 | Engine that commands and `interlock mcp` talk to                                                                                                            |
 | `INTERLOCK_MCP_PROFILE`         | Default tool profile for `interlock mcp`                                                                                                                    |
 | `INTERLOCK_REQUIRE_TOKEN`       | `1` rejects API, MCP and event requests without the API token                                                                                               |
-| `INTERLOCK_SECRET_KEY_FILE`     | Override for the variable encryption key file, including when `INTERLOCK_DATA_DIR` is set.                                                                  |
+| `INTERLOCK_SECRET_KEY_FILE`     | Absolute override for the variable encryption key file, including when `INTERLOCK_DATA_DIR` is set.                                                         |
 | `INTERLOCK_LOG_LEVEL`           | `debug`, `info` (default), `warn` or `error`                                                                                                                |
 | `INTERLOCK_SYNC_DIR`            | Sync workflow drafts with bundle files in a folder. See [Sync workflows](reuse-work.md#sync-workflows-with-a-repository-folder).                            |
 | `INTERLOCK_OTEL_TRACES`         | `1` exports run traces to `OTEL_EXPORTER_OTLP_ENDPOINT`. See [OpenTelemetry traces](opentelemetry.md).                                                      |

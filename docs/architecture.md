@@ -406,7 +406,7 @@ Set `INTERLOCK_DATA_DIR` to an absolute path before starting the engine. Interlo
 
 For the database, `--db` takes precedence over `INTERLOCK_DB`, which takes precedence over `INTERLOCK_DATA_DIR`. SQLite sidecars, the database lock, and schema backups stay beside the selected database. `INTERLOCK_SECRET_KEY_FILE` overrides the encryption key file. With a data directory configured, the API token still lives at `<data-dir>/keys/api-token`.
 
-Startup cleanup removes only the worktrees the open database recorded, so a database never removes another database's worktrees from a shared folder. The CLI, checkout server, macOS app, and stdio bridge share the path resolver. With the setting unset, Interlock uses its existing platform-specific key and token locations, and keeps the spool, worktrees, logs, and Git trials beside the database. Desktop preferences and explicitly configured working and sync directories use their own paths. See [how to move an install](upgrading.md#move-an-install-into-a-data-directory).
+Startup cleanup removes only worktrees the open database recorded as removed, so it leaves worktrees made by an unrelated database in the same folder. A copy or backup of a database shares its run IDs: do not open one with the data directory the original still uses. The CLI, checkout server, macOS app, and stdio bridge share the path resolver. With the setting unset, Interlock uses its existing platform-specific key and token locations, and keeps the spool, worktrees, logs, and Git trials beside the database. Desktop preferences and explicitly configured working and sync directories use their own paths. See [how to move an install](upgrading.md#move-an-install-into-a-data-directory).
 
 ## Workflow testbench
 

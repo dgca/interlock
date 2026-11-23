@@ -62,7 +62,7 @@ Interlock never removes a worktree with uncommitted or untracked changes (ignore
 Interlock only deletes a directory that sits directly inside the workspaces folder, is not a symlink, and has a matching ownership marker (`<run id>.owner.json`). Other directories there are never touched. At startup, Interlock:
 
 - treats interrupted preparations as failed and retries interrupted removals
-- removes marked worktrees that no record keeps, unless they have uncommitted changes
+- removes marked worktrees this database recorded as removed, unless they have uncommitted changes. A marked worktree with no record is left in place, because another database may own it. After you delete or replace a database, remove its old worktrees yourself with `git worktree remove`
 - runs `git worktree prune` in the repositories it tracks
 
 If you retry a failed run, it reuses the worktree it kept, or creates a new one on the run's existing branch.

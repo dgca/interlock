@@ -70,7 +70,7 @@ Setting `INTERLOCK_DATA_DIR` uses the files already in that directory. Interlock
 5. If the original spool exists, copy its contents into `<data-dir>/script-spool/` and preserve owner-only permissions. Keep retained Git worktrees and trial artifacts at their original paths if you need to access them from past runs. Use Git to preserve local work on their branches before removing retained worktrees. New runs use the new `workspaces/` folder.
 6. Set `INTERLOCK_DATA_DIR` for the engine, CLI, and stdio bridge. Clear database overrides if you want to use the database you copied to `interlock.db`. Start Interlock, run `interlock doctor`, and check that an existing workflow and its protected values are available.
 
-You can move or rename the data directory while the engine is stopped. If you open a different database with the same data directory, startup leaves the worktrees the earlier database made in `workspaces/`. Remove them yourself once you no longer need them.
+Git records each worktree's absolute path. Before you move or rename a data directory that holds retained or active worktrees, preserve their work on branches and remove them, or run `git worktree repair` in each repository afterwards. If you open a different database with the same data directory, startup leaves the worktrees the earlier database made in `workspaces/`. Remove them yourself once you no longer need them.
 
 ### If the server will not start
 
