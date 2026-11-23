@@ -11,11 +11,12 @@ import {
   renameSync,
   rmSync,
   statSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { createClient } from '@interlock/client';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -29,6 +30,7 @@ import {
 } from '@interlock/core';
 import { resolveDataPaths } from '@interlock/core/dataPaths';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { findExecutable } from '../packages/runtime/src/executors/process';
 import { developmentConnection } from '../packages/server/src/connection';
 import { startServer } from '../packages/server/src/start';
 
@@ -50,6 +52,13 @@ beforeEach(() => {
   vi.stubEnv('INTERLOCK_SECRET_KEY_FILE', undefined);
   vi.stubEnv('INTERLOCK_DB', undefined);
   vi.stubEnv('INTERLOCK_REQUIRE_TOKEN', undefined);
+  // Doctor probes installed harnesses. Keep those processes out of the test home.
+  const git = findExecutable('git');
+  if (!git) throw new Error('The data directory tests require Git on PATH.');
+  const bin = join(root, 'bin');
+  mkdirSync(bin);
+  symlinkSync(resolve(git), join(bin, 'git'));
+  vi.stubEnv('PATH', bin);
 });
 
 afterEach(async () => {
@@ -191,6 +200,13 @@ it('keeps engine state together and rejects a second database without touching r
   );
   expect(statSync(key).mode & 0o777).toBe(0o600);
   expect(statSync(join(dataDir, 'keys/api-token')).mode & 0o777).toBe(0o600);
+  const provisionedKey = (await engine.doctor()).checks.find(
+    (check) => check.name === 'Protected-value key path',
+  );
+  expect(provisionedKey?.details).toEqual({
+    path: key,
+    source: 'INTERLOCK_DATA_DIR',
+  });
 
   const definition = blankDefinition();
   definition.workspace = {
@@ -375,12 +391,12 @@ it('authenticates CLI and checkout stdio clients and reports the running engine 
       [],
     );
     expect((await fetch(`${url}/trpc/workflows.list`)).status).toBe(401);
-    await expect(
-      runCli(['workflows'], {
-        ...clientEnv,
-        INTERLOCK_DATA_DIR: join(root, 'wrong'),
-      }),
-    ).rejects.toThrow();
+    const refused = runCli(['workflows'], {
+      ...clientEnv,
+      INTERLOCK_DATA_DIR: join(root, 'wrong'),
+    });
+    await expect(refused).rejects.toHaveProperty('code', 1);
+    await expect(refused).rejects.toThrow('Interlock API token required');
     expect(existsSync(join(root, 'wrong'))).toBe(false);
     expect(existsSync(env.INTERLOCK_DB)).toBe(false);
     const token = (await import('@interlock/core/apiToken')).readApiToken();

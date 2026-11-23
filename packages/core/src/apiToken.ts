@@ -9,7 +9,8 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { dirname } from 'node:path';
-import { resolveDataPaths } from '@interlock/core/dataPaths';
+// Vite loads this module through Node when it evaluates the development proxy.
+import { resolveDataPaths } from './dataPaths.ts';
 
 // Node-only helpers. Browser code must not import this module.
 

@@ -8,6 +8,7 @@
     "esModuleInterop": true,
     "jsx": "react-jsx",
     "resolveJsonModule": true,
+    "allowImportingTsExtensions": true,
     "noEmit": true,
     "types": ["node"],
     "lib": ["ES2023", "DOM", "DOM.Iterable"]
