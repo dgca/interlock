@@ -376,7 +376,8 @@ export class ManagedWorkspaces {
         this.job('reconcile', () =>
           reconcileWorktrees(
             this.root,
-            (id) => ![undefined, 'removed'].includes(this.get(id)?.state),
+            // Another database may share this folder; leave checkouts it made.
+            (id) => this.get(id)?.state !== 'removed',
             repositories,
           ),
         );

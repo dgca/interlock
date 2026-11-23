@@ -73,6 +73,7 @@ Environment: INTERLOCK_PORT, INTERLOCK_DATA_DIR, INTERLOCK_DB, INTERLOCK_WORKDIR
 INTERLOCK_SYNC_DIR=PATH syncs workflow drafts with bundle files in PATH.
 INTERLOCK_OTEL_TRACES=1 exports run traces to OTEL_EXPORTER_OTLP_ENDPOINT (OTLP/HTTP JSON).
 INTERLOCK_DATA_DIR=PATH stores engine state under an absolute directory. --db and INTERLOCK_DB override the database path. INTERLOCK_SECRET_KEY_FILE overrides the encryption key path.
+Variable encryption keys are held separately from the database. Back up keys separately.
 INTERLOCK_REQUIRE_TOKEN=1 rejects API, MCP and event requests without the API token.
 Commands and the mcp bridge read the token from the api-token file in the key folder.`);
     return;

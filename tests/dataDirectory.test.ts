@@ -8,7 +8,6 @@ import {
   mkdtempSync,
   readdirSync,
   realpathSync,
-  renameSync,
   rmSync,
   statSync,
   symlinkSync,
@@ -153,7 +152,7 @@ it.each([
   },
 );
 
-it('keeps engine state together and rejects a second database without touching retained worktrees', async () => {
+it('keeps engine state together and leaves its worktrees alone when a second database shares the directory', async () => {
   const repository = join(root, 'repo');
   mkdirSync(repository);
   const git = (args: string[]) =>
@@ -244,20 +243,23 @@ it('keeps engine state together and rejects a second database without touching r
   await handle!.stop();
   handle = undefined;
 
+  // A second database sharing the directory must leave the first one's worktree alone.
   const marker = `${workspace}.owner.json`;
-  const otherDatabase = join(root, 'other.db');
-  await expect(open(otherDatabase)).rejects.toThrow(
-    /INTERLOCK_DATA_DIR.*bound to database/,
-  );
-  expect(existsSync(otherDatabase)).toBe(false);
+  const other = await open(join(root, 'other.db'));
+  expect(other.engine.workspaces.get(runId)).toBeUndefined();
+  const jobs = (
+    other.engine.workspaces as unknown as { jobs: Map<string, unknown> }
+  ).jobs;
+  other.engine.pump();
+  expect(jobs.has('reconcile')).toBe(true);
+  await vi.waitFor(() => expect(jobs.size).toBe(0), { timeout: 8000 });
   expect(existsSync(marker)).toBe(true);
   expect(existsSync(workspace)).toBe(true);
+  await handle!.stop();
+  handle = undefined;
 
-  renameSync(store.path, join(root, 'original.db'));
-  await expect(open()).rejects.toThrow(
-    /INTERLOCK_DATA_DIR.*does not match the directory binding/,
-  );
-  expect(existsSync(marker)).toBe(true);
+  const reopened = await open();
+  expect(reopened.engine.workspaces.get(runId)?.state).toBe('retained');
   expect(existsSync(workspace)).toBe(true);
 });
 

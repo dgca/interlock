@@ -63,14 +63,14 @@ With `INTERLOCK_DATA_DIR` set, both copies default to `<data-dir>/interlock.db`.
 
 Setting `INTERLOCK_DATA_DIR` uses the files already in that directory. Interlock leaves the previous files in place. To bring them across, use an empty destination and copy the state while the engine is stopped.
 
-1. Finish active runs and wait for background Scripts and local Git trials to stop. Use `interlock doctor` to record the current paths if your version reports them. For older versions, see the defaults in [engine state locations](architecture.md#engine-state-locations) and [protected-value keys](variables.md#back-up-or-restore-protected-values).
+1. Finish active runs and wait for background Scripts and local Git trials to stop. Use `interlock doctor` to record the current paths if your version reports them. For older versions, see the defaults in [engine state locations](https://github.com/dgca/interlock/blob/main/docs/architecture.md#engine-state-locations) and [protected-value keys](https://github.com/dgca/interlock/blob/main/docs/variables.md#back-up-or-restore-protected-values).
 2. Stop every engine using the database, including the desktop app. Create the destination at an absolute path with mode `0700`.
 3. Copy the database to `<data-dir>/interlock.db`. If SQLite left `-wal` or `-shm` files, copy them with the matching new base name. Keep your old copy and any schema backups until you verify the move.
 4. Copy the original vault key with its filename to `<data-dir>/keys/`, and copy the original `api-token` to the same folder. Use mode `0700` for the key directory and `0600` for both files. If you use `INTERLOCK_SECRET_KEY_FILE`, keep pointing it at the original key or update it to the copied key's absolute path. In legacy mode a key override also moved the token beside the key.
 5. If the original spool exists, copy its contents into `<data-dir>/script-spool/` and preserve owner-only permissions. Keep retained Git worktrees and trial artifacts at their original paths if you need to access them from past runs. Use Git to preserve local work on their branches before removing retained worktrees. New runs use the new `workspaces/` folder.
 6. Set `INTERLOCK_DATA_DIR` for the engine, CLI, and stdio bridge. Clear database overrides if you want to use the database you copied to `interlock.db`. Start Interlock, run `interlock doctor`, and check that an existing workflow and its protected values are available.
 
-The `.interlock-database` file records which database owns the directory. To move a directory whose database is inside it, preserve this file and the database's relative path. To move an externally configured database to a different path, use a fresh data directory and follow the stopped copy steps. An existing data directory rejects a different database to protect its worktrees. To restore a backup that predates the directory binding, restore it in a fresh data directory.
+You can move or rename the data directory while the engine is stopped. If you open a different database with the same data directory, startup leaves the worktrees the earlier database made in `workspaces/`. Remove them yourself once you no longer need them.
 
 ### If the server will not start
 

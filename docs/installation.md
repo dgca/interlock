@@ -24,7 +24,7 @@ To run without a global installation, use:
 npx -y @type_of/interlock@latest
 ```
 
-Installed copies store workflows and run history in `~/.interlock/interlock.db` by default. Set `INTERLOCK_DATA_DIR` to keep engine state in an absolute directory you choose. Scripts use the directory where you started Interlock as their default working directory. See [engine state locations](architecture.md#engine-state-locations).
+Installed copies store workflows and run history in `~/.interlock/interlock.db` by default. Set `INTERLOCK_DATA_DIR` to keep engine state in an absolute directory you choose. Scripts use the directory where you started Interlock as their default working directory. See [engine state locations](https://github.com/dgca/interlock/blob/main/docs/architecture.md#engine-state-locations).
 
 ## macOS desktop app
 

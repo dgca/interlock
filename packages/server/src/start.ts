@@ -11,7 +11,7 @@ import {
   type DataPaths,
   type ResolvedPath,
 } from '@interlock/core/dataPaths';
-import { bindDataDirectory, prepareDataDirectory } from './dataDirectory.js';
+import { prepareDataDirectory } from './dataDirectory.js';
 import type { ConnectionConfig } from './connection.js';
 import { checkPort, lockDatabase, startupError } from './startup.js';
 export { isDatabaseLocked, probeHealthyServer } from './startup.js';
@@ -98,9 +98,7 @@ export async function startServer(options: {
   prepareDataDirectory(paths);
   const hostname = options.hostname ?? '127.0.0.1';
   await checkPort(options.port);
-  const legacyConnection = paths.dataDir
-    ? undefined
-    : withApiToken(options.connection, hostname, paths);
+  const connection = withApiToken(options.connection, hostname, paths);
   const unlock = lockDatabase(database);
   let store: Store;
   try {
@@ -114,13 +112,9 @@ export async function startServer(options: {
       `Database upgraded from schema ${store.migration.from} to ${store.migration.to}. Backup: ${store.migration.backup}`,
     );
   let engine!: Engine;
-  let connection: ConnectionConfig;
   let sync: WorkflowSync | undefined;
   let traces: TraceExport | undefined;
   try {
-    bindDataDirectory(paths, store);
-    connection =
-      legacyConnection ?? withApiToken(options.connection, hostname, paths);
     const allowedRoots =
       options.allowedRoots ??
       parseAllowedRoots(process.env.INTERLOCK_ALLOWED_ROOTS);

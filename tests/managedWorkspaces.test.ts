@@ -269,14 +269,27 @@ it('reconciles after a restart without touching directories Interlock did not cr
   const runId = first.start(id, {}).run.id;
   await until(first, () => first.available(runId)[0]);
   const path = first.workspaces.get(runId)!.path;
-  // Simulate a crash: no cleanup runs, and a leftover checkout lost its record.
-  first.stop();
+  // Simulate a crash: no cleanup runs, and a workspace recorded as removed kept its checkout.
   const workspaces = join(f.root, 'workspaces');
   const orphan = '00000000-0000-4000-8000-000000000000';
+  first.store.put('workspaces', {
+    ...first.workspaces.get(runId)!,
+    id: orphan,
+    runId: orphan,
+    state: 'removed',
+  });
+  first.stop();
   f.git('worktree', 'add', '-q', '-b', 'orphan', join(workspaces, orphan));
   writeFileSync(
     join(workspaces, `${orphan}.owner.json`),
     JSON.stringify({ id: orphan, ownerToken: 'x', repository: f.repository }),
+  );
+  // A marked checkout this database never recorded belongs to another database.
+  const foreign = '33333333-3333-4333-8333-333333333333';
+  f.git('worktree', 'add', '-q', '-b', 'foreign', join(workspaces, foreign));
+  writeFileSync(
+    join(workspaces, `${foreign}.owner.json`),
+    JSON.stringify({ id: foreign, ownerToken: 'x', repository: f.repository }),
   );
   // Directories under valid run IDs that Interlock cannot prove it made.
   const unmarked = '11111111-1111-4111-8111-111111111111';
@@ -291,11 +304,18 @@ it('reconciles after a restart without touching directories Interlock did not cr
     JSON.stringify({ id: linked, ownerToken: 'x', repository: f.repository }),
   );
   const second = f.open();
+  const jobs = (second.workspaces as unknown as { jobs: Map<string, unknown> })
+    .jobs;
   await until(second, () => !existsSync(join(workspaces, orphan)));
+  await until(second, () => !jobs.has('reconcile'));
   expect(existsSync(path)).toBe(true);
+  expect(existsSync(join(workspaces, `${foreign}.owner.json`))).toBe(true);
   second.cancelRunTree({ id: runId, reason: 'stop' });
   await until(second, () => !existsSync(path));
-  expect(f.worktrees()).toEqual([realpathSync(f.repository)]);
+  expect(f.worktrees()).toEqual([
+    realpathSync(f.repository),
+    realpathSync(join(workspaces, foreign)),
+  ]);
   expect(existsSync(join(workspaces, unmarked))).toBe(true);
   expect(readFileSync(join(workspaces, linked, 'keep.txt'), 'utf8')).toBe(
     'keep',

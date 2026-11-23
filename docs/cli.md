@@ -22,7 +22,7 @@ With no command, `interlock` starts the engine, the UI and the HTTP MCP endpoint
 | `--db`      | `<data-dir>/interlock.db` with `INTERLOCK_DATA_DIR`, otherwise `~/.interlock/interlock.db` | `INTERLOCK_DB`       |
 
 Explicit flags take precedence over environment variables.
-Set `INTERLOCK_DATA_DIR` to an absolute path to put the database, keys and API token, background Script spool, and managed worktrees in one directory. `--db` and `INTERLOCK_DB` override the database path. See [engine state locations](architecture.md#engine-state-locations).
+Set `INTERLOCK_DATA_DIR` to an absolute path to put the database, keys and API token, background Script spool, and managed worktrees in one directory. `--db` and `INTERLOCK_DB` override the database path. See [engine state locations](https://github.com/dgca/interlock/blob/main/docs/architecture.md#engine-state-locations).
 
 ## How commands work
 
@@ -34,7 +34,7 @@ Set `INTERLOCK_DATA_DIR` to an absolute path to put the database, keys and API t
   INTERLOCK_URL=http://127.0.0.1:4400 interlock workflows
   ```
 
-- When the engine runs with `INTERLOCK_REQUIRE_TOKEN=1`, commands and the MCP bridge read the same [API token file](connect-harness.md#api-token). Give them the engine's `INTERLOCK_DATA_DIR` if it is set.
+- When the engine runs with `INTERLOCK_REQUIRE_TOKEN=1`, commands and the MCP bridge read the same [API token file](https://github.com/dgca/interlock/blob/main/docs/connect-harness.md#api-token). Give them the engine's `INTERLOCK_DATA_DIR` if it is set.
 
 | Command                    | Purpose                           |
 | -------------------------- | --------------------------------- |
@@ -317,16 +317,16 @@ A pause holds gate boundaries and new claims without interrupting work in flight
 
 ## Environment variables
 
-| Variable                        | Effect                                                                                                                           |
-| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `INTERLOCK_DATA_DIR`            | Absolute directory for engine state. See [engine state locations](architecture.md#engine-state-locations).                       |
-| `INTERLOCK_DB`                  | Database path. Takes precedence over `INTERLOCK_DATA_DIR` for SQLite.                                                            |
-| `INTERLOCK_WORKDIR`             | Default Script working directory                                                                                                 |
-| `INTERLOCK_URL`                 | Engine that commands and `interlock mcp` talk to                                                                                 |
-| `INTERLOCK_MCP_PROFILE`         | Default tool profile for `interlock mcp`                                                                                         |
-| `INTERLOCK_REQUIRE_TOKEN`       | `1` rejects API, MCP and event requests without the API token                                                                    |
-| `INTERLOCK_SECRET_KEY_FILE`     | Absolute override for the variable encryption key file, including when `INTERLOCK_DATA_DIR` is set.                              |
-| `INTERLOCK_LOG_LEVEL`           | `debug`, `info` (default), `warn` or `error`                                                                                     |
-| `INTERLOCK_SYNC_DIR`            | Sync workflow drafts with bundle files in a folder. See [Sync workflows](reuse-work.md#sync-workflows-with-a-repository-folder). |
-| `INTERLOCK_OTEL_TRACES`         | `1` exports run traces to `OTEL_EXPORTER_OTLP_ENDPOINT`. See [OpenTelemetry traces](opentelemetry.md).                           |
-| `INTERLOCK_LAUNCHER_CREDENTIAL` | Credential for `interlock launcher`                                                                                              |
+| Variable                        | Effect                                                                                                                                                      |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `INTERLOCK_DATA_DIR`            | Absolute directory for engine state. See [engine state locations](https://github.com/dgca/interlock/blob/main/docs/architecture.md#engine-state-locations). |
+| `INTERLOCK_DB`                  | Database path. Takes precedence over `INTERLOCK_DATA_DIR` for SQLite.                                                                                       |
+| `INTERLOCK_WORKDIR`             | Default Script working directory                                                                                                                            |
+| `INTERLOCK_URL`                 | Engine that commands and `interlock mcp` talk to                                                                                                            |
+| `INTERLOCK_MCP_PROFILE`         | Default tool profile for `interlock mcp`                                                                                                                    |
+| `INTERLOCK_REQUIRE_TOKEN`       | `1` rejects API, MCP and event requests without the API token                                                                                               |
+| `INTERLOCK_SECRET_KEY_FILE`     | Override for the variable encryption key file, including when `INTERLOCK_DATA_DIR` is set.                                                                  |
+| `INTERLOCK_LOG_LEVEL`           | `debug`, `info` (default), `warn` or `error`                                                                                                                |
+| `INTERLOCK_SYNC_DIR`            | Sync workflow drafts with bundle files in a folder. See [Sync workflows](reuse-work.md#sync-workflows-with-a-repository-folder).                            |
+| `INTERLOCK_OTEL_TRACES`         | `1` exports run traces to `OTEL_EXPORTER_OTLP_ENDPOINT`. See [OpenTelemetry traces](opentelemetry.md).                                                      |
+| `INTERLOCK_LAUNCHER_CREDENTIAL` | Credential for `interlock launcher`                                                                                                                         |
