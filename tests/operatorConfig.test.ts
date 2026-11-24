@@ -103,7 +103,7 @@ it('resolves options, environment, file and defaults with sources', () => {
     config,
     JSON.stringify({
       requireToken: true,
-      allowedRoots: [],
+      allowedRoots: [root],
       logLevel: 'error',
       syncDir: join(root, 'sync'),
     }),
@@ -114,7 +114,7 @@ it('resolves options, environment, file and defaults with sources', () => {
     source: 'config file',
   });
   expect(get(explicit).allowedRoots).toEqual({
-    value: [],
+    value: [root],
     source: 'config file',
     controlledByConfig: true,
   });
@@ -201,6 +201,7 @@ it.each([
   ['unknown key', '{"host":"localhost"}', /Unknown key.*host/],
   ['prototype key', '{"__proto__":{}}', /Unknown key.*__proto__/],
   ['wrong type', '{"requireToken":"true"}', /requireToken.*boolean/],
+  ['empty roots', '{"allowedRoots":[]}', /allowedRoots.*at least one path/],
   [
     'overridden log level',
     '{"logLevel":"verbose"}',
@@ -473,6 +474,33 @@ it('keeps the startup snapshot and restores saved shared roots after restart wit
     allowedRoots: savedRoots,
   });
   expect(third.engine.getAllowedRoots()).toEqual(savedRoots);
+});
+
+it('reports the shared roots in effect, including saved ones', async () => {
+  const startupRoot = join(root, 'startup');
+  const savedRoot = join(root, 'saved');
+  vi.stubEnv('INTERLOCK_ALLOWED_ROOTS', startupRoot);
+  const { engine } = await start();
+  const row = async () =>
+    (await engine.doctor()).checks.find(
+      (check) => check.name === 'allowedRoots',
+    );
+  expect((await row())?.message).toBe(
+    `${JSON.stringify([startupRoot])} (INTERLOCK_ALLOWED_ROOTS)`,
+  );
+  engine.executors.saveSettings({
+    expectedRevision: 0,
+    concurrency: 3,
+    allowedRoots: [savedRoot],
+  });
+  expect(await row()).toMatchObject({
+    message: `${JSON.stringify([startupRoot, savedRoot])} (INTERLOCK_ALLOWED_ROOTS and saved shared roots)`,
+    details: {
+      value: [startupRoot],
+      effective: [startupRoot, savedRoot],
+      controlledByConfig: false,
+    },
+  });
 });
 
 it('refuses to start when the config file sits in the workflow sync folder', async () => {

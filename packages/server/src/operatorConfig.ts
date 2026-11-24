@@ -23,7 +23,11 @@ const absolutePath = z
 const configSchema = z
   .object({
     requireToken: z.boolean().optional(),
-    allowedRoots: z.array(absolutePath).optional(),
+    // An empty list would replace saved shared roots and turn the check off.
+    allowedRoots: z
+      .array(absolutePath)
+      .min(1, 'Expected at least one path. Omit the key to keep saved roots')
+      .optional(),
     logLevel: z.enum(logLevels).optional(),
     syncDir: absolutePath.optional(),
   })
