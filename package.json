@@ -26,7 +26,7 @@
     "prepack": "pnpm build",
     "test:package": "node scripts/test-package.mjs",
     "test:kill": "node scripts/test-kill-recovery.mjs",
-    "verify": "pnpm format:check && pnpm lint && pnpm lint:deps && pnpm lint:unused && pnpm build && pnpm test && pnpm test:package",
+    "verify": "pnpm format:check && pnpm lint && pnpm lint:deps && pnpm lint:unused && pnpm build && pnpm test && pnpm test:package && pnpm site:build",
     "release:status": "changeset status",
     "release:version": "changeset version && pnpm install --lockfile-only",
     "release": "pnpm test && pnpm build && pnpm test:package && changeset publish",
