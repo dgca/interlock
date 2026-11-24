@@ -19,6 +19,7 @@ export function configuredAllowedRoots(
 
 export function operatorConfigChecks(
   settings?: StartupSettings,
+  effectiveRoots?: string[],
 ): DiagnosticCheck[] {
   if (!settings) return [];
   const { configFile, requireToken, allowedRoots, logLevel, syncDir } =
@@ -26,9 +27,10 @@ export function operatorConfigChecks(
   const suffix = requireToken.forced
     ? '. Required on non-loopback listeners.'
     : '';
-  const roots = allowedRoots.value.length
-    ? JSON.stringify(allowedRoots.value)
-    : '[]';
+  // Saved shared roots add to the startup list unless the config file declares the key.
+  const effective = effectiveRoots ?? allowedRoots.value;
+  const saved = effective.length > allowedRoots.value.length;
+  const roots = JSON.stringify(effective);
   const rows = [
     {
       name: 'Config file',
@@ -42,12 +44,16 @@ export function operatorConfigChecks(
     },
     {
       name: 'allowedRoots',
-      message: `${roots} (${allowedRoots.source})${
+      message: `${roots} (${allowedRoots.source}${saved ? ' and saved shared roots' : ''})${
         allowedRoots.controlledByConfig
           ? '. Saved shared roots are ignored while the config file declares allowedRoots.'
           : ''
       }`,
-      details: { ...allowedRoots, value: [...allowedRoots.value] },
+      details: {
+        ...allowedRoots,
+        value: [...allowedRoots.value],
+        effective: [...effective],
+      },
     },
     {
       name: 'logLevel',

@@ -28,12 +28,12 @@ Set `INTERLOCK_DATA_DIR` to an absolute path to put the database, keys and API t
 
 The engine reads one JSON object at startup. Set `INTERLOCK_CONFIG` to an absolute path to select a required file. Otherwise the engine looks for `config.json` under `INTERLOCK_DATA_DIR`, or beside the `keys` folder in the [user config directory](https://github.com/dgca/interlock/blob/main/docs/architecture.md#engine-state-locations). A missing file at either default location is valid. An unreadable or invalid file stops startup before the engine opens the database or writes state.
 
-| Key            | JSON value                                                                                                                                                                            |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `requireToken` | Boolean. Defaults to `false` on loopback. The token is always required off loopback.                                                                                                  |
-| `allowedRoots` | Array of absolute paths for shared dynamic working-directory checks. Defaults to no startup roots. An empty array also replaces saved shared roots, which turns the shared check off. |
-| `logLevel`     | `debug`, `info`, `warn`, or `error`. Defaults to `info`.                                                                                                                              |
-| `syncDir`      | Absolute path to a workflow sync folder. Sync is off by default.                                                                                                                      |
+| Key            | JSON value                                                                                                                                             |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `requireToken` | Boolean. Defaults to `false` on loopback. The token is always required off loopback.                                                                   |
+| `allowedRoots` | Array of absolute paths for shared dynamic working-directory checks. Defaults to no startup roots. Give at least one path; an empty array is rejected. |
+| `logLevel`     | `debug`, `info`, `warn`, or `error`. Defaults to `info`.                                                                                               |
+| `syncDir`      | Absolute path to a workflow sync folder. Sync is off by default.                                                                                       |
 
 Each key is optional. For each setting, explicit startup options take precedence over environment variables, then file values, then defaults. Key names and file log levels are case-sensitive. When the file declares `allowedRoots`, the resolved startup list replaces saved shared roots. Changes to the saved shared roots are unavailable until the key is removed and the engine restarts. Per-harness roots follow their existing rules.
 
@@ -328,7 +328,7 @@ A pause holds gate boundaries and new claims without interrupting work in flight
 
 - `doctor` exits with code `1` for a failure, and `0` for passing checks or warnings. `--live` makes model requests, so use it only when you want them.
 - `doctor` reports the running engine's data directory, database, protected-value key, API token, spool, and managed worktree paths. Each path includes the setting or default that selected it.
-- It also reports the operator config path, whether the file was found at startup, and the effective startup values and sources of the four settings. The `allowedRoots` row shows the startup list. Saved shared roots can still apply when the file omits `allowedRoots`. The report omits the API token itself.
+- It also reports the operator config path, whether the file was found at startup, and the effective startup values and sources of the four settings. The `allowedRoots` row shows the list in effect: the startup list, plus saved shared roots when the file omits `allowedRoots`. The report omits the API token itself.
 - `report` also takes `--since` and `--until` (ISO datetimes), `--limit N` and `--tag KEY=VALUE`. Dates must stay within years 0000–9999 once rounded to UTC. See [Reports](reports.md) and [Troubleshooting](troubleshooting.md).
 
 ## Environment variables

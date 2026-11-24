@@ -114,7 +114,7 @@ export async function runDoctor(
 ): Promise<DoctorReport> {
   const checks = [
     ...storagePathChecks(engine),
-    ...operatorConfigChecks(engine.startupSettings),
+    ...operatorConfigChecks(engine.startupSettings, engine.getAllowedRoots()),
   ];
 
   // ==========================================
