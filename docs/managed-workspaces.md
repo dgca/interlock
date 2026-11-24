@@ -67,11 +67,13 @@ Interlock only deletes a directory that sits directly inside the workspaces fold
 
 If you retry a failed run, it reuses the worktree it kept, or creates a new one on the run's existing branch.
 
+## Scripts in the worktree
+
+Script nodes, background Scripts and polling Script checks that run in the worktree receive `INTERLOCK_WORKSPACE_BRANCH`. An invoked workflow that shares its caller's worktree gets the caller's branch. To tell whether the checkout is still on the run's own branch, compare it with this value; do not match the branch name against a run ID. A Script with its own working folder setting does not receive the variable.
+
 ## Hooks
 
 Hooks run in the worktree with `INTERLOCK_RUN_ID` and `INTERLOCK_WORKSPACE_PATH`, `_BRANCH`, `_REPOSITORY` and `_BASE_COMMIT` set. They also receive the same values as JSON on standard input. Their output is ignored.
-
-A Script node that runs in the worktree receives `INTERLOCK_WORKSPACE_BRANCH`. An invoked workflow that shares its caller's worktree gets the caller's branch, so compare the checkout with this value and do not match the branch name against a run ID.
 
 - **`afterCreate`** runs before the run's first step. If it fails, preparation fails. Cancelling the run stops it.
 - **`beforeRemove`** runs before a ready worktree is removed. If it fails, the worktree is still removed and the error is recorded.
