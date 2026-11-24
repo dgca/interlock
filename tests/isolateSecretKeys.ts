@@ -26,6 +26,7 @@ const listKeys = () => {
 const before = new Set(listKeys());
 const dir = mkdtempSync(join(tmpdir(), 'interlock-keys-'));
 process.env.INTERLOCK_SECRET_KEY_FILE = join(dir, 'secret.key');
+delete process.env.INTERLOCK_DATA_DIR;
 
 afterAll(() => {
   rmSync(dir, { recursive: true, force: true });

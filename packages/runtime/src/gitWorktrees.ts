@@ -198,7 +198,7 @@ export async function createWorktree(
 
 /**
  * Startup reconciliation: prune stale Git registrations and remove checkouts
- * whose marker proves Interlock made them but no live record keeps them.
+ * whose marker proves Interlock made them and that `keep` does not hold.
  */
 export async function reconcileWorktrees(
   root: string,

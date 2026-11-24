@@ -2,17 +2,18 @@
 import '@interlock/server/sqliteWarning';
 import { createMcpClient } from '@interlock/mcp/client';
 import { parseArgs } from 'node:util';
-import { homedir } from 'node:os';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
   isDatabaseLocked,
+  prepareDataDirectory,
   probeHealthyServer,
   startServer,
 } from '@interlock/server/start';
 import { createMcpServer } from '@interlock/mcp';
 import { VERSION } from '@interlock/core/version';
+import { resolveDataPaths } from '@interlock/core/dataPaths';
 import {
   runCommand,
   commandError,
@@ -65,12 +66,13 @@ Report dates must be valid ISO datetimes whose rounded UTC bounds stay within ye
 System readiness check: doctor [--live] [--json]
 Run 'interlock commands' for argument syntax, or 'interlock <command> --help' for one command.
 
-Environment: INTERLOCK_PORT, INTERLOCK_DB, INTERLOCK_WORKDIR, INTERLOCK_URL,
+Environment: INTERLOCK_PORT, INTERLOCK_DATA_DIR, INTERLOCK_DB, INTERLOCK_WORKDIR, INTERLOCK_URL,
              INTERLOCK_SECRET_KEY_FILE, INTERLOCK_MCP_PROFILE,
              INTERLOCK_REQUIRE_TOKEN, INTERLOCK_LOG_LEVEL, INTERLOCK_SYNC_DIR,
              INTERLOCK_OTEL_TRACES
 INTERLOCK_SYNC_DIR=PATH syncs workflow drafts with bundle files in PATH.
 INTERLOCK_OTEL_TRACES=1 exports run traces to OTEL_EXPORTER_OTLP_ENDPOINT (OTLP/HTTP JSON).
+INTERLOCK_DATA_DIR=PATH stores engine state under an absolute directory. --db and INTERLOCK_DB override the database path. INTERLOCK_SECRET_KEY_FILE overrides the encryption key path.
 Variable encryption keys are held separately from the database. Back up keys separately.
 INTERLOCK_REQUIRE_TOKEN=1 rejects API, MCP and event requests without the API token.
 Commands and the mcp bridge read the token from the api-token file in the key folder.`);
@@ -202,14 +204,16 @@ Commands and the mcp bridge read the token from the api-token file in the key fo
   if (!Number.isInteger(port) || port < 1 || port > 65535)
     throw new Error('Port must be between 1 and 65535.');
   const engineUrl = `http://127.0.0.1:${port}`;
-  const database = resolve(
-    values.db ??
-      process.env.INTERLOCK_DB ??
-      resolve(homedir(), '.interlock/interlock.db'),
-  );
+  const paths = resolveDataPaths({
+    database:
+      values.db === undefined ? undefined : { path: values.db, source: '--db' },
+    resolveDatabasePath: true,
+  });
+  const database = paths.database.path;
+  prepareDataDirectory(paths);
   const healthy = await probeHealthyServer(engineUrl);
   const databaseInUse = healthy && isDatabaseLocked(database);
-  if (databaseInUse || (healthy && !values.db)) {
+  if (databaseInUse || (healthy && !values.db && !paths.dataDir)) {
     // The health check does not reveal the server's database; only the lock says it is in use.
     console.log(
       `Interlock is already running at ${engineUrl}.${databaseInUse ? '' : ` It may be using a different database than ${database}; stop it or choose another --port to open that database.`}\nOpen ${engineUrl} in your browser or run 'interlock <command>' to interact with the running engine.`,
@@ -218,7 +222,7 @@ Commands and the mcp bridge read the token from the api-token file in the key fo
   }
   await startServer({
     port,
-    database,
+    paths,
     workdir: resolve(
       values.workdir ?? process.env.INTERLOCK_WORKDIR ?? process.cwd(),
     ),

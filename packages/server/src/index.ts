@@ -7,8 +7,10 @@ export type { AppRouter } from './router.js';
 
 const root = fileURLToPath(new URL('../../../', import.meta.url));
 startServer({
-  database:
-    process.env.INTERLOCK_DB ?? resolve(root, '.interlock/interlock.db'),
+  defaultDatabase: {
+    path: resolve(root, '.interlock/interlock.db'),
+    source: 'checkout default',
+  },
   workdir: process.env.INTERLOCK_WORKDIR ?? root,
   ui: fileURLToPath(new URL('../../ui/dist', import.meta.url)),
   port: 4310,

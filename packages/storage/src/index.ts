@@ -9,9 +9,9 @@ import {
 import { waitingScriptApprovals } from './scriptApprovals.js';
 export * from './scriptApprovals.js';
 import { ProtectedValues } from './protectedValues.js';
-import { DatabaseSync } from 'node:sqlite';
-import { mkdirSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { resolveDataPaths, type DataPaths } from '@interlock/core/dataPaths';
+import type { DatabaseSync } from 'node:sqlite';
+import { openDatabase } from './database.js';
 import {
   InterlockError,
   samePromptContent,
@@ -19,7 +19,7 @@ import {
   type ReportFilter,
   type WorkflowCatalogQuery,
 } from '@interlock/core';
-import { migrate, type MigrationResult } from './migrations.js';
+import type { MigrationResult } from './migrations.js';
 import {
   batchSize,
   executionSteps,
@@ -180,35 +180,36 @@ export class Store {
     return batchSize(this.db, id, executionId, path);
   }
   readonly migration: MigrationResult;
+  readonly paths: DataPaths;
+
   constructor(
     readonly path: string,
-    options: { secretKeyFile?: string } = {},
+    options: { secretKeyFile?: string; paths?: DataPaths } = {},
   ) {
+    this.paths =
+      options.paths ??
+      resolveDataPaths({
+        database: { path, source: 'explicit store option' },
+        secretKeyFile: options.secretKeyFile,
+        // Embedded stores are isolated unless engine startup supplied its paths.
+        env: {
+          XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME,
+          INTERLOCK_SECRET_KEY_FILE: process.env.INTERLOCK_SECRET_KEY_FILE,
+        },
+      });
     this.protectedValues = new ProtectedValues(
       this,
       path,
-      options.secretKeyFile ??
-        (path === ':memory:'
-          ? undefined
-          : process.env.INTERLOCK_SECRET_KEY_FILE),
+      this.paths.keysDir.path,
+      this.paths.keyFile?.path,
     );
-    if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });
-    this.db = new DatabaseSync(path);
+    const { db, migration } = openDatabase(path);
+    this.db = db;
+    this.migration = migration;
     this.runScopes = new RunScopes(this.db);
-    try {
-      this.migration = migrate(this.db, path);
-      const journalMode = this.db.prepare('PRAGMA journal_mode = WAL;').get();
-      if (journalMode?.journal_mode === 'wal') {
-        this.db.exec('PRAGMA synchronous = NORMAL;');
-        this.db.exec('PRAGMA journal_size_limit = 16777216;');
-      }
-      this.transcripts = new Transcripts(this.db, path, (fn) =>
-        this.transaction(fn),
-      );
-    } catch (error) {
-      this.db.close();
-      throw error;
-    }
+    this.transcripts = new Transcripts(this.db, path, (fn) =>
+      this.transaction(fn),
+    );
   }
   get<T>(collection: string, id: string): T | undefined {
     const row = this.db

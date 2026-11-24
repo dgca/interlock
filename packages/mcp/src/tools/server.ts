@@ -94,7 +94,7 @@ export function createMcpServer(
   publishSchemaResources(server, workflowBundleSchema);
   tool(
     'doctor',
-    'Read-only readiness check. Reports storage, disk and harness status; enabled triggers with failures or automatic pauses; active pauses and uncertain resource reservations; and the variables, known model aliases and prompt pins that the latest published versions depend on. Set live:true to also probe model connectivity.',
+    'Read-only readiness check. Reports storage paths and their sources, disk and harness status, trigger failures and automatic pauses, active pauses and uncertain resource reservations, and variable, model alias and prompt dependencies of the latest published workflow versions. Set live:true to also probe model connectivity.',
     doctorOptionsSchema,
     (options) => client.system.doctor(options),
   );

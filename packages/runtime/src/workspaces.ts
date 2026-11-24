@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { resolve } from 'node:path';
 import {
   InterlockError,
   workspaceBranch,
@@ -72,9 +72,7 @@ export class ManagedWorkspaces {
     const store = (this.store = host.store);
     const root = options.workspaceRoot;
     this.configured = root !== undefined || store.path !== ':memory:';
-    this.root = resolve(
-      root ?? join(dirname(resolve(store.path)), 'workspaces'),
-    );
+    this.root = resolve(root ?? store.paths.workspaces.path);
     for (const workspace of store.list<ManagedWorkspace>(collection)) {
       if (workspace.state === 'removed' || workspace.state === 'retained')
         continue;
@@ -378,7 +376,8 @@ export class ManagedWorkspaces {
         this.job('reconcile', () =>
           reconcileWorktrees(
             this.root,
-            (id) => ![undefined, 'removed'].includes(this.get(id)?.state),
+            // Another database may share this folder; leave checkouts it made.
+            (id) => this.get(id)?.state !== 'removed',
             repositories,
           ),
         );

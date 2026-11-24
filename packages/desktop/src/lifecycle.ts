@@ -1,9 +1,8 @@
 import { DatabaseSync } from 'node:sqlite';
-import { homedir } from 'node:os';
-import { join } from 'node:path';
 import type { Engine } from '@interlock/runtime';
 import type { Store } from '@interlock/storage';
 import { readApiToken } from '@interlock/core/apiToken';
+import { resolveDataPaths, type DataPaths } from '@interlock/core/dataPaths';
 import * as serverStart from '@interlock/server/start';
 import { resolveBundledCliWrapper } from './cliInstall.js';
 
@@ -46,7 +45,7 @@ export interface ServerHandle {
 }
 
 export type StartServerFunction = (options: {
-  database: string;
+  paths: DataPaths;
   workdir: string;
   ui: string;
   port: number;
@@ -117,7 +116,7 @@ export function defaultIsDatabaseLocked(database: string): boolean {
 export class DesktopEngineLifecycle {
   private mode: EngineMode = 'stopped';
   private port: number;
-  private database: string;
+  private paths: DataPaths;
   private engineUrl: string;
   private uiUrl = '';
   private ownedServer?: ServerHandle;
@@ -136,10 +135,12 @@ export class DesktopEngineLifecycle {
 
   constructor(private readonly options: DesktopLifecycleOptions) {
     this.port = options.port ?? Number(process.env.INTERLOCK_PORT ?? 4310);
-    this.database =
-      options.database ??
-      process.env.INTERLOCK_DB ??
-      join(homedir(), '.interlock/interlock.db');
+    this.paths = resolveDataPaths({
+      database:
+        options.database === undefined
+          ? undefined
+          : { path: options.database, source: 'explicit desktop option' },
+    });
     this.engineUrl = `http://127.0.0.1:${this.port}`;
 
     const serverModule = serverStart as Record<string, unknown>;
@@ -182,7 +183,11 @@ export class DesktopEngineLifecycle {
   }
 
   getDatabase(): string {
-    return this.database;
+    return this.paths.database.path;
+  }
+
+  readApiToken(): string | undefined {
+    return this.readTokenFn(this.paths.token.path);
   }
 
   getWorkdir(): string {
@@ -203,11 +208,15 @@ export class DesktopEngineLifecycle {
 
   async start(): Promise<LifecycleState> {
     this.isStopping = false;
+    serverStart.prepareDataDirectory(this.paths);
     const isHealthy = await this.probeHealth(this.engineUrl, 1500);
 
-    if (isHealthy) {
+    if (
+      isHealthy &&
+      (!this.paths.dataDir || this.isLocked(this.getDatabase()))
+    ) {
       this.mode = 'attached';
-      const token = this.readTokenFn();
+      const token = this.readApiToken();
       this.uiUrl = token
         ? `${this.engineUrl}/?token=${encodeURIComponent(token)}`
         : this.engineUrl;
@@ -219,17 +228,7 @@ export class DesktopEngineLifecycle {
       };
     }
 
-    const conn: ConnectionConfig =
-      this.options.connection ?? defaultDesktopConnection(this.engineUrl);
-
-    this.ownedServer = await this.startServerFn({
-      port: this.port,
-      database: this.database,
-      workdir: this.options.workdir,
-      ui: this.options.ui,
-      connection: conn,
-      handleSignals: false,
-    });
+    this.ownedServer = await this.startOwnedServer();
 
     this.mode = 'owned';
     const activeConn = this.ownedServer.connection;
@@ -261,16 +260,7 @@ export class DesktopEngineLifecycle {
     if (this.mode === 'owned' && this.ownedServer) {
       if (this.activeRunCount() === 0) {
         await this.ownedServer.stop();
-        const conn: ConnectionConfig =
-          this.options.connection ?? defaultDesktopConnection(this.engineUrl);
-        this.ownedServer = await this.startServerFn({
-          port: this.port,
-          database: this.database,
-          workdir: this.options.workdir,
-          ui: this.options.ui,
-          connection: conn,
-          handleSignals: false,
-        });
+        this.ownedServer = await this.startOwnedServer();
         const activeConn = this.ownedServer.connection;
         this.uiUrl =
           activeConn.requireToken && activeConn.token
@@ -284,6 +274,18 @@ export class DesktopEngineLifecycle {
     }
 
     return { restarted: false, deferred: false };
+  }
+
+  private startOwnedServer() {
+    return this.startServerFn({
+      port: this.port,
+      paths: this.paths,
+      workdir: this.options.workdir,
+      ui: this.options.ui,
+      connection:
+        this.options.connection ?? defaultDesktopConnection(this.engineUrl),
+      handleSignals: false,
+    });
   }
 
   async poll(): Promise<void> {
@@ -323,23 +325,14 @@ export class DesktopEngineLifecycle {
 
     for (let i = 0; i < 25; i++) {
       if (this.isStopping) return;
-      if (!this.isLocked(this.database)) break;
+      if (!this.isLocked(this.getDatabase())) break;
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
 
     if (this.isStopping) return;
 
     try {
-      const conn: ConnectionConfig =
-        this.options.connection ?? defaultDesktopConnection(this.engineUrl);
-      this.ownedServer = await this.startServerFn({
-        port: this.port,
-        database: this.database,
-        workdir: this.options.workdir,
-        ui: this.options.ui,
-        connection: conn,
-        handleSignals: false,
-      });
+      this.ownedServer = await this.startOwnedServer();
       this.mode = 'owned';
       const activeConn = this.ownedServer.connection;
       this.uiUrl =

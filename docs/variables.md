@@ -157,11 +157,13 @@ the database and its key separately. Both kinds use authenticated encryption.
 The server reads the owner-only key automatically when needed; there is no
 password prompt. Keys are created when the first value is stored.
 
-The default key directory is `~/Library/Application Support/Interlock/keys` on
+With `INTERLOCK_DATA_DIR` set, keys go in `<data-dir>/keys/`. Otherwise the key
+directory is `~/Library/Application Support/Interlock/keys` on
 macOS and `$XDG_CONFIG_HOME/interlock/keys` on Linux, falling back to
 `~/.config/interlock/keys`. Each vault has its own key filename. To use an existing
 key elsewhere, set `INTERLOCK_SECRET_KEY_FILE` to its absolute path before starting
-Interlock. Database backups and portable exports do not include keys.
+Interlock. It takes precedence over `INTERLOCK_DATA_DIR` for the key. Database
+backups and portable exports do not include keys.
 
 Restore the original key as a regular file with owner-only access, mode `0600`.
 A missing, incorrect, permissive, symlinked, or corrupted key leaves the store

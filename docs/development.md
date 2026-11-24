@@ -16,7 +16,7 @@ pnpm dev
 - Stop any installed Interlock server on port 4310 first.
 - The engine accepts browser requests from the Vite origin only in development. An installed copy rejects them.
 
-Development data lives in `.interlock/interlock.db` inside the checkout. Installed copies use a separate database unless you pass `--db`.
+The development database defaults to `.interlock/interlock.db` inside the checkout. Set `INTERLOCK_DATA_DIR` to specify a directory for engine state. Installed copies default to a separate database. See [engine state locations](architecture.md#engine-state-locations).
 
 To serve the built UI on port 4310 with the development database:
 

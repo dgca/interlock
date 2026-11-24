@@ -79,7 +79,7 @@ pnpm install
 pnpm dev
 ```
 
-The development UI runs on [port 5173](http://127.0.0.1:5173) with the engine on port 4310, and stores data in `.interlock/interlock.db` inside the checkout. Stop any installed Interlock server on port 4310 first.
+The development UI runs on [port 5173](http://127.0.0.1:5173) with the engine on port 4310. The development database defaults to `.interlock/interlock.db` inside the checkout. Set `INTERLOCK_DATA_DIR` to use a dedicated directory for engine state. Stop any installed Interlock server on port 4310 first.
 
 Before opening a pull request, run:
 

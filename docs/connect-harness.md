@@ -23,7 +23,7 @@ For a custom port, copy the URL from the connection dialog. These instructions a
 
 ## API token
 
-Interlock creates a per-install API token on startup. The file is named `api-token` and is readable only by its owner (mode 0600). It sits in the protected-value key folder: `~/Library/Application Support/Interlock/keys/` on macOS, or `$XDG_CONFIG_HOME/interlock/keys/` (default `~/.config/interlock/keys/`) on Linux. When `INTERLOCK_SECRET_KEY_FILE` is set, the token sits in that file's folder.
+Interlock creates a per-install API token on startup with mode `0600`. With `INTERLOCK_DATA_DIR` set, the token lives at `<data-dir>/keys/api-token`, even if you override the encryption key path. Otherwise the token lives in `~/Library/Application Support/Interlock/keys/` on macOS or `$XDG_CONFIG_HOME/interlock/keys/` on Linux. The Linux fallback is `~/.config/interlock/keys/`. If you set `INTERLOCK_SECRET_KEY_FILE` without a data directory, the token lives beside that key. Run `interlock doctor` to see the path used by the running engine.
 
 First-party clients send the token as `Authorization: Bearer <token>`. The UI receives it with the page. The `interlock` CLI and the stdio bridge read the file, so stdio configuration carries no token. Custom harness launchers inherit the server environment, so an `interlock mcp` bridge they start reads the same file. HTTP configuration copied from **Connect with MCP** includes the header.
 
@@ -31,7 +31,7 @@ The token is optional in 0.2. Set `INTERLOCK_REQUIRE_TOKEN=1` before starting In
 
 - Startup prints a UI link that carries the token. Open it once per browser; the page keeps the token for later visits at that address.
 - Copy HTTP configuration again from **Connect with MCP** for clients configured without the header.
-- A stdio bridge started with a different `INTERLOCK_SECRET_KEY_FILE` from the server reads a different file. Give the bridge the same value.
+- Give the CLI and stdio bridge the engine's `INTERLOCK_DATA_DIR`. If the engine uses a legacy location, give them the same `INTERLOCK_SECRET_KEY_FILE` or `XDG_CONFIG_HOME` where applicable. **Connect with MCP** includes the configured location in copied stdio snippets.
 
 To replace the token, stop Interlock, delete `api-token`, start Interlock again, and copy client configuration again.
 

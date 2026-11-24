@@ -28,6 +28,7 @@ import {
   defaultProbeHealthyServer,
   type ConnectionConfig,
   type ServerHandle,
+  type StartServerFunction,
 } from '../packages/desktop/src/lifecycle.js';
 import {
   AttentionNotificationTracker,
@@ -313,6 +314,44 @@ describe('lifecycle', () => {
     expect(stateChanges).toContain('owned');
 
     await lifecycle.stop();
+  });
+
+  it('uses the configured token and database through attach and takeover', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'interlock-desktop-data-'));
+    const dataDir = join(directory, 'state');
+    vi.stubEnv('INTERLOCK_DATA_DIR', dataDir);
+    vi.stubEnv('INTERLOCK_DB', undefined);
+    let healthy = true;
+    const readToken = vi.fn(() => 'fixture-token');
+    const startServer = vi
+      .fn<StartServerFunction>()
+      .mockResolvedValue(makeMockServer());
+    const lifecycle = new DesktopEngineLifecycle({
+      workdir: directory,
+      ui: directory,
+      probeHealth: () => Promise.resolve(healthy),
+      isLocked: () => healthy,
+      startServer,
+      readToken,
+    });
+    try {
+      const database = join(dataDir, 'interlock.db');
+      expect((await lifecycle.start()).mode).toBe('attached');
+      expect(lifecycle.getDatabase()).toBe(database);
+      expect(readToken).toHaveBeenCalledWith(join(dataDir, 'keys/api-token'));
+      healthy = false;
+      await lifecycle.poll();
+      expect(lifecycle.getMode()).toBe('owned');
+      expect(startServer.mock.calls[0]?.[0].paths.dataDir).toBe(dataDir);
+      expect(startServer.mock.calls[0]?.[0].paths.database).toEqual({
+        path: database,
+        source: 'INTERLOCK_DATA_DIR',
+      });
+    } finally {
+      await lifecycle.stop();
+      vi.unstubAllEnvs();
+      rmSync(directory, { recursive: true, force: true });
+    }
   });
 
   it('restarts owned server on workdir update when idle, or defers when runs active', async () => {

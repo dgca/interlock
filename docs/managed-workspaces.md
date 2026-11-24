@@ -29,7 +29,7 @@ In the editor, open **Workflow settings** and turn on **Give each run its own Gi
 
 ## Where runs work
 
-The worktree is created under the Interlock data folder, beside the database, at `workspaces/<run id>`. The run starts its first step once the worktree is ready. If creation fails, that step fails with the Git error.
+Interlock creates a worktree at `<data-dir>/workspaces/<run id>` when `INTERLOCK_DATA_DIR` is set. Otherwise `workspaces/` sits beside the database. The run starts its first step once the worktree is ready. If creation fails, that step fails with the Git error.
 
 Agent and Script nodes, including polling Script checks, use the first of these that is set:
 
@@ -62,7 +62,7 @@ Interlock never removes a worktree with uncommitted or untracked changes (ignore
 Interlock only deletes a directory that sits directly inside the workspaces folder, is not a symlink, and has a matching ownership marker (`<run id>.owner.json`). Other directories there are never touched. At startup, Interlock:
 
 - treats interrupted preparations as failed and retries interrupted removals
-- removes marked worktrees that no record keeps, unless they have uncommitted changes
+- removes marked worktrees this database recorded as removed, unless they have uncommitted changes. A marked worktree with no record is left in place, because another database may own it. After you delete or replace a database, remove its old worktrees yourself with `git worktree remove`
 - runs `git worktree prune` in the repositories it tracks
 
 If you retry a failed run, it reuses the worktree it kept, or creates a new one on the run's existing branch.

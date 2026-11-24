@@ -86,6 +86,7 @@ try {
     PATH: `${join(prefix, 'bin')}:${process.env.PATH}`,
     INTERLOCK_SECRET_KEY_FILE: join(temp, 'secret.key'),
   };
+  delete env.INTERLOCK_DATA_DIR;
   assert.equal(
     execFileSync(bin, ['--version'], {
       cwd: workdir,
@@ -117,13 +118,10 @@ try {
   assert(!refused.stdout.includes('Interlock is running'));
   assert.deepEqual(await readFile(futurePath), before);
   const url = `http://127.0.0.1:${port}`;
-  const start = async (launch = 'global') => {
-    const args = [
-      '--port',
-      String(port),
-      '--db',
-      join(temp, 'data/interlock.db'),
-    ];
+  const start = async (launch = 'global', launchEnv = env) => {
+    const args = ['--port', String(port)];
+    if (!launchEnv.INTERLOCK_DATA_DIR)
+      args.push('--db', join(temp, 'data/interlock.db'));
     server = spawn(
       launch === 'global' ? bin : 'npx',
       launch === 'global'
@@ -138,7 +136,12 @@ try {
             'interlock',
             ...args,
           ],
-      { cwd: workdir, env, detached: true, stdio: ['ignore', 'pipe', 'pipe'] },
+      {
+        cwd: workdir,
+        env: launchEnv,
+        detached: true,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      },
     );
     server.stdout.on('data', (chunk) => {
       logs += chunk;
@@ -158,6 +161,46 @@ try {
     }
     throw new Error(`Server failed to start: ${logs}`);
   };
+  const volume = join(temp, 'data-volume');
+  const tokenEnv = {
+    ...env,
+    INTERLOCK_DATA_DIR: volume,
+    INTERLOCK_REQUIRE_TOKEN: '1',
+    INTERLOCK_URL: url,
+  };
+  delete tokenEnv.INTERLOCK_DB;
+  delete tokenEnv.INTERLOCK_SECRET_KEY_FILE;
+  await start('global', tokenEnv);
+  assert.equal((await fetch(`${url}/api/workflows`)).status, 401);
+  assert.deepEqual(
+    JSON.parse(
+      execFileSync(bin, ['workflows'], {
+        cwd: workdir,
+        env: tokenEnv,
+        encoding: 'utf8',
+      }),
+    ),
+    [],
+  );
+  client = new Client({ name: 'package-token-smoke', version: '1.0.0' });
+  await client.connect(
+    new StdioClientTransport({
+      command: bin,
+      args: ['mcp'],
+      cwd: workdir,
+      env: tokenEnv,
+      stderr: 'pipe',
+    }),
+  );
+  const tokenWorkflows = await client.callTool({
+    name: 'list_workflows',
+    arguments: {},
+  });
+  assert.equal(tokenWorkflows.isError ?? false, false);
+  assert.deepEqual(JSON.parse(tokenWorkflows.content[0].text), []);
+  await client.close();
+  await stop();
+  logs = '';
   await start();
   const html = await fetch(url).then((r) => r.text());
   for (const path of [
