@@ -140,7 +140,7 @@ Sync is off when neither setting selects a folder.
 - A file holds the draft and what it references: names of required variables (never values, so Secrets stay local), saved prompts and Agent presets.
 - Versions, triggers and run history stay local.
 - Publishing replaces a file only when it holds exactly what Interlock last wrote or loaded. Any other edit to the file is kept and reported.
-- If the sync folder also holds the operator config path, sync reserves that filename and its case variants, even before the config file exists.
+- The sync folder cannot be the folder that holds the [operator config file](cli.md#operator-config-file). Interlock refuses to start when the file is found there.
 
 ### What a changed file does
 

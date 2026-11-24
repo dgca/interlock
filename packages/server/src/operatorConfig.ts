@@ -4,9 +4,10 @@ import {
   fstatSync,
   openSync,
   readFileSync,
+  realpathSync,
   statSync,
 } from 'node:fs';
-import { isAbsolute, join, resolve } from 'node:path';
+import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { z } from 'zod';
 import type { StartupSettings } from '@interlock/core';
 import type { DataPaths } from '@interlock/core/dataPaths';
@@ -139,6 +140,17 @@ function checkConfigLocation(path: string, paths: DataPaths) {
   }
 }
 
+function sameFolder(a: string, b: string) {
+  const real = (folder: string) => {
+    try {
+      return realpathSync(folder);
+    } catch {
+      return folder;
+    }
+  };
+  return a === b || real(a) === real(b);
+}
+
 export interface StartupOptions {
   allowedRoots?: string[];
   logLevel?: StartupSettings['logLevel']['value'];
@@ -205,9 +217,21 @@ export function loadOperatorConfig(
     file?.syncDir,
     null,
   );
+  const configPath = isAbsolute(selected.path)
+    ? selected.path
+    : resolve(selected.path);
+  // Sync imports and writes JSON files in its folder, so a config file there is not safe.
+  if (
+    file !== undefined &&
+    syncDir.value &&
+    sameFolder(resolve(syncDir.value), dirname(configPath))
+  )
+    throw new Error(
+      `Config file ${JSON.stringify(configPath)} is in the workflow sync folder (${syncDir.source}). Choose a separate folder for workflow sync, or move the config file.`,
+    );
   return {
     configFile: {
-      path: isAbsolute(selected.path) ? selected.path : resolve(selected.path),
+      path: configPath,
       found: file !== undefined,
     },
     requireToken: {

@@ -111,12 +111,7 @@ export async function startServer(
     );
     engine.executors.start(nativeAdapters);
     const syncDir = startupSettings.syncDir.value;
-    if (syncDir)
-      sync = startWorkflowSync(
-        engine,
-        syncDir,
-        startupSettings.configFile.path,
-      );
+    if (syncDir) sync = startWorkflowSync(engine, syncDir);
     // The exporter module loads only when INTERLOCK_OTEL_TRACES is on.
     const traceConfig = traceExportConfig();
     if (traceConfig)

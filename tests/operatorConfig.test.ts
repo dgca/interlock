@@ -105,7 +105,7 @@ it('resolves options, environment, file and defaults with sources', () => {
       requireToken: true,
       allowedRoots: [],
       logLevel: 'error',
-      syncDir: root,
+      syncDir: join(root, 'sync'),
     }),
   );
   const explicit = { INTERLOCK_CONFIG: config };
@@ -128,7 +128,10 @@ it('resolves options, environment, file and defaults with sources', () => {
     value: 'warn',
     source: 'INTERLOCK_LOG_LEVEL',
   });
-  expect(get(env).syncDir).toEqual({ value: root, source: 'config file' });
+  expect(get(env).syncDir).toEqual({
+    value: join(root, 'sync'),
+    source: 'config file',
+  });
   expect(get(env).requireToken).toMatchObject({
     value: false,
     source: 'INTERLOCK_REQUIRE_TOKEN',
@@ -472,40 +475,23 @@ it('keeps the startup snapshot and restores saved shared roots after restart wit
   expect(third.engine.getAllowedRoots()).toEqual(savedRoots);
 });
 
-it.each([
-  [true, 'config'],
-  [false, 'config'],
-  [true, 'Config'],
-  [false, 'Config'],
-] as const)(
-  'protects the config path from workflow sync when found is %s and the workflow ID is %s',
-  async (found, workflowId) => {
-    mkdirSync(dataDir);
-    const path = join(dataDir, 'config.json');
-    const content = JSON.stringify({ syncDir: dataDir });
-    if (found) writeFileSync(path, content);
-    else vi.stubEnv('INTERLOCK_SYNC_DIR', dataDir);
-    const { engine } = await start();
-    expect(workflowSyncStatus(engine)?.items).toEqual([]);
-    const workflow = engine.create('Sync exercise');
-    engine.store.put('workflows', { ...workflow, id: workflowId });
-    engine.publish(workflowId);
-    engine.publish(workflow.id);
-    await vi.waitFor(() => {
-      expect(existsSync(join(dataDir, `${workflow.id}.json`))).toBe(true);
-      const conflict = workflowSyncStatus(engine)?.items.find(
-        (item) => item.workflowId === workflowId,
-      );
-      expect(conflict?.reason).toContain('config file is reserved');
-    });
-    expect(existsSync(path)).toBe(found);
-    if (found) expect(readFileSync(path, 'utf8')).toBe(content);
-    expect(
-      readdirSync(dataDir)
-        .filter((file) => file.endsWith('.json'))
-        .sort(),
-    ).toEqual(
-      [...(found ? ['config.json'] : []), `${workflow.id}.json`].sort(),
-    );
-  },
-);
+it('refuses to start when the config file sits in the workflow sync folder', async () => {
+  mkdirSync(dataDir);
+  const path = join(dataDir, 'config.json');
+  const content = JSON.stringify({ syncDir: dataDir });
+  writeFileSync(path, content);
+  await expect(start()).rejects.toThrow(
+    /config\.json.*is in the workflow sync folder \(config file\)/,
+  );
+  expect(readdirSync(dataDir)).toEqual(['config.json']);
+
+  // The environment variable selects the folder the same way.
+  writeFileSync(path, '{}');
+  vi.stubEnv('INTERLOCK_SYNC_DIR', dataDir);
+  await expect(start()).rejects.toThrow(/\(INTERLOCK_SYNC_DIR\)/);
+
+  // With no config file, the same folder syncs as before.
+  rmSync(path);
+  const { engine } = await start();
+  expect(workflowSyncStatus(engine)?.items).toEqual([]);
+});
