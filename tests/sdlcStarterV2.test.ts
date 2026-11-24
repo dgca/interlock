@@ -206,13 +206,21 @@ it('runs the setup, check, verdict, routing and delivery Scripts on a real repos
   const tree = join(repo, '..', `${repo.split('/').at(-1)}-tree`);
   dirs.push(tree);
   git('worktree', 'add', '-q', '-b', 'interlock/run-1', tree, 'HEAD');
-  process.env.INTERLOCK_ROOT_RUN_ID = 'run-1';
+  // The root run is another workflow's when SDLC is called as a child.
+  process.env.INTERLOCK_ROOT_RUN_ID = 'caller-run';
+  process.env.INTERLOCK_WORKSPACE_BRANCH = 'interlock/run-1';
   try {
     expect(
       await inDir(tree, { run: { repoPath: repo, request: 'x' } }),
     ).toMatchObject({ repoPath: realpathSync(tree), dedicatedBranch: true });
+    // A checkout moved off the worktree's branch is not the run's own.
+    process.env.INTERLOCK_WORKSPACE_BRANCH = 'interlock/other';
+    expect(
+      await inDir(tree, { run: { repoPath: repo, request: 'x' } }),
+    ).toMatchObject({ dedicatedBranch: false });
   } finally {
     delete process.env.INTERLOCK_ROOT_RUN_ID;
+    delete process.env.INTERLOCK_WORKSPACE_BRANCH;
   }
   git('checkout', '-q', 'a.txt');
 

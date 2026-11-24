@@ -251,6 +251,69 @@ it("runs tool calls in the calling Agent's checkout without another worktree", a
   expect(f.worktrees()).toEqual([realpathSync(f.repository), path]);
 });
 
+it('tells a Script the branch of the worktree it runs in, whichever run started the tree', async () => {
+  const f = setup();
+  const engine = f.open();
+  const script = {
+    id: 'read',
+    kind: 'script',
+    label: 'Read',
+    language: 'javascript',
+    command:
+      "const { execFileSync } = await import('node:child_process'); const e = process.env; return { branch: e.INTERLOCK_WORKSPACE_BRANCH ?? null, run: e.INTERLOCK_RUN_ID, root: e.INTERLOCK_ROOT_RUN_ID, head: execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { encoding: 'utf8' }).trim() };",
+  };
+  const around = (node: unknown) => ({
+    nodes: [
+      { id: 'entry', kind: 'entry', label: 'In' },
+      node,
+      { id: 'exit', kind: 'exit', label: 'Out' },
+    ],
+    edges: [
+      { id: 'in', source: 'entry', target: 'read' },
+      { id: 'out', source: 'read', target: 'exit' },
+    ],
+  });
+  const child = publish(engine, {
+    ...around(script),
+    workspace: { repository: f.repository },
+  });
+  // The caller has no worktree of its own, so the child's run owns the branch.
+  const caller = publish(
+    engine,
+    around({
+      id: 'read',
+      kind: 'workflow',
+      label: 'Call',
+      workflowId: child,
+      version: 1,
+    }),
+  );
+  const finished = async (workflowId: string) => {
+    const id = engine.start(workflowId, {}).run.id;
+    return until(engine, () => {
+      const run = engine.run(id);
+      expect(run.status, run.error).toBe('completed');
+      return run;
+    });
+  };
+  const called = await finished(caller);
+  const seen = called.output as Record<string, string>;
+  expect(seen.root).toBe(called.id);
+  expect(seen.run).not.toBe(called.id);
+  expect(seen).toMatchObject({
+    branch: `interlock/${seen.run}`,
+    head: `interlock/${seen.run}`,
+  });
+
+  // Outside a managed worktree the variable is absent, even when inherited.
+  vi.stubEnv('INTERLOCK_WORKSPACE_BRANCH', 'inherited');
+  const plain = publish(engine, { ...around(script), cwd: f.repository });
+  expect((await finished(plain)).output).toMatchObject({
+    branch: null,
+    head: 'main',
+  });
+});
+
 it('reconciles after a restart without touching directories Interlock did not create', async () => {
   const f = setup();
   const first = f.open();
