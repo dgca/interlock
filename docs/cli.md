@@ -24,6 +24,21 @@ With no command, `interlock` starts the engine, the UI and the HTTP MCP endpoint
 Explicit flags take precedence over environment variables.
 Set `INTERLOCK_DATA_DIR` to an absolute path to put the database, keys and API token, background Script spool, and managed worktrees in one directory. `--db` and `INTERLOCK_DB` override the database path. See [engine state locations](https://github.com/dgca/interlock/blob/main/docs/architecture.md#engine-state-locations).
 
+### Operator config file
+
+The engine reads one JSON object at startup. Set `INTERLOCK_CONFIG` to an absolute path to select a required file. Otherwise the engine looks for `config.json` under `INTERLOCK_DATA_DIR`, or beside the `keys` folder in the [user config directory](https://github.com/dgca/interlock/blob/main/docs/architecture.md#engine-state-locations). A missing file at either default location is valid. An unreadable or invalid file stops startup before the engine opens the database or writes state.
+
+| Key            | JSON value                                                                                         |
+| -------------- | -------------------------------------------------------------------------------------------------- |
+| `requireToken` | Boolean. Defaults to `false` on loopback. The token is always required off loopback.               |
+| `allowedRoots` | Array of absolute paths for shared dynamic working-directory checks. Defaults to no startup roots. |
+| `logLevel`     | `debug`, `info`, `warn`, or `error`. Defaults to `info`.                                           |
+| `syncDir`      | Absolute path to a workflow sync folder. Sync is off by default.                                   |
+
+Each key is optional. For each setting, explicit startup options take precedence over environment variables, then file values, then defaults. Key names and file log levels are case-sensitive. When the file declares `allowedRoots`, the resolved startup list replaces saved shared roots. Changes to the saved shared roots are unavailable until the key is removed and the engine restarts. Per-harness roots follow their existing rules.
+
+Edit the file on the engine host and restart the engine to apply changes. Keep it at a separate path from engine files such as the database and logs. Interlock never writes it. Client commands and the stdio bridge use the running engine and do not read the file.
+
 ## How commands work
 
 - Commands print JSON, except `doctor` and `report`, which print readable text unless you add `--json`.
@@ -34,7 +49,7 @@ Set `INTERLOCK_DATA_DIR` to an absolute path to put the database, keys and API t
   INTERLOCK_URL=http://127.0.0.1:4400 interlock workflows
   ```
 
-- When the engine runs with `INTERLOCK_REQUIRE_TOKEN=1`, commands and the MCP bridge read the same [API token file](https://github.com/dgca/interlock/blob/main/docs/connect-harness.md#api-token). Give them the engine's `INTERLOCK_DATA_DIR` if it is set.
+- When the engine requires a token, commands and the MCP bridge read the same [API token file](https://github.com/dgca/interlock/blob/main/docs/connect-harness.md#api-token). Give them the engine's `INTERLOCK_DATA_DIR` if it is set.
 
 | Command                    | Purpose                           |
 | -------------------------- | --------------------------------- |
@@ -313,6 +328,7 @@ A pause holds gate boundaries and new claims without interrupting work in flight
 
 - `doctor` exits with code `1` for a failure, and `0` for passing checks or warnings. `--live` makes model requests, so use it only when you want them.
 - `doctor` reports the running engine's data directory, database, protected-value key, API token, spool, and managed worktree paths. Each path includes the setting or default that selected it.
+- It also reports the operator config path, whether the file was found at startup, and the effective startup values and sources of the four settings. The `allowedRoots` row shows the startup list. Saved shared roots can still apply when the file omits `allowedRoots`. The report omits the API token itself.
 - `report` also takes `--since` and `--until` (ISO datetimes), `--limit N` and `--tag KEY=VALUE`. Dates must stay within years 0000–9999 once rounded to UTC. See [Reports](reports.md) and [Troubleshooting](troubleshooting.md).
 
 ## Environment variables
@@ -320,11 +336,13 @@ A pause holds gate boundaries and new claims without interrupting work in flight
 | Variable                        | Effect                                                                                                                                                      |
 | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `INTERLOCK_DATA_DIR`            | Absolute directory for engine state. See [engine state locations](https://github.com/dgca/interlock/blob/main/docs/architecture.md#engine-state-locations). |
+| `INTERLOCK_CONFIG`              | Absolute path to a required [operator config file](#operator-config-file).                                                                                  |
 | `INTERLOCK_DB`                  | Database path. Takes precedence over `INTERLOCK_DATA_DIR` for SQLite.                                                                                       |
 | `INTERLOCK_WORKDIR`             | Default Script working directory                                                                                                                            |
 | `INTERLOCK_URL`                 | Engine that commands and `interlock mcp` talk to                                                                                                            |
 | `INTERLOCK_MCP_PROFILE`         | Default tool profile for `interlock mcp`                                                                                                                    |
 | `INTERLOCK_REQUIRE_TOKEN`       | `1` rejects API, MCP and event requests without the API token                                                                                               |
+| `INTERLOCK_ALLOWED_ROOTS`       | Shared roots for dynamic working directories. Use a JSON array or a comma- or colon-separated list.                                                         |
 | `INTERLOCK_SECRET_KEY_FILE`     | Absolute override for the variable encryption key file, including when `INTERLOCK_DATA_DIR` is set.                                                         |
 | `INTERLOCK_LOG_LEVEL`           | `debug`, `info` (default), `warn` or `error`                                                                                                                |
 | `INTERLOCK_SYNC_DIR`            | Sync workflow drafts with bundle files in a folder. See [Sync workflows](reuse-work.md#sync-workflows-with-a-repository-folder).                            |

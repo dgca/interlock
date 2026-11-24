@@ -591,11 +591,6 @@
       "symbol": "AppRouter"
     },
     {
-      "file": "packages/server/src/start.ts",
-      "type": "exports",
-      "symbol": "parseAllowedRoots"
-    },
-    {
       "file": "packages/storage/src/index.ts",
       "type": "exports",
       "symbol": "runsForReport"

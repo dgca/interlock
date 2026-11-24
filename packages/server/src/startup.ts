@@ -31,7 +31,7 @@ export function isDatabaseLocked(database: string): boolean {
   if (database === ':memory:') return false;
   const path = `${database}.lock`;
   if (!existsSync(path)) return false;
-  const lock = new DatabaseSync(path);
+  const lock = new DatabaseSync(path, { readOnly: true });
   try {
     lock.exec('PRAGMA busy_timeout = 0; BEGIN EXCLUSIVE; ROLLBACK');
     return false;

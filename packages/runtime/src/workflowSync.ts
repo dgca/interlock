@@ -1,15 +1,17 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import {
   lstatSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   renameSync,
+  rmSync,
   statSync,
   watch,
   writeFileSync,
   type FSWatcher,
 } from 'node:fs';
-import { join } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import {
   InterlockError,
   modelReferences,
@@ -112,6 +114,14 @@ function draftOnly(value: unknown): unknown {
 /** Larger files are reported, not read. */
 const maxFileBytes = 5 * 1024 * 1024;
 
+function realPath(path: string) {
+  try {
+    return realpathSync(path);
+  } catch {
+    return path;
+  }
+}
+
 function readBundle(folder: string, file: string): FileRead {
   const stats = lstatSync(join(folder, file));
   if (stats.isSymbolicLink())
@@ -191,7 +201,11 @@ export class WorkflowSync {
   constructor(
     private engine: Engine,
     readonly folder: string,
-    private options: { debounceMs?: number; retryMs?: number } = {},
+    private options: {
+      debounceMs?: number;
+      retryMs?: number;
+      configPath?: string;
+    } = {},
   ) {
     observePublishes(engine.store, {
       publishing: () => this.publishing(),
@@ -201,6 +215,20 @@ export class WorkflowSync {
 
   private get store() {
     return this.engine.store;
+  }
+
+  private configFiles() {
+    const names = new Set<string>();
+    const path = this.options.configPath;
+    if (!path) return names;
+    const folder = resolve(this.folder);
+    const realFolder = realPath(folder);
+    for (const candidate of [path, realPath(path)]) {
+      const parent = dirname(candidate);
+      if (parent === folder || realPath(parent) === realFolder)
+        names.add(basename(candidate));
+    }
+    return names;
   }
 
   /** Scan once, then watch the folder; a missing folder is checked again later. */
@@ -306,8 +334,14 @@ export class WorkflowSync {
     const items: WorkflowSyncItem[] = [];
     const reads: FileRead[] = [];
     const unreadable = new Set<string>();
+    const configFiles = this.configFiles();
     for (const file of readdirSync(this.folder).sort()) {
-      if (!file.endsWith('.json') || file.startsWith('.')) continue;
+      if (
+        !file.endsWith('.json') ||
+        file.startsWith('.') ||
+        configFiles.has(file)
+      )
+        continue;
       try {
         reads.push(readBundle(this.folder, file));
       } catch (error) {
@@ -518,6 +552,10 @@ export class WorkflowSync {
       });
       return false;
     };
+    if (this.configFiles().has(file))
+      return skip(
+        'The operator config file is reserved. Choose a different workflow sync folder.',
+      );
     try {
       read = readBundle(this.folder, file);
     } catch (error) {
@@ -557,9 +595,14 @@ export class WorkflowSync {
       return skip(`Publishing could not write this file: ${message(error)}`);
     }
     try {
-      const temporary = join(this.folder, `.${file}.tmp`);
-      writeFileSync(temporary, content);
-      renameSync(temporary, path);
+      const temporary = join(this.folder, `.${randomUUID()}.tmp`);
+      writeFileSync(temporary, content, { flag: 'wx' });
+      try {
+        renameSync(temporary, path);
+      } catch (error) {
+        rmSync(temporary, { force: true });
+        throw error;
+      }
     } catch (error) {
       return skip(`Publishing could not write this file: ${message(error)}`);
     }
@@ -611,8 +654,12 @@ export class WorkflowSync {
 const running = new WeakMap<Store, WorkflowSync>();
 
 /** Start syncing with a folder; the caller stops the returned sync on shutdown. */
-export function startWorkflowSync(engine: Engine, folder: string) {
-  const sync = new WorkflowSync(engine, folder);
+export function startWorkflowSync(
+  engine: Engine,
+  folder: string,
+  configPath: string,
+) {
+  const sync = new WorkflowSync(engine, folder, { configPath });
   running.set(engine.store, sync);
   sync.start();
   return sync;

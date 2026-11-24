@@ -68,12 +68,14 @@ Setting `INTERLOCK_DATA_DIR` uses the files already in that directory. Interlock
 3. Copy the database to `<data-dir>/interlock.db`. If SQLite left `-wal` or `-shm` files, copy them with the matching new base name. Keep your old copy and any schema backups until you verify the move.
 4. Copy the original vault key with its filename to `<data-dir>/keys/`, and copy the original `api-token` to the same folder. Use mode `0700` for the key directory and `0600` for both files. If you use `INTERLOCK_SECRET_KEY_FILE`, keep pointing it at the original key or update it to the copied key's absolute path. In legacy mode a key override also moved the token beside the key.
 5. If the original spool exists, copy its contents into `<data-dir>/script-spool/` and preserve owner-only permissions. Keep retained Git worktrees and trial artifacts at their original paths if you need to access them from past runs. Use Git to preserve local work on their branches before removing retained worktrees. New runs use the new `workspaces/` folder.
-6. Set `INTERLOCK_DATA_DIR` for the engine, CLI, and stdio bridge. Clear database overrides if you want to use the database you copied to `interlock.db`. Start Interlock, run `interlock doctor`, and check that an existing workflow and its protected values are available.
+6. If you use the default [operator config file](cli.md#operator-config-file), copy it to `<data-dir>/config.json`. If you use `INTERLOCK_CONFIG`, keep pointing it at the absolute path you want the engine to use.
+7. Set `INTERLOCK_DATA_DIR` for the engine, CLI, and stdio bridge. Clear database overrides if you want to use the database you copied to `interlock.db`. Start Interlock, run `interlock doctor`, and check that an existing workflow and its protected values are available.
 
 Git records each worktree's absolute path. Before you move or rename a data directory that holds retained or active worktrees, preserve their work on branches and remove them, or run `git worktree repair` in each repository afterwards. If you open a different database with the same data directory, startup leaves the worktrees the earlier database made in `workspaces/`. Remove them yourself once you no longer need them.
 
 ### If the server will not start
 
+- If the error names an operator config file, correct the reported problem and restart. Existing flags and environment variables still work without a config file. An explicit `INTERLOCK_CONFIG` path must point to a readable file.
 - Startup checks whether the port is taken before it opens the database. Find the listener with `lsof -nP -iTCP:4310 -sTCP:LISTEN`, changing the port if needed.
 - A locked-database error names the path and suggests stopping other instances.
 - If a process was suspended with Ctrl+Z, `kill -CONT <pid>` lets it handle a pending termination signal.

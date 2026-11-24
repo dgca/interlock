@@ -81,7 +81,10 @@ export class ExecutorConfiguration {
   >();
   private readonly presetChecks = new Set<string>();
   constructor(
-    private readonly engine: Pick<Engine, 'store' | 'getAllowedRoots' | 'pump'>,
+    private readonly engine: Pick<
+      Engine,
+      'store' | 'getAllowedRoots' | 'pump' | 'startupSettings'
+    >,
     private readonly defaultCwd: string,
     private readonly host: ExecutorConfigurationHost,
   ) {}
@@ -139,8 +142,8 @@ export class ExecutorConfiguration {
         .catch(() => {});
     }
   }
-  settings() {
-    const stored = this.engine.store.get<{
+  private storedSettings() {
+    return this.engine.store.get<{
       id: string;
       revision: number;
       concurrency: number | null;
@@ -148,8 +151,14 @@ export class ExecutorConfiguration {
       allowedRoots?: string[];
       providerPrefixes?: Record<string, string>;
     }>('executorSettings', 'shared');
-    const roots = stored?.allowedRoots ?? this.engine.getAllowedRoots();
-    return executorSettingsSchema.parse({
+  }
+  settings() {
+    const stored = this.storedSettings();
+    const operatorRoots = this.engine.startupSettings?.allowedRoots;
+    const roots = operatorRoots?.controlledByConfig
+      ? undefined
+      : (stored?.allowedRoots ?? this.engine.getAllowedRoots());
+    const settings = executorSettingsSchema.parse({
       revision: stored?.revision ?? 0,
       concurrency: stored ? stored.concurrency : 3,
       ...(stored?.defaultPermissions
@@ -160,20 +169,31 @@ export class ExecutorConfiguration {
         ? { providerPrefixes: stored.providerPrefixes }
         : {}),
     });
+    return operatorRoots?.controlledByConfig
+      ? { ...settings, allowedRoots: [...operatorRoots.value] }
+      : settings;
   }
   saveSettings(input: unknown) {
     const q = executorSettingsUpdateSchema.parse(input);
     const result = this.engine.store.transaction(() => {
-      if (this.settings().revision !== q.expectedRevision)
+      const current = this.settings();
+      if (current.revision !== q.expectedRevision)
         throw new InterlockError(
           'Execution settings changed. Reload before saving.',
         );
-      const current = this.settings();
+      const controlled =
+        this.engine.startupSettings?.allowedRoots.controlledByConfig;
+      if (controlled && q.allowedRoots !== undefined)
+        throw new InterlockError(
+          'Shared allowed roots are controlled by the operator config file. Change the startup configuration and restart Interlock.',
+        );
       const defaultPermissions =
         q.defaultPermissions === undefined
           ? current.defaultPermissions
           : (q.defaultPermissions ?? undefined);
-      const currentRoots = current.allowedRoots;
+      const currentRoots = controlled
+        ? this.storedSettings()?.allowedRoots
+        : current.allowedRoots;
       const roots =
         q.allowedRoots !== undefined ? q.allowedRoots : currentRoots;
       const currentPrefixes = current.providerPrefixes;
@@ -189,7 +209,7 @@ export class ExecutorConfiguration {
           : {}),
       });
       this.engine.store.put('executorSettings', { id: 'shared', ...next });
-      return next;
+      return controlled ? this.settings() : next;
     });
     this.schedule();
     return result;

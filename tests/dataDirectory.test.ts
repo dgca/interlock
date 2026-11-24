@@ -23,6 +23,7 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import {
   blankDefinition,
+  doctorReportSchema,
   nodeSchema,
   type DoctorReport,
   type SavedVariable,
@@ -360,6 +361,12 @@ it('rejects invalid data directory settings from the checkout server entry point
 });
 
 it('authenticates CLI and checkout stdio clients and reports the running engine paths over both MCP transports', async () => {
+  mkdirSync(dataDir);
+  const configPath = join(dataDir, 'config.json');
+  writeFileSync(
+    configPath,
+    JSON.stringify({ allowedRoots: [root], logLevel: 'warn' }),
+  );
   const listener = createServer().listen(0, '127.0.0.1');
   await once(listener, 'listening');
   const port = (listener.address() as { port: number }).port;
@@ -386,9 +393,14 @@ it('authenticates CLI and checkout stdio clients and reports the running engine 
       },
       { timeout: 8000 },
     );
-    const clientEnv = { ...process.env, INTERLOCK_URL: url };
+    const clientEnv = {
+      ...process.env,
+      INTERLOCK_URL: url,
+      INTERLOCK_CONFIG: 'client-must-ignore.json',
+    };
     const help = await runCli(['--help']);
     expect(help.stdout).toContain('INTERLOCK_DATA_DIR');
+    expect(help.stdout).toContain('INTERLOCK_CONFIG');
     expect(JSON.parse((await runCli(['workflows'], clientEnv)).stdout)).toEqual(
       [],
     );
@@ -405,11 +417,11 @@ it('authenticates CLI and checkout stdio clients and reports the running engine 
     if (!token) throw new Error('Missing fixture token');
     const text = await runCli(['doctor'], clientEnv);
     expect(text.stdout).toContain(`${database} (--db)`);
-    const report = JSON.parse(
-      (await runCli(['doctor', '--json'], clientEnv)).stdout,
-    ) as DoctorReport;
+    const json = (await runCli(['doctor', '--json'], clientEnv)).stdout;
+    const report = JSON.parse(json) as DoctorReport;
     const paths = report.checks.filter(
-      (check) => check.details && 'source' in check.details,
+      (check) =>
+        check.details && 'source' in check.details && 'path' in check.details,
     );
     expect(paths.map((check) => check.details)).toEqual([
       { path: dataDir, source: 'INTERLOCK_DATA_DIR' },
@@ -422,6 +434,43 @@ it('authenticates CLI and checkout stdio clients and reports the running engine 
       { path: join(dataDir, 'script-spool'), source: 'INTERLOCK_DATA_DIR' },
       { path: join(dataDir, 'workspaces'), source: 'INTERLOCK_DATA_DIR' },
     ]);
+    const settings = new Map<string, object>([
+      ['Config file', { path: configPath, found: true }],
+      ['requireToken', { value: true, source: 'INTERLOCK_REQUIRE_TOKEN' }],
+      [
+        'allowedRoots',
+        { value: [root], source: 'config file', controlledByConfig: true },
+      ],
+      ['logLevel', { value: 'warn', source: 'config file' }],
+      ['syncDir', { value: null, source: 'default' }],
+    ]);
+    const configRows = report.checks.filter((check) =>
+      settings.has(check.name),
+    );
+    expect(configRows).toHaveLength(settings.size);
+    for (const row of configRows) {
+      expect(row.details).toMatchObject(settings.get(row.name)!);
+      expect(text.stdout).toContain(`${row.name}: ${row.message}`);
+    }
+    const live = doctorReportSchema.parse(
+      JSON.parse(
+        (await runCli(['doctor', '--live', '--json'], clientEnv)).stdout,
+      ),
+    );
+    expect(live.checks.filter((check) => settings.has(check.name))).toEqual(
+      configRows,
+    );
+    expect(text.stdout).not.toContain(token);
+    expect(json).not.toContain(token);
+    const update = {
+      action: 'save_settings',
+      expectedRevision: 0,
+      concurrency: 3,
+      allowedRoots: [],
+    };
+    await expect(
+      runCli(['executors', JSON.stringify(update)], clientEnv),
+    ).rejects.toThrow('controlled by the operator config');
     const headers = { Authorization: `Bearer ${token}` };
     const config = await createClient(url, { token }).connection.query();
     expect(config.env).toEqual({
@@ -435,17 +484,20 @@ it('authenticates CLI and checkout stdio clients and reports the running engine 
       new StdioClientTransport({
         command: process.execPath,
         args: ['--import', 'tsx', 'packages/mcp/src/index.ts'],
-        env: config.env,
+        env: { ...config.env, INTERLOCK_CONFIG: 'client-must-ignore.json' },
         stderr: 'pipe',
       }),
     ]) {
       const mcp = new Client({ name: 'data-directory-test', version: '1.0.0' });
       clients.push(mcp);
       await mcp.connect(transport);
+      const { tools } = await mcp.listTools();
       expect(
-        (await mcp.listTools()).tools.find((tool) => tool.name === 'doctor')
-          ?.description,
-      ).toContain('storage paths and their sources');
+        tools.find((tool) => tool.name === 'doctor')?.description,
+      ).toContain('operator config path');
+      expect(
+        tools.find((tool) => tool.name === 'manage_executors')?.description,
+      ).toContain('shared roots are read-only');
       const listed = await mcp.callTool({
         name: 'list_workflows',
         arguments: {},
@@ -453,8 +505,20 @@ it('authenticates CLI and checkout stdio clients and reports the running engine 
       expect(listed.isError).not.toBe(true);
       const diagnostic = await mcp.callTool({ name: 'doctor', arguments: {} });
       expect(diagnostic.isError).not.toBe(true);
+      const mcpReport = doctorReportSchema.parse(diagnostic.structuredContent);
+      expect(
+        mcpReport.checks.filter((check) => settings.has(check.name)),
+      ).toEqual(configRows);
       expect(JSON.stringify(diagnostic)).toContain(database);
       expect(JSON.stringify(diagnostic)).not.toContain(token);
+      const refused = await mcp.callTool({
+        name: 'manage_executors',
+        arguments: { request: update },
+      });
+      expect(refused.isError).toBe(true);
+      expect(JSON.stringify(refused)).toContain(
+        'controlled by the operator config',
+      );
     }
   } finally {
     await Promise.allSettled(clients.map((client) => client.close()));

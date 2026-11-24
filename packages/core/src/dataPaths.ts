@@ -55,9 +55,9 @@ export function resolveDataPaths(
   const databaseFile = fileBacked ? resolve(database.path) : database.path;
   const databaseDir = dirname(resolve(database.path));
   const xdgConfigHome = env.XDG_CONFIG_HOME;
-  const keysDir = dataDir
-    ? join(dataDir, 'keys')
-    : join(interlockConfigDir(platform, home, xdgConfigHome ?? ''), 'keys');
+  const configDir =
+    dataDir ?? interlockConfigDir(platform, home, xdgConfigHome ?? '');
+  const keysDir = join(configDir, 'keys');
   const keysSource = dataDir
     ? 'INTERLOCK_DATA_DIR'
     : platform !== 'darwin' && xdgConfigHome
@@ -78,6 +78,10 @@ export function resolveDataPaths(
   return {
     dataDir,
     database,
+    configFile:
+      env.INTERLOCK_CONFIG === undefined
+        ? { path: join(configDir, 'config.json'), source: keysSource }
+        : { path: env.INTERLOCK_CONFIG, source: 'INTERLOCK_CONFIG' },
     keysDir: { path: keysDir, source: keysSource },
     keyFile:
       keyFile === undefined

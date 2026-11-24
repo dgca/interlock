@@ -35,6 +35,19 @@ export const doctorReportSchema = z.object({
 });
 export type DoctorReport = z.infer<typeof doctorReportSchema>;
 
+interface StartupSetting<T> {
+  value: T;
+  source: string;
+}
+
+export interface StartupSettings {
+  configFile: { path: string; found: boolean };
+  requireToken: StartupSetting<boolean> & { forced: boolean };
+  allowedRoots: StartupSetting<string[]> & { controlledByConfig: boolean };
+  logLevel: StartupSetting<'debug' | 'info' | 'warn' | 'error'>;
+  syncDir: StartupSetting<string | null>;
+}
+
 export const doctorOptionsSchema = z
   .object({
     live: z.boolean().optional(),

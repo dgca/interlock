@@ -66,7 +66,7 @@ Interlock is a trusted local tool for one person. Workflows run Scripts, Fetch r
 
 - The server listens only on `127.0.0.1`. Do not expose its port through a tunnel, proxy, port forward or container mapping.
 - Scripts are not sandboxed. Imported Scripts need one-time approval before their first run.
-- A per-install API token is sent automatically by the UI, CLI and MCP bridge. Set `INTERLOCK_REQUIRE_TOKEN=1` to reject requests without it.
+- A per-install API token is sent automatically by the UI, CLI and MCP bridge. Require it with `requireToken` in the [operator config](https://github.com/dgca/interlock/blob/main/docs/cli.md#operator-config-file) or `INTERLOCK_REQUIRE_TOKEN=1`.
 
 Read the [full security notes](https://github.com/dgca/interlock/blob/main/docs/security.md) for Script environments and the token.
 

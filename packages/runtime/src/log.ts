@@ -10,14 +10,18 @@ import { join } from 'node:path';
 import type { DiagnosticCheck } from '@interlock/core';
 import { sanitizeMessage } from './executors/templates.js';
 
-const levels = ['debug', 'info', 'warn', 'error'] as const;
-type LogLevel = (typeof levels)[number];
+export const logLevels = ['debug', 'info', 'warn', 'error'] as const;
+type LogLevel = (typeof logLevels)[number];
 
 export function parseLogLevel(value: string | undefined): LogLevel {
   if (!value) return 'info';
-  const level = levels.find((candidate) => candidate === value.toLowerCase());
+  const level = logLevels.find(
+    (candidate) => candidate === value.toLowerCase(),
+  );
   if (!level)
-    throw new Error(`INTERLOCK_LOG_LEVEL must be one of ${levels.join(', ')}.`);
+    throw new Error(
+      `INTERLOCK_LOG_LEVEL must be one of ${logLevels.join(', ')}.`,
+    );
   return level;
 }
 
@@ -36,7 +40,7 @@ export class JsonLog {
     if (existsSync(this.file)) this.size = statSync(this.file).size;
   }
   write(level: LogLevel, event: string, fields: Record<string, unknown> = {}) {
-    if (levels.indexOf(level) < levels.indexOf(this.level)) return;
+    if (logLevels.indexOf(level) < logLevels.indexOf(this.level)) return;
     const at = new Date().toISOString();
     const line = `${JSON.stringify({ at, level, event, ...fields })}\n`;
     const bytes = Buffer.byteLength(line);

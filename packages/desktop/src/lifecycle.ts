@@ -97,7 +97,7 @@ export function defaultIsDatabaseLocked(database: string): boolean {
   if (database === ':memory:') return false;
   const path = `${database}.lock`;
   try {
-    const lock = new DatabaseSync(path);
+    const lock = new DatabaseSync(path, { readOnly: true });
     try {
       lock.exec('PRAGMA busy_timeout = 0; BEGIN EXCLUSIVE');
       lock.exec('ROLLBACK');
@@ -208,7 +208,6 @@ export class DesktopEngineLifecycle {
 
   async start(): Promise<LifecycleState> {
     this.isStopping = false;
-    serverStart.prepareDataDirectory(this.paths);
     const isHealthy = await this.probeHealth(this.engineUrl, 1500);
 
     if (
