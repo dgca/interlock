@@ -103,6 +103,7 @@ export function Diagnostics() {
               void fetchDiagnostics(live);
             }}
             aria-disabled={loading}
+            data-disabled={loading || undefined}
             size="xs"
             aria-label="Include live harness model verification"
           />
@@ -115,6 +116,7 @@ export function Diagnostics() {
               if (!loading) void fetchDiagnostics(liveProbe);
             }}
             aria-disabled={loading}
+            data-disabled={loading || undefined}
           >
             Run checks
           </Button>

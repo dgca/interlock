@@ -5,6 +5,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   realpathSync,
   rmSync,
   writeFileSync,
@@ -455,9 +456,14 @@ it('keeps the startup snapshot and restores saved shared roots after restart wit
   expect(third.engine.getAllowedRoots()).toEqual(savedRoots);
 });
 
-it.each([true, false])(
-  'protects the selected config path from workflow sync when found is %s',
-  async (found) => {
+it.each([
+  [true, 'config'],
+  [false, 'config'],
+  [true, 'Config'],
+  [false, 'Config'],
+] as const)(
+  'protects the config path from workflow sync when found is %s and the workflow ID is %s',
+  async (found, workflowId) => {
     mkdirSync(dataDir);
     const path = join(dataDir, 'config.json');
     const content = JSON.stringify({ syncDir: dataDir });
@@ -466,17 +472,24 @@ it.each([true, false])(
     const { engine } = await start();
     expect(workflowSyncStatus(engine)?.items).toEqual([]);
     const workflow = engine.create('Sync exercise');
-    engine.store.put('workflows', { ...workflow, id: 'config' });
-    engine.publish('config');
+    engine.store.put('workflows', { ...workflow, id: workflowId });
+    engine.publish(workflowId);
     engine.publish(workflow.id);
     await vi.waitFor(() => {
       expect(existsSync(join(dataDir, `${workflow.id}.json`))).toBe(true);
       const conflict = workflowSyncStatus(engine)?.items.find(
-        (item) => item.workflowId === 'config',
+        (item) => item.workflowId === workflowId,
       );
       expect(conflict?.reason).toContain('config file is reserved');
     });
     expect(existsSync(path)).toBe(found);
     if (found) expect(readFileSync(path, 'utf8')).toBe(content);
+    expect(
+      readdirSync(dataDir)
+        .filter((file) => file.endsWith('.json'))
+        .sort(),
+    ).toEqual(
+      [...(found ? ['config.json'] : []), `${workflow.id}.json`].sort(),
+    );
   },
 );

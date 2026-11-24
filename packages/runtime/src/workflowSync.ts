@@ -222,11 +222,15 @@ export class WorkflowSync {
     const path = this.options.configPath;
     if (!path) return names;
     const folder = resolve(this.folder);
-    const realFolder = realPath(folder);
+    const identity = this.folderIdentity();
     for (const candidate of [path, realPath(path)]) {
       const parent = dirname(candidate);
-      if (parent === folder || realPath(parent) === realFolder)
-        names.add(basename(candidate));
+      if (
+        parent === folder ||
+        (identity && this.folderIdentity(parent) === identity)
+      )
+        // A case variant can address the reserved path even when the file is absent.
+        names.add(basename(candidate).toLowerCase());
     }
     return names;
   }
@@ -262,9 +266,9 @@ export class WorkflowSync {
     return this.folderIdentity() !== undefined;
   }
 
-  private folderIdentity() {
+  private folderIdentity(folder = this.folder) {
     try {
-      const stats = statSync(this.folder);
+      const stats = statSync(folder);
       return stats.isDirectory() ? `${stats.dev}:${stats.ino}` : undefined;
     } catch {
       return undefined;
@@ -339,7 +343,7 @@ export class WorkflowSync {
       if (
         !file.endsWith('.json') ||
         file.startsWith('.') ||
-        configFiles.has(file)
+        configFiles.has(file.toLowerCase())
       )
         continue;
       try {
@@ -552,7 +556,7 @@ export class WorkflowSync {
       });
       return false;
     };
-    if (this.configFiles().has(file))
+    if (this.configFiles().has(file.toLowerCase()))
       return skip(
         'The operator config file is reserved. Choose a different workflow sync folder.',
       );

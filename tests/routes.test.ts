@@ -1149,10 +1149,10 @@ it('shows a static diagnostics loading state and allows retry after failure', as
   const run = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
     (button) => button.textContent === 'Run checks',
   )!;
-  expect(run.disabled).toBe(true);
+  expect(run.getAttribute('aria-disabled')).toBe('true');
   await act(async () => reject(new Error('Diagnostics unavailable')));
   expect(container.textContent).toContain('Diagnostics unavailable');
-  expect(run.disabled).toBe(false);
+  expect(run.getAttribute('aria-disabled')).toBe('false');
   await click('Run checks');
   expect(container.textContent).not.toContain('Diagnostics unavailable');
   expect(container.textContent).toContain('Storage check');

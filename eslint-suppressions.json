@@ -505,9 +505,6 @@
   "packages/server/src/start.ts": {
     "@typescript-eslint/no-misused-promises": {
       "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
     }
   },
   "packages/server/src/starters.ts": {

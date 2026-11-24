@@ -123,6 +123,7 @@ it('renders startup rows while a refresh is pending and after retry', async () =
   const button = [...container.querySelectorAll('button')].find(
     (item) => item.textContent === 'Run checks',
   )!;
+  const live = container.querySelector<HTMLInputElement>('[role=switch]')!;
   button.focus();
   let fail!: (error: Error) => void;
   doctor.mockImplementationOnce(
@@ -132,13 +133,28 @@ it('renders startup rows while a refresh is pending and after retry', async () =
       }),
   );
   await act(() => Promise.resolve().then(() => button.click()));
-  expect(button.getAttribute('aria-disabled')).toBe('true');
+  for (const control of [button, live]) {
+    expect(control.getAttribute('aria-disabled')).toBe('true');
+    expect(control.hasAttribute('data-disabled')).toBe(true);
+  }
+  await act(() =>
+    Promise.resolve().then(() => {
+      button.click();
+      live.click();
+    }),
+  );
+  expect(live.checked).toBe(false);
+  expect(doctor).toHaveBeenCalledTimes(2);
   expect(document.activeElement).toBe(button);
   expect(container.textContent).toContain(checks[0].message);
   await act(() => Promise.resolve().then(() => fail(new Error('Read failed'))));
   expect(container.textContent).toContain(
     'Showing the last successful report.',
   );
+  for (const control of [button, live]) {
+    expect(control.getAttribute('aria-disabled')).toBe('false');
+    expect(control.hasAttribute('data-disabled')).toBe(false);
+  }
   doctor.mockResolvedValueOnce(result);
   await act(() => Promise.resolve().then(() => button.click()));
   expect(container.textContent).not.toContain(
