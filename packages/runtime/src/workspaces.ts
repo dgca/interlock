@@ -140,8 +140,8 @@ export class ManagedWorkspaces {
   get(id: string) {
     return this.store.get<ManagedWorkspace>(collection, id);
   }
-  /** The checkout a run works in, or undefined when no workspace applies. */
-  path(run: Run, definition?: WorkflowDefinition) {
+  /** The workspace a run works in, or undefined when none applies. */
+  current(run: Run, definition?: WorkflowDefinition) {
     const id = this.ownerId(run, definition);
     if (!id) return undefined;
     const workspace = this.get(id);
@@ -149,7 +149,11 @@ export class ManagedWorkspaces {
       throw new InterlockError(
         `The run's workspace is ${workspace?.state ?? 'missing'}; no work runs outside it`,
       );
-    return workspace.path;
+    return workspace;
+  }
+  /** The checkout a run works in, or undefined when no workspace applies. */
+  path(run: Run, definition?: WorkflowDefinition) {
+    return this.current(run, definition)?.path;
   }
   /**
    * Called before a run takes a step. Undefined lets it proceed, false waits

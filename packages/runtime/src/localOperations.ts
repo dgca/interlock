@@ -205,10 +205,11 @@ export class LocalOperations {
       );
       const definition = this.definition(run);
       // Node cwd, then the run's workspace, then workflow cwd.
-      const workspace =
+      const managed =
         operation.cwd === undefined
-          ? this.workspaces.path(run, definition)
+          ? this.workspaces.current(run, definition)
           : undefined;
+      const workspace = managed?.path;
       const cwdBinding =
         operation.cwd ?? (workspace ? undefined : definition.cwd);
       let effectiveCwd = environment?.cwd ?? workspace ?? this.cwd;
@@ -226,6 +227,12 @@ export class LocalOperations {
         effectiveCwd = result.resolvedCwd!;
       }
       execution.resolvedCwd = effectiveCwd;
+      const context = {
+        ...this.scriptContextEnvironment(run, execution),
+        // Set only when the Script runs in the run's managed worktree.
+        INTERLOCK_WORKSPACE_BRANCH:
+          managed && effectiveCwd === managed.path ? managed.branch : undefined,
+      };
       if (
         'executionMode' in operation &&
         operation.executionMode === 'background'
@@ -244,7 +251,7 @@ export class LocalOperations {
             operation.language,
             {
               ...inherited,
-              ...this.scriptContextEnvironment(run, execution),
+              ...context,
               // Progress snapshots redact only saved Secrets: no API token here.
               INTERLOCK_URL: server.url,
               INTERLOCK_API_TOKEN: undefined,
@@ -300,7 +307,7 @@ export class LocalOperations {
       try {
         output = await launch({
           ...inherited,
-          ...this.scriptContextEnvironment(run, execution),
+          ...context,
           INTERLOCK_URL: server.url,
           INTERLOCK_API_TOKEN: server.apiToken,
           INTERLOCK_EXECUTION_PROVENANCE_FILE: provenanceFile,
