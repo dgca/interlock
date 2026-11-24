@@ -213,6 +213,10 @@ export function loadOperatorConfig(
     requireToken: {
       ...requireToken,
       value: requireToken.value || forced,
+      // The listener, not the configured value, is why the token is required.
+      ...(forced && !requireToken.value
+        ? { source: 'non-loopback listener' }
+        : {}),
       forced,
     },
     allowedRoots: {

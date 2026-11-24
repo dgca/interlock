@@ -42,7 +42,11 @@ export function operatorConfigChecks(
     },
     {
       name: 'allowedRoots',
-      message: `${roots} (${allowedRoots.source})`,
+      message: `${roots} (${allowedRoots.source})${
+        allowedRoots.controlledByConfig
+          ? '. Saved shared roots are ignored while the config file declares allowedRoots.'
+          : ''
+      }`,
       details: { ...allowedRoots, value: [...allowedRoots.value] },
     },
     {

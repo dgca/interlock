@@ -183,7 +183,13 @@ export class ExecutorConfiguration {
         );
       const controlled =
         this.engine.startupSettings?.allowedRoots.controlledByConfig;
-      if (controlled && q.allowedRoots !== undefined)
+      // A client may send back the list it read; only a real change is refused.
+      const sent = q.allowedRoots;
+      const startupRoots = this.engine.startupSettings?.allowedRoots.value;
+      const unchanged =
+        sent?.length === startupRoots?.length &&
+        sent?.every((root, index) => root === startupRoots?.[index]);
+      if (controlled && sent !== undefined && !unchanged)
         throw new InterlockError(
           'Shared allowed roots are controlled by the operator config file. Change the startup configuration and restart Interlock.',
         );
@@ -195,7 +201,9 @@ export class ExecutorConfiguration {
         ? this.storedSettings()?.allowedRoots
         : current.allowedRoots;
       const roots =
-        q.allowedRoots !== undefined ? q.allowedRoots : currentRoots;
+        q.allowedRoots !== undefined && !controlled
+          ? q.allowedRoots
+          : currentRoots;
       const currentPrefixes = current.providerPrefixes;
       const providerPrefixes =
         q.providerPrefixes !== undefined ? q.providerPrefixes : currentPrefixes;

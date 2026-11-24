@@ -227,6 +227,8 @@ it.each([
           ...process.env,
           INTERLOCK_CONFIG: config,
           INTERLOCK_LOG_LEVEL: 'info',
+          // Never the default port, where a real engine may be running.
+          INTERLOCK_PORT: '45931',
         },
         timeout: 8000,
       },
@@ -251,7 +253,11 @@ it('rejects a relative explicit path before opening an existing database', async
     process.execPath,
     ['--import', 'tsx', 'packages/cli/src/bin.ts', '--db', database],
     {
-      env: { ...process.env, INTERLOCK_CONFIG: 'relative.json' },
+      env: {
+        ...process.env,
+        INTERLOCK_CONFIG: 'relative.json',
+        INTERLOCK_PORT: '45931',
+      },
       timeout: 8000,
     },
   );
@@ -385,7 +391,7 @@ it('forces authentication off loopback and reports the reason', async () => {
   const auth = report.checks.find((row) => row.name === 'requireToken');
   expect(auth?.details).toEqual({
     value: true,
-    source: 'config file',
+    source: 'non-loopback listener',
     forced: true,
   });
   expect(auth?.message).toContain('Required on non-loopback');
@@ -434,8 +440,18 @@ it('keeps the startup snapshot and restores saved shared roots after restart wit
   expect(() => save({ allowedRoots: savedRoots })).toThrow(
     'controlled by the operator config',
   );
-  expect(save({})).toMatchObject({
+  // Sending back the list that was read is not a change.
+  expect(save({ allowedRoots: fileRoots })).toMatchObject({
     revision: 2,
+    allowedRoots: fileRoots,
+  });
+  expect(
+    second.engine.executors.saveSettings({
+      expectedRevision: 2,
+      concurrency: 4,
+    }),
+  ).toMatchObject({
+    revision: 3,
     concurrency: 4,
     allowedRoots: fileRoots,
   });
@@ -449,7 +465,7 @@ it('keeps the startup snapshot and restores saved shared roots after restart wit
 
   const third = await start();
   expect(third.engine.executors.settings()).toMatchObject({
-    revision: 2,
+    revision: 3,
     concurrency: 4,
     allowedRoots: savedRoots,
   });
