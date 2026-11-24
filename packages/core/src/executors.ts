@@ -104,7 +104,7 @@ export const executorSettingsSchema = z
       .array(allowedRootSchema)
       .optional()
       .describe(
-        'Server-wide allowed root directories for dynamic cwd binding.',
+        'Shared allowed roots for dynamic cwd binding. A startup config can control this list.',
       ),
     providerPrefixes: z
       .record(z.string().trim().min(1), z.string().trim().min(1))
@@ -126,7 +126,7 @@ export const executorSettingsUpdateSchema = z
       .array(allowedRootSchema)
       .optional()
       .describe(
-        'Server-wide allowed root directories for dynamic cwd binding.',
+        'Shared allowed roots for dynamic cwd binding. Omit when the operator config declares allowedRoots.',
       ),
     providerPrefixes: z
       .record(z.string().trim().min(1), z.string().trim().min(1))

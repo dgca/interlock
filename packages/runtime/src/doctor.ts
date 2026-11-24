@@ -23,6 +23,7 @@ import {
   uncertainOperationCollection,
 } from './quiescence.js';
 import { privateFetchCheck } from './fetch.js';
+import { operatorConfigChecks } from './startupSettings.js';
 
 function storagePathChecks(engine: Engine): DiagnosticCheck[] {
   const { paths, protectedValues } = engine.store;
@@ -111,7 +112,10 @@ export async function runDoctor(
   engine: Engine,
   options: DoctorOptions = {},
 ): Promise<DoctorReport> {
-  const checks = storagePathChecks(engine);
+  const checks = [
+    ...storagePathChecks(engine),
+    ...operatorConfigChecks(engine.startupSettings),
+  ];
 
   // ==========================================
   // 1. System & Storage Checks

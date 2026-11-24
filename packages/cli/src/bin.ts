@@ -7,7 +7,6 @@ import { fileURLToPath } from 'node:url';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
   isDatabaseLocked,
-  prepareDataDirectory,
   probeHealthyServer,
   startServer,
 } from '@interlock/server/start';
@@ -68,9 +67,11 @@ Run 'interlock commands' for argument syntax, or 'interlock <command> --help' fo
 
 Environment: INTERLOCK_PORT, INTERLOCK_DATA_DIR, INTERLOCK_DB, INTERLOCK_WORKDIR, INTERLOCK_URL,
              INTERLOCK_SECRET_KEY_FILE, INTERLOCK_MCP_PROFILE,
-             INTERLOCK_REQUIRE_TOKEN, INTERLOCK_LOG_LEVEL, INTERLOCK_SYNC_DIR,
+             INTERLOCK_CONFIG, INTERLOCK_REQUIRE_TOKEN, INTERLOCK_ALLOWED_ROOTS,
+             INTERLOCK_LOG_LEVEL, INTERLOCK_SYNC_DIR,
              INTERLOCK_OTEL_TRACES
 INTERLOCK_SYNC_DIR=PATH syncs workflow drafts with bundle files in PATH.
+INTERLOCK_CONFIG=PATH selects an absolute path to the engine's operator JSON file.
 INTERLOCK_OTEL_TRACES=1 exports run traces to OTEL_EXPORTER_OTLP_ENDPOINT (OTLP/HTTP JSON).
 INTERLOCK_DATA_DIR=PATH stores engine state under an absolute directory. --db and INTERLOCK_DB override the database path. INTERLOCK_SECRET_KEY_FILE overrides the encryption key path.
 Variable encryption keys are held separately from the database. Back up keys separately.
@@ -210,7 +211,6 @@ Commands and the mcp bridge read the token from the api-token file in the key fo
     resolveDatabasePath: true,
   });
   const database = paths.database.path;
-  prepareDataDirectory(paths);
   const healthy = await probeHealthyServer(engineUrl);
   const databaseInUse = healthy && isDatabaseLocked(database);
   if (databaseInUse || (healthy && !values.db && !paths.dataDir)) {

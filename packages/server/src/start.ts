@@ -1,8 +1,7 @@
 import { serve } from '@hono/node-server';
-import { resolve } from 'node:path';
 import { Store } from '@interlock/storage';
 import { Engine } from '@interlock/runtime';
-import { JsonLog, parseLogLevel } from '@interlock/runtime/log';
+import { JsonLog } from '@interlock/runtime/log';
 import { createApp, serveUi } from './app.js';
 import { isLoopback, parseRequireToken } from './apiToken.js';
 import { ensureApiToken } from '@interlock/core/apiToken';
@@ -15,7 +14,6 @@ import { prepareDataDirectory } from './dataDirectory.js';
 import type { ConnectionConfig } from './connection.js';
 import { checkPort, lockDatabase, startupError } from './startup.js';
 export { isDatabaseLocked, probeHealthyServer } from './startup.js';
-export { prepareDataDirectory } from './dataDirectory.js';
 import { nativeAdapters } from '@interlock/runtime/executors/native';
 import {
   startWorkflowSync,
@@ -23,39 +21,19 @@ import {
 } from '@interlock/runtime/workflowSync';
 import { traceExportConfig } from '@interlock/runtime/traceExportConfig';
 import type { TraceExport } from '@interlock/runtime/traceExport';
-
-export function parseAllowedRoots(value?: string): string[] | undefined {
-  if (!value || !value.trim()) return undefined;
-  const trimmed = value.trim();
-  if (trimmed.startsWith('[')) {
-    try {
-      const parsed = JSON.parse(trimmed);
-      if (Array.isArray(parsed))
-        return parsed
-          .map(String)
-          .map((s) => s.trim())
-          .filter(Boolean);
-    } catch {
-      // Fall through to delimiter splitting
-    }
-  }
-  return trimmed
-    .split(/[,:]/)
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
+import { loadOperatorConfig, type StartupOptions } from './operatorConfig.js';
 
 /**
- * Adds the per-install token. It is required when INTERLOCK_REQUIRE_TOKEN is set
- * or the server listens beyond loopback; a token that cannot be created only
- * fails startup when required.
+ * Adds the per-install token. Startup requires a usable token when startup
+ * settings enable authentication or the server listens beyond loopback.
  */
 export function withApiToken(
   connection: ConnectionConfig,
   hostname = '127.0.0.1',
   paths = resolveDataPaths(),
+  configuredRequirement = parseRequireToken(),
 ): ConnectionConfig {
-  const requireToken = parseRequireToken() || !isLoopback(hostname);
+  const requireToken = configuredRequirement || !isLoopback(hostname);
   const env = paths.tokenEnv;
   const config = Object.keys(env).length
     ? { ...connection, env: { ...connection.env, ...env } }
@@ -70,21 +48,20 @@ export function withApiToken(
   }
 }
 
-export async function startServer(options: {
-  database?: string;
-  defaultDatabase?: ResolvedPath;
-  paths?: DataPaths;
-  workdir: string;
-  ui: string;
-  port: number;
-  connection: ConnectionConfig;
-  allowedRoots?: string[];
-  /** Folder of workflow bundles to sync with. Off when unset. */
-  syncDir?: string;
-  /** Listen address. Not user-configurable yet; a non-loopback address requires the API token. */
-  hostname?: string;
-  handleSignals?: boolean;
-}) {
+export async function startServer(
+  options: StartupOptions & {
+    database?: string;
+    defaultDatabase?: ResolvedPath;
+    paths?: DataPaths;
+    workdir: string;
+    ui: string;
+    port: number;
+    connection: ConnectionConfig;
+    /** Listen address. Not user-configurable yet; a non-loopback address requires the API token. */
+    hostname?: string;
+    handleSignals?: boolean;
+  },
+) {
   const paths =
     options.paths ??
     resolveDataPaths({
@@ -95,10 +72,16 @@ export async function startServer(options: {
       defaultDatabase: options.defaultDatabase,
     });
   const database = paths.database.path;
-  prepareDataDirectory(paths);
   const hostname = options.hostname ?? '127.0.0.1';
+  const startupSettings = loadOperatorConfig(paths, options, hostname);
+  prepareDataDirectory(paths);
   await checkPort(options.port);
-  const connection = withApiToken(options.connection, hostname, paths);
+  const connection = withApiToken(
+    options.connection,
+    hostname,
+    paths,
+    startupSettings.requireToken.value,
+  );
   const unlock = lockDatabase(database);
   let store: Store;
   try {
@@ -115,11 +98,8 @@ export async function startServer(options: {
   let sync: WorkflowSync | undefined;
   let traces: TraceExport | undefined;
   try {
-    const allowedRoots =
-      options.allowedRoots ??
-      parseAllowedRoots(process.env.INTERLOCK_ALLOWED_ROOTS);
     engine = new Engine(store, options.workdir, {
-      ...(allowedRoots ? { allowedRoots } : {}),
+      startupSettings,
     });
     engine.executors.mcpUrl = new URL(
       '/mcp/execute',
@@ -127,14 +107,11 @@ export async function startServer(options: {
     ).href;
     if (connection.requireToken) engine.executors.apiToken = connection.token;
     engine.executors.errors.attach(
-      new JsonLog(
-        paths.logRoot,
-        parseLogLevel(process.env.INTERLOCK_LOG_LEVEL),
-      ),
+      new JsonLog(paths.logRoot, startupSettings.logLevel.value),
     );
     engine.executors.start(nativeAdapters);
-    const syncDir = options.syncDir ?? process.env.INTERLOCK_SYNC_DIR?.trim();
-    if (syncDir) sync = startWorkflowSync(engine, resolve(syncDir));
+    const syncDir = startupSettings.syncDir.value;
+    if (syncDir) sync = startWorkflowSync(engine, syncDir);
     // The exporter module loads only when INTERLOCK_OTEL_TRACES is on.
     const traceConfig = traceExportConfig();
     if (traceConfig)

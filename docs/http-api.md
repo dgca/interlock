@@ -15,7 +15,7 @@ The API is local, like the rest of Interlock:
 
 - It accepts requests only for `127.0.0.1`, `localhost` or `[::1]`, and rejects untrusted browser origins.
 - Request bodies are limited to 2 MiB.
-- When `INTERLOCK_REQUIRE_TOKEN=1` is set, every `/api` request needs the [API token](https://github.com/dgca/interlock/blob/main/docs/connect-harness.md#api-token). Without it the server answers `401`. Read the file reported by `interlock doctor` or use the matching path below.
+- When the engine requires token authentication, every `/api` request needs the [API token](https://github.com/dgca/interlock/blob/main/docs/connect-harness.md#api-token). Without it the server answers `401`. Read the file reported by `interlock doctor` or use the matching path below.
 
 ```sh
 TOKEN=$(cat ~/Library/Application\ Support/Interlock/keys/api-token)   # macOS
@@ -176,7 +176,7 @@ export async function onIssueEvent(event, deliveryId) {
     headers: {
       'Content-Type': 'application/json',
       'Idempotency-Key': `github:${deliveryId}`,
-      // Authorization: `Bearer ${token}` when INTERLOCK_REQUIRE_TOKEN=1
+      // Authorization: `Bearer ${token}` when the engine requires a token
     },
     body: JSON.stringify({
       workflowId: 'dba7ea93-3550-4a65-8b8e-29f938e34bbd',
@@ -312,7 +312,7 @@ Errors are JSON with an `error` message and, from `/api` routes, a `code`. The `
 | Status | Code                | When                                                                                                                   |
 | ------ | ------------------- | ---------------------------------------------------------------------------------------------------------------------- |
 | 400    | `invalid_request`   | The body is not JSON, has unknown fields, the input does not match the contract, or the header and `requestId` differ. |
-| 401    | none                | `INTERLOCK_REQUIRE_TOKEN=1` is set and the token is missing or wrong.                                                  |
+| 401    | none                | The engine requires a token and it is missing or wrong.                                                                |
 | 403    | none                | The request used another host name or an untrusted browser origin.                                                     |
 | 404    | `not_found`         | The workflow, run or route does not exist.                                                                             |
 | 409    | `conflict`          | A start key was reused with different arguments or refers to deleted history.                                          |

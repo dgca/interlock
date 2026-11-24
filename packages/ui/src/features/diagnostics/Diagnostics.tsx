@@ -97,11 +97,13 @@ export function Diagnostics() {
             label="Live probe"
             checked={liveProbe}
             onChange={(e) => {
+              if (loading) return;
               const live = e.currentTarget.checked;
               setLiveProbe(live);
               void fetchDiagnostics(live);
             }}
-            disabled={loading}
+            aria-disabled={loading}
+            data-disabled={loading || undefined}
             size="xs"
             aria-label="Include live harness model verification"
           />
@@ -110,8 +112,11 @@ export function Diagnostics() {
           <Button
             leftSection={<RefreshCw size={14} />}
             variant="secondary"
-            onClick={() => void fetchDiagnostics(liveProbe)}
-            disabled={loading}
+            onClick={() => {
+              if (!loading) void fetchDiagnostics(liveProbe);
+            }}
+            aria-disabled={loading}
+            data-disabled={loading || undefined}
           >
             Run checks
           </Button>
@@ -126,6 +131,9 @@ export function Diagnostics() {
             mb="lg"
           >
             {error}
+            {report && (
+              <Text size="sm">Showing the last successful report.</Text>
+            )}
           </Alert>
         )}
 

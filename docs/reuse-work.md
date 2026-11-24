@@ -122,7 +122,7 @@ Hooks of a [managed Git workspace](https://github.com/dgca/interlock/blob/main/d
 Sync keeps workflow files in a folder of your repository, so you can review workflow changes in pull requests. Publishing writes a file; a changed file, for example after `git pull`, updates the draft.
 
 1. Pick or create a folder in your repository, for example `workflows`. Interlock does not create it.
-2. Start Interlock with `INTERLOCK_SYNC_DIR` set to that folder:
+2. Set `syncDir` in the [operator config](cli.md#operator-config-file) to the folder's absolute path, or start Interlock with `INTERLOCK_SYNC_DIR` set to the folder:
 
    ```sh
    INTERLOCK_SYNC_DIR=./workflows interlock
@@ -131,7 +131,7 @@ Sync keeps workflow files in a folder of your repository, so you can review work
 3. Publish a workflow. Interlock writes it to `<workflow ID>.json`.
 4. Commit the file and open a pull request as usual.
 
-Sync is off when the variable is unset.
+Sync is off when neither setting selects a folder.
 
 ### What publishing writes
 
@@ -140,6 +140,7 @@ Sync is off when the variable is unset.
 - A file holds the draft and what it references: names of required variables (never values, so Secrets stay local), saved prompts and Agent presets.
 - Versions, triggers and run history stay local.
 - Publishing replaces a file only when it holds exactly what Interlock last wrote or loaded. Any other edit to the file is kept and reported.
+- The sync folder cannot be the folder that holds the [operator config file](cli.md#operator-config-file). Interlock refuses to start when the file is found there.
 
 ### What a changed file does
 

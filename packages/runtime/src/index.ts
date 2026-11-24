@@ -6,10 +6,12 @@ import {
   selectsPreset,
 } from '@interlock/core';
 import { runDoctor } from './doctor.js';
+import { configuredAllowedRoots } from './startupSettings.js';
 import { generateWorkflowReport } from './report.js';
 import type {
   DoctorOptions,
   DoctorReport,
+  StartupSettings,
   ReportFilter,
   WorkflowReport,
 } from '@interlock/core';
@@ -185,6 +187,7 @@ export class Engine {
       trialRoot?: string;
       workspaceRoot?: string;
       allowedRoots?: string[];
+      startupSettings?: StartupSettings;
       clock?: { now: () => number };
       substituteWorkflow?: (
         node: Extract<WorkflowNode, { kind: 'workflow' }>,
@@ -687,15 +690,11 @@ export class Engine {
     run.updatedAt = now();
     this.store.put('runs', run);
   }
+  get startupSettings() {
+    return this.options.startupSettings;
+  }
   getAllowedRoots(): string[] {
-    const serverSettingsRoots = this.store.get<{
-      id: string;
-      allowedRoots?: string[];
-    }>('executorSettings', 'shared')?.allowedRoots;
-    return [
-      ...(this.options.allowedRoots ?? []),
-      ...(serverSettingsRoots ?? []),
-    ];
+    return configuredAllowedRoots(this.store, this.options);
   }
   workflow(id: string) {
     return this.authoring.workflow(id);
