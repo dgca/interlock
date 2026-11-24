@@ -101,7 +101,7 @@ The Script hands delivery to the agent in these cases:
 
 These end with `outcome: "delivery_blocked"` and the reason in `limitations`. Nothing is pushed, and the agent does not take over:
 
-- The branch is the pull request's base branch, the remote's default branch, or, without a run worktree, the branch the run started on.
+- The branch is the pull request's base branch, the remote's default branch, or, without a worktree of its own or its caller's, the branch the run started on.
 - The remote's URL or push URL changed after the run started. Setup records them before any agent runs.
 - The checkout moved or changed while the description was written.
 - `gh pr list` or `gh pr create` fails, or times out, for another reason.

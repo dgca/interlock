@@ -361,6 +361,7 @@ it('preserves an existing workflow variable binding that uses a context name', a
 it('uses the original environment when spawn rejects the added context', async () => {
   vi.stubEnv('INTERLOCK_RUN_ID', 'inherited-run');
   vi.stubEnv('INTERLOCK_EXECUTION_ID', undefined);
+  vi.stubEnv('INTERLOCK_WORKSPACE_BRANCH', 'inherited-branch');
   const launch = vi
     .spyOn(scripts, 'executeScript')
     .mockRejectedValueOnce(
@@ -375,6 +376,8 @@ it('uses the original environment when spawn rejects the added context', async (
     expect(launch.mock.calls[0][6]?.INTERLOCK_RUN_ID).toBe(id);
     expect(launch.mock.calls[1][6]?.INTERLOCK_RUN_ID).toBe('inherited-run');
     expect(launch.mock.calls[1][6]?.INTERLOCK_EXECUTION_ID).toBeUndefined();
+    // The retry keeps the engine's own environment, except the worktree branch.
+    expect(launch.mock.calls[1][6]?.INTERLOCK_WORKSPACE_BRANCH).toBeUndefined();
   } finally {
     launch.mockRestore();
   }

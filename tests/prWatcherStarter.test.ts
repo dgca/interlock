@@ -185,7 +185,7 @@ it('finds, watches, repairs and pushes a pull request with real Scripts and a fa
   git(repo, 'commit', '-qam', 'factory change');
   git(repo, 'push', '-q', 'origin', 'main', 'interlock/run-1');
   const prHead = git(repo, 'rev-parse', 'HEAD');
-  // The watcher's own managed worktree: its branch carries its run ID.
+  // The watcher's own managed worktree, on the branch Interlock made for it.
   git(repo, 'worktree', 'add', '-q', '-b', 'interlock/watch-9', tree, 'main');
 
   mkdirSync(fake);
@@ -215,7 +215,9 @@ it('finds, watches, repairs and pushes a pull request with real Scripts and a fa
   };
   payload('pr', pr);
   process.env.PATH = `${fake}:${env.PATH}`;
-  process.env.INTERLOCK_ROOT_RUN_ID = 'watch-9';
+  // The root run is another workflow's when the watcher is called as a child.
+  process.env.INTERLOCK_ROOT_RUN_ID = 'caller-run';
+  process.env.INTERLOCK_WORKSPACE_BRANCH = 'interlock/watch-9';
   try {
     // An SDLC run's completed event finds its pull request by branch.
     const setup = await run(

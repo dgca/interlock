@@ -320,6 +320,8 @@ export class LocalOperations {
           )
             return launch({
               ...inherited,
+              // Delivery guards trust this name, so an inherited value never stands in.
+              INTERLOCK_WORKSPACE_BRANCH: context.INTERLOCK_WORKSPACE_BRANCH,
               INTERLOCK_EXECUTION_PROVENANCE_FILE: provenanceFile,
               ...bindings,
             });
