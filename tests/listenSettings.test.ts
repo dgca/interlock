@@ -25,6 +25,7 @@ import { developmentConnection } from '../packages/server/src/connection';
 import { internalEngineUrl, startServer } from '../packages/server/src/start';
 import { checkPort } from '../packages/server/src/startup';
 import { createApp } from '../packages/server/src/app';
+import { canonicalHostHeader } from '../packages/server/src/listenAddress';
 
 const exec = promisify(execFile);
 let root: string;
@@ -100,14 +101,8 @@ function runCli(args: string[], env = process.env) {
   );
 }
 
-it('forces authentication off loopback and reports the reason', async () => {
-  setConfig({ host: '0.0.0.0', requireToken: false });
-  const { engine, url, connection, server: listener } = await start();
-  expect(listener.address()).toMatchObject({ address: '0.0.0.0' });
-  expect(connection.engineUrl).toBe(url);
-  await expect(checkPort(Number(new URL(url).port), '0.0.0.0')).rejects.toThrow(
-    /already in use at 0\.0\.0\.0/,
-  );
+/** Runs a Script that reports its INTERLOCK_URL and whether the engine answers there. */
+async function scriptUrl(engine: Awaited<ReturnType<typeof start>>['engine']) {
   const workflow = engine.create(
     'Check internal URL',
     '',
@@ -134,8 +129,69 @@ it('forces authentication off loopback and reports the reason', async () => {
   const run = engine.start(workflow.id, {}).run;
   await vi.waitFor(() => {
     engine.pump();
-    expect(engine.run(run.id).output).toEqual({ url, ok: true });
+    expect(engine.run(run.id).output).not.toBeUndefined();
   });
+  return engine.run(run.id).output;
+}
+
+it("keeps today's address, checks and URLs when neither setting is supplied", async () => {
+  const { engine, url, connection, server: listener } = await start();
+  expect(listener.address()).toMatchObject({ address: '127.0.0.1' });
+  expect(connection.engineUrl).toBe(url);
+  expect(connection.requireToken).toBe(false);
+  expect(connection.publicUrlConfigured).toBeUndefined();
+  expect(engine.executors.mcpUrl).toBe(`${url}/mcp/execute`);
+  expect(engine.executors.publicMcpUrl).toBeUndefined();
+  expect(await scriptUrl(engine)).toEqual({ url, ok: true });
+  expect(console.log).toHaveBeenCalledWith(`Interlock is running at ${url}`);
+  expect((await fetch(`${url}/api/workflows`)).status).toBe(200);
+  expect(await createClient(url).connection.query()).toMatchObject({
+    engineUrl: url,
+    mcpUrl: `${url}/mcp`,
+  });
+  expect(await postMcp(url, { Origin: url })).toMatchObject({ status: 200 });
+  expect(
+    await postMcp(url, { Origin: 'https://public.example.test' }),
+  ).toMatchObject({ status: 403 });
+  expect(await postMcp(url, { Host: 'public.example.test' })).toMatchObject({
+    status: 403,
+  });
+  const rows = (await engine.doctor()).checks;
+  expect(rows.find(({ name }) => name === 'host')?.details).toEqual({
+    value: '127.0.0.1',
+    source: 'default',
+  });
+  expect(
+    rows.find(({ name }) => name === 'requireToken')?.details,
+  ).toMatchObject({ value: false });
+});
+
+it('refuses a wildcard listener when another process holds the loopback port', async () => {
+  const other = createServer();
+  other.listen(0, '127.0.0.1');
+  await once(other, 'listening');
+  const { port } = other.address() as { port: number };
+  try {
+    // macOS lets the wildcard bind succeed; Linux refuses it outright.
+    await expect(start({ hostname: '0.0.0.0', port })).rejects.toThrow(
+      /Another process is using port|already in use/,
+    );
+    // The failed start released the database lock.
+    await start();
+  } finally {
+    other.close();
+  }
+});
+
+it('forces authentication off loopback and reports the reason', async () => {
+  setConfig({ host: '0.0.0.0', requireToken: false });
+  const { engine, url, connection, server: listener } = await start();
+  expect(listener.address()).toMatchObject({ address: '0.0.0.0' });
+  expect(connection.engineUrl).toBe(url);
+  await expect(checkPort(Number(new URL(url).port), '0.0.0.0')).rejects.toThrow(
+    /already in use at 0\.0\.0\.0/,
+  );
+  expect(await scriptUrl(engine)).toEqual({ url, ok: true });
   const unrelatedHost = await postMcp(url, {
     Host: 'unexpected.example.test',
     Authorization: `Bearer ${connection.token}`,
@@ -266,6 +322,7 @@ it('accepts both origins on a custom port and forces a token for a public hostna
   });
   expect(engine.executors.mcpUrl).toBe(`${url}/mcp/execute`);
   expect(engine.executors.publicMcpUrl).toBe(`${publicUrl}/mcp/execute`);
+  expect(await scriptUrl(engine)).toEqual({ url, ok: true });
   const capture = join(root, 'launch.json');
   const launcher = join(root, 'launcher.mjs');
   writeFileSync(
@@ -317,14 +374,16 @@ it('accepts both origins on a custom port and forces a token for a public hostna
 });
 
 it.each([
-  ['0.0.0.0', '127.0.0.1'],
-  ['::', '[::1]'],
-  ['192.0.2.1', '192.0.2.1'],
-  ['2001:0db8::1', '[2001:db8::1]'],
-  ['localhost', 'localhost'],
+  ['0.0.0.0', '127.0.0.1', false],
+  ['::', '[::1]', false],
+  ['::ffff:0.0.0.0', '127.0.0.1', false],
+  ['0:0:0:0:0:ffff:0:0', '127.0.0.1', false],
+  ['192.0.2.1', '192.0.2.1', true],
+  ['2001:0db8::1', '[2001:db8::1]', true],
+  ['localhost', 'localhost', true],
 ])(
   'uses the internal URL and checks specific hosts for %s',
-  async (host, address) => {
+  async (host, address, specific) => {
     const internalOrigin = `http://${address}:5000`;
     expect(internalEngineUrl(host, 5000)).toBe(internalOrigin);
     const { engine } = await start();
@@ -334,6 +393,15 @@ it.each([
       publicUrl: null,
     });
     expect((await app.request(`${internalOrigin}/health`)).status).toBe(200);
+    // A wildcard listener adds no Host name of its own.
+    const own = host.includes(':') ? `[${host}]:5000` : `${host}:5000`;
+    expect(
+      (
+        await app.request(`${internalOrigin}/health`, {
+          headers: { Host: canonicalHostHeader(own) },
+        })
+      ).status,
+    ).toBe(specific ? 200 : 403);
     expect(
       (
         await app.request(`${internalOrigin}/health`, {
@@ -344,45 +412,59 @@ it.each([
   },
 );
 
-it.each(['IPv4', 'IPv6'] as const)(
-  'binds a specific %s interface when available',
-  async (family) => {
-    const host = Object.values(networkInterfaces())
-      .flat()
-      .find(
-        (entry) =>
-          entry?.family === family &&
-          (family === 'IPv4' ? !entry.internal : entry.internal),
-      )?.address;
-    if (!host) return;
-    setConfig({ host });
-    let handle;
-    try {
-      handle = await start();
-    } catch (error) {
-      if (
-        error instanceof Error &&
-        ['EACCES', 'EADDRNOTAVAIL', 'EAFNOSUPPORT', 'EPERM'].includes(
-          (error.cause as NodeJS.ErrnoException | undefined)?.code ?? '',
-        )
-      )
-        return;
-      throw error;
-    }
-    expect(handle.server.address()).toMatchObject({ address: host });
-    const cliUrl = handle.connection.engineUrl;
-    expect((await fetch(`${cliUrl}/health`)).ok).toBe(true);
-    const result = await runCli(['doctor', '--json'], {
-      ...process.env,
-      INTERLOCK_URL: cliUrl,
-    });
-    const report = doctorReportSchema.parse(JSON.parse(result.stdout));
-    expect(report.checks.find(({ name }) => name === 'host')?.details).toEqual({
-      value: host,
-      source: 'config file',
-    });
-  },
+const interfaces = (['IPv4', 'IPv6'] as const).map(
+  (family) =>
+    [
+      family,
+      Object.values(networkInterfaces())
+        .flat()
+        .find(
+          (entry) =>
+            entry?.family === family &&
+            // IPv6 uses the loopback address: other IPv6 addresses need a zone or may not route.
+            (family === 'IPv4' ? !entry.internal : entry.internal),
+        )?.address,
+    ] as const,
 );
+
+for (const [family, host] of interfaces)
+  // Reported as skipped, not passed, on a machine without the interface.
+  it.skipIf(!host)(
+    `binds a specific ${family} interface when available`,
+    async () => {
+      setConfig({ host });
+      let handle;
+      try {
+        handle = await start();
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          ['EACCES', 'EADDRNOTAVAIL', 'EAFNOSUPPORT', 'EPERM'].includes(
+            (error.cause as NodeJS.ErrnoException | undefined)?.code ?? '',
+          )
+        )
+          return;
+        throw error;
+      }
+      expect(handle.server.address()).toMatchObject({ address: host });
+      const cliUrl = handle.connection.engineUrl;
+      expect((await fetch(`${cliUrl}/health`)).ok).toBe(true);
+      expect((await fetch(`${cliUrl}/api/workflows`)).status).toBe(
+        family === 'IPv4' ? 401 : 200,
+      );
+      const result = await runCli(['doctor', '--json'], {
+        ...process.env,
+        INTERLOCK_URL: cliUrl,
+      });
+      const report = doctorReportSchema.parse(JSON.parse(result.stdout));
+      expect(
+        report.checks.find(({ name }) => name === 'host')?.details,
+      ).toEqual({
+        value: host,
+        source: 'config file',
+      });
+    },
+  );
 
 it('pins the desktop listener while applying the configured public URL', async () => {
   const publicUrl = 'https://desktop.example.test';

@@ -17,6 +17,7 @@ import { prepareDataDirectory } from './dataDirectory.js';
 import type { ConnectionConfig } from './connection.js';
 import {
   checkPort,
+  confirmInternalAddress,
   listenError,
   lockDatabase,
   startupError,
@@ -36,6 +37,8 @@ import {
   canonicalHostHeader,
   defaultHost,
   internalEngineUrl,
+  isWildcardHost,
+  urlHostname,
 } from './listenAddress.js';
 
 /**
@@ -139,6 +142,8 @@ export async function startServer(
     if (!address || typeof address === 'string')
       throw new Error('Missing Interlock listener address.');
     internalUrl = internalEngineUrl(hostname, address.port);
+    if (isWildcardHost(urlHostname(hostname)))
+      await confirmInternalAddress(server, internalUrl);
     connection.engineUrl = publicUrl ?? internalUrl;
     if (publicUrl) connection.publicUrlConfigured = true;
     if (

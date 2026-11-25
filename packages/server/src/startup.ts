@@ -1,4 +1,4 @@
-import { createServer } from 'node:net';
+import { connect, createServer, type Server, type Socket } from 'node:net';
 import { existsSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -86,6 +86,59 @@ export function checkPort(port: number, host = defaultHost): Promise<void> {
     );
     listener.listen(port, host, () =>
       listener.close((error) => (error ? reject(error) : resolve())),
+    );
+  });
+}
+
+/**
+ * A wildcard bind can succeed while another process holds the same port on
+ * the loopback address (macOS and BSD). Local clients, which carry the API
+ * token, would then reach that process. Resolves once a connection to the
+ * internal URL arrives at this server.
+ */
+export function confirmInternalAddress(
+  server: Server,
+  internalUrl: string,
+): Promise<void> {
+  const url = new URL(internalUrl);
+  const host = url.hostname.replace(/^\[|\]$/g, '');
+  return new Promise((resolve, reject) => {
+    const arrived = new Set<number>();
+    const client = connect(Number(url.port), host);
+    const finish = (error?: Error) => {
+      clearTimeout(timer);
+      server.off('connection', onConnection);
+      client.destroy();
+      if (error) reject(error);
+      else resolve();
+    };
+    const check = () => {
+      if (client.localPort && arrived.has(client.localPort)) finish();
+    };
+    const onConnection = (socket: Socket) => {
+      if (socket.remotePort) arrived.add(socket.remotePort);
+      check();
+    };
+    const timer = setTimeout(
+      () =>
+        finish(
+          new Error(
+            `Another process is using port ${url.port} at ${host}, so local clients would reach it instead of Interlock. Stop that process or select another --port.`,
+          ),
+        ),
+      1000,
+    );
+    server.on('connection', onConnection);
+    client.once('connect', check);
+    client.once('error', (error) =>
+      finish(
+        new Error(
+          `Cannot reach Interlock at ${internalUrl}. ${error.message}`,
+          {
+            cause: error,
+          },
+        ),
+      ),
     );
   });
 }

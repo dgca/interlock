@@ -44,7 +44,7 @@ Edit the file on the engine host and restart the engine to apply changes. Keep i
 
 Empty or blank values for `host` or `publicUrl` fail validation, including when supplied through `--host` or the selected environment variable. Omit a setting to use its fallback. The desktop app pins its listener to `127.0.0.1` and uses the same precedence for `publicUrl`.
 
-The internal URL uses the listen address and port. It maps `0.0.0.0` to `127.0.0.1` and `::` to `[::1]`. The startup link uses the internal URL, so a wildcard startup link opens on the engine machine. When the engine listens on a specific non-loopback address or a different port, set `INTERLOCK_URL` to its internal URL for CLI commands and the stdio bridge. HTTP MCP configuration uses `publicUrl` when set and the internal URL otherwise. Hosted use remains unsupported pending sign-in and the HTTPS check.
+The internal URL uses the listen address and port. It maps `0.0.0.0` to `127.0.0.1` and `::` to `[::1]`. With a wildcard address, startup fails if another process holds the same port on that loopback address, because local clients would reach that process. The startup link uses the internal URL, so a wildcard startup link opens on the engine machine. When the engine listens on a specific non-loopback address or a different port, set `INTERLOCK_URL` to its internal URL for CLI commands and the stdio bridge. HTTP MCP configuration uses `publicUrl` when set and the internal URL otherwise. Hosted use remains unsupported pending sign-in and the HTTPS check.
 
 ## How commands work
 
