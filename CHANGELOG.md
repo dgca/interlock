@@ -1,5 +1,21 @@
 # @type_of/interlock
 
+## 0.3.1
+
+### Patch Changes
+
+- c687117: Reject an empty `allowedRoots` array in the operator config file, and show the shared roots in effect in `doctor`, including saved shared roots.
+- a681433: Fix the SDLC and Pull request watcher starters so they work in their own worktree when another workflow calls them. Scripts that run in a managed worktree now receive `INTERLOCK_WORKSPACE_BRANCH`.
+
+  A library copy keeps its old Script. To update an SDLC copy, open its setup Script, set `dedicatedBranch` to `process.env.INTERLOCK_WORKSPACE_BRANCH === branch`, and publish. Adding the starter again creates a separate copy without your settings.
+
+- 4d60389: Add `INTERLOCK_DATA_DIR` to keep the engine's database, keys, API token, background Script spool, and managed worktrees in one directory. `interlock doctor` reports the effective paths and their sources.
+
+  Startup cleanup no longer removes managed worktrees that the open database has no record of, so two databases that share a folder leave each other's worktrees alone. After you delete or replace a database, remove its old worktrees yourself.
+
+- 76e6db6: Add startup settings for the engine's listen address and advertised HTTP URL. Diagnostics shows both values and their sources. A non-loopback listener or public hostname requires the API token. A wildcard listener refuses to start when another process holds the same port on the loopback address.
+- b236ee3: Read operator settings from an optional JSON config at engine startup. Doctor and Diagnostics show which file the engine used and where each effective setting came from.
+
 ## 0.3.0
 
 ### Minor Changes
