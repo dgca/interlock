@@ -68,6 +68,7 @@ const operations = (e: Engine) =>
 
 it('leases a launch to the credentialed client and accepts its result once', async () => {
   const e = setup();
+  e.executors.mcpUrl = 'http://127.0.0.1:4310/mcp/execute';
   const { credential } = pull(e).rotateCredential({ profileId: 'plugin' });
   const listed = JSON.stringify(await e.executors.listProfiles());
   expect(listed).not.toContain(credential);
@@ -84,6 +85,7 @@ it('leases a launch to the credentialed client and accepts its result once', asy
   expect(leased).toHaveLength(1);
   const [launch] = leased;
   expect(launch.kind).toBe('launch');
+  expect(launch.payload.mcpUrl).toBe(e.executors.mcpUrl);
   expect(launch.payload.runId).toBe(run.id);
   expect(typeof launch.payload.idempotencyKey).toBe('string');
   expect(typeof launch.payload.claimTicket).toBe('string');
@@ -120,6 +122,25 @@ it('leases a launch to the credentialed client and accepts its result once', asy
     claimTicket: launch.payload.claimTicket as string,
   });
   expect(claimed.token).toBeTruthy();
+});
+
+it('advertises the public endpoint in the leased launch payload', async () => {
+  const e = setup();
+  e.executors.mcpUrl = 'http://127.0.0.1:4310/mcp/execute';
+  e.executors.publicMcpUrl = 'https://engine.example.test/mcp/execute';
+  const { credential } = pull(e).rotateCredential({ profileId: 'plugin' });
+  start(e);
+  const { operations: leased } = await pull(e).poll({
+    profileId: 'plugin',
+    credential,
+    clientId: 'plugin-1',
+    waitMs: 5000,
+  });
+  expect(leased).toHaveLength(1);
+  expect(leased[0]).toMatchObject({
+    kind: 'launch',
+    payload: { mcpUrl: e.executors.publicMcpUrl },
+  });
 });
 
 it('keeps work unclaimed while no client polls and allows one active client', async () => {

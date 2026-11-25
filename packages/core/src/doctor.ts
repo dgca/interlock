@@ -42,7 +42,12 @@ interface StartupSetting<T> {
 
 export interface StartupSettings {
   configFile: { path: string; found: boolean };
-  requireToken: StartupSetting<boolean> & { forced: boolean };
+  host: StartupSetting<string>;
+  publicUrl: StartupSetting<string | null>;
+  requireToken: StartupSetting<boolean> & {
+    forced: boolean;
+    forcedBy?: 'non-loopback listener' | 'public URL';
+  };
   allowedRoots: StartupSetting<string[]> & { controlledByConfig: boolean };
   logLevel: StartupSetting<'debug' | 'info' | 'warn' | 'error'>;
   syncDir: StartupSetting<string | null>;

@@ -64,7 +64,7 @@ Next, [connect an agent](https://dgca.github.io/interlock/docs/agents/) or impor
 
 Interlock is a trusted local tool for one person. Workflows run Scripts, Fetch requests and agents with your user account's access, so treat a workflow like code you run.
 
-- The server listens only on `127.0.0.1`. Do not expose its port through a tunnel, proxy, port forward or container mapping.
+- The server listens on `127.0.0.1` by default. The [operator config](https://github.com/dgca/interlock/blob/main/docs/cli.md#operator-config-file) can set the listen address and advertised URL. Hosted use remains unsupported pending sign-in and the HTTPS check.
 - Scripts are not sandboxed. Imported Scripts need one-time approval before their first run.
 - A per-install API token is sent automatically by the UI, CLI and MCP bridge. Require it with `requireToken` in the [operator config](https://github.com/dgca/interlock/blob/main/docs/cli.md#operator-config-file) or `INTERLOCK_REQUIRE_TOKEN=1`.
 

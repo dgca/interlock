@@ -1,7 +1,8 @@
-import { createServer } from 'node:net';
+import { connect, createServer, type Server, type Socket } from 'node:net';
 import { existsSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { defaultHost } from './listenAddress.js';
 
 /**
  * Hold an exclusive SQLite lock on a sidecar file for the server's lifetime.
@@ -64,21 +65,80 @@ export async function probeHealthyServer(
   }
 }
 
-export function checkPort(port: number): Promise<void> {
+export function listenError(
+  error: NodeJS.ErrnoException,
+  host: string,
+  port: number,
+) {
+  return new Error(
+    error.code === 'EADDRINUSE'
+      ? `Port ${port} is already in use at ${host}. Another Interlock instance may be running. Find the process with lsof -nP -iTCP:${port} -sTCP:LISTEN and stop that instance, or select --port with a different --db. If the process is suspended, resume it with kill -CONT <pid> so it can handle a pending termination signal.`
+      : `Cannot listen on ${host} at port ${port}. ${error.message}`,
+    { cause: error },
+  );
+}
+
+export function checkPort(port: number, host = defaultHost): Promise<void> {
   return new Promise((resolve, reject) => {
     const listener = createServer();
     listener.once('error', (error: NodeJS.ErrnoException) =>
-      reject(
+      reject(listenError(error, host, port)),
+    );
+    listener.listen(port, host, () =>
+      listener.close((error) => (error ? reject(error) : resolve())),
+    );
+  });
+}
+
+/**
+ * A wildcard bind can succeed while another process holds the same port on
+ * the loopback address (macOS and BSD). Local clients, which carry the API
+ * token, would then reach that process. Resolves once a connection to the
+ * internal URL arrives at this server.
+ */
+export function confirmInternalAddress(
+  server: Server,
+  internalUrl: string,
+): Promise<void> {
+  const url = new URL(internalUrl);
+  const host = url.hostname.replace(/^\[|\]$/g, '');
+  return new Promise((resolve, reject) => {
+    const arrived = new Set<number>();
+    const client = connect(Number(url.port), host);
+    const finish = (error?: Error) => {
+      clearTimeout(timer);
+      server.off('connection', onConnection);
+      client.destroy();
+      if (error) reject(error);
+      else resolve();
+    };
+    const check = () => {
+      if (client.localPort && arrived.has(client.localPort)) finish();
+    };
+    const onConnection = (socket: Socket) => {
+      if (socket.remotePort) arrived.add(socket.remotePort);
+      check();
+    };
+    const timer = setTimeout(
+      () =>
+        finish(
+          new Error(
+            `Another process is using port ${url.port} at ${host}, so local clients would reach it instead of Interlock. Stop that process or select another --port.`,
+          ),
+        ),
+      1000,
+    );
+    server.on('connection', onConnection);
+    client.once('connect', check);
+    client.once('error', (error) =>
+      finish(
         new Error(
-          error.code === 'EADDRINUSE'
-            ? `Port ${port} is already in use at 127.0.0.1. Another Interlock instance may be running. Find the process with lsof -nP -iTCP:${port} -sTCP:LISTEN and stop that instance, or select --port with a different --db. If the process is suspended, resume it with kill -CONT <pid> so it can handle a pending termination signal.`
-            : error.message,
-          { cause: error },
+          `Cannot reach Interlock at ${internalUrl}. ${error.message}`,
+          {
+            cause: error,
+          },
         ),
       ),
-    );
-    listener.listen(port, '127.0.0.1', () =>
-      listener.close((error) => (error ? reject(error) : resolve())),
     );
   });
 }

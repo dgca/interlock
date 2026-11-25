@@ -13,13 +13,24 @@ import { createHttpApi } from './httpApi.js';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { isWildcardHost, urlHostname } from './listenAddress.js';
 
 const largeQueryPaths = largeQueryProcedures.map(
   (procedure) => `/trpc/${procedure}`,
 );
 
-export function createApp(engine: Engine, connection?: ConnectionConfig) {
+export function createApp(
+  engine: Engine,
+  connection?: ConnectionConfig,
+  listener?: { host: string; internalOrigin: string; publicUrl: string | null },
+) {
   const app = new Hono();
+  const hostnames = new Set(['127.0.0.1', 'localhost', '[::1]']);
+  if (listener) {
+    const host = urlHostname(listener.host);
+    if (!isWildcardHost(host)) hostnames.add(host);
+    if (listener.publicUrl) hostnames.add(new URL(listener.publicUrl).hostname);
+  }
   const trustedOrigins = [
     'http://127.0.0.1:4310',
     'http://localhost:4310',
@@ -42,14 +53,25 @@ export function createApp(engine: Engine, connection?: ConnectionConfig) {
     }),
   );
   app.use('*', async (c, next) => {
-    const host = new URL(c.req.url).hostname;
-    if (!['127.0.0.1', 'localhost', '[::1]'].includes(host))
-      return c.json({ error: 'Local requests only' }, 403);
+    const header = c.req.header('host');
+    const host =
+      header === undefined
+        ? new URL(c.req.url).hostname
+        : parseHostHeader(header);
+    if (!hostnames.has(host))
+      return c.json(
+        {
+          error:
+            'Local requests only. Set publicUrl to allow another hostname.',
+        },
+        403,
+      );
     const origin = c.req.header('origin');
     // Read engineUrl per request: callers may set it after binding a port.
     if (
       origin &&
       origin !== connection?.engineUrl &&
+      origin !== listener?.internalOrigin &&
       !trustedOrigins.includes(origin)
     )
       return c.json({ error: 'Untrusted origin' }, 403);
@@ -152,6 +174,11 @@ export function createApp(engine: Engine, connection?: ConnectionConfig) {
     }),
   );
   return app;
+}
+
+function parseHostHeader(header: string) {
+  if (!/^[^/?#@\\\s,]+$/.test(header)) return '';
+  return URL.parse(`http://${header}`)?.hostname ?? '';
 }
 
 /** Serves the UI build; the page carries the API token as permitted by the connection. */

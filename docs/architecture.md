@@ -341,7 +341,7 @@ in Bash. JavaScript's `input` and Bash's JSON stdin keep their usual format.
 | `INTERLOCK_BATCH_ITEM_INDEX`          | Zero-based position in the Batch input. Present for Batch item runs.                                                                                                                                          |
 | `INTERLOCK_POLL_CHECK_NUMBER`         | Present for polling Script checks. Starts at 1 within each Wait attempt. An interrupted check can reuse its number after restart.                                                                             |
 | `INTERLOCK_WORKSPACE_BRANCH`          | Branch of the [managed worktree](managed-workspaces.md) the Script runs in, whichever run in the tree owns it. Absent when the Script runs anywhere else or sets its own working folder.                      |
-| `INTERLOCK_URL`                       | The running server's base URL, such as `http://127.0.0.1:4310`, for calls to its [HTTP API](http-api.md). Absent when the engine runs without the server.                                                     |
+| `INTERLOCK_URL`                       | The running server's internal URL, such as `http://127.0.0.1:4310`, for calls to its [HTTP API](http-api.md). Absent when the engine runs without the server.                                                 |
 | `INTERLOCK_API_TOKEN`                 | The [API token](connect-harness.md#api-token), set only when the server requires it. Send it as `Authorization: Bearer`; Interlock redacts it from Script output and errors. Not given to background Scripts. |
 | `INTERLOCK_EXECUTION_PROVENANCE_FILE` | Path to temporary owner-only JSON file with prior node provenance: `{ [nodeId]: { visitCount, latest, history } }`. Removed when the Script ends.                                                             |
 
@@ -379,7 +379,11 @@ The shared API exposes `report.summary` (with `system.report` as an alias), the 
 
 ## Local interfaces
 
-The main service binds to `127.0.0.1` and rejects unexpected request hosts and browser origins. It is a single-user local service. A per-install [API token](connect-harness.md#api-token) is sent by first-party clients; on loopback it is required on `/api`, `/trpc`, `/mcp` and `/events` when `requireToken` in the [operator config](cli.md#operator-config-file) or `INTERLOCK_REQUIRE_TOKEN` enables it, so by default local processes can invoke its interfaces. `startServer` always requires it, and refuses to start without one, when given a non-loopback `hostname`; no user-facing option sets one yet. The check lives in `packages/server/src/apiToken.ts`. It must not be exposed through a public tunnel.
+The main service binds to `127.0.0.1` by default. Set `host` in the [operator config](cli.md#operator-config-file), `INTERLOCK_HOST`, or `--host` to change it. The desktop app pins its listener to `127.0.0.1`. The Host check accepts the existing loopback names, a specific bind address, and the configured public hostname. The Origin check trusts the internal URL and the configured public origin in addition to the existing local origins. Forwarded headers do not affect either check.
+
+The internal URL uses the listen address and port, with a loopback address for a wildcard listener. Startup output, the already-running probe, Scripts, and child-process harness launches use it. The connection response, HTTP MCP instructions, and pull launch payloads use the `publicUrl` origin when configured and the internal URL otherwise. The connection dialog keeps Legacy stdio on the internal URL.
+
+Interlock is a single-user local service. A per-install [API token](connect-harness.md#api-token) is required on `/api`, `/trpc`, `/mcp` and `/events` if the listener or configured public hostname is off loopback, or if `requireToken` or `INTERLOCK_REQUIRE_TOKEN` enables it. Startup fails if the required token is unavailable. Hosted use remains unsupported pending sign-in and the HTTPS check.
 
 Installed copies default to `~/.interlock/interlock.db`. Development defaults to `.interlock/interlock.db` inside the checkout. `interlock` starts the engine and built UI in the foreground. Its `--port`, `--db`, and `--workdir` flags override defaults. Development uses `pnpm dev` for the engine and Vite UI, or `pnpm start` for the engine and previously built UI.
 

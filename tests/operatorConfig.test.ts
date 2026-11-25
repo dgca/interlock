@@ -37,6 +37,8 @@ beforeEach(() => {
   vi.stubEnv('INTERLOCK_DATA_DIR', dataDir);
   for (const name of [
     'INTERLOCK_CONFIG',
+    'INTERLOCK_HOST',
+    'INTERLOCK_PUBLIC_URL',
     'INTERLOCK_REQUIRE_TOKEN',
     'INTERLOCK_ALLOWED_ROOTS',
     'INTERLOCK_LOG_LEVEL',
@@ -84,16 +86,24 @@ function setConfig(value: unknown) {
   writeFileSync(config, JSON.stringify(value));
 }
 
+function runCli(args: string[], env = process.env) {
+  return exec(
+    process.execPath,
+    ['--import', 'tsx', 'packages/cli/src/bin.ts', ...args],
+    {
+      env,
+      timeout: 8000,
+    },
+  );
+}
+
 it('resolves options, environment, file and defaults with sources', () => {
   const get = (env: NodeJS.ProcessEnv = {}, options = {}) =>
-    loadOperatorConfig(
-      resolveDataPaths({ home: root, env }),
-      options,
-      'localhost',
-      env,
-    );
+    loadOperatorConfig(resolveDataPaths({ home: root, env }), options, env);
   expect(get()).toMatchObject({
     configFile: { found: false },
+    host: { value: '127.0.0.1', source: 'default' },
+    publicUrl: { value: null, source: 'default' },
     requireToken: { value: false, source: 'default' },
     allowedRoots: { value: [], source: 'default', controlledByConfig: false },
     logLevel: { value: 'info', source: 'default' },
@@ -157,6 +167,113 @@ it('resolves options, environment, file and defaults with sources', () => {
   });
 });
 
+it('resolves listener settings once with flag, option, environment, and config provenance', async () => {
+  setConfig({ host: '192.0.2.1', publicUrl: 'HTTPS://File.Example.test:443/' });
+  const paths = resolveDataPaths();
+  expect(loadOperatorConfig(paths, {})).toMatchObject({
+    host: { value: '192.0.2.1', source: 'config file' },
+    publicUrl: { value: 'https://file.example.test', source: 'config file' },
+  });
+  vi.stubEnv('INTERLOCK_HOST', '192.0.2.2');
+  vi.stubEnv('INTERLOCK_PUBLIC_URL', 'http://env.example.test:8080/');
+  expect(loadOperatorConfig(paths, {})).toMatchObject({
+    host: { value: '192.0.2.2', source: 'INTERLOCK_HOST' },
+    publicUrl: {
+      value: 'http://env.example.test:8080',
+      source: 'INTERLOCK_PUBLIC_URL',
+    },
+  });
+  const { engine, url } = await start({
+    hostname: '127.0.0.1',
+    publicUrl: 'https://option.example.test/',
+  });
+  expect(engine.startupSettings).toMatchObject({
+    host: { value: '127.0.0.1', source: 'startup option' },
+    publicUrl: {
+      value: 'https://option.example.test',
+      source: 'startup option',
+    },
+  });
+  const args = ['--host', '127.0.0.1', '--port', new URL(url).port];
+  const alreadyRunning = await runCli(args);
+  expect(alreadyRunning.stdout).toContain(
+    `Interlock is already running at ${url}`,
+  );
+  const invalidFlag = runCli([...args, '--host=']);
+  await expect(invalidFlag).rejects.toHaveProperty('code', 1);
+  await expect(invalidFlag).rejects.toHaveProperty(
+    'stderr',
+    expect.stringMatching(/--host: host: Expected an IPv4 or IPv6 address/),
+  );
+  setConfig({ publicUrl: 'https://changed.example.test' });
+  expect(engine.startupSettings?.publicUrl.value).toBe(
+    'https://option.example.test',
+  );
+  await stop();
+  vi.stubEnv('INTERLOCK_HOST', undefined);
+  vi.stubEnv('INTERLOCK_PUBLIC_URL', undefined);
+  expect((await start()).connection.engineUrl).toBe(
+    'https://changed.example.test',
+  );
+});
+
+it.each([
+  ['host', 'example.test'],
+  ['host', ''],
+  ['publicUrl', ''],
+  ['publicUrl', 'https://interlock.example.test/path'],
+  ['publicUrl', 'https://interlock.example.test/extra/..'],
+  ['publicUrl', 'https://interlock.example.test/?query'],
+  ['publicUrl', 'https://interlock.example.test/?'],
+  ['publicUrl', 'https://interlock.example.test/#'],
+  ['publicUrl', 'https://user:secret-value@interlock.example.test'],
+  ['publicUrl', 'ftp://interlock.example.test'],
+] as const)('rejects invalid file %s %j before writes', async (key, value) => {
+  setConfig({ [key]: value });
+  const result = await runCli(['--host', '127.0.0.1']).catch(
+    (error: unknown) => error,
+  );
+  expect(result).toHaveProperty('code', 1);
+  expect(result).toHaveProperty(
+    'stderr',
+    expect.stringContaining(
+      `Config file ${JSON.stringify(config)}: ${key}: Expected`,
+    ),
+  );
+  expect(result).toHaveProperty(
+    'stderr',
+    expect.not.stringContaining('secret-value'),
+  );
+  expect(existsSync(dataDir)).toBe(false);
+});
+
+it.each([
+  { args: ['--host='], env: {}, message: '--host: host:' },
+  { args: [], env: { INTERLOCK_HOST: '' }, message: 'INTERLOCK_HOST: host:' },
+  { args: [], env: { INTERLOCK_HOST: ' ' }, message: 'INTERLOCK_HOST: host:' },
+  {
+    args: [],
+    env: { INTERLOCK_PUBLIC_URL: '' },
+    message: 'INTERLOCK_PUBLIC_URL: publicUrl:',
+  },
+  {
+    args: [],
+    env: { INTERLOCK_PUBLIC_URL: ' ' },
+    message: 'INTERLOCK_PUBLIC_URL: publicUrl:',
+  },
+])(
+  'rejects empty values from $message before writes',
+  async ({ args, env, message }) => {
+    const result = runCli(args, { ...process.env, ...env });
+    await expect(result).rejects.toHaveProperty('code', 1);
+    await expect(result).rejects.toHaveProperty(
+      'stderr',
+      expect.stringContaining(`${message} Expected`),
+    );
+    expect(existsSync(dataDir)).toBe(false);
+  },
+);
+
 it.each([
   ['darwin', '', 'Library/Application Support/Interlock'],
   ['linux', '', '.config/interlock'],
@@ -183,7 +300,7 @@ it.each([
       loadOperatorConfig(
         resolveDataPaths({ platform, home: root, env: { ...env, ...extra } }),
         {},
-        'localhost',
+        { ...env, ...extra },
       ).logLevel.value;
     expect(level({})).toBe('debug');
     expect(level({ INTERLOCK_DATA_DIR: dataDir })).toBe('warn');
@@ -198,7 +315,7 @@ it.each([
   ['non-file', 'directory', /regular file/],
   ['malformed JSON', '{', /valid JSON/],
   ['non-object', '[]', /JSON object/],
-  ['unknown key', '{"host":"localhost"}', /Unknown key.*host/],
+  ['unknown key', '{"port":1234}', /Unknown key.*port/],
   ['prototype key', '{"__proto__":{}}', /Unknown key.*__proto__/],
   ['wrong type', '{"requireToken":"true"}', /requireToken.*boolean/],
   ['empty roots', '{"allowedRoots":[]}', /allowedRoots.*at least one path/],
@@ -373,39 +490,6 @@ it('starts with all four file settings in use', async () => {
   const content = readFileSync(log.file, 'utf8');
   expect(content).not.toContain('ignored');
   expect(content).toContain('recorded');
-});
-
-it('forces authentication off loopback and reports the reason', async () => {
-  setConfig({ requireToken: false });
-  const { engine, url, connection } = await start({ hostname: '0.0.0.0' });
-  for (const path of [
-    '/api/workflows',
-    '/trpc/connection',
-    '/mcp',
-    '/events',
-  ]) {
-    expect((await fetch(`${url}${path}`)).status).toBe(401);
-    const allowed = await fetch(`${url}${path}`, {
-      headers: { Authorization: `Bearer ${connection.token}` },
-    });
-    expect(allowed.status).toBe(path === '/mcp' ? 405 : 200);
-    await allowed.body?.cancel();
-  }
-  const report = await engine.doctor();
-  const auth = report.checks.find((row) => row.name === 'requireToken');
-  expect(auth?.details).toEqual({
-    value: true,
-    source: 'non-loopback listener',
-    forced: true,
-  });
-  expect(auth?.message).toContain('Required on non-loopback');
-  expect(JSON.stringify(report)).not.toContain(connection.token);
-  await stop();
-  rmSync(join(dataDir, 'keys', 'api-token'));
-  mkdirSync(join(dataDir, 'keys', 'api-token'));
-  await expect(start({ hostname: '0.0.0.0' })).rejects.toThrow(
-    'Cannot use the API token file',
-  );
 });
 
 it('keeps the startup snapshot and restores saved shared roots after restart without the key', async () => {

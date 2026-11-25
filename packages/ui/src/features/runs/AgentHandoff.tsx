@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Bot, Copy } from 'lucide-react';
 
 import { errorMessage } from '../../lib/api';
+import { trpc, useQueryClient } from '../../lib/query';
 
 export function AgentHandoff({
   runId,
@@ -14,12 +15,23 @@ export function AgentHandoff({
 }) {
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState('');
+  const client = useQueryClient();
   const copy = async () => {
     setCopied(false);
     setError('');
     try {
+      const state = client.getQueryState(
+        trpc.connection.queryOptions().queryKey,
+      );
+      const publicMcpUrl =
+        state?.status === 'success' && state.data?.publicUrlConfigured
+          ? state.data.mcpUrl
+          : undefined;
       await navigator.clipboard.writeText(
         `Continue existing Interlock run ${runId}. Do not start a new run.\n` +
+          (publicMcpUrl
+            ? `Connect to Interlock MCP at ${publicMcpUrl}.\n`
+            : '') +
           `Resume with get_run_briefing and use list_work with runId "${runId}" to find available assignments, including child runs. ` +
           'Use get_run_result for selected inputs or outputs; use get_run for full inspection. When blocked, use wait_for_run_change with the briefing cursor for a finite wait, and recover explicitly from cursor reset after restart. ' +
           "Claim assignments using your actual capabilities. Follow each assignment's prompt, input, context policy, and output schema, then submit JSON with its claim token. " +

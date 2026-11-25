@@ -258,6 +258,9 @@ describe('lifecycle', () => {
     const state = await lifecycle.start();
     expect(state.mode).toBe('owned');
     expect(startServerFn).toHaveBeenCalledTimes(1);
+    expect(startServerFn).toHaveBeenCalledWith(
+      expect.objectContaining({ hostname: '127.0.0.1' }),
+    );
     expect(lifecycle.activeRunCount()).toBe(1);
 
     await lifecycle.stop();

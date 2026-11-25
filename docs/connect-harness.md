@@ -15,11 +15,11 @@ npx -y @type_of/interlock@latest
 
 Keep this process running and open [Interlock](http://127.0.0.1:4310). **Connect with MCP**, also available through **Connect an agent** in a run, provides the endpoint URL and client configuration.
 
-An embedded host can hide these connection controls through [UI configuration](embedded-ui.md). Copyable run instructions remain available.
+An embedded host can hide these connection controls through [UI configuration](embedded-ui.md). Copyable run instructions remain available. If the engine has a configured `publicUrl` and the connection details are available, the run instructions include its MCP endpoint.
 
 Use Streamable HTTP at `http://127.0.0.1:4310/mcp`. The UI, engine, and MCP tools run in the same process and package version. After upgrading, restart Interlock at the same address and reconnect your client if needed. Keep the existing URL configuration; no separate bridge installation is needed.
 
-For a custom port, copy the URL from the connection dialog. These instructions apply to clients running on the same computer as Interlock. The service listens on loopback and must not be exposed through a public tunnel.
+For a custom address or port, copy the URL from the connection dialog. HTTP snippets use the configured `publicUrl` when set. Legacy stdio uses the internal URL. Hosted use remains unsupported pending sign-in and the HTTPS check.
 
 ## API token
 
@@ -27,7 +27,7 @@ Interlock creates a per-install API token on startup with mode `0600`. With `INT
 
 First-party clients send the token as `Authorization: Bearer <token>`. The UI receives it with the page. The `interlock` CLI and the stdio bridge read the file, so stdio configuration carries no token. Custom harness launchers inherit the server environment, so an `interlock mcp` bridge they start reads the same file. HTTP configuration copied from **Connect with MCP** includes the header.
 
-On loopback the token is optional by default. Set `requireToken` in the [operator config](cli.md#operator-config-file) or start with `INTERLOCK_REQUIRE_TOKEN=1` to reject requests without it on `/api`, `/trpc`, `/mcp` and `/events` with HTTP 401. Existing configurations without the header keep working while the setting is off. With it on:
+The token is optional by default for a loopback listener with no non-loopback public hostname. Set `requireToken` in the [operator config](cli.md#operator-config-file) or start with `INTERLOCK_REQUIRE_TOKEN=1` to reject requests without it on `/api`, `/trpc`, `/mcp` and `/events` with HTTP 401. A non-loopback listener or public hostname always requires the token. When the token is required:
 
 - Startup prints a UI link that carries the token. Open it once per browser; the page keeps the token for later visits at that address.
 - Copy HTTP configuration again from **Connect with MCP** for clients configured without the header.

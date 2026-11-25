@@ -5,6 +5,8 @@ export type ConnectionConfig = {
   args: string[];
   env?: Record<string, string>;
   engineUrl: string;
+  /** The HTTP endpoint came from an explicit publicUrl setting. */
+  publicUrlConfigured?: true;
   development: boolean;
   fallback?: { command: string; args: string[] };
   /** Per-install API token, sent by first-party clients in both modes. */

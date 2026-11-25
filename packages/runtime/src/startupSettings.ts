@@ -22,11 +22,22 @@ export function operatorConfigChecks(
   effectiveRoots?: string[],
 ): DiagnosticCheck[] {
   if (!settings) return [];
-  const { configFile, requireToken, allowedRoots, logLevel, syncDir } =
-    settings;
-  const suffix = requireToken.forced
-    ? '. Required on non-loopback listeners.'
-    : '';
+  const {
+    configFile,
+    host,
+    publicUrl,
+    requireToken,
+    allowedRoots,
+    logLevel,
+    syncDir,
+  } = settings;
+  const { forcedBy, ...tokenDetails } = requireToken;
+  const suffix =
+    forcedBy === 'public URL'
+      ? '. Required when the public URL has a non-loopback hostname.'
+      : forcedBy === 'non-loopback listener'
+        ? '. Required on non-loopback listeners.'
+        : '';
   // Saved shared roots add to the startup list unless the config file declares the key.
   const effective = effectiveRoots ?? allowedRoots.value;
   const saved = effective.length > allowedRoots.value.length;
@@ -40,7 +51,17 @@ export function operatorConfigChecks(
     {
       name: 'requireToken',
       message: `${requireToken.value} (${requireToken.source})${suffix}`,
-      details: { ...requireToken },
+      details: tokenDetails,
+    },
+    {
+      name: 'host',
+      message: `${host.value} (${host.source})`,
+      details: { ...host },
+    },
+    {
+      name: 'publicUrl',
+      message: `${publicUrl.value ?? 'Not set'} (${publicUrl.source})`,
+      details: { ...publicUrl },
     },
     {
       name: 'allowedRoots',

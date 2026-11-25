@@ -13,6 +13,7 @@ import type { StartupSettings } from '@interlock/core';
 import type { DataPaths } from '@interlock/core/dataPaths';
 import { logLevels, parseLogLevel } from '@interlock/runtime/log';
 import { isLoopback, parseRequireToken } from './apiToken.js';
+import { defaultHost, isListenHost } from './listenAddress.js';
 
 const absolutePath = z
   .string()
@@ -20,8 +21,21 @@ const absolutePath = z
     (path) => isAbsolute(path) && !path.includes('\0'),
     'Expected a valid absolute path',
   );
+const listenHost = z
+  .string()
+  .refine(isListenHost, 'Expected an IPv4 or IPv6 address or localhost');
+const publicOrigin = z
+  .string()
+  .refine(
+    (value) =>
+      /^https?:\/\/[^/?#@\\\s]+\/?$/i.test(value) && URL.canParse(value),
+    'Expected an http or https URL with a host and optional port, without a path other than /, query, fragment, or credentials',
+  )
+  .transform((value) => new URL(value).origin);
 const configSchema = z
   .object({
+    host: listenHost.optional(),
+    publicUrl: publicOrigin.optional(),
     requireToken: z.boolean().optional(),
     // An empty list would replace saved shared roots and turn the check off.
     allowedRoots: z
@@ -156,6 +170,8 @@ function sameFolder(a: string, b: string) {
 }
 
 export interface StartupOptions {
+  hostname?: string;
+  publicUrl?: string;
   allowedRoots?: string[];
   logLevel?: StartupSettings['logLevel']['value'];
   requireToken?: boolean;
@@ -180,12 +196,48 @@ function setting<T>(
 export function loadOperatorConfig(
   paths: DataPaths,
   options: StartupOptions,
-  hostname: string,
   env = process.env,
+  hostFlag?: string,
 ): StartupSettings {
   const selected = paths.configFile;
   const file = readConfig(selected);
   checkConfigLocation(selected.path, paths);
+  const host = setting(
+    hostFlag ?? options.hostname,
+    'INTERLOCK_HOST',
+    () => env.INTERLOCK_HOST,
+    file?.host,
+    defaultHost,
+  );
+  if (host.source === 'flag')
+    host.source = hostFlag === undefined ? 'startup option' : '--host';
+  const publicUrl = setting(
+    options.publicUrl,
+    'INTERLOCK_PUBLIC_URL',
+    () => env.INTERLOCK_PUBLIC_URL,
+    file?.publicUrl,
+    null,
+  );
+  if (publicUrl.source === 'flag') publicUrl.source = 'startup option';
+  const validate = (
+    schema: z.ZodType<string>,
+    key: string,
+    source: string,
+    value: string,
+  ) => {
+    const result = schema.safeParse(value);
+    if (!result.success)
+      throw new Error(`${source}: ${key}: ${result.error.issues[0].message}.`);
+    return result.data;
+  };
+  host.value = validate(listenHost, 'host', host.source, host.value);
+  if (publicUrl.value !== null)
+    publicUrl.value = validate(
+      publicOrigin,
+      'publicUrl',
+      publicUrl.source,
+      publicUrl.value,
+    );
   const requireToken = setting(
     options.requireToken,
     'INTERLOCK_REQUIRE_TOKEN',
@@ -196,7 +248,11 @@ export function loadOperatorConfig(
     file?.requireToken,
     false,
   );
-  const forced = !isLoopback(hostname);
+  const forcedBy = !isLoopback(host.value)
+    ? 'non-loopback listener'
+    : publicUrl.value && !isLoopback(new URL(publicUrl.value).hostname)
+      ? 'public URL'
+      : undefined;
   const allowedRoots = setting(
     options.allowedRoots,
     'INTERLOCK_ALLOWED_ROOTS',
@@ -238,14 +294,14 @@ export function loadOperatorConfig(
       path: configPath,
       found: file !== undefined,
     },
+    host,
+    publicUrl,
     requireToken: {
       ...requireToken,
-      value: requireToken.value || forced,
-      // The listener, not the configured value, is why the token is required.
-      ...(forced && !requireToken.value
-        ? { source: 'non-loopback listener' }
-        : {}),
-      forced,
+      value: requireToken.value || forcedBy !== undefined,
+      ...(forcedBy && !requireToken.value ? { source: forcedBy } : {}),
+      forced: forcedBy !== undefined,
+      forcedBy,
     },
     allowedRoots: {
       ...allowedRoots,
