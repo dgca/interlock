@@ -2,6 +2,7 @@ import { createServer } from 'node:net';
 import { existsSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { defaultHost } from './listenAddress.js';
 
 /**
  * Hold an exclusive SQLite lock on a sidecar file for the server's lifetime.
@@ -64,20 +65,26 @@ export async function probeHealthyServer(
   }
 }
 
-export function checkPort(port: number): Promise<void> {
+export function listenError(
+  error: NodeJS.ErrnoException,
+  host: string,
+  port: number,
+) {
+  return new Error(
+    error.code === 'EADDRINUSE'
+      ? `Port ${port} is already in use at ${host}. Another Interlock instance may be running. Find the process with lsof -nP -iTCP:${port} -sTCP:LISTEN and stop that instance, or select --port with a different --db. If the process is suspended, resume it with kill -CONT <pid> so it can handle a pending termination signal.`
+      : `Cannot listen on ${host} at port ${port}. ${error.message}`,
+    { cause: error },
+  );
+}
+
+export function checkPort(port: number, host = defaultHost): Promise<void> {
   return new Promise((resolve, reject) => {
     const listener = createServer();
     listener.once('error', (error: NodeJS.ErrnoException) =>
-      reject(
-        new Error(
-          error.code === 'EADDRINUSE'
-            ? `Port ${port} is already in use at 127.0.0.1. Another Interlock instance may be running. Find the process with lsof -nP -iTCP:${port} -sTCP:LISTEN and stop that instance, or select --port with a different --db. If the process is suspended, resume it with kill -CONT <pid> so it can handle a pending termination signal.`
-            : error.message,
-          { cause: error },
-        ),
-      ),
+      reject(listenError(error, host, port)),
     );
-    listener.listen(port, '127.0.0.1', () =>
+    listener.listen(port, host, () =>
       listener.close((error) => (error ? reject(error) : resolve())),
     );
   });

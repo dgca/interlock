@@ -365,7 +365,12 @@ it('authenticates CLI and checkout stdio clients and reports the running engine 
   const configPath = join(dataDir, 'config.json');
   writeFileSync(
     configPath,
-    JSON.stringify({ allowedRoots: [root], logLevel: 'warn' }),
+    JSON.stringify({
+      allowedRoots: [root],
+      logLevel: 'warn',
+      host: '127.0.0.1',
+      publicUrl: 'https://interlock.example.test/',
+    }),
   );
   const listener = createServer().listen(0, '127.0.0.1');
   await once(listener, 'listening');
@@ -401,6 +406,9 @@ it('authenticates CLI and checkout stdio clients and reports the running engine 
     const help = await runCli(['--help']);
     expect(help.stdout).toContain('INTERLOCK_DATA_DIR');
     expect(help.stdout).toContain('INTERLOCK_CONFIG');
+    expect(help.stdout).toContain('--host');
+    expect(help.stdout).toContain('INTERLOCK_HOST');
+    expect(help.stdout).toContain('INTERLOCK_PUBLIC_URL');
     expect(JSON.parse((await runCli(['workflows'], clientEnv)).stdout)).toEqual(
       [],
     );
@@ -436,6 +444,11 @@ it('authenticates CLI and checkout stdio clients and reports the running engine 
     ]);
     const settings = new Map<string, object>([
       ['Config file', { path: configPath, found: true }],
+      ['host', { value: '127.0.0.1', source: 'config file' }],
+      [
+        'publicUrl',
+        { value: 'https://interlock.example.test', source: 'config file' },
+      ],
       ['requireToken', { value: true, source: 'INTERLOCK_REQUIRE_TOKEN' }],
       [
         'allowedRoots',
@@ -473,6 +486,10 @@ it('authenticates CLI and checkout stdio clients and reports the running engine 
     ).rejects.toThrow('controlled by the operator config');
     const headers = { Authorization: `Bearer ${token}` };
     const config = await createClient(url, { token }).connection.query();
+    expect(config).toMatchObject({
+      engineUrl: 'https://interlock.example.test',
+      mcpUrl: 'https://interlock.example.test/mcp',
+    });
     expect(config.env).toEqual({
       INTERLOCK_URL: url,
       INTERLOCK_DATA_DIR: dataDir,

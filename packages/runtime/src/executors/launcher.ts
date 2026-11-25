@@ -68,6 +68,7 @@ export interface LauncherHost {
   readonly errors: SchedulerErrors;
   stopped(): boolean;
   mcpUrl(): string | undefined;
+  publicMcpUrl(): string | undefined;
   apiToken(): string | undefined;
   latest(workId: string): ManagedExecution | undefined;
   write(record: ManagedExecution): void;
@@ -222,7 +223,10 @@ export class LauncherSupervisor {
         await this.pull.request(
           { ...work, workId: work.id, profile },
           'launch',
-          launchPayload,
+          {
+            ...launchPayload,
+            mcpUrl: this.host.publicMcpUrl() ?? launchPayload.mcpUrl,
+          },
         ),
       ));
     } else if (profile.transport === 'http') {

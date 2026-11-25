@@ -1,6 +1,8 @@
 import { timingSafeEqual } from 'node:crypto';
+import { isIP } from 'node:net';
 import type { MiddlewareHandler } from 'hono';
 import type { ConnectionConfig } from './connection.js';
+import { urlHostname } from './listenAddress.js';
 
 /** Parses INTERLOCK_REQUIRE_TOKEN. Unset or empty keeps the 0.2 default: not required. */
 export function parseRequireToken(value = process.env.INTERLOCK_REQUIRE_TOKEN) {
@@ -15,11 +17,14 @@ export function parseRequireToken(value = process.env.INTERLOCK_REQUIRE_TOKEN) {
 /** Whether a listen address stays on this machine. Anything else requires the token. */
 export function isLoopback(hostname: string) {
   const host = hostname.replace(/^\[|\]$/g, '').toLowerCase();
-  return (
-    host === 'localhost' ||
-    host === '::1' ||
-    /^(::ffff:)?127\.\d+\.\d+\.\d+$/.test(host)
-  );
+  if (isIP(host) === 6 && !host.includes('%')) {
+    const canonical = urlHostname(host);
+    return (
+      canonical === '[::1]' ||
+      /^\[::ffff:7f[0-9a-f]{2}:[0-9a-f]{1,4}\]$/.test(canonical)
+    );
+  }
+  return host === 'localhost' || (isIP(host) === 4 && host.startsWith('127.'));
 }
 
 const matches = (candidate: string | undefined, token: string) => {

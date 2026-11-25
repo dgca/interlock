@@ -278,6 +278,7 @@ export class DesktopEngineLifecycle {
   private startOwnedServer() {
     return this.startServerFn({
       port: this.port,
+      hostname: '127.0.0.1',
       paths: this.paths,
       workdir: this.options.workdir,
       ui: this.options.ui,

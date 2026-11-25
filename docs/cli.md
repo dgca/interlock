@@ -10,14 +10,15 @@ The `interlock` command starts the local engine and talks to a running one. Use 
 ## Start the engine
 
 ```sh
-interlock [--port 4310] [--workdir PATH] [--db PATH]
+interlock [--host 127.0.0.1] [--port 4310] [--workdir PATH] [--db PATH]
 ```
 
 With no command, `interlock` starts the engine, the UI and the HTTP MCP endpoint at `/mcp`. Keep the terminal open. Pending database migrations run at startup, with a backup before schema upgrades.
 
 | Flag        | Default                                                                                    | Environment variable |
 | ----------- | ------------------------------------------------------------------------------------------ | -------------------- |
-| `--port`    | `4310`                                                                                     | none                 |
+| `--host`    | `127.0.0.1`                                                                                | `INTERLOCK_HOST`     |
+| `--port`    | `4310`                                                                                     | `INTERLOCK_PORT`     |
 | `--workdir` | Current directory, for Scripts                                                             | `INTERLOCK_WORKDIR`  |
 | `--db`      | `<data-dir>/interlock.db` with `INTERLOCK_DATA_DIR`, otherwise `~/.interlock/interlock.db` | `INTERLOCK_DB`       |
 
@@ -28,16 +29,22 @@ Set `INTERLOCK_DATA_DIR` to an absolute path to put the database, keys and API t
 
 The engine reads one JSON object at startup. Set `INTERLOCK_CONFIG` to an absolute path to select a required file. Otherwise the engine looks for `config.json` under `INTERLOCK_DATA_DIR`, or beside the `keys` folder in the [user config directory](https://github.com/dgca/interlock/blob/main/docs/architecture.md#engine-state-locations). A missing file at either default location is valid. An unreadable or invalid file stops startup before the engine opens the database or writes state.
 
-| Key            | JSON value                                                                                                                                             |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `requireToken` | Boolean. Defaults to `false` on loopback. The token is always required off loopback.                                                                   |
-| `allowedRoots` | Array of absolute paths for shared dynamic working-directory checks. Defaults to no startup roots. Give at least one path; an empty array is rejected. |
-| `logLevel`     | `debug`, `info`, `warn`, or `error`. Defaults to `info`.                                                                                               |
-| `syncDir`      | Absolute path to a workflow sync folder. Sync is off by default.                                                                                       |
+| Key            | JSON value                                                                                                                                                  |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `host`         | IPv4 or IPv6 listen address, or `localhost`. Defaults to `127.0.0.1`. `0.0.0.0` and `::` listen on all interfaces of their respective address families.     |
+| `publicUrl`    | Advertised HTTP or HTTPS origin, with an optional port and trailing `/`. Omit credentials, paths other than `/`, queries, and fragments. Defaults to unset. |
+| `requireToken` | Boolean. Defaults to `false`. A non-loopback listener or public hostname always requires the token.                                                         |
+| `allowedRoots` | Array of absolute paths for shared dynamic working-directory checks. Defaults to no startup roots. Give at least one path; an empty array is rejected.      |
+| `logLevel`     | `debug`, `info`, `warn`, or `error`. Defaults to `info`.                                                                                                    |
+| `syncDir`      | Absolute path to a workflow sync folder. Sync is off by default.                                                                                            |
 
 Each key is optional. For each setting, explicit startup options take precedence over environment variables, then file values, then defaults. Key names and file log levels are case-sensitive. When the file declares `allowedRoots`, the resolved startup list replaces saved shared roots. Changes to the saved shared roots are unavailable until the key is removed and the engine restarts. Per-harness roots follow their existing rules.
 
 Edit the file on the engine host and restart the engine to apply changes. Keep it at a separate path from engine files such as the database and logs. Interlock never writes it. Client commands and the stdio bridge use the running engine and do not read the file.
+
+Empty or blank values for `host` or `publicUrl` fail validation, including when supplied through `--host` or the selected environment variable. Omit a setting to use its fallback. The desktop app pins its listener to `127.0.0.1` and uses the same precedence for `publicUrl`.
+
+The internal URL uses the listen address and port. It maps `0.0.0.0` to `127.0.0.1` and `::` to `[::1]`. The startup link uses the internal URL, so a wildcard startup link opens on the engine machine. When the engine listens on a specific non-loopback address or a different port, set `INTERLOCK_URL` to its internal URL for CLI commands and the stdio bridge. HTTP MCP configuration uses `publicUrl` when set and the internal URL otherwise. Hosted use remains unsupported pending sign-in and the HTTPS check.
 
 ## How commands work
 
@@ -328,7 +335,7 @@ A pause holds gate boundaries and new claims without interrupting work in flight
 
 - `doctor` exits with code `1` for a failure, and `0` for passing checks or warnings. `--live` makes model requests, so use it only when you want them.
 - `doctor` reports the running engine's data directory, database, protected-value key, API token, spool, and managed worktree paths. Each path includes the setting or default that selected it.
-- It also reports the operator config path, whether the file was found at startup, and the effective startup values and sources of the four settings. The `allowedRoots` row shows the list in effect: the startup list, plus saved shared roots when the file omits `allowedRoots`. The report omits the API token itself.
+- It also reports the operator config path, whether the file was found at startup, and the effective values and sources of the startup settings, including `host` and `publicUrl`. The `allowedRoots` row shows the startup list plus saved shared roots when the file omits `allowedRoots`. The report omits the API token itself.
 - `report` also takes `--since` and `--until` (ISO datetimes), `--limit N` and `--tag KEY=VALUE`. Dates must stay within years 0000–9999 once rounded to UTC. See [Reports](reports.md) and [Troubleshooting](troubleshooting.md).
 
 ## Environment variables
@@ -339,6 +346,8 @@ A pause holds gate boundaries and new claims without interrupting work in flight
 | `INTERLOCK_CONFIG`              | Absolute path to a required [operator config file](#operator-config-file).                                                                                  |
 | `INTERLOCK_DB`                  | Database path. Takes precedence over `INTERLOCK_DATA_DIR` for SQLite.                                                                                       |
 | `INTERLOCK_WORKDIR`             | Default Script working directory                                                                                                                            |
+| `INTERLOCK_HOST`                | Engine listen address when `--host` is absent                                                                                                               |
+| `INTERLOCK_PUBLIC_URL`          | Advertised HTTP or HTTPS origin                                                                                                                             |
 | `INTERLOCK_URL`                 | Engine that commands and `interlock mcp` talk to                                                                                                            |
 | `INTERLOCK_MCP_PROFILE`         | Default tool profile for `interlock mcp`                                                                                                                    |
 | `INTERLOCK_REQUIRE_TOKEN`       | `1` rejects API, MCP and event requests without the API token                                                                                               |

@@ -6,7 +6,9 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
+  internalEngineUrl,
   isDatabaseLocked,
+  loadOperatorConfig,
   probeHealthyServer,
   startServer,
 } from '@interlock/server/start';
@@ -33,7 +35,7 @@ async function main() {
   if (argv[0] === '--help' || argv[0] === '-h' || argv[0] === 'help') {
     console.log(`Interlock ${VERSION}
 
-Usage: interlock [--port 4310] [--workdir PATH] [--db PATH]
+Usage: interlock [--host 127.0.0.1] [--port 4310] [--workdir PATH] [--db PATH]
        interlock mcp [--profile all|execute|author|operate]
        interlock <command> [arguments]
 
@@ -65,7 +67,8 @@ Report dates must be valid ISO datetimes whose rounded UTC bounds stay within ye
 System readiness check: doctor [--live] [--json]
 Run 'interlock commands' for argument syntax, or 'interlock <command> --help' for one command.
 
-Environment: INTERLOCK_PORT, INTERLOCK_DATA_DIR, INTERLOCK_DB, INTERLOCK_WORKDIR, INTERLOCK_URL,
+Environment: INTERLOCK_HOST (listen address), INTERLOCK_PUBLIC_URL (advertised HTTP origin),
+             INTERLOCK_PORT, INTERLOCK_DATA_DIR, INTERLOCK_DB, INTERLOCK_WORKDIR, INTERLOCK_URL,
              INTERLOCK_SECRET_KEY_FILE, INTERLOCK_MCP_PROFILE,
              INTERLOCK_CONFIG, INTERLOCK_REQUIRE_TOKEN, INTERLOCK_ALLOWED_ROOTS,
              INTERLOCK_LOG_LEVEL, INTERLOCK_SYNC_DIR,
@@ -196,6 +199,7 @@ Commands and the mcp bridge read the token from the api-token file in the key fo
   const { values } = parseArgs({
     args: argv,
     options: {
+      host: { type: 'string' },
       port: { type: 'string' },
       workdir: { type: 'string' },
       db: { type: 'string' },
@@ -204,12 +208,18 @@ Commands and the mcp bridge read the token from the api-token file in the key fo
   const port = Number(values.port ?? process.env.INTERLOCK_PORT ?? 4310);
   if (!Number.isInteger(port) || port < 1 || port > 65535)
     throw new Error('Port must be between 1 and 65535.');
-  const engineUrl = `http://127.0.0.1:${port}`;
   const paths = resolveDataPaths({
     database:
       values.db === undefined ? undefined : { path: values.db, source: '--db' },
     resolveDatabasePath: true,
   });
+  const startupSettings = loadOperatorConfig(
+    paths,
+    {},
+    process.env,
+    values.host,
+  );
+  const engineUrl = internalEngineUrl(startupSettings.host.value, port);
   const database = paths.database.path;
   const healthy = await probeHealthyServer(engineUrl);
   const databaseInUse = healthy && isDatabaseLocked(database);
@@ -223,6 +233,7 @@ Commands and the mcp bridge read the token from the api-token file in the key fo
   await startServer({
     port,
     paths,
+    startupSettings,
     workdir: resolve(
       values.workdir ?? process.env.INTERLOCK_WORKDIR ?? process.cwd(),
     ),

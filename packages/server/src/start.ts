@@ -1,4 +1,7 @@
-import { serve } from '@hono/node-server';
+import { once } from 'node:events';
+import { createServer } from 'node:http';
+import { getRequestListener } from '@hono/node-server';
+import type { StartupSettings } from '@interlock/core';
 import { Store } from '@interlock/storage';
 import { Engine } from '@interlock/runtime';
 import { JsonLog } from '@interlock/runtime/log';
@@ -12,8 +15,15 @@ import {
 } from '@interlock/core/dataPaths';
 import { prepareDataDirectory } from './dataDirectory.js';
 import type { ConnectionConfig } from './connection.js';
-import { checkPort, lockDatabase, startupError } from './startup.js';
+import {
+  checkPort,
+  listenError,
+  lockDatabase,
+  startupError,
+} from './startup.js';
 export { isDatabaseLocked, probeHealthyServer } from './startup.js';
+export { internalEngineUrl } from './listenAddress.js';
+export { loadOperatorConfig } from './operatorConfig.js';
 import { nativeAdapters } from '@interlock/runtime/executors/native';
 import {
   startWorkflowSync,
@@ -22,14 +32,19 @@ import {
 import { traceExportConfig } from '@interlock/runtime/traceExportConfig';
 import type { TraceExport } from '@interlock/runtime/traceExport';
 import { loadOperatorConfig, type StartupOptions } from './operatorConfig.js';
+import {
+  canonicalHostHeader,
+  defaultHost,
+  internalEngineUrl,
+} from './listenAddress.js';
 
 /**
  * Adds the per-install token. Startup requires a usable token when startup
- * settings enable authentication or the server listens beyond loopback.
+ * settings or the listener's address require authentication.
  */
 export function withApiToken(
   connection: ConnectionConfig,
-  hostname = '127.0.0.1',
+  hostname = defaultHost,
   paths = resolveDataPaths(),
   configuredRequirement = parseRequireToken(),
 ): ConnectionConfig {
@@ -57,8 +72,8 @@ export async function startServer(
     ui: string;
     port: number;
     connection: ConnectionConfig;
-    /** Listen address. Not user-configurable yet; a non-loopback address requires the API token. */
-    hostname?: string;
+    /** Startup snapshot already resolved for the CLI's health probe. */
+    startupSettings?: StartupSettings;
     handleSignals?: boolean;
   },
 ) {
@@ -72,16 +87,33 @@ export async function startServer(
       defaultDatabase: options.defaultDatabase,
     });
   const database = paths.database.path;
-  const hostname = options.hostname ?? '127.0.0.1';
-  const startupSettings = loadOperatorConfig(paths, options, hostname);
+  const startupSettings =
+    options.startupSettings ?? loadOperatorConfig(paths, options);
+  const hostname = startupSettings.host.value;
+  const publicUrl = startupSettings.publicUrl.value;
   prepareDataDirectory(paths);
-  await checkPort(options.port);
+  await checkPort(options.port, hostname);
   const connection = withApiToken(
     options.connection,
     hostname,
     paths,
     startupSettings.requireToken.value,
   );
+  let app: ReturnType<typeof createApp> | undefined;
+  const listener = getRequestListener(
+    (request) =>
+      app?.fetch(request) ??
+      new Response('Interlock is starting.', {
+        status: 503,
+        headers: { Connection: 'close' },
+      }),
+    { hostname },
+  );
+  const server = createServer((request, response) => {
+    const host = request.headers.host;
+    if (host) request.headers.host = canonicalHostHeader(host);
+    void listener(request, response);
+  });
   const unlock = lockDatabase(database);
   let store: Store;
   try {
@@ -97,14 +129,29 @@ export async function startServer(
   let engine!: Engine;
   let sync: WorkflowSync | undefined;
   let traces: TraceExport | undefined;
+  let internalUrl: string;
   try {
+    server.listen(options.port, hostname);
+    await once(server, 'listening').catch((error: NodeJS.ErrnoException) => {
+      throw listenError(error, hostname, options.port);
+    });
+    const address = server.address();
+    if (!address || typeof address === 'string')
+      throw new Error('Missing Interlock listener address.');
+    internalUrl = internalEngineUrl(hostname, address.port);
+    connection.engineUrl = publicUrl ?? internalUrl;
+    if (publicUrl) connection.publicUrlConfigured = true;
+    if (
+      connection.env?.INTERLOCK_URL !== undefined ||
+      internalUrl !== internalEngineUrl(defaultHost, 4310)
+    )
+      connection.env = { ...connection.env, INTERLOCK_URL: internalUrl };
     engine = new Engine(store, options.workdir, {
       startupSettings,
     });
-    engine.executors.mcpUrl = new URL(
-      '/mcp/execute',
-      options.connection.engineUrl,
-    ).href;
+    engine.executors.mcpUrl = new URL('/mcp/execute', internalUrl).href;
+    if (publicUrl)
+      engine.executors.publicMcpUrl = new URL('/mcp/execute', publicUrl).href;
     if (connection.requireToken) engine.executors.apiToken = connection.token;
     engine.executors.errors.attach(
       new JsonLog(paths.logRoot, startupSettings.logLevel.value),
@@ -118,24 +165,29 @@ export async function startServer(
       traces = (
         await import('@interlock/runtime/traceExport')
       ).startTraceExport(store, traceConfig);
+    const readyApp = createApp(engine, connection, {
+      host: hostname,
+      internalOrigin: new URL(internalUrl).origin,
+      publicUrl,
+    });
+    serveUi(readyApp, options.ui, connection);
     engine.pump();
+    app = readyApp;
   } catch (error) {
+    if (server.listening) server.close();
     sync?.stop();
     await traces?.stop(0);
+    await engine?.executors.stop();
     engine?.stop();
     store.close();
     unlock();
     throw startupError(error, database);
   }
-  const app = createApp(engine, connection);
-  serveUi(app, options.ui, connection);
   const timer = setInterval(() => engine.pump(), 1000);
-  const server = serve({ fetch: app.fetch, hostname, port: options.port }, () =>
-    console.log(
-      connection.requireToken
-        ? `Interlock is running at ${connection.engineUrl}/?token=${connection.token}\nAPI token required. Open this link to use the UI.`
-        : `Interlock is running at ${connection.engineUrl}`,
-    ),
+  console.log(
+    connection.requireToken
+      ? `Interlock is running at ${internalUrl}/?token=${connection.token}\nAPI token required. Open this link to use the UI.`
+      : `Interlock is running at ${internalUrl}`,
   );
   let stopping = false;
   const stop = async () => {
@@ -162,17 +214,11 @@ export async function startServer(
     store.close();
     unlock();
   };
-  const onError =
-    (port: number, option: string) => (error: NodeJS.ErrnoException) => {
-      console.error(
-        error.code === 'EADDRINUSE'
-          ? `Port ${port} is already in use. Choose ${option} or stop the process using that port.`
-          : error.message,
-      );
-      void stop();
-      process.exitCode = 1;
-    };
-  server.on('error', onError(options.port, '--port'));
+  server.on('error', (error: NodeJS.ErrnoException) => {
+    console.error(listenError(error, hostname, options.port).message);
+    void stop();
+    process.exitCode = 1;
+  });
   if (options.handleSignals !== false) {
     for (const signal of ['SIGINT', 'SIGTERM'] as const)
       process.on(signal, async () => {

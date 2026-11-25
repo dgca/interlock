@@ -71,7 +71,8 @@ export class ExecutorManager {
   }>();
   private running = false;
   private stopped = false;
-  mcpUrl?: string; // Execute-profile MCP endpoint offered to launched sessions.
+  mcpUrl?: string; // Internal execute-profile MCP endpoint.
+  publicMcpUrl?: string; // Advertised execute-profile endpoint for pull launches.
   apiToken?: string; // Required API token offered to launched sessions; never in the payload.
   private scheduled = false;
   private unsubscribe?: () => void;
@@ -87,6 +88,7 @@ export class ExecutorManager {
         errors: this.errors,
         stopped: () => this.stopped,
         mcpUrl: () => this.mcpUrl,
+        publicMcpUrl: () => this.publicMcpUrl,
         apiToken: () => this.apiToken,
         latest: (workId) => this.latest(workId),
         write: (record) => this.write(record),
