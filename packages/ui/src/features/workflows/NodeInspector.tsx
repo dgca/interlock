@@ -11,7 +11,7 @@ import {
   NumberInput,
   Button,
 } from '../../design-system';
-import { StallPolicyEditor } from '../executors/StallSettings';
+import { NodeStallOverrides } from './NodeStallOverrides';
 import { NodeExecutorSelect } from '../executors/NodeExecutorSelect';
 import { ResourceBindingsEditor } from './ResourceBindingsEditor';
 import { AgentToolsEditor } from './AgentToolsEditor';
@@ -34,8 +34,6 @@ import {
   nodeInputHint,
   humanAnswerContract,
   isPollWait,
-  stallFields,
-  type StallPolicy,
   type WorkflowDefinition,
   type WorkflowCatalogEntry,
   type WorkflowBoard,
@@ -54,66 +52,13 @@ import { WorkflowModeEditor } from './WorkflowModeEditor';
 
 import { ContractEditor } from '../../components/ContractEditor/ContractEditor';
 import { ScriptCode } from './ScriptCode';
+import { ScriptRetrySettings } from './ScriptRetrySettings';
 import {
   WorkspaceReadWarning,
   type WorkspaceRead,
 } from '../../components/WorkspaceReads';
 import { PromptPicker } from '../prompts/PromptPicker';
 import styles from './NodeInspector.module.css';
-
-const stallPolicyKeys = [
-  ...Object.keys(stallFields),
-  'idleRecovery',
-] as (keyof StallPolicy)[];
-
-function NodeStallOverrides({
-  node,
-  onChange,
-}: {
-  node: WorkflowNode;
-  onChange: (patch: Partial<StallPolicy>) => void;
-}) {
-  const policy: StallPolicy = node;
-  const customized = stallPolicyKeys.some((key) => policy[key] !== undefined);
-  const [editing, setEditing] = useState(customized);
-  const overriding = editing || customized;
-  return (
-    <>
-      <Switch
-        mt="md"
-        label="Override stall detection"
-        aria-label="Override stall detection"
-        description="Use workflow and library defaults when off."
-        checked={overriding}
-        onChange={(event) => {
-          const checked = event.currentTarget.checked;
-          setEditing(checked);
-          if (!checked)
-            onChange(
-              Object.fromEntries(
-                stallPolicyKeys.map((key) => [key, undefined]),
-              ),
-            );
-        }}
-      />
-      {overriding && (
-        <StallPolicyEditor
-          value={node}
-          onChange={onChange}
-          showRecovery={node.kind === 'agent'}
-          showHeading={false}
-          thresholds={
-            node.kind === 'agent'
-              ? ['unclaimedStallMs', 'claimedIdleStallMs', 'runStallMs']
-              : node.kind === 'input'
-                ? ['humanWaitStallMs', 'runStallMs']
-                : ['runStallMs']
-          }
-        />
-      )}
-    </>
-  );
-}
 
 export function NodeInspector({
   node,
@@ -601,6 +546,7 @@ export function NodeInspector({
                   })
                 }
               />
+              <ScriptRetrySettings node={node} onChange={patch} />
             </NodeSection>
           </>
         )}

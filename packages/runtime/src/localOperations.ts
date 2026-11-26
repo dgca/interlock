@@ -24,6 +24,11 @@ import {
 import { writeExecutionProvenanceFile } from './nodeData.js';
 import type { ScriptApprovals } from './scriptApprovals.js';
 import { baseEnvironment, executeScript, scriptFailure } from './scripts.js';
+import {
+  redactScriptOutcome,
+  scriptOutcomeOf,
+  withScriptOutcome,
+} from './scriptRetry.js';
 import { secretRedaction } from './secretRedaction.js';
 import type { TrialEnvironments } from './trialEnvironments.js';
 import type { Variables } from './variables.js';
@@ -339,8 +344,12 @@ export class LocalOperations {
       if (error instanceof UncertainScript) throw error;
       if (error instanceof UncertainFetch)
         throw new UncertainFetch(redact.text(message(error)));
+      const outcome = scriptOutcomeOf(error);
       const text = scriptFailure(operation, message(error), environment?.env);
-      throw new InterlockError(redact.text(text));
+      const failure = new InterlockError(redact.text(text));
+      throw outcome
+        ? withScriptOutcome(failure, redactScriptOutcome(outcome, redact.text))
+        : failure;
     }
   }
 }

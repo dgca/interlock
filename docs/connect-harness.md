@@ -216,7 +216,7 @@ Use [Parallel](parallel.md#author-through-cli-or-mcp) for different named paths 
 
 ### Author timers
 
-Script, Fetch and waited Workflow nodes can also opt into [failure routing](failure-routes.md) with `onFailure: "route"` and both `default` and `failed` edges. Existing authoring tools expose the same configuration. Recovery receives `{input,error,output}`; failed operations remain visible in a run that may complete successfully. Workflow recovery includes retained child references; cancellation never routes, and handled children cannot be retried independently. No automatic retry is added.
+Script, Fetch and waited Workflow nodes can also opt into [failure routing](failure-routes.md) with `onFailure: "route"` and both `default` and `failed` edges. Existing authoring tools expose the same configuration. Recovery receives `{input,error,output}`; failed operations remain visible in a run that may complete successfully. Workflow recovery includes retained child references; cancellation never routes, and handled children cannot be retried independently. A foreground Script can opt into `transientRetry` separately; Fetch and Workflow calls never retry automatically.
 
 Use a `wait` node for a durable pause, or set `unclaimedTimeoutMs` on an Agent and connect both its `default` and `timeout` routes. Both create and update tools describe the same timer fields on their definition parameters. See [timer configuration](timers.md) for bounds, defaults, and examples.
 

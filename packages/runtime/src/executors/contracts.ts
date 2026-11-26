@@ -160,6 +160,9 @@ export interface ClassifiedHarnessError {
   reason: string;
 }
 
+/** Three-way text judgment shared by harness and Script failure handling. */
+export type FailureTextClass = 'transient' | 'permanent' | 'unknown';
+
 export function isMissingResultError(error: unknown): boolean {
   if (error instanceof HarnessResultError) {
     const message = extractErrorText(error);
@@ -208,6 +211,27 @@ export function classifyHarnessError(error: unknown): ClassifiedHarnessError {
     };
   }
 
+  const textClass = classifyFailureText(message);
+  if (textClass === 'transient')
+    return {
+      errorClass: 'transient',
+      retryable: true,
+      reason: message,
+    };
+  // Unclassified text keeps the harness default: permanent failure.
+  return {
+    errorClass: 'permanent',
+    retryable: false,
+    reason: message,
+  };
+}
+
+/**
+ * Judge failure text as transient, permanent, or unknown. Permanent patterns
+ * win over transient ones, as they always have for harness errors. Callers
+ * decide what an unknown result means; Agents treat it as permanent.
+ */
+export function classifyFailureText(message: string): FailureTextClass {
   // Permanent error checks
   const isPermanent =
     // Quota / billing
@@ -246,13 +270,7 @@ export function classifyHarnessError(error: unknown): ClassifiedHarnessError {
       message,
     );
 
-  if (isPermanent) {
-    return {
-      errorClass: 'permanent',
-      retryable: false,
-      reason: message,
-    };
-  }
+  if (isPermanent) return 'permanent';
 
   // Transient error checks
   const isTransient =
@@ -286,18 +304,5 @@ export function classifyHarnessError(error: unknown): ClassifiedHarnessError {
       message,
     );
 
-  if (isTransient) {
-    return {
-      errorClass: 'transient',
-      retryable: true,
-      reason: message,
-    };
-  }
-
-  // Unclassified default: permanent failure
-  return {
-    errorClass: 'permanent',
-    retryable: false,
-    reason: message,
-  };
+  return isTransient ? 'transient' : 'unknown';
 }

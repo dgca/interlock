@@ -71,6 +71,42 @@ export interface NodeExecution {
   resolvedCwd?: string;
   provenance?: ExecutionProvenance;
   privateNetwork?: import('./fetch.js').PrivateNetworkTarget;
+  /** Automatic transient retry state for a foreground Script visit. */
+  scriptRetry?: ScriptRetryState;
+}
+/** One automatic transient retry decision for a foreground Script visit. */
+export interface ScriptRetryReceipt {
+  /** Attempt that failed, starting at 1. */
+  attempt: number;
+  decision: 'retry' | 'stop';
+  /** Judgment layer behind the decision. */
+  layer:
+    | 'signal'
+    | 'classifier'
+    | 'duplicate'
+    | 'permanent'
+    | 'exhausted'
+    | 'window'
+    | 'ineligible';
+  reason: string;
+  /** Delay before the next attempt; 0 for a stop. */
+  delayMs: number;
+  at: string;
+}
+/** Retained retry state and bounded receipts for one foreground Script visit. */
+export interface ScriptRetryState {
+  /** Retries already scheduled in this visit. */
+  retries: number;
+  /** Committed backoff deadline. Absent while an attempt is in flight. */
+  retryAt?: string;
+  /** When that backoff began, so paused time is excluded from its delay. */
+  retryScheduledAt?: string;
+  /** Requested active backoff in milliseconds. */
+  retryDelayMs?: number;
+  /** Previous observed exit, for early duplicate detection. */
+  previous?: { exitCode: number | null; stderr: string };
+  /** Newest-last receipts, bounded. */
+  receipts?: ScriptRetryReceipt[];
 }
 export interface PollCheckResult {
   count: number;

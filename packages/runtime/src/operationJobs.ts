@@ -8,6 +8,8 @@ import {
   type Json,
   type NodeExecution,
   type Run,
+  type ScriptRetryReceipt,
+  type ScriptRetryState,
   type WorkflowDefinition,
   type WorkflowNode,
 } from '@interlock/core';
@@ -25,6 +27,12 @@ import {
 } from './localOperations.js';
 import type { PauseHolds } from './pauseHolds.js';
 import type { ScriptApprovals } from './scriptApprovals.js';
+import {
+  decideScriptRetry,
+  normalizeScriptFailure,
+  type ScriptExitOutcome,
+  scriptOutcomeOf,
+} from './scriptRetry.js';
 import type { StepCompletion } from './stepCompletion.js';
 import type { TrialEnvironments } from './trialEnvironments.js';
 import type { Variables } from './variables.js';
@@ -97,6 +105,7 @@ export class OperationJobs {
         continue;
       const run = this.run(state.id);
       const execution = run.executions.at(-1)!;
+      if (localOperation && !this.scriptRetryDue(run, execution)) continue;
       if (duePoll) {
         this.runPollCheck(run, execution);
         continue;
@@ -105,6 +114,19 @@ export class OperationJobs {
         (n) => n.id === execution.nodeId,
       )!;
       if (node.kind !== 'script' && node.kind !== 'fetch') continue;
+      if (
+        node.kind === 'script' &&
+        node.executionMode === 'background' &&
+        (node.transientRetry?.maxRetries ?? 0) > 0
+      ) {
+        this.fail(
+          run,
+          execution,
+          `${node.label}: transient retry requires foreground execution`,
+        );
+        continue;
+      }
+      this.beginScriptAttempt(run, execution);
       this.markOperationStarted(run, execution);
       const controller = new AbortController();
       this.localJobs.set(execution.id, controller);
@@ -148,6 +170,7 @@ export class OperationJobs {
             uncertain:
               error instanceof UncertainScript ||
               error instanceof UncertainFetch,
+            outcome: scriptOutcomeOf(error),
           }),
         )
         .then((result) => {
@@ -172,6 +195,17 @@ export class OperationJobs {
               current.resolvedCwd = result.resolvedCwd;
             }
             if (!result.ok) {
+              if (
+                this.scheduleScriptRetry(
+                  latest,
+                  current,
+                  node,
+                  result.error,
+                  result.uncertain,
+                  result.outcome,
+                )
+              )
+                return;
               if (
                 current.background &&
                 (result.uncertain || current.background.state !== 'completed')
@@ -246,7 +280,110 @@ export class OperationJobs {
         });
     }
   }
+  /**
+   * Whether a committed automatic Script retry is due. Paused time is excluded
+   * from its backoff, so a pause during backoff does not shorten it.
+   */
+  scriptRetryDue(run: Run, execution: NodeExecution) {
+    const retry = execution.scriptRetry;
+    if (!retry?.retryAt || !retry.retryScheduledAt) return true;
+    const delayMs = retry.retryDelayMs ?? 0;
+    if (delayMs <= 0) return true;
+    return (
+      this.pauses.elapsed(run, retry.retryScheduledAt, this.now()).activeMs >=
+      delayMs
+    );
+  }
+  /** Marks the next launch as a retry and clears the committed backoff. */
+  private beginScriptAttempt(run: Run, execution: NodeExecution) {
+    const retry = execution.scriptRetry;
+    if (!retry?.retryAt) return;
+    execution.attempt = (execution.attempt ?? 1) + 1;
+    retry.retryAt = undefined;
+    retry.retryScheduledAt = undefined;
+    retry.retryDelayMs = undefined;
+    this.save(run);
+  }
+  /**
+   * Schedules one automatic retry for an opted-in foreground Script, or records
+   * why it stops. Only an observed non-zero exit is eligible.
+   */
+  private scheduleScriptRetry(
+    run: Run,
+    execution: NodeExecution,
+    node: WorkflowNode,
+    error: string,
+    uncertain: boolean,
+    outcome: ScriptExitOutcome | undefined,
+  ) {
+    if (
+      uncertain ||
+      node.kind !== 'script' ||
+      node.executionMode === 'background' ||
+      execution.background
+    )
+      return false;
+    const policy = node.transientRetry;
+    if (!policy || policy.maxRetries === 0) return false;
+    if (outcome?.kind !== 'exit') return false;
+    const state: ScriptRetryState = execution.scriptRetry ?? { retries: 0 };
+    const recentRetries = (state.receipts ?? []).filter(
+      (receipt) =>
+        receipt.decision === 'retry' &&
+        this.pauses.elapsed(run, receipt.at, this.now()).activeMs <=
+          policy.windowMs,
+    ).length;
+    const decision = decideScriptRetry({
+      policy,
+      outcome,
+      errorText: error,
+      state,
+      recentRetries,
+    });
+    const at = this.now();
+    const receipt: ScriptRetryReceipt = {
+      attempt: execution.attempt ?? 1,
+      decision: decision.retry ? 'retry' : 'stop',
+      layer: decision.layer,
+      reason: decision.reason.slice(0, 200),
+      delayMs: decision.delayMs,
+      at,
+    };
+    execution.scriptRetry = {
+      ...state,
+      retries: state.retries + (decision.retry ? 1 : 0),
+      previous: {
+        exitCode: outcome.exitCode,
+        stderr: normalizeScriptFailure(outcome.stderr),
+      },
+      receipts: [...(state.receipts ?? []), receipt].slice(-20),
+      ...(decision.retry
+        ? {
+            retryAt: new Date(this.nowMs() + decision.delayMs).toISOString(),
+            retryScheduledAt: at,
+            retryDelayMs: decision.delayMs,
+          }
+        : {
+            retryAt: undefined,
+            retryScheduledAt: undefined,
+            retryDelayMs: undefined,
+          }),
+    };
+    this.save(run);
+    this.event(
+      run,
+      decision.retry ? 'node.retry_scheduled' : 'node.retry_stopped',
+      `${node.label}: ${
+        decision.retry
+          ? `retry ${state.retries + 1}/${policy.maxRetries} in ${decision.delayMs}ms`
+          : 'stopped retrying'
+      } (${decision.layer}: ${decision.reason.slice(0, 120)})`,
+    );
+    return decision.retry;
+  }
   admitOperation(run: Run, execution: NodeExecution, acquire = true) {
+    // A committed Script retry waits for its backoff before taking resources.
+    if (acquire && !this.scriptRetryDue(run, execution)) return false;
     if (!execution.resources?.length || execution.resourceActive) return true;
     const owners = this.resources.owners(execution.resources);
     if (owners.length) {
