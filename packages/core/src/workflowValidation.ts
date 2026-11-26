@@ -93,6 +93,15 @@ export function validateDefinition(input: unknown): WorkflowDefinition {
       );
   for (const node of d.nodes)
     if (
+      node.kind === 'script' &&
+      node.executionMode === 'background' &&
+      (node.transientRetry?.maxRetries ?? 0) > 0
+    )
+      throw new InterlockError(
+        `${node.label}: transient retry requires foreground execution; reconcile an uncertain background outcome before retrying`,
+      );
+  for (const node of d.nodes)
+    if (
       node.kind === 'agent' &&
       new Set(node.promptIds).size !== (node.promptIds?.length ?? 0)
     )

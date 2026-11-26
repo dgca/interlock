@@ -232,7 +232,7 @@ const onFailureSchema = z
   .enum(['fail', 'route'])
   .optional()
   .describe(
-    'Stop by default. route needs failed and success edges; Script, HTTP and output-contract failures send {input,error,output} (null output if absent). Validation, cancellation, limits, mapping and uncertain interruptions stay terminal. No automatic retry.',
+    'Stop by default. route needs failed and success edges; Script, HTTP and output-contract failures send {input,error,output} (null output if absent). Validation, cancellation, limits, mapping and uncertain interruptions stay terminal. Only a Script with transientRetry retries automatically.',
   );
 
 const nodeShapeSchema = z.discriminatedUnion('kind', [
@@ -333,6 +333,11 @@ const nodeShapeSchema = z.discriminatedUnion('kind', [
       .optional()
       .describe(
         'Background survives server restarts; uncertain outcomes need stopped reconciliation before retry.',
+      ),
+    transientRetry: transientRetrySchema
+      .optional()
+      .describe(
+        'Foreground only. Retry an observed non-zero exit after an explicit signal, a recognized transient error, or one unclassified probe. Omit or set maxRetries 0 for no automatic retry.',
       ),
     ...scriptEnvironmentFields,
     // Older saved nodes omit language and must continue to run as Bash.

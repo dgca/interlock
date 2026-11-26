@@ -33,6 +33,8 @@ export function recoverInterruptedOperations(
       (execution?.kind === 'script' || execution?.kind === 'fetch') &&
       execution.status === 'running' &&
       !execution.background &&
+      // A committed retry backoff has no live process; it resumes when due.
+      !execution.scriptRetry?.retryAt &&
       (!execution.resources?.length || execution.operationStartedAt)
     ) {
       resources.uncertainExecution(

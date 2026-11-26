@@ -641,7 +641,9 @@ export class Engine {
           )
         )
           continue;
-        this.resources.endExecution(run.id, execution, true);
+        // A committed retry backoff has no live process to protect.
+        const backoff = execution.scriptRetry?.retryAt;
+        this.resources.endExecution(run.id, execution, !backoff);
         changed = true;
       }
       if (changed) this.save(run);

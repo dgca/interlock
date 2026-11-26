@@ -136,11 +136,6 @@
       "symbol": "RecoveryAction"
     },
     {
-      "file": "packages/core/src/executors.ts",
-      "type": "types",
-      "symbol": "TransientRetry"
-    },
-    {
       "file": "packages/core/src/externalInput.ts",
       "type": "types",
       "symbol": "ExternalInputHold"
